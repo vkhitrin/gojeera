@@ -75,7 +75,22 @@ class WorkItemInfoContainer(Vertical):
                 await self.issue_description_widget.update('Unable to display the description.')
             self.issue_description_widget.visible = True
             self.description_container.visible = True
-            self.description_container.border_title = 'Description'
+
+            # Check if description is required in the edit metadata
+            is_required = False
+            if issue_edit_metadata := work_item.get_edit_metadata():
+                description_field = issue_edit_metadata.get('description', {})
+                is_required = description_field.get('required', False)
+
+            # Set border title with required indicator if needed
+            if is_required:
+                self.description_container.border_title = 'Description'
+                self.description_container.border_subtitle = '(*)'
+                self.description_container.add_class('required')
+            else:
+                self.description_container.border_title = 'Description'
+                self.description_container.border_subtitle = ''
+                self.description_container.remove_class('required')
         else:
             self.description_container.visible = False
             self.issue_description_widget.visible = False

@@ -960,7 +960,37 @@ class MainScreen(Screen):
         """
 
         if data:
-            response: APIControllerResponse = await self.api.create_work_item(data)
+            # Split data into base fields and dynamic fields (custom fields, components, etc.)
+            # Base fields are handled explicitly by the controller
+            base_fields = {
+                'project_key',
+                'parent_key',
+                'issue_type_id',
+                'assignee_account_id',
+                'reporter_account_id',
+                'summary',
+                'description',
+                'duedate',
+                'priority',
+            }
+
+            # Separate base data from dynamic fields (custom fields, components, etc.)
+            base_data = {k: v for k, v in data.items() if k in base_fields}
+            dynamic_fields = {k: v for k, v in data.items() if k not in base_fields}
+
+            self.logger.info(
+                'Creating work item with split fields',
+                extra={
+                    'base_data': base_data,
+                    'dynamic_fields': dynamic_fields,
+                    'all_data_keys': list(data.keys()),
+                    'dynamic_field_types': {k: type(v).__name__ for k, v in dynamic_fields.items()},
+                },
+            )
+
+            response: APIControllerResponse = await self.api.create_work_item(
+                base_data, **dynamic_fields
+            )
             if response.success and response.result:
                 self.notify(
                     f'Work item {response.result.key} created successfully',

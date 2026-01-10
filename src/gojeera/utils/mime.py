@@ -1,22 +1,4 @@
-from enum import Enum
-
-
-class SupportedAttachmentVisualizationMimeTypes(Enum):
-    """The MIME types supported for viewing files in the application."""
-
-    IMAGE_WEBP = 'image/webp'
-    IMAGE_PNG = 'image/png'
-    IMAGE_JPEG = 'image/jpeg'
-    IMAGE_JPG = 'image/jpg'
-    IMAGE_GIF = 'image/gif'
-    IMAGE_BMP = ('image/bmp',)
-    IMAGE_AVIF = 'image/avif'
-    IMAGE_TIFF = 'image/tiff'
-    APPLICATION_JSON = 'application/json'
-    APPLICATION_XML = 'application/xml'
-    TEXT_CSV = 'text/csv'
-    TEXT_PLAIN = 'text/plain'
-    TEXT_MARKDOWN = 'text/markdown'
+from gojeera.constants import SupportedAttachmentVisualizationMimeTypes
 
 
 def can_view_attachment(mime_type: str) -> bool:

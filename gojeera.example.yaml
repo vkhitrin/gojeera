@@ -1,17 +1,48 @@
-jira_api_username: 'foo@bar'
-jira_api_token: '12345'
-jira_api_base_url: 'https://<your-hostname>.atlassian.net'
-jira_base_url: 'https://<your-hostname>.atlassian.net'
-jira_user_group_id: '12345'
-jira_account_id: '098765'
-search_results_per_page: 65
-search_issues_default_day_interval: 15
-show_issue_web_links: True
-default_project_key_or_id: 'MY-PROJECT-KEY'
+# Jira API Configuration
+jira:
+  api_username: "foo@bar"
+  api_token: "12345"
+  api_base_url: "https://<your-hostname>.atlassian.net"
+
+jira_base_url: "https://<your-hostname>.atlassian.net"
+show_work_item_web_links: True
 ignore_users_without_email: True
-custom_field_id_sprint: 'customfield_<MY-PROJECT-SPRINT-FIELD-ID>'
-pre_defined_jql_expressions:
-  1:
-    label: "Work in the current sprint"
-    expression: 'sprint in openSprints()'
-jql_expression_id_for_work_items_search: 1
+custom_field_id_sprint: "customfield_<MY-PROJECT-SPRINT-FIELD-ID>"
+search_results_per_page: 20
+
+# Local JQL filters (shown with ⌂ symbol in autocomplete)
+jql_filters:
+  - label: "Work in the current sprint"
+    expression: "sprint in openSprints()"
+  - label: "My open work items"
+    expression: "assignee = currentUser() AND status != Done ORDER BY priority DESC"
+  - label: "Recently updated"
+    expression: "updated >= -7d ORDER BY updated DESC"
+jql_filter_label_for_work_items_search: "Work in the current sprint"
+
+# Remote JQL filters - fetch saved filters from Jira (shown with ☁ symbol in autocomplete)
+fetch_remote_filters:
+  # Enable fetching filters from Jira API (default: false)
+  enabled: true
+  # Include shared filters (groups/projects) in addition to personal filters (default: false)
+  include_shared: false
+  # Only fetch starred filters (default: false)
+  starred_only: false
+  # Cache remote filters for the mentioned duration in seconds (default: 3600)
+  cache_ttl: 3600
+
+# Jumper - quick widget navigation overlay (press Ctrl+\ to activate)
+jumper:
+  # Enable the jumper overlay for quick navigation (default: true)
+  enabled: true
+  # Keys to use for jumper targets (default: shown below)
+  keys:
+    - "1"
+    - "2"
+    - "3"
+    - "q"
+    - "w"
+    - "e"
+    - "a"
+    - "s"
+    - "d"

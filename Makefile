@@ -1,34 +1,43 @@
+.PHONY: .DEFAULT
+.DEFAULT: help
+
 .PHONY: help
 help:
-	@echo "Available targets:"
-	@echo "  env                        - Synchronize the uv environment"
-	@echo "  install_pre_commit_hooks   - Install pre-commit hooks"
-	@echo "  lint                       - Lint the code"
-	@echo "  lint-fix                   - Lint the code and apply fixes"
-	@echo "  test                       - Run tests"
+	@fgrep -h "##" $(MAKEFILE_LIST) | sed -e 's/\(\:.*\#\#\)/\:\ /' | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
 
 .PHONY: env
-env:
+env: ##Prepare environment using uv (including development tools)
 	uv sync --all-groups
 
-.PHONY: install_pre_commit_hooks
-install_pre_commit_hooks:
-	pre-commit install -t pre-commit
-	pre-commit install -t pre-push
-
 .PHONY: lint
-lint:
-	mkdir -p /tmp/artifacts
-	ruff format . --diff
-	ruff check .
-	uv run mypy --version
-	uv run mypy --cache-dir /dev/null --junit-xml /tmp/artifacts/mypy.xml src
+lint: ##Lint using ruff
+	@uv run ruff format . --diff
+	@uv run ruff check .
 
-.PHONY: lint-fix
-lint-fix:
-	ruff format .
-	ruff check . --fix
+.PHONY: type-check
+type-check: ##Typecheck using typ:
+	@uv run ty check
+
+.PHONY: deadcode
+deadcode: ##Detect deadcode using vulture
+	@uv run vulture
+
+.PHONY: compile
+compile: ##Compiles code to check valid syntax
+	@uv run python -m compileall -q .
+
+.PHONY: check-css
+check-css: ##Checks CSS for unused classes and IDs
+	@uv run python ./scripts/check_unused_css.py
+
+.PHONY: analyze-codebase
+analyze-codebase: ##Analyzes codebase
+	-$(MAKE) lint
+	-$(MAKE) type-check
+	-$(MAKE) deadcode
+	-$(MAKE) compile
+	-$(MAKE) check-css
 
 .PHONY: test
-test:
+test: ##Run tests
 	uv run --no-sync pytest src/gojeera

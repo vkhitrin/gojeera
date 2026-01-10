@@ -1,10 +1,10 @@
 from datetime import date
 
-from gojeera.models import IssuePriority, JiraIssueComponent, JiraUser
+from gojeera.models import JiraUser, JiraWorkItemComponent, WorkItemPriority
 
 
 def work_item_priority_has_changed(
-    current_priority: IssuePriority | None = None,
+    current_priority: WorkItemPriority | None = None,
     target_priority: str | None = None,
 ) -> bool:
     """Determines if the priority of a work item has changed wrt. to a new priority selected by the user from the
@@ -105,7 +105,7 @@ def work_item_due_date_has_changed(
 
 
 def work_item_components_has_changed(
-    current_components: list[JiraIssueComponent],
+    current_components: list[JiraWorkItemComponent],
     target_components: list[dict],
 ) -> bool:
     """Determines if the components field of a work item has changed based on the current value and a new selection

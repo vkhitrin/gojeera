@@ -11,21 +11,6 @@ class APIException(Exception):
         super().__init__(*args)
 
 
-class CLIException(Exception):
-    """General CLI Exception, whenever a specific reason can't be determined."""
-
-    extra: dict[str, Any] = {}
-
-    def __init__(self, *args, **kwargs):
-        self.extra = kwargs.pop('extra', self.extra)
-        super().__init__(*args)
-
-    def get_extra_details(self) -> dict:
-        if self.extra:
-            return self.extra
-        return {}
-
-
 class ServiceUnavailableException(APIException):
     pass
 
@@ -43,10 +28,6 @@ class UpdateWorkItemException(APIException):
 
 
 class ValidationError(APIException):
-    pass
-
-
-class IssueTransitionException(APIException):
     pass
 
 

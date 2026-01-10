@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import logging
 from typing import Any, Callable, cast
-import xml.etree.ElementTree as ET
 
+import defusedxml.ElementTree as ET
 import httpx
 
 from gojeera.config import ApplicationConfiguration
@@ -15,15 +15,7 @@ from gojeera.exceptions import (
     ServiceInvalidResponseException,
     ServiceUnavailableException,
 )
-
-
-class gojeeraBearerAuth(httpx.Auth):
-    def __init__(self, token: str, username: str | None = None):
-        self.token = token
-
-    def auth_flow(self, request):
-        request.headers['Authorization'] = f'Bearer {self.token.strip()}'
-        yield request
+from gojeera.utils.obfuscation import obfuscate_url
 
 
 @dataclass
@@ -49,10 +41,6 @@ def _setup_ssl_certificates(configuration: ApplicationConfiguration) -> SSLCerti
         if verify_ssl and ssl_certificate_configuration.ca_bundle:
             verify_ssl = ssl_certificate_configuration.ca_bundle
 
-        # expects:
-        # (certificate file) or,
-        # (certificate file, key file) or,
-        # (certificate file, key file, password)
         cert = cast(
             str | tuple[str, str] | tuple[str, str, str], tuple(httpx_certificate_configuration)
         )
@@ -60,7 +48,7 @@ def _setup_ssl_certificates(configuration: ApplicationConfiguration) -> SSLCerti
     return SSLCertificateSettings(cert=cert, verify_ssl=verify_ssl)
 
 
-class gojeeraAsyncHTTPClient:
+class AsyncHTTPClient:
     """An async HTTP client for the Jira RETS API.
 
     This is useful for operations in endpoints that do not return JSON data, e.g. for downloading file attachments.
@@ -75,14 +63,12 @@ class gojeeraAsyncHTTPClient:
     ):
         ssl_certificate_settings: SSLCertificateSettings = _setup_ssl_certificates(configuration)
         self.base_url: str = base_url.rstrip('/')
-        if configuration.use_bearer_authentication:
-            self.authentication: httpx.Auth = gojeeraBearerAuth(api_token, api_username)
-        else:
-            self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        timeout = httpx.Timeout(60.0, connect=10.0, read=60.0, write=30.0)
         self.client: httpx.AsyncClient = httpx.AsyncClient(
             verify=ssl_certificate_settings.verify_ssl,
             cert=ssl_certificate_settings.cert,
-            timeout=None,
+            timeout=timeout,
         )
         self.logger = logging.getLogger(LOGGER_NAME)
 
@@ -99,7 +85,6 @@ class gojeeraAsyncHTTPClient:
         return f'{self.base_url}/{resource}'
 
     async def close_async_client(self):
-        # httpx.AsyncClient.aclose must be awaited!
         await self.client.aclose()
 
     async def make_request(
@@ -130,7 +115,6 @@ class gojeeraAsyncHTTPClient:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            # see https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#status-codes
             error_details: dict | None = self._parse_error_response(response)
 
             extra = {
@@ -162,7 +146,9 @@ class gojeeraAsyncHTTPClient:
             if response.status_code == 201:
                 return self._empty_response(response)
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
+            self.logger.error(
+                log_msg, extra={'url': obfuscate_url(url), 'status_code': response.status_code}
+            )
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
     @staticmethod
@@ -191,14 +177,12 @@ class JiraClient:
     ):
         ssl_certificate_settings: SSLCertificateSettings = _setup_ssl_certificates(configuration)
         self.base_url: str = base_url.rstrip('/')
-        if configuration.use_bearer_authentication:
-            self.authentication: httpx.Auth = gojeeraBearerAuth(api_token, api_username)
-        else:
-            self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        timeout = httpx.Timeout(60.0, connect=10.0, read=60.0, write=30.0)
         self.client: httpx.Client = httpx.Client(
             verify=ssl_certificate_settings.verify_ssl,
             cert=ssl_certificate_settings.cert,
-            timeout=None,
+            timeout=timeout,
         )
         self.logger = logging.getLogger(LOGGER_NAME)
 
@@ -237,7 +221,6 @@ class JiraClient:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            # see https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#status-codes
             error_details: dict | None = self._parse_error_response(response)
 
             extra = {
@@ -268,9 +251,11 @@ class JiraClient:
         except Exception as e:
             if response.status_code == 201:
                 return {}
-            # This may happen if nginx responds with an error page or on calling ping
+
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
+            self.logger.error(
+                log_msg, extra={'url': obfuscate_url(url), 'status_code': response.status_code}
+            )
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
         return response_json
@@ -283,7 +268,7 @@ class JiraClient:
             return None
 
 
-class AsyncJiraClient(gojeeraAsyncHTTPClient):
+class AsyncJiraClient(AsyncHTTPClient):
     """Async JSON client for the Jira REST API."""
 
     @staticmethod
@@ -317,26 +302,6 @@ class AsyncJiraClient(gojeeraAsyncHTTPClient):
         timeout: int = 55,
         **kwargs,
     ) -> Any | None:
-        """Make an HTTP request to the Jira API.
-
-        Args:
-            method: The HTTP method to use (e.g., httpx.AsyncClient.post).
-            url: The API endpoint URL.
-            headers: Optional HTTP headers.
-            timeout: Request timeout in seconds.
-            **kwargs: Additional arguments to pass to the HTTP method (e.g., data, params).
-
-        Returns:
-            The parsed JSON response from the API, or None/empty dict for empty responses.
-
-        Raises:
-            ServiceInvalidRequestException: If the request fails.
-            ServiceUnavailableException: If the service is unavailable or times out.
-            ResourceNotFoundException: If the requested resource is not found (404).
-            AuthorizationException: If authentication fails (401).
-            PermissionException: If permission is denied (403).
-            ServiceInvalidResponseException: If the response cannot be parsed.
-        """
         headers = self.set_headers(headers)
         full_url = self.get_resource_url(url)
 
@@ -351,17 +316,16 @@ class AsyncJiraClient(gojeeraAsyncHTTPClient):
             )
         except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
             msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(msg, extra={'url': full_url})
-            raise ServiceUnavailableException(msg, extra={'url': full_url}) from e
+            self.logger.error(msg, extra={'url': obfuscate_url(url)})
+            raise ServiceUnavailableException(msg, extra={'url': url}) from e
 
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            # see https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#status-codes
             error_details: dict | None = self._parse_error_response(response)
 
             extra = {
-                'url': full_url,
+                'url': obfuscate_url(url),
                 'status_code': response.status_code,
             }
 
@@ -389,7 +353,9 @@ class AsyncJiraClient(gojeeraAsyncHTTPClient):
             if response.status_code == 201:
                 return self._empty_response(response)
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': full_url, 'status_code': response.status_code})
+            self.logger.error(
+                log_msg, extra={'url': obfuscate_url(full_url), 'status_code': response.status_code}
+            )
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
     async def get_label_suggestions(self, query: str = '') -> Any | None:
@@ -401,25 +367,15 @@ class AsyncJiraClient(gojeeraAsyncHTTPClient):
         Returns:
             Dictionary with 'suggestions' key containing list of label strings,
             or None if request fails.
-
-        Note:
-            The API returns XML in the format:
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <suggestionListStruct>
-                <token>label1</token>
-                <token>label2</token>
-                ...
-            </suggestionListStruct>
         """
 
         # NOTE: (vkhitrin) since this is the only endpoint using `1.0`,
         #       we will not create a dedicated logic for it.
         jira_base = self.base_url.rsplit('/rest/api/', 1)[0]
         full_url = f'{jira_base}/rest/api/1.0/labels/suggest'
-        # Always include query parameter, even if empty string (required by API)
+
         params = {'query': query if query else ''}
 
-        # Direct client call to avoid method binding issues
         try:
             http_response = await self.client.get(full_url, params=params, auth=self.authentication)
             http_response.raise_for_status()

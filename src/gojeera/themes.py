@@ -48,13 +48,11 @@ def create_theme_from_config(config: dict) -> Theme:
         if color in config:
             kwargs[color] = config[color]
 
-    # Add optional numeric parameters
     if 'luminosity_spread' in config:
         kwargs['luminosity_spread'] = config['luminosity_spread']
     if 'text_alpha' in config:
         kwargs['text_alpha'] = config['text_alpha']
 
-    # Add variables if provided
     if 'variables' in config:
         kwargs['variables'] = config['variables']
 
@@ -107,7 +105,7 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
 
     for yaml_file in yaml_files:
         try:
-            with open(yaml_file) as f:
+            with open(yaml_file, encoding='utf-8') as f:
                 theme_config = yaml.safe_load(f)
 
             if not theme_config:

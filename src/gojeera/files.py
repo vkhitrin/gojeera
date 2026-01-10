@@ -6,13 +6,13 @@ from gojeera.constants import LOG_FILE_FILE_NAME
 
 
 def _gojeera_directory(root: Path) -> Path:
-    """Returns the path to a `gojeera` directory associated with the application.
+    """Returns the path to a directory associated with the application.
 
     Args:
-        root: the root directory path where the gojeera directory exists or is created.
+        root: the root directory path where the application directory exists or is created.
 
     Returns:
-        A `Path` expression of a `gojeera` directory.
+        A `Path` expression of the application directory.
     """
     directory = root / 'gojeera'
     directory.mkdir(exist_ok=True, parents=True)

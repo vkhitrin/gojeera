@@ -1,447 +1,101 @@
 import asyncio
-from datetime import datetime
-import os
-from pathlib import Path
-import subprocess
+import logging
 import sys
+from typing import cast
 
 import click
 from pydantic import ValidationError
 from rich.console import Console
 from textual.theme import BUILTIN_THEMES
 
+from gojeera.api_controller.controller import APIController
 from gojeera.app import JiraApp
-from gojeera.commands.handler import CommandHandler
-from gojeera.commands.render import (
-    CLIExceptionRenderer,
-    JiraIssueCommentRenderer,
-    JiraIssueCommentsRenderer,
-    JiraIssueCommentTextRenderer,
-    JiraIssueMetadataRenderer,
-    JiraIssueSearchRenderer,
-    JiraUserGroupRenderer,
-    JiraUserRenderer,
-    ThemesRenderer,
-)
 from gojeera.config import ApplicationConfiguration
-from gojeera.exceptions import CLIException
-from gojeera.files import get_config_file, get_themes_directory
+from gojeera.constants import LOGGER_NAME
+from gojeera.files import get_themes_directory
+from gojeera.models import JiraMyselfInfo
 from gojeera.themes import create_themes_from_config, load_themes_from_directory
 
 console = Console()
+logger = logging.getLogger(LOGGER_NAME)
 
 
-@click.group()
-def cli():
-    pass
-
-
-@cli.group(help='Use it to add, list or delete comments associated to work items.')
-def comments():
-    pass
-
-
-@cli.group(help='Use it to search, update or delete work items.')
-def issues():
-    pass
-
-
-@cli.group(help='Use it to search users and user groups.')
-def users():
-    pass
-
-
-@cli.command('version', help='Shows the version of the tool.')
-def version():
-    from importlib.metadata import version
-
-    console.print(version('gojeera'))
-
-
-@cli.command(
-    'themes',
-    help='List the available themes. Using a theme: gojeera ui --theme <NAME>',
-)
-def themes():
-    console.print('Available built-in themes\n')
-    renderer = ThemesRenderer()
-    renderer.render(console, list(BUILTIN_THEMES.keys()))
-
-    custom_themes = []
-
+async def check_authentication(
+    settings: ApplicationConfiguration,
+) -> tuple[bool, str | None, JiraMyselfInfo | None]:
     try:
-        themes_dir = get_themes_directory()
-        directory_themes = load_themes_from_directory(themes_dir)
-        custom_themes.extend(directory_themes)
-    except Exception as e:
-        console.print(f'\n[yellow]Warning: Could not load themes from directory: {str(e)}[/yellow]')
+        api_controller = APIController(configuration=settings)
+        response = await api_controller.myself()
 
-    if custom_themes:
-        console.print('\nAvailable custom themes\n')
-        custom_theme_names = [theme.name for theme in custom_themes]
-        renderer.render(console, custom_theme_names)
-
-
-@cli.command('config', help='Shows the location of the configuration file.')
-def config():
-    if jira_tui_config_file := os.getenv('GOJEERA_CONFIG_FILE'):
-        conf_file = Path(jira_tui_config_file).resolve()
-        console.print(f'Using GOJEERA_CONFIG_FILE: {conf_file}')
-    else:
-        conf_file = get_config_file()
-        console.print(f'Using: {conf_file}')
-
-
-@issues.command('search')
-@click.option(
-    '--project-key', '-p', type=str, help='A case-sensitive key that identifies a project.'
-)
-@click.option('--key', '-k', type=str, help='A case-sensitive key that identifies a work item.')
-@click.option(
-    '--assignee-account-id', '-u', type=str, help='The account ID of a user to filter work items.'
-)
-@click.option(
-    '--limit',
-    '-l',
-    type=int,
-    help='The number of work items to return. Default is 50.',
-)
-@click.option(
-    '--created-from',
-    type=click.DateTime(['%Y-%m-%d']),
-    help='Searches issues created from this date forward (inclusive). Expects YYYY-MM-DD',
-)
-@click.option(
-    '--created-until',
-    type=click.DateTime(['%Y-%m-%d']),
-    help='Searches issues created until this date (inclusive). Expects YYYY-MM-DD',
-)
-def search_issues(
-    project_key: str,
-    key: str | None = None,
-    assignee_account_id: str | None = None,
-    limit: int | None = None,
-    created_from: datetime | None = None,
-    created_until: datetime | None = None,
-) -> None:
-    """Search work items."""
-    if not project_key and not key:
-        raise click.BadParameter(
-            'One of --project-key (-p) or --key (-k) must be provided',
-        )
-
-    handler = CommandHandler()
-
-    if key:
-        with console.status('Fetching work item...'):
-            try:
-                response = handler.get_issue(
-                    key=key.strip(),
-                    fields=[
-                        'id',
-                        'key',
-                        'status',
-                        'summary',
-                        'created',
-                        'updated',
-                        'author',
-                        'reporter',
-                        'issuetype',
-                        'assignee',
-                    ],
-                )
-            except CLIException as e:
-                console.print(str(e))
-                renderer = CLIExceptionRenderer()
-                renderer.render(console, e.get_extra_details())
-            except Exception as e:
-                console.print(f'An unknown error occurred while fetching the work item: {str(e)}')
-            else:
-                render = JiraIssueSearchRenderer()
-                render.render(console, response)
-            return
-
-    with console.status('Searching work items...'):
         try:
-            response = handler.search_issues(
-                project_key=project_key,
-                assignee_account_id=assignee_account_id,
-                limit=limit,
-                created_from=created_from.date() if created_from else None,
-                created_until=created_until.date() if created_until else None,
-            )
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
+            await api_controller.api.client.close_async_client()
+            await api_controller.api.async_http_client.close_async_client()
         except Exception as e:
-            console.print(f'An unknown error occurred while searching for work items: {str(e)}')
-        else:
-            render = JiraIssueSearchRenderer()
-            render.render(console, response)
+            logger.debug(f'Failed to close async clients: {e}')
 
+        if not response.success:
+            if response.error:
+                error = str(response.error) if response.error else 'Please check your credentials.'
+                error_msg = error.lower()
 
-@issues.command('metadata')
-@click.argument('work-item-key')
-def issue_metadata(work_item_key: str) -> None:
-    """Retrieves metadata associated to the work item identified by WORK_ITEM_KEY.
+                if 'unauthorized' in error_msg or '401' in error_msg:
+                    return False, 'Please check your credentials.', None
+                elif 'forbidden' in error_msg or '403' in error_msg:
+                    return False, 'Access forbidden. Please check your permissions.', None
+                elif 'not found' in error_msg or '404' in error_msg:
+                    return False, 'Jira instance not found. Please check your API base URL.', None
+                elif 'timeout' in error_msg or 'timed out' in error_msg:
+                    return False, 'Connection timed out.', None
+                elif 'connection' in error_msg:
+                    return (
+                        False,
+                        'Connection error. Please check your network and Jira instance URL.',
+                        None,
+                    )
 
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item.
-    """
-    handler = CommandHandler()
-    with console.status('Fetching metadata for the selected work item...'):
-        try:
-            metadata: dict = asyncio.run(handler.get_metadata(work_item_key))
-        except CLIException as e:
-            console.print(str(e))
-        else:
-            render = JiraIssueMetadataRenderer()
-            render.render(console, metadata, issue_key=work_item_key)
-
-
-@issues.command('update')
-@click.argument('work-item-key')
-@click.option('--summary', '-s', help='Text to set as the summary (aka. title) of the work item.')
-@click.option(
-    '--assignee-account-id',
-    '-u',
-    help='The account ID of the user to whom the work item will be assigned. Pass -u "" or -u null to unassign the work item.',
-)
-@click.option(
-    '--due-date',
-    '-d',
-    type=click.DateTime(['%Y-%m-%d']),
-    help='Update the due date of an issue. Expects YYYY-MM-DD',
-)
-@click.option(
-    '--meta',
-    is_flag=True,
-    type=bool,
-    default=False,
-    help='Shows metadata for an issue. This is useful for updates.',
-)
-@click.option(
-    '--status-id',
-    '-t',
-    type=int,
-    help='The ID of the status to set for the work item. Use --meta for more details.',
-)
-@click.option(
-    '--priority-id',
-    '-p',
-    type=int,
-    help='The ID of the priority to set for the work item. Use --meta for more details.',
-)
-def update_issue(
-    work_item_key: str,
-    summary: str | None = None,
-    assignee_account_id: str | None = None,
-    due_date: datetime | None = None,
-    meta: bool | None = None,
-    status_id: int | None = None,
-    priority_id: int | None = None,
-):
-    """Updates (some) fields of the work item identified by WORK_ITEM_KEY.
-
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item we want to update.
-    """
-    handler = CommandHandler()
-
-    if meta:
-        try:
-            metadata: dict = asyncio.run(handler.get_metadata(work_item_key))
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        except Exception as e:
-            console.print(
-                f'An unknown error occurred while retrieving metadata for the given work item: {str(e)}'
-            )
-        else:
-            render = JiraIssueMetadataRenderer()
-            render.render(console, metadata, issue_key=work_item_key)
-        return
-
-    if not any([summary, due_date, status_id, priority_id]) and assignee_account_id is None:
-        raise click.BadParameter(
-            'One of --summary, --due-date, --status-id, --priority-id, --assignee-account-id must be provided',
-        )
-
-    if summary is not None:
-        summary = summary.strip()
-        if not summary:
-            raise click.BadParameter('summary can not be empty')
-
-    if status_id:
-        with console.status('Trying to update the status of the work item...'):
-            try:
-                result: bool = asyncio.run(handler.update_issue_status(work_item_key, status_id))
-            except CLIException as e:
-                console.print(str(e))
-                renderer = CLIExceptionRenderer()
-                renderer.render(console, e.get_extra_details())
-            except Exception as e:
-                console.print(
-                    f'An unknown error occurred when trying to update the status of the work item: {str(e)}'
-                )
-            else:
-                if result:
-                    console.print('The status of the work item was updated successfully.')
+                elif 'contextvar' in error_msg or '<' in error_msg:
+                    return False, 'Please check your credentials.', None
                 else:
-                    console.print('Failed to update the status of the work item.')
+                    return False, error, None
+            return False, 'Please check your credentials.', None
 
-    if summary or assignee_account_id or priority_id or due_date:
-        with console.status('Trying to update the details of the work item...'):
-            try:
-                result = asyncio.run(
-                    handler.update_issue(
-                        work_item_key,
-                        summary=summary,
-                        assignee_account_id=assignee_account_id,
-                        due_date=due_date.date() if due_date else None,
-                        priority_id=priority_id,
-                    ),
-                )
-            except CLIException as e:
-                console.print(str(e))
-                renderer = CLIExceptionRenderer()
-                renderer.render(console, e.get_extra_details())
-            except Exception as e:
-                console.print(f'Unable to update the selected work item. {str(e)}')
-            else:
-                if result:
-                    console.print('Work item updated successfully.')
-                else:
-                    console.print('Work item not updated.')
+        if response.result is None:
+            return False, 'Authentication succeeded but no user info received.', None
 
+        user_info: JiraMyselfInfo = response.result
+        return True, None, user_info
 
-@comments.command('add')
-@click.argument('work-item-key')
-@click.argument('message')
-def add_comment(message: str, work_item_key: str):
-    """Adds a comment to the work item identified by WORK_ITEM_KEY.
-
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item.
-    MESSAGE is the message of the comment.
-    """
-    handler = CommandHandler()
-    with console.status('Trying to add the comment to the issue...'):
-        try:
-            response = handler.add_comment(work_item_key, message)
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        else:
-            render = JiraIssueCommentRenderer()
-            render.render(console, response, issue_key=work_item_key)
-
-
-@comments.command('list')
-@click.argument('work-item-key')
-@click.option(
-    '--page',
-    '-p',
-    default=1,
-    type=int,
-    help='The page number we want to retrieve. The max number of items per page is 10',
-)
-@click.option('--comment-id', '-c', default=None, help='The ID of a comment')
-def list_comments(work_item_key: str, page: int = 1, comment_id: str | None = None):
-    """Lists the comments of the work item identified by WORK_ITEM_KEY.
-
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item.
-    """
-    handler = CommandHandler()
-    with console.status('Fetching comments for the issue...'):
-        try:
-            response = handler.get_comments(work_item_key, comment_id, page=page)
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        else:
-            render = JiraIssueCommentsRenderer()
-            render.render(console, response, issue_key=work_item_key)
-
-
-@comments.command('show')
-@click.argument('work-item-key')
-@click.argument('comment-id')
-def show_comment(work_item_key: str, comment_id: str) -> None:
-    """Shows the text of a comment of the work item identified by WORK_ITEM_KEY.
-
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item.
-    COMMENT_ID the id of the comment whose text we want to view.
-    """
-    handler = CommandHandler()
-    with console.status('Fetching comment...'):
-        try:
-            comment = handler.get_comment(work_item_key, comment_id)
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        else:
-            render = JiraIssueCommentTextRenderer()
-            render.render(console, comment, issue_key=work_item_key)
-
-
-@comments.command('delete')
-@click.argument('work-item-key')
-@click.argument('comment-id')
-def delete_comment(work_item_key: str, comment_id: str):
-    """Deletes the comment with id COMMENT_ID of the work item identified by WORK_ITEM_KEY.
-
-    WORK_ITEM_KEY is the case-sensitive key that identifies the work item.
-    COMMENT_ID the id of the comment whose text we want to view.
-    """
-    handler = CommandHandler()
-    with console.status('Trying to delete the comment...'):
-        try:
-            handler.delete_comment(work_item_key, comment_id)
-            console.print('Comment deleted successfully.')
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-
-
-@cli.command('completions', help='Generate shell completion script.')
-@click.argument('shell', type=click.Choice(['bash', 'zsh', 'fish']))
-def completions(shell):
-    """Generate shell completion script for the specified shell (bash, zsh, fish)."""
-    env = os.environ.copy()
-    env['_GOJEERA_COMPLETE'] = f'{shell}_source'
-    try:
-        result = subprocess.run(
-            ['gojeera'], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        if result.returncode != 0:
-            console.print(f'Error generating completions: {result.stderr}')
-            sys.exit(result.returncode)
-        console.print(result.stdout)
     except Exception as e:
-        console.print(f'Failed to generate completions: {str(e)}')
-        sys.exit(1)
+        error = str(e)
+        error_msg = error.lower()
+
+        if 'contextvar' in error_msg or ('<' in error_msg and '0x' in error_msg):
+            return False, 'Please check your credentials.', None
+        elif 'certificate' in error_msg or 'ssl' in error_msg:
+            return False, 'SSL certificate error.', None
+        elif 'connection' in error_msg:
+            return False, 'Connection error. Please check your network and Jira instance URL.', None
+        elif 'timeout' in error_msg:
+            return False, 'Connection timed out.', None
+        else:
+            return False, error, None
 
 
-@cli.command('ui')
+@click.command()
 @click.option('--project-key', '-p', default=None, help='A case-sensitive Jira project key.')
 @click.option('--work-item-key', '-w', default=None, help='A case-sensitive work item key.')
 @click.option(
-    '--assignee-account-id',
+    '--assignee',
     '-u',
     default=None,
-    help='A Jira user account ID. Typically this would be your Jira account ID so user-related dropdowns can pre-select your user',
+    help='A Jira user display name or account ID to pre-select in the assignee dropdown.',
 )
 @click.option(
-    '--jql-expression-id',
+    '--jql-filter',
     '-j',
     default=None,
-    type=int,
-    help='The ID of a JQL expression as defined in the config.',
+    type=str,
+    help='The label of a JQL filter query to load on startup, as defined in the config.',
 )
 @click.option('--theme', '-t', default=None, help='The name of the theme to use.')
 @click.option(
@@ -457,43 +111,86 @@ def completions(shell):
     type=int,
     help='Focus and open the work item at the specified position on startup. Requires --search-on-startup.',
 )
-def ui(
+@click.option(
+    '--version',
+    is_flag=True,
+    default=False,
+    help='Show the version of the tool.',
+)
+def cli(
     project_key: str | None = None,
     work_item_key: str | None = None,
-    assignee_account_id: str | None = None,
-    jql_expression_id: int | None = None,
+    assignee: str | None = None,
+    jql_filter: str | None = None,
     theme: str | None = None,
     search_on_startup: bool = False,
     focus_item_on_startup: int | None = None,
+    version: bool = False,
 ):
-    """Launches the gojeera application."""
-    # Validate theme if provided
+    """Launches gojeera."""
+
+    if version:
+        from importlib.metadata import version as get_version
+
+        console.print(get_version('gojeera'))
+        return
+
     if theme:
         valid_themes = set(BUILTIN_THEMES.keys())
 
-        # Load custom themes from directory
         try:
             themes_dir = get_themes_directory()
             directory_themes = load_themes_from_directory(themes_dir)
             valid_themes.update(t.name for t in directory_themes)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f'Failed to load themes from directory: {e}')
 
-        # Also check config-based themes (deprecated)
         try:
-            settings = ApplicationConfiguration()  # type: ignore[call-arg] # noqa
-            if settings.custom_themes:
-                config_themes = create_themes_from_config(settings.custom_themes)
-                valid_themes.update(t.name for t in config_themes)
-        except Exception:
-            pass
+            settings = ApplicationConfiguration()
+            if hasattr(settings, 'custom_themes'):
+                custom_themes_attr = settings.custom_themes
+                if custom_themes_attr:
+                    config_themes = create_themes_from_config(cast(list[dict], custom_themes_attr))
+                    valid_themes.update(t.name for t in config_themes)
+        except Exception as e:
+            logger.debug(f'Failed to load themes from config: {e}')
 
         if theme not in valid_themes:
             console.print('The name of the theme you provided is not supported.')
-            console.print('To see the list of supported themes run: gojeera themes')
+            console.print('To see the list of supported themes, check the documentation.')
             sys.exit(1)
 
-    # Validate that --focus-item-on-startup requires --search-on-startup
+    exclusive_options = [project_key, work_item_key, jql_filter]
+    provided_options = [opt for opt in exclusive_options if opt is not None]
+    if len(provided_options) > 1:
+        console.print(
+            'Error: --project-key, --work-item-key, and --jql-filter are mutually exclusive.'
+        )
+        console.print('Please provide only one of these options.')
+        sys.exit(1)
+
+    import re
+
+    if project_key:
+        project_key_pattern = r'^[A-Z][A-Z0-9]{1,9}$'
+        if not re.match(project_key_pattern, project_key):
+            console.print(f'Error: Invalid project key format: "{project_key}"')
+            console.print('Project keys must be 2-10 uppercase characters, starting with a letter.')
+            console.print('Examples: PROJ, DEV, PLATFORM, ABC123')
+            sys.exit(1)
+
+    if work_item_key:
+        work_item_pattern = r'^[A-Z][A-Z0-9]+-\d+$'
+        if not re.match(work_item_pattern, work_item_key):
+            console.print(f'Error: Invalid work item key format: "{work_item_key}"')
+            console.print('Work item keys must follow the format: <PROJECT>-<NUMBER>')
+            console.print('Examples: PROJ-123, ABC-456, DEV-1')
+            sys.exit(1)
+
+    if assignee is not None and project_key is None:
+        console.print('Error: --assignee requires --project-key to be defined.')
+        sys.exit(1)
+
     if focus_item_on_startup is not None:
         if not search_on_startup:
             console.print('--focus-item-on-startup requires --search-on-startup to be enabled.')
@@ -503,7 +200,7 @@ def ui(
             sys.exit(1)
 
     try:
-        settings = ApplicationConfiguration()  # type: ignore[call-arg] # noqa
+        settings = ApplicationConfiguration()
         settings.search_on_startup = search_on_startup
     except FileNotFoundError as e:
         console.print(e)
@@ -516,99 +213,23 @@ def ui(
             else:
                 console.print(f'Configuration error: {_e.get("msg")}')
         sys.exit(1)
+
+    success, error_message, user_info = asyncio.run(check_authentication(settings))
+
+    if not success:
+        console.print(f'[bold red]Authentication failed:[/bold red] {error_message}')
+        sys.exit(1)
+
     JiraApp(
         settings,
+        user_info=user_info,
         project_key=project_key,
-        user_account_id=assignee_account_id,
-        jql_expression_id=jql_expression_id,
+        assignee=assignee,
+        jql_filter=jql_filter,
         work_item_key=work_item_key,
         user_theme=theme,
         focus_item_on_startup=focus_item_on_startup,
     ).run()
-
-
-@users.command('search')
-@click.argument('email_or_name')
-def search_users(email_or_name: str):
-    """Searches users by email or name. This is useful for getting the account ID of users.
-
-    EMAIL_OR_NAME is the email address or name to search users.
-    """
-    handler = CommandHandler()
-    with console.status('Searching Jira users...'):
-        try:
-            items = handler.users(email_or_name=email_or_name)
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        else:
-            render = JiraUserRenderer()
-            render.render(console, items)
-
-
-@users.command('groups')
-@click.option(
-    '--group-ids',
-    '-g',
-    default=None,
-    help='Retrieve the groups with these IDs. Accepts a comma-separated list of IDs.',
-)
-@click.option(
-    '--group-names',
-    '-n',
-    default=None,
-    help='Retrieve the groups with this name.  Accepts a comma-separated list of names.',
-)
-@click.option(
-    '--page',
-    '-p',
-    type=int,
-    default=1,
-    help='The page number we want to retrieve. The max number of items per page is 25',
-)
-@click.option(
-    '--group-id',
-    default=None,
-    help='Count the number of users in the group',
-)
-def search_users_groups(
-    group_ids: str | None = None,
-    group_names: str | None = None,
-    group_id: str | None = None,
-    page: int = 1,
-) -> None:
-    """Searches Jira users groups. Use it to find groups of users by name or ID. Useful for setting the config variable
-    jira_user_group_id."""
-    handler = CommandHandler()
-    if group_id:
-        # fetch the number of users in the group
-        with console.status('Counting Jira users in the group...'):
-            try:
-                result = handler.total_users_in_group(group_id=group_id)
-            except CLIException as e:
-                console.print(str(e))
-                renderer = CLIExceptionRenderer()
-                renderer.render(console, e.get_extra_details())
-            else:
-                console.print(f'Number of users in group with ID {group_id}: {result}')
-        return
-
-    with console.status('Searching Jira user groups...'):
-        # find Jira users groups
-        try:
-            items = handler.search_user_groups(
-                page=page,
-                group_ids=[gid.strip() for gid in group_ids.split(',')] if group_ids else None,
-                group_names=[gn.strip() for gn in group_names.split(',')] if group_names else None,
-            )
-        except CLIException as e:
-            console.print(str(e))
-            renderer = CLIExceptionRenderer()
-            renderer.render(console, e.get_extra_details())
-        else:
-            render = JiraUserGroupRenderer()
-            render.render(console, items)
 
 
 def gojeeraCLI():

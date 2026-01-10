@@ -2,40 +2,22 @@ from datetime import date, datetime
 from io import BufferedReader
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import magic
 
-from gojeera.api.client import AsyncJiraClient, JiraClient, gojeeraAsyncHTTPClient
-from gojeera.api.utils import build_issue_search_jql
+from gojeera.api.client import AsyncHTTPClient, AsyncJiraClient, JiraClient
+from gojeera.api.utils import build_work_item_search_jql
 from gojeera.config import ApplicationConfiguration
-from gojeera.constants import ISSUE_SEARCH_DEFAULT_MAX_RESULTS, LOGGER_NAME
+from gojeera.constants import LOGGER_NAME, WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS
 from gojeera.exceptions import FileUploadException
-from gojeera.models import WorkItemsSearchOrderBy
+from gojeera.utils.adf_helpers import text_to_adf
+from gojeera.utils.obfuscation import obfuscate_account_id
 
 
 class JiraAPI:
-    """Implements methods to connect to the Jira REST API provided by the Jira Cloud Platform.
-
-    **Supported Versions**
-
-    - https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version
-    - https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/#version
-
-    **Versions**
-
-    [Version 2](https://developer.atlassian.com/cloud/jira/platform/rest/v2/) and
-    [version 3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/) of the API offer the same collection of
-    operations. However, version 3 provides support for the
-    [Atlassian Document Format (ADF)](https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/) in:
-
-    - body in comments, including where comments are used in issue, issue link, and transition resources.
-    - comment in work-logs.
-    - description and environment fields in issues.
-    - textarea type custom fields (multi-line text fields) in issues. Single line custom fields (textfield) accept a
-    string and don't handle Atlassian Document Format content.
-    """
+    """Implements methods to connect to the Jira REST API provided by the Jira Cloud Platform."""
 
     API_PATH_PREFIX = '/rest/api/3/'
 
@@ -46,31 +28,27 @@ class JiraAPI:
         api_token: str,
         configuration: ApplicationConfiguration,
     ):
-        # Async JSON client
         self._client = AsyncJiraClient(
             base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
-        # Sync JSON client - for uploading attachments
+
         self._sync_client = JiraClient(
             base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
-        # Async HTTP client - for downloading attachments
-        self._async_http_client = gojeeraAsyncHTTPClient(
+
+        self._async_http_client = AsyncHTTPClient(
             base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
         self._base_url = base_url
-        # this allows us to issue requests to different endpoints depending on whether Jira runs on the cloud (default)
-        # or on-premises
-        self.cloud = configuration.cloud if configuration.cloud is False else True
         self.logger = logging.getLogger(LOGGER_NAME)
 
     @property
@@ -82,7 +60,7 @@ class JiraAPI:
         return self._client
 
     @property
-    def async_http_client(self) -> gojeeraAsyncHTTPClient:
+    def async_http_client(self) -> AsyncHTTPClient:
         return self._async_http_client
 
     @property
@@ -94,29 +72,21 @@ class JiraAPI:
         offset: int | None = None,
         limit: int | None = None,
         query: str | None = None,
-        order_by: str | None = None,
-        keys: list[str] = None,
+        keys: list[str] | None = None,
     ) -> dict:
         """Retrieves a paginated list of projects visible to the user (making the request).
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-search-get
 
         Args:
             offset: the index of the first item to return in a page of results (page offset).
             limit: the maximum number of items to return per page. Must be less than or equal to 100.
             query: filter the results using a literal string. Projects with a matching key or name are returned
             (case-insensitive).
-            order_by: sort the results by a field: `key` (default), `category`, `issueCount`, `lastIssueUpdatedTime`,
-            `name`, `owner`, `archivedDate`, `deletedDate`.
             keys: the project keys to filter the results by.
 
         Returns:
             A dictionary with the details of the projects.
         """
         params: dict[str, Any] = {}
-        if order_by:
-            params['orderBy'] = order_by
         if offset is not None:
             params['startAt'] = offset
         if limit is not None:
@@ -126,18 +96,18 @@ class JiraAPI:
         if keys:
             params['keys'] = ','.join(keys[:50])
 
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='project/search', params=params
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url='project/search', params=params
+            ),
         )
 
     async def get_project_statuses(self, project_key: str) -> list[dict]:
         """Retrieves the valid statuses for a project.
 
-        The statuses are grouped by issue type, as each project has a set of valid issue types and each issue type has
+        The statuses are grouped by work item type, as each project has a set of valid work item types and each work item type has
         a set of valid statuses.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-projectidorkey-statuses-get
 
         Args:
             project_key: the (case-sensitive) project ID or project key.
@@ -145,58 +115,31 @@ class JiraAPI:
         Returns:
             A list of dictionaries.
         """
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url=f'project/{project_key}/statuses'
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url=f'project/{project_key}/statuses'
+            ),
         )
 
-    async def get_issue_types_for_user(self) -> list[dict]:
-        """Retrieves all the issue types.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-types/#api-rest-api-3-issuetype-get
+    async def get_work_items_types_for_user(self) -> list[dict]:
+        """Retrieves all the work item types.
 
         Returns:
-            A list of dictionaries with the details of the types of issues.
+            A list of dictionaries with the details of the types of work items.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='issuetype')  # type:ignore[return-value]
-
-    async def get_statuses(
-        self,
-        project_id: str | None = None,
-        offset: int | None = None,
-        limit: int | None = None,
-    ) -> dict:
-        """Retrieves a paginated list of statuses that match a search on project.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-status/#api-rest-api-3-statuses-search-get
-
-        Args:
-            project_id: the ID of the project the status is part of or null for global statuses.
-            offset: the index of the first item to return in a page of results (page offset).
-            limit: the maximum number of items to return per page. The Default is 200.
-
-        Returns:
-            A dictionary with the statuses.
-        """
-        params: dict[str, Any] = {}
-        if project_id:
-            params['projectId'] = project_id
-        if offset:
-            params['startAt'] = offset
-        if limit:
-            params['maxResults'] = limit
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='statuses/search', params=params
+        return cast(
+            list[dict],
+            await self._client.make_request(method=httpx.AsyncClient.get, url='issuetype'),
         )
 
     async def status(self) -> list[dict]:
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='status')  # type:ignore[return-value]
+        return cast(
+            list[dict], await self._client.make_request(method=httpx.AsyncClient.get, url='status')
+        )
 
     async def get_project(self, key: str) -> dict:
         """Retrieves the details of a project.
-
-        https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-projectidorkey-get
 
         Args:
             key: the project ID or project key (case-sensitive).
@@ -204,27 +147,27 @@ class JiraAPI:
         Returns:
             A dictionary with the details of the project.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url=f'project/{key}')  # type:ignore[return-value]
+        return cast(
+            dict,
+            await self._client.make_request(method=httpx.AsyncClient.get, url=f'project/{key}'),
+        )
 
     async def user_assignable_search(
         self,
         project_id_or_key: str | None = None,
-        issue_key: str | None = None,
-        issue_id: str | None = None,
+        work_item_key: str | None = None,
+        work_item_id: str | None = None,
         offset: int | None = None,
         limit: int | None = 50,
         query: str | None = None,
     ) -> list[dict]:
-        """Retrieves a list of users that can be assigned to an issue.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-user-search/#api-rest-api-3-user-assignable-search-get
+        """Retrieves a list of users that can be assigned to a work item.
 
         Args:
-            project_id_or_key: the project ID or project key (case-sensitive). Required, unless `issue_key` or
-            `issue_id` is specified.
-            issue_key: the key of the issue. Required, unless issueId or project is specified.
-            issue_id: the ID of the issue. Required, unless issueKey or project is specified.
+            project_id_or_key: the project ID or project key (case-sensitive). Required, unless `work_item_key` or
+            `work_item_id` is specified.
+            work_item_key: the key of the work item. Required, unless issueId or project is specified.
+            work_item_id: the ID of the work item. Required, unless issueKey or project is specified.
             offset: the index of the first item to return in a page of results (page offset).
             limit: the maximum number of items to return. Default is `50`.
             query: a string that is matched against user attributes, such as `displayName`, and `emailAddress`, to find
@@ -235,38 +178,40 @@ class JiraAPI:
         Returns:
             A list of dictionaries with the details of the users.
         """
-        if not any([project_id_or_key, issue_id, issue_key]):
-            raise ValueError('One of these parameters is required: project_id, issue_id, issue_key')
+        if not any([project_id_or_key, work_item_id, work_item_key]):
+            raise ValueError(
+                'One of these parameters is required: project_id, work_item_id, work_item_key'
+            )
 
         params: dict[str, Any] = {}
         if project_id_or_key:
-            params['project'] = project_id_or_key  # accept case-sensitive project key as well
+            params['project'] = project_id_or_key
         if offset is not None:
             params['startAt'] = offset
         if limit is not None:
             params['maxResults'] = limit
         if query:
             params['query'] = query
-        if issue_key:
-            params['issueKey'] = issue_key
-        if issue_id:
-            params['issueId'] = issue_id
+        if work_item_key:
+            params['issueKey'] = work_item_key
+        if work_item_id:
+            params['issueId'] = work_item_id
 
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='user/assignable/search', params=params
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url='user/assignable/search', params=params
+            ),
         )
 
     async def user_assignable_multi_projects(
         self,
-        project_keys: list[str] = None,
+        project_keys: list[str] | None = None,
         query: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
     ) -> list[dict]:
-        """Retrieves the users who can be assigned issues in one or more projects.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-user-search/#api-rest-api-3-user-assignable-multiprojectsearch-get
+        """Retrieves the users who can be assigned work items in one or more projects.
 
         Args:
             project_keys: a list of project keys (case-sensitive). This parameter accepts a comma-separated list.
@@ -289,64 +234,64 @@ class JiraAPI:
             params['projectKeys'] = ','.join(project_keys)
         if query:
             params['query'] = query
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url='user/assignable/multiProjectSearch',
-            params=params,
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='user/assignable/multiProjectSearch',
+                params=params,
+            ),
         )
 
-    async def get_issue(
+    async def get_work_item(
         self,
-        issue_id_or_key: str,
+        work_item_id_or_key: str,
         fields: str | None = None,
         properties: str | None = None,
     ) -> dict:
         """Retrieves the details of a work item by ID or key.
 
-        The issue is identified by its ID or key, however, if the identifier doesn't match an issue, a case-insensitive
-        search and check for moved issues is performed. If a matching issue is found its details are returned, a 302
-        or other redirect is not returned. The issue key returned in the response is the key of the issue found.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-get
+        The work item is identified by its ID or key, however, if the identifier doesn't match a work item, a case-insensitive
+        search and check for moved work items is performed. If a matching work item is found its details are returned, a 302
+        or other redirect is not returned. The work item key returned in the response is the key of the work item found.
 
         Args:
-            issue_id_or_key: the ID or case-sensitive key of the work item to retrieve.
-            fields: a list of fields to return for the issue. This parameter accepts a comma-separated list. Use it
+            work_item_id_or_key: the ID or case-sensitive key of the work item to retrieve.
+            fields: a list of fields to return for the work. This parameter accepts a comma-separated list. Use it
             to retrieve a subset of fields. Allowed values:
                 *all Returns all fields.
                 *navigable Returns navigable fields.
-            Any issue field, prefixed with a minus to exclude.
-            properties: a list of issue properties to return for the issue. This parameter accepts a comma-separated
+            Any work item field, prefixed with a minus to exclude.
+            properties: a list of work item properties to return for the work item. This parameter accepts a comma-separated
             list. Allowed values:
-                *all Returns all issue properties.
-                Any issue property key, prefixed with a minus to exclude.
+                *all Returns all work item properties.
+                Any work item property key, prefixed with a minus to exclude.
 
         Returns:
-            A dictionary with the detail sof the issue.
+            A dictionary with the detail sof the work item.
         """
         params: dict[str, Any] = {'expand': 'editmeta'}
         if fields is not None:
             params['fields'] = fields
         if properties is not None:
             params['properties'] = properties
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/{issue_id_or_key}',
-            params=params,
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}',
+                params=params,
+            ),
         )
 
-    async def get_issue_remote_links(
-        self, issue_id_or_key: str, global_id: str | None = None
+    async def get_work_item_remote_links(
+        self, work_item_id_or_key: str, global_id: str | None = None
     ) -> list[dict]:
-        """Retrieves the remote issue links for an issue.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-remote-links/#api-rest-api-3-issue-issueidorkey-remotelink-get
+        """Retrieves the remote work items links for a work item.
 
         Args:
-            issue_id_or_key: the key or ID of the issue whose remote links we want to retrieve.
-            global_id: the global ID of the remote issue link.
+            work_item_id_or_key: the key or ID of the work item whose remote links we want to retrieve.
+            global_id: the global ID of the remote work item link.
 
         Returns:
             A list of dictionaries.
@@ -354,20 +299,22 @@ class JiraAPI:
         params: dict[str, str] = {}
         if global_id:
             params['globalId'] = global_id
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/{issue_id_or_key}/remotelink',
-            params=params,
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/remotelink',
+                params=params,
+            ),
         )
 
-    async def create_issue_remote_link(self, issue_id_or_key: str, url: str, title: str) -> None:
-        """Creates or updates a remote issue link for an issue.
-
-        See Also:
-        https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-remote-links/#api-rest-api-3-issue-issueidorkey-remotelink-post
+    async def create_work_item_remote_link(
+        self, work_item_id_or_key: str, url: str, title: str
+    ) -> None:
+        """Creates or updates a remote work item link for a work item.
 
         Args:
-            issue_id_or_key: the ID or case-sensitive key of the work item
+            work_item_id_or_key: the ID or case-sensitive key of the work item
             url: the URL of the link.
             title: the title of the link.
 
@@ -382,18 +329,15 @@ class JiraAPI:
         }
         await self._client.make_request(
             method=httpx.AsyncClient.post,
-            url=f'issue/{issue_id_or_key}/remotelink',
+            url=f'issue/{work_item_id_or_key}/remotelink',
             data=json.dumps(payload),
         )
 
-    async def delete_issue_remote_link(self, issue_id_or_key: str, link_id: str) -> None:
+    async def delete_work_item_remote_link(self, work_item_id_or_key: str, link_id: str) -> None:
         """Deletes a web link associated to a work item.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-remote-links/#api-rest-api-3-issue-issueidorkey-remotelink-linkid-delete
-
         Args:
-            issue_id_or_key: the ID or case-sensitive key of the work item
+            work_item_id_or_key: the ID or case-sensitive key of the work item
             link_id: the IF of the link.
 
         Returns:
@@ -401,11 +345,37 @@ class JiraAPI:
         """
         await self._client.make_request(
             method=httpx.AsyncClient.delete,
-            url=f'issue/{issue_id_or_key}/remotelink/{link_id}',
+            url=f'issue/{work_item_id_or_key}/remotelink/{link_id}',
         )
         return None
 
-    async def search_issues(
+    async def update_work_item_remote_link(
+        self, work_item_id_or_key: str, link_id: str, url: str, title: str
+    ) -> None:
+        """Updates a remote work item link for a work item.
+
+        Args:
+            work_item_id_or_key: the ID or case-sensitive key of the work item
+            link_id: the ID of the link to update.
+            url: the URL of the link.
+            title: the title of the link.
+
+        Returns:
+            Nothing.
+        """
+        payload: dict[str, Any] = {
+            'object': {
+                'title': title,
+                'url': url,
+            }
+        }
+        await self._client.make_request(
+            method=httpx.AsyncClient.put,
+            url=f'issue/{work_item_id_or_key}/remotelink/{link_id}',
+            data=json.dumps(payload),
+        )
+
+    async def search_work_items(
         self,
         project_key: str | None = None,
         created_from: date | None = None,
@@ -414,20 +384,16 @@ class JiraAPI:
         updated_until: date | None = None,
         status: int | None = None,
         assignee: str | None = None,
-        issue_type: int | None = None,
+        work_item_type: int | None = None,
         jql_query: str | None = None,
         search_in_active_sprint: bool = False,
         fields: list[str] | None = None,
         next_page_token: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        order_by: WorkItemsSearchOrderBy | None = None,
     ) -> dict:
-        """Searches for issues using JQL. Recent updates might not be immediately visible in the returned search
+        """Searches for work items using JQL. Recent updates might not be immediately visible in the returned search
         results.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-post
 
         Args:
             project_key: search items that belong to the project with this (case-sensitive) key.
@@ -437,7 +403,7 @@ class JiraAPI:
             updated_until: search items updated until this date
             status: search items with this status id.
             assignee: search items assigned to this user (by account id).
-            issue_type: search items with this type id.
+            work_item_type: search items with this type id.
             jql_query: a JQL expression to filter items.
             search_in_active_sprint: if `True` only work items that belong to the currently active sprint will be
             retrieved.
@@ -445,19 +411,11 @@ class JiraAPI:
             next_page_token: an optional token to retrieve the next page of results.
             offset: N/A
             limit: retrieve this max number of results per page.
-            order_by: sort the items according to these criteria. This requirement needs to be placed at the end of
-            the JQL query, otherwise the JQL will be invalid. Possible values are:
-            - order by created asc
-            - order by created desc
-            - order by priority asc
-            - order by priority desc
-            - order by key asc
-            - order by key desc
 
         Returns:
             A dictionary with the results.
         """
-        jql: str = build_issue_search_jql(
+        jql: str = build_work_item_search_jql(
             project_key=project_key,
             created_from=created_from,
             created_until=created_until,
@@ -465,22 +423,24 @@ class JiraAPI:
             updated_until=updated_until,
             status=status,
             assignee=assignee,
-            issue_type=issue_type,
+            work_item_type=work_item_type,
             jql_query=jql_query,
             search_in_active_sprint=search_in_active_sprint,
-            order_by=order_by,
         )
         payload: dict[str, Any] = {
             'jql': jql,
-            'maxResults': limit or ISSUE_SEARCH_DEFAULT_MAX_RESULTS,
+            'maxResults': limit or WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS,
         }
         if fields:
             payload['fields'] = fields
         if next_page_token:
             payload['nextPageToken'] = next_page_token
 
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post, url='search/jql', data=json.dumps(payload)
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post, url='search/jql', data=json.dumps(payload)
+            ),
         )
 
     async def work_items_search_approximate_count(
@@ -491,17 +451,11 @@ class JiraAPI:
         updated_from: date | None = None,
         status: int | None = None,
         assignee: str | None = None,
-        issue_type: int | None = None,
+        work_item_type: int | None = None,
         jql_query: str | None = None,
     ) -> dict:
-        """Provides an estimated count of the issues that match the JQL. Recent updates might not be immediately visible
+        """Provides an estimated count of the work items that match the JQL. Recent updates might not be immediately visible
         in the returned output. This endpoint requires JQL to be bounded.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-approximate-count-post
-
-        Important: this is only available for the Jira cloud platform. For on-premises we need another way or to disable
-        the feature.
 
         Args:
             project_key: search items that belong to the project with this (case-sensitive) key.
@@ -510,54 +464,49 @@ class JiraAPI:
             updated_from: search items updated from this date forward.
             status: search items with this status id.
             assignee: search items assigned to this user (by account id).
-            issue_type: search items with this type id.
+            work_item_type: search items with this type id.
             jql_query: a JQL expression to filter items.
 
         Returns:
             A dictionary with the estimated number of items that match the search criteria.
         """
-        jql: str = build_issue_search_jql(
+        jql: str = build_work_item_search_jql(
             project_key=project_key,
             created_from=created_from,
             created_until=created_until,
             updated_from=updated_from,
             status=status,
             assignee=assignee,
-            issue_type=issue_type,
+            work_item_type=work_item_type,
             jql_query=jql_query,
         )
 
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post,
-            url='search/approximate-count',
-            data=json.dumps({'jql': jql}),
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post,
+                url='search/approximate-count',
+                data=json.dumps({'jql': jql}),
+            ),
         )
 
-    async def evaluate_expression(
-        self, expression: str, issue_key: str = None, project_key: str = None
-    ) -> dict:
-        """Evaluates a JQL expression.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-jira-expressions/#api-rest-api-3-expression-evaluate-post
+    async def parse_jql_query(self, jql_query: str) -> dict:
+        """Parses and validates a JQL query.
 
         Args:
-            expression: a JQL expression.
-            issue_key: a case-sensitive work item key.
-            project_key: a case-sensitive project key.
+            jql_query: the JQL query string to parse and validate.
 
         Returns:
-            A dictionary with the result of the evaluation.
+            A dictionary with the parsing result including any errors.
         """
-        payload: dict[str, Any] = {'expression': expression}
-        if issue_key:
-            payload['issue'] = {'key': issue_key}
-        if project_key:
-            payload['project'] = {'key': project_key}
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post,
-            url='expression/evaluate',
-            data=json.dumps(payload),
+        payload: dict[str, Any] = {'queries': [jql_query]}
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post,
+                url='jql/parse',
+                data=json.dumps(payload),
+            ),
         )
 
     async def global_settings(self) -> dict:
@@ -566,46 +515,150 @@ class JiraAPI:
         These settings determine whether optional features (for example, subtasks, time tracking, and others) are
         enabled. If time tracking is enabled, this operation also returns the time tracking configuration.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-jira-settings/#api-rest-api-3-configuration-get
-
         Returns:
             A dictionary with the settings.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='configuration')  # type:ignore[return-value]
+        return cast(
+            dict, await self._client.make_request(method=httpx.AsyncClient.get, url='configuration')
+        )
 
     async def server_info(self) -> dict:
         """Retrieves information of the Jira server.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-server-info/#api-group-server-info
-
         Returns:
             A dictionary with the details.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='serverInfo')  # type:ignore[return-value]
+        return cast(
+            dict, await self._client.make_request(method=httpx.AsyncClient.get, url='serverInfo')
+        )
 
     async def myself(self) -> dict:
         """Retrieves information of the Jira user connecting to the Jira server.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-myself/#api-rest-api-3-myself-get
-
         Returns:
             A dictionary with the details.
         """
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url='myself',
-            params={'expand': 'groups,applicationRoles'},
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='myself',
+                params={'expand': 'groups,applicationRoles'},
+            ),
         )
+
+    async def fetch_user_filters(
+        self,
+        account_id: str | None = None,
+        starred_only: bool = False,
+        max_results: int = 50,
+        include_shared: bool = False,
+    ) -> list[dict[str, str]]:
+        """Fetch JQL filters from Jira.
+
+        Args:
+            account_id: User account ID for fetching owned filters.
+            starred_only: If True, only return filters that are starred (marked as favorite).
+            max_results: Maximum number of filters to return (default 50).
+            include_shared: If True, fetch both personal and shared filters. If False, only personal filters.
+
+        Returns:
+            A list of dicts with 'label' (filter name), 'expression' (JQL), and 'source' ('remote').
+        """
+        filters = []
+        seen_ids = set()
+
+        if account_id:
+            self.logger.info(
+                f'Fetching personal filters for account_id={obfuscate_account_id(account_id)}'
+            )
+            personal_params: dict[str, Any] = {
+                'maxResults': max_results,
+                'expand': 'jql,favourite',
+                'accountId': account_id,
+            }
+
+            personal_response = await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='filter/search',
+                params=personal_params,
+            )
+
+            if personal_response and 'values' in personal_response:
+                self.logger.info(f'Received {len(personal_response["values"])} personal filters')
+                filters.extend(
+                    self._process_filters(personal_response['values'], starred_only, seen_ids)
+                )
+
+        if include_shared:
+            self.logger.info('Fetching shared filters (accessible via groups/projects)')
+            shared_params: dict[str, Any] = {
+                'maxResults': max_results,
+                'expand': 'jql,favourite',
+            }
+
+            shared_response = await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='filter/search',
+                params=shared_params,
+            )
+
+            if shared_response and 'values' in shared_response:
+                self.logger.info(f'Received {len(shared_response["values"])} shared filters')
+                filters.extend(
+                    self._process_filters(shared_response['values'], starred_only, seen_ids)
+                )
+
+        self.logger.info(f'Returning {len(filters)} total filters')
+        return filters
+
+    def _process_filters(
+        self, filter_values: list[dict], starred_only: bool, seen_ids: set[str]
+    ) -> list[dict[str, str]]:
+        """Process filter data from API response.
+
+        Args:
+            filter_values: List of filter dictionaries from API response
+            starred_only: If True, only include starred filters
+            seen_ids: Set of filter IDs already processed (to avoid duplicates)
+
+        Returns:
+            List of processed filter dictionaries
+        """
+        processed = []
+
+        for filter_data in filter_values:
+            filter_id = filter_data.get('id', '')
+            name = filter_data.get('name', '')
+            is_favourite = filter_data.get('favourite', False)
+            jql = filter_data.get('jql', '')
+
+            if filter_id in seen_ids:
+                continue
+
+            if starred_only and not is_favourite:
+                self.logger.info(f'Skipping non-starred filter: {name}')
+                continue
+
+            if not name or not jql:
+                self.logger.warning(f'Filter missing name or JQL: {filter_data}')
+                continue
+
+            processed.append(
+                {
+                    'label': name,
+                    'expression': jql,
+                    'source': 'remote',
+                    'starred': is_favourite,
+                }
+            )
+            seen_ids.add(filter_id)
+
+        return processed
 
     async def search_users(self, offset: int | None = None, limit: int | None = None) -> list[dict]:
         """Retrieves a list of all users, including active users, inactive users and previously deleted users that have
         an Atlassian account.
-
-        See Also:
-           https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-users/#api-rest-api-3-users-search-get
 
         Args:
             offset: the index of the first item to return.
@@ -619,8 +672,11 @@ class JiraAPI:
             params['startAt'] = offset
         if limit is not None:
             params['maxResults'] = limit
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='users/search', params=params
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url='users/search', params=params
+            ),
         )
 
     async def user_search(
@@ -631,9 +687,6 @@ class JiraAPI:
         limit: int | None = None,
     ) -> list[dict]:
         """Retrieves a list of active users that match the search string and property.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-user-search/#api-rest-api-3-user-search-get
 
         Args:
             username: the username to filter users.
@@ -654,134 +707,94 @@ class JiraAPI:
             params['username'] = username
         if query is not None:
             params['query'] = query
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='user/search', params=params
+        return cast(
+            list[dict],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url='user/search', params=params
+            ),
         )
 
-    async def get_groups_in_bulk(
-        self,
-        offset: int | None = None,
-        limit: int | None = None,
-        groups_ids: list[str] | None = None,
-        groups_names: list[str] | None = None,
-    ) -> dict:
-        """Retrieves a paginated list of groups.
-
-        https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-groups/#api-rest-api-3-group-bulk-get
+    async def add_comment(self, work_item_id_or_key: str, message: str) -> dict:
+        """Adds a comment to a work item.
 
         Args:
-            offset: the index of the first item to return in a page of results (page offset).
-            limit: the maximum number of items to return per page. The default is 50.
-            groups_ids: a list of groups IDs to retrieve.
-            groups_names: a list of groups names to retrieve.
-
-        Returns:
-            A dictionary with the results of the current page.
-        """
-        params: dict[str, Any] = {}
-        if limit is not None:
-            params['maxResults'] = limit
-        if offset is not None:
-            params['startAt'] = offset
-        if groups_ids:
-            params['groupId'] = ','.join(groups_ids)
-        if groups_names:
-            params['groupName'] = ','.join(groups_names)
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='group/bulk', params=params
-        )
-
-    async def get_users_in_group(
-        self, group_id: str, offset: int | None = None, limit: int | None = None
-    ) -> dict:
-        """Retrieves a paginated list of all (active) users in a group.
-
-        Note that users are ordered by username, however the username is not returned in the results due to privacy
-        reasons.
-
-        See Also:
-            - https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-groups/#api-rest-api-3-group-member-get
-            - https://support.atlassian.com/user-management/docs/default-groups-and-permissions/
-
-        Args:
-            group_id: The ID of the group.
-            offset: the index of the first item to return in a page of results (page offset).
-            limit: the maximum number of items to return per page (number should be between 1 and 50).
-
-        Returns:
-            A dictionary with the details of the users.
-        """
-        params: dict[str, Any] = {
-            'includeInactiveUsers': False,
-        }
-        if offset is not None:
-            params['startAt'] = offset
-        if limit is not None:
-            params['maxResults'] = limit
-        if group_id:
-            params['groupId'] = group_id
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url='group/member', params=params
-        )
-
-    async def add_comment(self, issue_id_or_key: str, message: str) -> dict:
-        """Adds a comment to an issue.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-post
-
-        Args:
-            issue_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
+            work_item_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
             message: the message of the comment.
 
         Returns:
             A dictionary with the details of the comment.
         """
         payload = self._build_payload_to_add_comment(message)
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post,
-            url=f'issue/{issue_id_or_key}/comment',
-            data=json.dumps(payload),
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post,
+                url=f'issue/{work_item_id_or_key}/comment',
+                data=json.dumps(payload),
+            ),
         )
 
     @staticmethod
     def _build_payload_to_add_comment(message: str) -> dict:
-        return {
-            'body': {
-                'content': [{'content': [{'text': message, 'type': 'text'}], 'type': 'paragraph'}],
-                'type': 'doc',
-                'version': 1,
-            }
-        }
-
-    async def get_comment(self, issue_id_or_key: str, comment_id: str) -> dict:
-        """Retrieves the detail sof a comment.
-
-        See Also:
-        https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-id-get
+        """Build payload for adding a comment, converting markdown to ADF.
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
+            message: Markdown text to convert to ADF
+
+        Returns:
+            Dictionary with ADF body structure
+        """
+
+        adf_doc = text_to_adf(message, track_warnings=False)
+
+        return {'body': adf_doc}
+
+    async def update_comment(self, work_item_id_or_key: str, comment_id: str, message: str) -> dict:
+        """Updates a comment on a work item.
+
+        Args:
+            work_item_id_or_key: the case-sensitive key of the work item whose comment we want to update.
+            comment_id: the ID of the comment to update.
+            message: the new message content in markdown format.
+
+        Returns:
+            A dictionary with the details of the updated comment.
+        """
+        payload = self._build_payload_to_add_comment(message)
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.put,
+                url=f'issue/{work_item_id_or_key}/comment/{comment_id}',
+                data=json.dumps(payload),
+            ),
+        )
+
+    async def get_comment(self, work_item_id_or_key: str, comment_id: str) -> dict:
+        """Retrieves the detail sof a comment.
+
+        Args:
+            work_item_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
             comment_id: the ID of the comment.
 
         Returns:
             A dictionary with the details of the comment.
         """
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/{issue_id_or_key}/comment/{comment_id}',
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/comment/{comment_id}',
+            ),
         )
 
     async def get_comments(
-        self, issue_id_or_key: str, offset: int | None = None, limit: int | None = None
+        self, work_item_id_or_key: str, offset: int | None = None, limit: int | None = None
     ) -> dict:
         """Retrieves the comments of a work item.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get
-
         Args:
-            issue_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
+            work_item_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
             offset: the index of the first item to return in a page of results (page offset).
             limit: the maximum number of items to return per page. The default is 50.
 
@@ -793,20 +806,20 @@ class JiraAPI:
             params['maxResults'] = limit
         if offset is not None:
             params['startAt'] = offset
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/{issue_id_or_key}/comment',
-            params=params,
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/comment',
+                params=params,
+            ),
         )
 
-    async def delete_comment(self, issue_id_or_key: str, comment_id: str) -> None:
+    async def delete_comment(self, work_item_id_or_key: str, comment_id: str) -> None:
         """Deletes a comment.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-id-delete
-
         Args:
-            issue_id_or_key: the case-sensitive key of the work item whose comment we want to delete.
+            work_item_id_or_key: the case-sensitive key of the work item whose comment we want to delete.
             comment_id: the ID of the comment.
 
         Returns:
@@ -814,56 +827,49 @@ class JiraAPI:
         """
         await self._client.make_request(
             method=httpx.AsyncClient.delete,
-            url=f'issue/{issue_id_or_key}/comment/{comment_id}',
+            url=f'issue/{work_item_id_or_key}/comment/{comment_id}',
         )
         return None
 
-    async def issue_edit_metadata(self, issue_id_or_key: str) -> dict:
-        """Retrieves the edit screen fields for an issue that are visible to and editable by the user.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-editmeta-get
+    async def work_item_edit_metadata(self, work_item_id_or_key: str) -> dict:
+        """Retrieves the edit screen fields for a work item that are visible to and editable by the user.
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
 
         Returns:
             A dictionary with the metadata.
         """
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url=f'issue/{issue_id_or_key}/editmeta'
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url=f'issue/{work_item_id_or_key}/editmeta'
+            ),
         )
 
-    async def update_issue(self, issue_id_or_key: str, payload: dict) -> dict:
+    async def update_work_item(self, work_item_id_or_key: str, payload: dict) -> dict:
         """Updates a work item.
 
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-put
-
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
             payload: the fields and their values.
 
         Returns:
             A dictionary with the details of the work item after the update.
         """
         data = {'update': payload}
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.put,
-            url=f'issue/{issue_id_or_key}',
-            data=json.dumps(data),
-            params={'returnIssue': True},
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.put,
+                url=f'issue/{work_item_id_or_key}',
+                data=json.dumps(data),
+                params={'returnIssue': True},
+            ),
         )
 
-    async def create_work_item(self, fields: dict) -> dict:
+    async def new_work_item(self, fields: dict) -> dict:
         """Creates a work item.
-
-        The current version of this method does not implement support for setting the value of the environment field.
-        If we want to change this then we would need to take care of the difference in the format of the
-        environment field for API v2 (does nto support ADF) and v3 (supports ADF).
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post
 
         Args:
             fields: a dictionary with the fields and their values to create the item.
@@ -872,34 +878,81 @@ class JiraAPI:
             A dictionary with the details of the new item.
         """
         payload = {'fields': fields}
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post, url='issue', data=json.dumps(payload)
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post, url='issue', data=json.dumps(payload)
+            ),
         )
 
-    async def transitions(self, issue_id_or_key: str) -> dict:
-        """Retrieves the applicable transitions for a work item.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-get
+    async def clone_work_item(
+        self,
+        work_item_id_or_key: str,
+        fields_to_clone: dict,
+        link_to_original: bool = True,
+    ) -> dict:
+        """Clones a work item by creating a new item with the specified fields.
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item to clone.
+            fields_to_clone: a dictionary with the fields and their values for the cloned item.
+            link_to_original: if True, creates a "Cloners" link between the original and cloned items.
+
+        Returns:
+            A dictionary with the details of the cloned item, including its key.
+        """
+
+        cloned_item = await self.new_work_item(fields_to_clone)
+
+        if link_to_original and cloned_item.get('key'):
+            try:
+                link_types_response = await self.work_item_link_types()
+                cloners_link_type = None
+
+                for link_type in link_types_response.get('issueLinkTypes', []):
+                    if link_type.get('name') == 'Cloners':
+                        cloners_link_type = link_type
+                        break
+
+                if cloners_link_type:
+                    link_payload = {
+                        'type': {'id': cloners_link_type.get('id')},
+                        'inwardIssue': {'key': work_item_id_or_key},
+                        'outwardIssue': {'key': cloned_item.get('key')},
+                    }
+                    await self._client.make_request(
+                        method=httpx.AsyncClient.post,
+                        url='issueLink',
+                        data=json.dumps(link_payload),
+                    )
+            except Exception as e:
+                self.logger.warning(
+                    f'Failed to create link between original and cloned work items: {e}'
+                )
+
+        return cloned_item
+
+    async def transitions(self, work_item_id_or_key: str) -> dict:
+        """Retrieves the applicable transitions for a work item.
+
+        Args:
+            work_item_id_or_key: the case-sensitive key of the work item.
 
         Returns:
             A dictionary with the details of the transitions.
         """
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get, url=f'issue/{issue_id_or_key}/transitions'
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get, url=f'issue/{work_item_id_or_key}/transitions'
+            ),
         )
 
-    async def transition_issue(self, issue_id_or_key: str, transition_id: str) -> None:
-        """Performs an issue transition.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-post
+    async def transition_work_item(self, work_item_id_or_key: str, transition_id: str) -> None:
+        """Performs a work item transition.
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
             transition_id: the ID of the status transition.
 
         Returns:
@@ -908,31 +961,24 @@ class JiraAPI:
         payload = {'transition': transition_id}
         await self._client.make_request(
             method=httpx.AsyncClient.post,
-            url=f'issue/{issue_id_or_key}/transitions',
+            url=f'issue/{work_item_id_or_key}/transitions',
             data=json.dumps(payload),
         )
         return None
 
-    async def create_issue_link(
+    async def create_work_item_link(
         self,
-        left_issue_key: str,
-        right_issue_key: str,
+        left_work_item_key: str,
+        right_work_item_key: str,
         link_type: str,
         link_type_id: str,
     ) -> None:
-        """Creates a link between two issues. Use this operation to indicate a relationship between two issues and
-        optionally add a comment to the "from" (outward) issue
-
-        The current version of this method does not implement support for adding a comment in the link between the 2
-        work items. If we want to change this then we would need to take care of the difference in the format of the
-        comment field for API v2 (does nto support ADF) and v3 (supports ADF).
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-links/#api-rest-api-3-issuelink-post
+        """Creates a link between two work items. Use this operation to indicate a relationship between two work items and
+        optionally add a comment to the "from" (outward) work item
 
         Args:
-            left_issue_key: the case-sensitive key of the work item.
-            right_issue_key: the case-sensitive key of the work item.
+            left_work_item: the case-sensitive key of the work item.
+            right_work_item_key: the case-sensitive key of the work item.
             link_type: the type of link.
             link_type_id: the ID of the type of link.
 
@@ -945,11 +991,11 @@ class JiraAPI:
             },
         }
         if link_type == 'inward':
-            payload['inwardIssue'] = {'key': right_issue_key}
-            payload['outwardIssue'] = {'key': left_issue_key}
+            payload['inwardIssue'] = {'key': right_work_item_key}
+            payload['outwardIssue'] = {'key': left_work_item_key}
         else:
-            payload['inwardIssue'] = {'key': left_issue_key}
-            payload['outwardIssue'] = {'key': right_issue_key}
+            payload['inwardIssue'] = {'key': left_work_item_key}
+            payload['outwardIssue'] = {'key': right_work_item_key}
         await self._client.make_request(
             method=httpx.AsyncClient.post,
             url='issueLink',
@@ -957,32 +1003,32 @@ class JiraAPI:
         )
         return None
 
-    async def issue_link_types(self) -> dict:
-        """Retrieves a list of all issue link types.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-link-types/#api-rest-api-3-issuelinktype-get
+    async def work_item_link_types(self) -> dict:
+        """Retrieves a list of all work item link types.
 
         Returns:
             A dictionary with the types of links between work items.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='issueLinkType')  # type:ignore[return-value]
+        return cast(
+            dict, await self._client.make_request(method=httpx.AsyncClient.get, url='issueLinkType')
+        )
 
-    async def delete_issue_link(self, link_id: str) -> None:
+    async def delete_work_item_link(self, link_id: str) -> None:
         await self._client.make_request(method=httpx.AsyncClient.delete, url=f'issueLink/{link_id}')
         return None
 
-    async def get_issue_create_meta(
-        self, project_id_or_key: str, issue_type_id: str, offset: int = 0, limit: int | None = None
+    async def get_work_item_create_meta(
+        self,
+        project_id_or_key: str,
+        work_item_type_id: str,
+        offset: int = 0,
+        limit: int | None = None,
     ) -> dict:
-        """Retrieves a page of field metadata for a specified project and type of issue id.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-createmeta-projectidorkey-issuetypes-issuetypeid-get
+        """Retrieves a page of field metadata for a specified project and type of work item id.
 
         Args:
             project_id_or_key: the case-sensitive key of the project.
-            issue_type_id: the ID of a type of issue.
+            work_item_type_id: the ID of a type of work item.
             offset: the index of the first item to return in a page of results (page offset).
             limit: the maximum number of items to return per page.
 
@@ -994,28 +1040,28 @@ class JiraAPI:
             params['startAt'] = offset
         if limit is not None:
             params['maxResults'] = limit
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/createmeta/{project_id_or_key}/issuetypes/{issue_type_id}',
-            params=params,
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/createmeta/{project_id_or_key}/issuetypes/{work_item_type_id}',
+                params=params,
+            ),
         )
 
-    def add_attachment_to_issue(
+    def add_attachment_to_work_item(
         self,
-        issue_id_or_key: str,
+        work_item_id_or_key: str,
         filename,
         file_name: str,
         mime_type: str | None = None,
     ) -> list[dict]:
-        """Adds an attachment to an issue.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/#api-rest-api-3-issue-issueidorkey-attachments-post
+        """Adds an attachment to a work item.
 
         Attachments are posted as multipart/form-data (RFC 1867).
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
             filename: the full name of the file to upload.
             file_name: the name of the file to upload.
             mime_type: the MIME type of the file.
@@ -1026,8 +1072,7 @@ class JiraAPI:
 
         with open(filename, 'rb') as file_to_upload:
             try:
-                # attempt to detect the MIME type based on the content of the file
-                detected_mime_type: str = self._detect_file_mime_type(file_to_upload)  # type:ignore
+                detected_mime_type: str = self._detect_file_mime_type(file_to_upload)
             except FileNotFoundError as e:
                 self.logger.warning(
                     f'File not found. Unable to determine the MIME type of he file {filename}.'
@@ -1035,11 +1080,14 @@ class JiraAPI:
                 raise FileUploadException(
                     f'The file {filename} was not found. Unable to upload it as attachment.'
                 ) from e
-            return self._sync_client.make_request(  # type:ignore[return-value]
-                method=httpx.post,
-                url=f'issue/{issue_id_or_key}/attachments',
-                headers={'X-Atlassian-Token': 'no-check'},
-                files={'file': (file_name, file_to_upload, detected_mime_type)},
+            return cast(
+                list[dict],
+                self._sync_client.make_request(
+                    method=httpx.post,
+                    url=f'issue/{work_item_id_or_key}/attachments',
+                    headers={'X-Atlassian-Token': 'no-check'},
+                    files={'file': (file_name, file_to_upload, detected_mime_type)},
+                ),
             )
 
     @staticmethod
@@ -1047,10 +1095,7 @@ class JiraAPI:
         return magic.from_buffer(file_to_upload.read(2028), mime=True)
 
     async def delete_attachment(self, attachment_id: str) -> None:
-        """Deletes an attachment from an issue.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/#api-rest-api-3-attachment-id-delete
+        """Deletes an attachment from a work item.
 
         Args:
             attachment_id: The ID of the attachment.
@@ -1063,29 +1108,8 @@ class JiraAPI:
         )
         return None
 
-    async def get_attachment(self, attachment_id: str) -> dict:
-        """Retrieves an attachment (metadata).
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/#api-rest-api-3-attachment-id-get
-            https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issue-attachments/#api-rest-api-2-attachment-id-get
-
-        Args:
-            attachment_id: the ID of the attachment.
-
-        Returns:
-            A dictionary with the metadata of the attachment.
-        """
-        return await self._client.make_request(
-            method=httpx.AsyncClient.get, url=f'attachment/{attachment_id}'
-        )
-
     async def get_attachment_content(self, attachment_id: str) -> Any:
         """Retrieves the contents of an attachment.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/#api-rest-api-3-attachment-content-id-get
-            https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issue-attachments/#api-rest-api-2-attachment-content-id-get
 
         Args:
             attachment_id: The ID of the attachment.
@@ -1099,25 +1123,17 @@ class JiraAPI:
             follow_redirects=True,
         )
 
-    async def get_issue_work_log(
+    async def get_work_item_work_log(
         self,
-        issue_id_or_key: str,
+        work_item_id_or_key: str,
         offset: int | None = None,
         limit: int | None = None,
     ) -> dict:
-        """Retrieves work logs for an issue (ordered by created time), starting from the oldest worklog or from the
+        """Retrieves work logs for a work item (ordered by created time), starting from the oldest worklog or from the
         worklog started on or after a date and time.
 
-        ```{important}
-        Time tracking must be enabled in Jira, otherwise this operation returns an error. For more information, see
-        [Configuring time tracking](https://confluence.atlassian.com/x/qoXKM).
-        ```
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-worklogs/#api-rest-api-3-issue-issueidorkey-worklog-get
-
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
             offset: the index of the first item to return in a page of results (page offset).
             limit: the maximum number of items to return per page. The default is 5000.
 
@@ -1129,39 +1145,34 @@ class JiraAPI:
             params['startAt'] = offset
         if limit is not None:
             params['maxResults'] = limit
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url=f'issue/{issue_id_or_key}/worklog',
-            params=params,
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/worklog',
+                params=params,
+            ),
         )
 
-    async def add_issue_work_log(
+    async def add_work_item_work_log(
         self,
-        issue_id_or_key: str,
+        work_item_id_or_key: str,
         time_spent: str,
         started: datetime,
         time_remaining: str | None = None,
         comment: str | None = None,
     ) -> dict:
-        """Adds a worklog to an issue.
-
-        ```{important}
-        Time tracking must be enabled in Jira, otherwise this operation returns an error. For more information, see
-        [Configuring time tracking](https://confluence.atlassian.com/x/qoXKM).
-        ```
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-worklogs/#api-rest-api-3-issue-issueidorkey-worklog-post
+        """Adds a worklog to a work item.
 
         Args:
-            issue_id_or_key: the case-sensitive key of the work item.
+            work_item_id_or_key: the case-sensitive key of the work item.
             comment: a comment about the worklog. Optional when creating or updating a worklog.
             started: the datetime on which the worklog effort was started. Required when creating a worklog. Optional
             when updating a worklog.
-            time_spent: the time spent working on the issue as days (#d), hours (#h), or minutes (#m or #). Required
+            time_spent: the time spent working on the work item as days (#d), hours (#h), or minutes (#m or #). Required
             when creating a worklog if timeSpentSeconds isn't provided. Optional when updating a worklog. Cannot be
             provided if timeSpentSecond is provided.
-            time_remaining: the value to set as the issue's remaining time estimate, as days (#d), hours (#h),
+            time_remaining: the value to set as the work item's remaining time estimate, as days (#d), hours (#h),
             or minutes (#m or #). For example, 2d. Required when adjustEstimate is new.
 
         Returns:
@@ -1176,26 +1187,73 @@ class JiraAPI:
         params = {'adjustEstimate': 'auto'}
         if time_remaining:
             params = {'newEstimate': time_remaining, 'adjustEstimate': 'new'}
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post,
-            url=f'issue/{issue_id_or_key}/worklog',
-            data=json.dumps(payload),
-            params=params,
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.post,
+                url=f'issue/{work_item_id_or_key}/worklog',
+                data=json.dumps(payload),
+                params=params,
+            ),
         )
 
-    async def delete_work_log(self, issue_id_or_key: str, worklog_id: str) -> bool:
-        """Deletes a worklog from an issue.
-
-        ```{important}
-        Time tracking must be enabled in Jira, otherwise this operation returns an error. For more information, see
-        [Configuring time tracking](https://confluence.atlassian.com/x/qoXKM).
-        ```
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-worklogs/#api-rest-api-3-issue-issueidorkey-worklog-id-delete
+    async def update_work_log(
+        self,
+        work_item_id_or_key: str,
+        worklog_id: str,
+        time_spent: str | None = None,
+        started: datetime | None = None,
+        time_remaining: str | None = None,
+        comment: str | None = None,
+    ) -> dict:
+        """Updates a worklog for a work item.
 
         Args:
-            issue_id_or_key: the ID or key of the issue.
+            work_item_id_or_key: the case-sensitive key of the work item.
+            worklog_id: the ID of the worklog to update.
+            time_spent: the time spent working on the work item as days (#d), hours (#h), or minutes (#m or #). Required
+            when creating a worklog if timeSpentSeconds isn't provided. Optional when updating a worklog. Cannot be
+            provided if timeSpentSecond is provided.
+            started: the datetime on which the worklog effort was started. Required when creating a worklog. Optional
+            when updating a worklog.
+            comment: a comment about the worklog. Optional when creating or updating a worklog.
+            time_remaining: the value to set as the work item's remaining time estimate, as days (#d), hours (#h),
+            or minutes (#m or #). For example, 2d. Required when adjustEstimate is new.
+
+        Returns:
+            A dictionary with the updated worklog's details.
+        """
+        payload: dict[str, Any] = {}
+        if started:
+            payload['started'] = started.isoformat(timespec='milliseconds').replace(
+                '+00:00', '+0000'
+            )
+        if time_spent:
+            payload['timeSpent'] = time_spent
+        if comment is not None and (
+            comment_payload := self._build_worklog_comment_payload(comment)
+        ):
+            payload['comment'] = comment_payload
+
+        params = {'adjustEstimate': 'auto'}
+        if time_remaining:
+            params = {'newEstimate': time_remaining, 'adjustEstimate': 'new'}
+
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.put,
+                url=f'issue/{work_item_id_or_key}/worklog/{worklog_id}',
+                data=json.dumps(payload),
+                params=params,
+            ),
+        )
+
+    async def delete_work_log(self, work_item_id_or_key: str, worklog_id: str) -> bool:
+        """Deletes a worklog from a work item.
+
+        Args:
+            work_item_id_or_key: the ID or key of the work item.
             worklog_id: the ID of the worklog.
 
         Returns:
@@ -1203,7 +1261,7 @@ class JiraAPI:
         """
         await self._client.make_request(
             method=httpx.AsyncClient.delete,
-            url=f'issue/{issue_id_or_key}/worklog/{worklog_id}',
+            url=f'issue/{work_item_id_or_key}/worklog/{worklog_id}',
         )
         return True
 
@@ -1212,34 +1270,23 @@ class JiraAPI:
         """Builds the payload required for adding/set a description/comment to a worklog when a worklog is added to a work item.
 
         Args:
-            message: a comment about the worklog. Optional when creating or updating a worklog.
+            message: a comment about the worklog (markdown format). Optional when creating or updating a worklog.
 
         Returns:
-            A dictionary with the payload's data for setting the worklog's comment/description.
+            A dictionary with the payload's data for setting the worklog's comment/description in ADF format.
         """
-        return {
-            'content': [{'content': [{'text': message, 'type': 'text'}], 'type': 'paragraph'}],
-            'type': 'doc',
-            'version': 1,
-        }
+
+        return cast(dict, text_to_adf(message, track_warnings=False))
 
     async def get_fields(self) -> list[dict]:
-        """Retrieves system and custom issue fields according to the following rules.
-
-        - Fields that cannot be added to the issue navigator are always returned.
-        - Fields that cannot be placed on an issue screen are always returned.
-        - Fields that depend on global Jira settings are only returned if the setting is enabled. That is,
-        timetracking fields, subtasks, votes, and watches.
-        - For all other fields, this operation only returns the fields that the user has permission to view (that is,
-        the field is used in at least one project that the user has Browse Projects project permission for.)
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-fields/#api-rest-api-3-field-get
+        """Retrieves work item fields.
 
         Returns:
             A list of dictionaries.
         """
-        return await self._client.make_request(method=httpx.AsyncClient.get, url='field')
+        return cast(
+            list[dict], await self._client.make_request(method=httpx.AsyncClient.get, url='field')
+        )
 
     async def get_label_suggestions(self, query: str = '') -> Any | None:
         """Get label suggestions from Jira.
@@ -1251,341 +1298,3 @@ class JiraAPI:
             List of label suggestions or None if request fails
         """
         return await self._client.get_label_suggestions(query)
-
-
-class JiraAPIv2(JiraAPI):
-    """Implements methods to connect to the REST API v2 exposed by the Jira Cloud Platform.
-
-    **API Docs**: https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/#about
-
-    This class implements methods for connecting to Jira REST API v2.
-    """
-
-    API_PATH_PREFIX = '/rest/api/2/'
-
-    @staticmethod
-    def _build_payload_to_add_comment(message: str) -> dict:
-        return {'body': message}
-
-
-class JiraDataCenterAPI(JiraAPI):
-    """Implements the API exposed by the Jira Data Center (aka. on-premises) platform.
-
-    **API Docs**: https://developer.atlassian.com/server/jira/platform/rest/v11001/intro/#gettingstarted
-    """
-
-    # see: https://developer.atlassian.com/server/jira/platform/rest/v11001/intro/#structure
-    API_PATH_PREFIX = '/rest/api/2/'
-
-    async def search_projects(
-        self,
-        offset: int | None = None,
-        limit: int | None = None,
-        query: str | None = None,
-        order_by: str | None = None,
-        keys: list[str] = None,
-    ) -> dict:
-        """Retrieves all projects visible for the currently logged-in user, i.e. all the projects the user has either
-        'Browse projects' or 'Administer projects' permission. If no user is logged in, it returns all projects that
-        are visible for anonymous users.
-
-        See Also:
-            - https://developer.atlassian.com/server/jira/platform/rest/v11000/api-group-project/#api-api-2-project-get
-            - https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/project-getAllProjects
-
-        Args:
-            offset: N/A
-            limit: N/A
-            order_by: N/A
-            keys: N/A
-            query: N/A
-
-        Returns:
-            A dictionary with the details of the projects.
-        """
-        data = await self._client.make_request(method=httpx.AsyncClient.get, url='project')  # type:ignore[return-value]
-        return {'values': data, 'isLast': True}
-
-    async def search_issues(
-        self,
-        project_key: str | None = None,
-        created_from: date | None = None,
-        created_until: date | None = None,
-        updated_from: date | None = None,
-        updated_until: date | None = None,
-        status: int | None = None,
-        assignee: str | None = None,
-        issue_type: int | None = None,
-        jql_query: str | None = None,
-        search_in_active_sprint: bool = False,
-        fields: list[str] | None = None,
-        next_page_token: str | None = None,
-        offset: int | None = None,
-        limit: int | None = None,
-        order_by: WorkItemsSearchOrderBy | None = None,
-    ) -> dict:
-        """Searches for issues using JQL. Recent updates might not be immediately visible in the returned search
-        results.
-
-        See Also:
-            - https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-search/#api-api-2-search-post
-            - https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/search-search
-
-        Args:
-            project_key: search items that belong to the project with this (case-sensitive) key.
-            created_from: search items created from this date forward.
-            created_until: search items created until this date.
-            updated_from: search items updated from this date forward.
-            updated_until: search items updated until this date
-            status: search items with this status id.
-            assignee: search items assigned to this user (by account id).
-            issue_type: search items with this type id.
-            jql_query: a JQL expression to filter items.
-            search_in_active_sprint: if `True` only work items that belong to the currently active sprint will be
-            retrieved.
-            fields: retrieve these fields for every item found.
-            next_page_token: N/A
-            offset: the index of the first issue to return (0-based)
-            limit: retrieve this max number of results per page.
-            order_by: sort the items according to these criteria. This requirement needs to be placed at the end of
-            the JQL query, otherwise the JQL will be invalid. Possible values are:
-            - order by created asc
-            - order by created desc
-            - order by priority asc
-            - order by priority desc
-            - order by key asc
-            - order by key desc
-
-        Returns:
-            A dictionary with the results.
-        """
-        jql: str = build_issue_search_jql(
-            project_key=project_key,
-            created_from=created_from,
-            created_until=created_until,
-            updated_from=updated_from,
-            updated_until=updated_until,
-            status=status,
-            assignee=assignee,
-            issue_type=issue_type,
-            jql_query=jql_query,
-            search_in_active_sprint=search_in_active_sprint,
-            order_by=order_by,
-        )
-        payload: dict[str, Any] = {
-            'jql': jql,
-            'maxResults': limit or ISSUE_SEARCH_DEFAULT_MAX_RESULTS,
-        }
-        if fields:
-            payload['fields'] = fields
-        if offset:
-            payload['startAt'] = offset
-
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post, url='search', data=json.dumps(payload)
-        )
-
-    async def work_items_search_approximate_count(
-        self,
-        project_key: str | None = None,
-        created_from: date | None = None,
-        created_until: date | None = None,
-        updated_from: date | None = None,
-        status: int | None = None,
-        assignee: str | None = None,
-        issue_type: int | None = None,
-        jql_query: str | None = None,
-    ) -> dict:
-        # not supported in Jira DC
-        raise NotImplementedError('This feature is not implemented in Jira Data Center platform.')
-
-    async def server_info(self) -> dict:
-        """Retrieves information of the Jira server.
-
-        See Also:
-            - https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/serverInfo-getServerInfo
-            - https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-serverinfo/#api-api-2-serverinfo-get
-
-        Returns:
-            A dictionary with the details.
-        """
-        return await super().server_info()
-
-    async def myself(self) -> dict:
-        """Retrieves information of the Jira user connecting to the Jira server.
-
-        See Also:
-            - https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/myself-getUser
-            - https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-myself/#api-group-myself
-
-        Returns:
-            A dictionary with the details.
-        """
-        return await super().myself()
-
-    async def user_search(
-        self,
-        username: str | None = None,
-        query: str | None = None,
-        offset: int | None = None,
-        limit: int | None = None,
-    ) -> list[dict]:
-        """Retrieves a list of active users that match the search string and property.
-
-        See Also:
-            - https://docs.atlassian.com/software/jira/docs/api/REST/9.17.0/#api/2/user-findUsers
-            -
-
-        Args:
-            username: A query string used to search username, name or e-mail address.
-            query: N/A.
-            offset: the index of the first item to return.
-            limit: the maximum number of items to return (limited to 1000).
-
-        Returns:
-            A list of dictionaries with the details of the users.
-        """
-        return await super().user_search(username=query or username, offset=offset, limit=limit)
-
-    async def user_assignable_multi_projects(
-        self,
-        project_keys: list[str] = None,
-        query: str | None = None,
-        offset: int | None = None,
-        limit: int | None = None,
-    ) -> list[dict]:
-        """Retrieves the users who can be assigned issues in one or more projects.
-
-        See Also:
-            https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-user-search/#api-rest-api-3-user-assignable-multiprojectsearch-get
-
-        Args:
-            project_keys: a list of project keys (case-sensitive). This parameter accepts a comma-separated list.
-            offset: N/A
-            limit: the maximum number of items to return per page. Default is `50`.
-            query: expects a username.
-            Required, unless `username` or `accountId` is specified.
-
-        Returns:
-            A list of dictionaries with the details of the users.
-        """
-        params: dict[str, Any] = {}
-        if limit is not None:
-            params['maxResults'] = limit
-        if project_keys:
-            params['projectKeys'] = ','.join(project_keys)
-        if query:
-            params['username'] = query
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.get,
-            url='user/assignable/multiProjectSearch',
-            params=params,
-        )
-
-    async def get_attachment(self, attachment_id: str) -> dict:
-        """Retrieves an attachment (metadata).
-
-        See Also:
-            https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/attachment-getAttachment
-            https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-attachment/#api-api-2-attachment-id-get
-
-        Args:
-            attachment_id: the ID of the attachment.
-
-        Returns:
-            JSON representation of the attachment meta-data. The representation does not contain the
-            attachment itself, but contains a URI that can be used to download the actual attached file.
-        """
-        return await super().get_attachment(attachment_id)
-
-    async def get_attachment_content(self, attachment_id: str) -> Any:
-        """Retrieves the contents of an attachment.
-
-        See Also:
-            https://docs.atlassian.com/software/jira/docs/api/REST/1000.1580.0/#api/2/attachment
-            https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-attachment/#api-api-2-attachment-id-get
-
-        Args:
-            attachment_id: The ID of the attachment.
-
-        Returns:
-            A bytes representation of the attachment's content; or `None` if the attachment can not be downloaded.
-        """
-        attachment: dict
-        if attachment := await self.get_attachment(attachment_id):
-            if content := attachment.get('content'):
-                await self._async_http_client.make_request(
-                    method=httpx.AsyncClient.get,
-                    url=content,
-                    follow_redirects=True,
-                )
-        return None
-
-    @staticmethod
-    def _build_payload_to_add_comment(message: str) -> dict:
-        return {'body': message}
-
-    async def get_issue_work_log(
-        self,
-        issue_id_or_key: str,
-        offset: int | None = None,
-        limit: int | None = None,
-    ) -> dict:
-        """Retrieves all work logs for an issue. Work logs won't be returned if the Log work field is hidden for the
-        project.
-
-        See Also:
-            https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-issue/#api-api-2-issue-issueidorkey-worklog-get
-
-        Args:
-            issue_id_or_key: the case-sensitive key of the work item.
-            offset: N/A.
-            limit: N/A.
-
-        Returns:
-            A dictionary with the worklog of the work item.
-        """
-        return await super().get_issue_work_log(issue_id_or_key)
-
-    async def add_issue_work_log(
-        self,
-        issue_id_or_key: str,
-        time_spent: str,
-        started: datetime,
-        time_remaining: str | None = None,
-        comment: str | None = None,
-    ) -> dict:
-        """Adds a worklog to an issue.
-
-        See Also:
-            https://developer.atlassian.com/server/jira/platform/rest/v11001/api-group-issue/#api-api-2-issue-issueidorkey-worklog-post
-
-        Args:
-            issue_id_or_key: the case-sensitive key of the work item.
-            comment: a comment about the worklog. Optional when creating or updating a worklog.
-            started: the datetime on which the worklog effort was started. Required when creating a worklog. Optional
-            when updating a worklog.
-            time_spent: the time spent working on the issue as days (#d), hours (#h), or minutes (#m or #). Required
-            when creating a worklog if timeSpentSeconds isn't provided. Optional when updating a worklog. Cannot be
-            provided if timeSpentSecond is provided.
-            time_remaining: required when 'new' is selected for adjustEstimate. e.g. "2d".
-
-        Returns:
-            A dictionary with the worklog's details.
-        """
-        payload = {
-            'started': started.isoformat(timespec='milliseconds').replace('+00:00', '+0000'),
-            'timeSpent': time_spent,
-            'issueId': issue_id_or_key,
-        }
-        if comment:
-            payload['comment'] = comment
-        params = {'adjustEstimate': 'auto'}
-        if time_remaining:
-            params = {'newEstimate': time_remaining, 'adjustEstimate': 'new'}
-        return await self._client.make_request(  # type:ignore[return-value]
-            method=httpx.AsyncClient.post,
-            url=f'issue/{issue_id_or_key}/worklog',
-            data=json.dumps(payload),
-            params=params,
-        )

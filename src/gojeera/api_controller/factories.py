@@ -1,30 +1,34 @@
 from datetime import datetime
+import logging
 from typing import Any
 
-from dateutil.parser import isoparse  # type:ignore[import-untyped]
+from dateutil.parser import isoparse
 
 from gojeera.config import CONFIGURATION
+from gojeera.constants import LOGGER_NAME
 from gojeera.models import (
     Attachment,
-    IssueComment,
-    IssuePriority,
-    IssueStatus,
-    IssueType,
-    JiraIssue,
-    JiraIssueComponent,
     JiraSprint,
     JiraUser,
-    JiraWorkItemFields,
+    JiraWorkItem,
+    JiraWorkItemComponent,
+    JiraWorkItemGenericFields,
     Project,
-    RelatedJiraIssue,
+    RelatedJiraWorkItem,
     TimeTracking,
+    WorkItemComment,
+    WorkItemPriority,
+    WorkItemStatus,
+    WorkItemType,
 )
 from gojeera.utils.fields import get_additional_fields_values, get_custom_fields_values
+
+logger = logging.getLogger(LOGGER_NAME)
 
 
 class WorkItemFactory:
     @staticmethod
-    def create_work_item(data: dict) -> JiraIssue:
+    def new_work_item(data: dict) -> JiraWorkItem:
         """Creates an instance of `JiraIssue` for a work item as returned by the API.
 
         Args:
@@ -35,19 +39,22 @@ class WorkItemFactory:
         """
 
         fields: dict = data.get('fields', {})
-        project: dict = fields.get(JiraWorkItemFields.PROJECT.value, {})
-        status: dict = fields.get(JiraWorkItemFields.STATUS.value, {})
-        assignee: dict | None = fields.get(JiraWorkItemFields.ASSIGNEE.value)
-        reporter: dict | None = fields.get(JiraWorkItemFields.REPORTER.value)
-        priority: dict | None = fields.get(JiraWorkItemFields.PRIORITY.value)
-        parent_issue_key = (
-            fields.get(JiraWorkItemFields.PARENT.value).get('key')
-            if fields.get(JiraWorkItemFields.PARENT.value)
-            else None
-        )
+        project: dict = fields.get(JiraWorkItemGenericFields.PROJECT.value, {})
+        status: dict = fields.get(JiraWorkItemGenericFields.STATUS.value, {})
+        assignee: dict | None = fields.get(JiraWorkItemGenericFields.ASSIGNEE.value)
+        reporter: dict | None = fields.get(JiraWorkItemGenericFields.REPORTER.value)
+        priority: dict | None = fields.get(JiraWorkItemGenericFields.PRIORITY.value)
+
+        parent_work_item_key = None
+        parent_work_item_type = None
+        if parent := fields.get(JiraWorkItemGenericFields.PARENT.value):
+            parent_work_item_key = parent.get('key')
+            if parent_fields := parent.get('fields'):
+                if work_item_issuetype := parent_fields.get('issuetype'):
+                    parent_work_item_type = work_item_issuetype.get('name')
 
         tracking = None
-        if time_tracking := fields.get(JiraWorkItemFields.TIME_TRACKING.value):
+        if time_tracking := fields.get(JiraWorkItemGenericFields.TIME_TRACKING.value):
             tracking = TimeTracking(
                 original_estimate=time_tracking.get('originalEstimate'),
                 remaining_estimate=time_tracking.get('remainingEstimate'),
@@ -67,7 +74,7 @@ class WorkItemFactory:
                 )
 
         attachments: list[Attachment] = []
-        for item in fields.get(JiraWorkItemFields.ATTACHMENT.value, []):
+        for item in fields.get(JiraWorkItemGenericFields.ATTACHMENT.value, []):
             creator = None
             if author := item.get('author'):
                 creator = JiraUser(
@@ -87,33 +94,30 @@ class WorkItemFactory:
                 )
             )
 
-        # extract the components
-        components: list[JiraIssueComponent] = []
-        for component in fields.get(JiraWorkItemFields.COMPONENTS.value, []) or []:
+        components: list[JiraWorkItemComponent] = []
+        for component in fields.get(JiraWorkItemGenericFields.COMPONENTS.value, []) or []:
             components.append(
-                JiraIssueComponent(
+                JiraWorkItemComponent(
                     id=component.get('id'),
                     name=component.get('name'),
                     description=component.get('description'),
                 )
             )
 
-        # extract the value of the issue's custom fields
         custom_fields_values: dict[str, Any] | None = None
         if editmeta := data.get('editmeta', {}):
             custom_fields_values = get_custom_fields_values(fields, editmeta.get('fields', {}))
 
-        # extract the value of the issue's additional fields
         additional_fields: dict[str, Any] = get_additional_fields_values(
             fields,
-            [item.value for item in JiraWorkItemFields],
+            [item.value for item in JiraWorkItemGenericFields],
         )
 
-        return JiraIssue(
-            id=data.get('id'),
-            key=data.get('key'),
-            summary=fields.get(JiraWorkItemFields.SUMMARY.value, ''),
-            description=fields.get(JiraWorkItemFields.DESCRIPTION.value),
+        return JiraWorkItem(
+            id=str(data.get('id', '')),
+            key=str(data.get('key', '')),
+            summary=fields.get(JiraWorkItemGenericFields.SUMMARY.value, ''),
+            description=fields.get(JiraWorkItemGenericFields.DESCRIPTION.value),
             project=Project(
                 id=project.get('id'),
                 name=project.get('name'),
@@ -122,22 +126,30 @@ class WorkItemFactory:
             if project
             else None,
             created=(
-                isoparse(fields.get(JiraWorkItemFields.CREATED.value))
-                if fields.get(JiraWorkItemFields.CREATED.value)
+                isoparse(fields.get(JiraWorkItemGenericFields.CREATED.value))
+                if fields.get(JiraWorkItemGenericFields.CREATED.value)
                 else None
             ),
             updated=(
-                isoparse(fields.get(JiraWorkItemFields.UPDATED.value))
-                if fields.get(JiraWorkItemFields.UPDATED.value)
+                isoparse(fields.get(JiraWorkItemGenericFields.UPDATED.value))
+                if fields.get(JiraWorkItemGenericFields.UPDATED.value)
                 else None
             ),
-            priority=IssuePriority(
+            priority=WorkItemPriority(
                 id=priority.get('id'),
                 name=priority.get('name'),
             )
             if priority
             else None,
-            status=IssueStatus(id=str(status.get('id')), name=status.get('name')),
+            status=WorkItemStatus(
+                id=str(status.get('id')),
+                name=status.get('name'),
+                status_category_color=(
+                    status.get('statusCategory', {}).get('colorName')
+                    if status.get('statusCategory')
+                    else None
+                ),
+            ),
             assignee=JiraUser(
                 account_id=assignee.get('accountId'),
                 active=assignee.get('active'),
@@ -154,39 +166,43 @@ class WorkItemFactory:
             )
             if reporter
             else None,
-            issue_type=IssueType(
-                id=fields.get(JiraWorkItemFields.ISSUE_TYPE.value, {}).get('id'),
-                name=fields.get(JiraWorkItemFields.ISSUE_TYPE.value, {}).get('name'),
-                hierarchy_level=fields.get(JiraWorkItemFields.ISSUE_TYPE.value, {}).get(
+            work_item_type=WorkItemType(
+                id=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get('id'),
+                name=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get('name'),
+                subtask=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get(
+                    'subtask', False
+                ),
+                hierarchy_level=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get(
                     'hierarchyLevel'
                 ),
             ),
             comments=build_comments(
-                fields.get(JiraWorkItemFields.COMMENT.value, {}).get('comments', [])
+                fields.get(JiraWorkItemGenericFields.COMMENT.value, {}).get('comments', [])
             ),
-            related_issues=build_related_work_items(
-                fields.get(JiraWorkItemFields.ISSUE_LINKS.value, [])
+            related_work_items=build_related_work_items(
+                fields.get(JiraWorkItemGenericFields.WORK_ITEM_LINKS.value, [])
             ),
-            parent_issue_key=parent_issue_key,
+            parent_work_item_key=parent_work_item_key,
+            parent_work_item_type=parent_work_item_type,
             time_tracking=tracking,
             resolution=(
-                fields.get(JiraWorkItemFields.RESOLUTION.value).get('name')
-                if fields.get(JiraWorkItemFields.RESOLUTION.value)
+                fields.get(JiraWorkItemGenericFields.RESOLUTION.value).get('name')
+                if fields.get(JiraWorkItemGenericFields.RESOLUTION.value)
                 else None
             ),
-            resolution_date=isoparse(fields.get(JiraWorkItemFields.RESOLUTION_DATE.value))
-            if fields.get(JiraWorkItemFields.RESOLUTION_DATE.value)
+            resolution_date=isoparse(fields.get(JiraWorkItemGenericFields.RESOLUTION_DATE.value))
+            if fields.get(JiraWorkItemGenericFields.RESOLUTION_DATE.value)
             else None,
-            labels=fields.get(JiraWorkItemFields.LABELS.value, [])
-            if fields.get(JiraWorkItemFields.LABELS.value)
+            labels=fields.get(JiraWorkItemGenericFields.LABELS.value, [])
+            if fields.get(JiraWorkItemGenericFields.LABELS.value)
             else None,
             attachments=attachments,
             sprint=sprint,
             edit_meta=data.get('editmeta', {}),
             due_date=datetime.strptime(
-                fields.get(JiraWorkItemFields.DUE_DATE.value), '%Y-%m-%d'
+                fields.get(JiraWorkItemGenericFields.DUE_DATE.value), '%Y-%m-%d'
             ).date()
-            if fields.get(JiraWorkItemFields.DUE_DATE.value)
+            if fields.get(JiraWorkItemGenericFields.DUE_DATE.value)
             else None,
             custom_fields=custom_fields_values,
             additional_fields=additional_fields,
@@ -194,7 +210,7 @@ class WorkItemFactory:
         )
 
 
-def build_comments(raw_comments: list[dict]) -> list[IssueComment]:
+def build_comments(raw_comments: list[dict]) -> list[WorkItemComment]:
     """Builds a list of `IssueComment`.
 
     Args:
@@ -203,14 +219,14 @@ def build_comments(raw_comments: list[dict]) -> list[IssueComment]:
     Returns:
         A list of instances `IssueComment`.
     """
-    comments: list[IssueComment] = []
+    comments: list[WorkItemComment] = []
     for comment in raw_comments:
         try:
             author = comment.get('author', {})
             update_author = comment.get('updateAuthor')
             comments.append(
-                IssueComment(
-                    id=comment.get('id'),
+                WorkItemComment(
+                    id=str(comment.get('id', '')),
                     author=JiraUser(
                         account_id=author.get('accountId'),
                         display_name=author.get('displayName'),
@@ -230,12 +246,13 @@ def build_comments(raw_comments: list[dict]) -> list[IssueComment]:
                     body=comment.get('body'),
                 )
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f'Failed to parse comment: {e}')
             continue
     return comments
 
 
-def build_related_work_items(links: list[dict]) -> list[RelatedJiraIssue]:
+def build_related_work_items(links: list[dict]) -> list[RelatedJiraWorkItem]:
     """Builds a list of `RelatedJiraIssue` representing the items related to another item.
 
     Args:
@@ -244,63 +261,79 @@ def build_related_work_items(links: list[dict]) -> list[RelatedJiraIssue]:
     Returns:
         A list of `RelatedJiraIssue`.
     """
-    related_issues: list[RelatedJiraIssue] = []
+    related_work_items: list[RelatedJiraWorkItem] = []
     for item in links:
-        if inward_issue := item.get('inwardIssue', {}):
+        if inward_work_item := item.get('inwardIssue', {}):
             try:
-                related_issues.append(_build_related_inward_issue(item, inward_issue))
-            except Exception:
+                related_work_items.append(_build_related_inward_work_item(item, inward_work_item))
+            except Exception as e:
+                logger.warning(f'Failed to parse inward work item: {e}')
                 continue
-        if outward_issue := item.get('outwardIssue', {}):
+        if outward_work_item := item.get('outwardIssue', {}):
             try:
-                related_issues.append(_build_related_outward_issue(item, outward_issue))
-            except Exception:
+                related_work_items.append(_build_related_outward_work_item(item, outward_work_item))
+            except Exception as e:
+                logger.warning(f'Failed to parse outward work item: {e}')
                 continue
-    return related_issues
+    return related_work_items
 
 
-def _build_related_inward_issue(item: dict, inward_issue: dict) -> RelatedJiraIssue:
-    return RelatedJiraIssue(
-        id=item.get('id'),
-        key=inward_issue.get('key'),
-        summary=inward_issue.get('fields', {}).get('summary'),
-        priority=IssuePriority(
-            id=inward_issue.get('fields', {}).get('priority').get('id'),
-            name=inward_issue.get('fields', {}).get('priority').get('name'),
+def _build_related_inward_work_item(item: dict, inward_work_item: dict) -> RelatedJiraWorkItem:
+    return RelatedJiraWorkItem(
+        id=str(item.get('id', '')),
+        key=str(inward_work_item.get('key', '')),
+        summary=inward_work_item.get('fields', {}).get('summary'),
+        priority=WorkItemPriority(
+            id=inward_work_item.get('fields', {}).get('priority').get('id'),
+            name=inward_work_item.get('fields', {}).get('priority').get('name'),
         )
-        if inward_issue.get('fields', {}).get('priority')
+        if inward_work_item.get('fields', {}).get('priority')
         else None,
-        status=IssueStatus(
-            id=str(inward_issue.get('fields', {}).get('status', {}).get('id')),
-            name=inward_issue.get('fields', {}).get('status', {}).get('name'),
+        status=WorkItemStatus(
+            id=str(inward_work_item.get('fields', {}).get('status', {}).get('id')),
+            name=inward_work_item.get('fields', {}).get('status', {}).get('name'),
+            status_category_color=(
+                inward_work_item.get('fields', {})
+                .get('status', {})
+                .get('statusCategory', {})
+                .get('colorName')
+            ),
         ),
-        issue_type=IssueType(
-            id=inward_issue.get('fields', {}).get('issuetype', {}).get('id'),
-            name=inward_issue.get('fields', {}).get('issuetype', {}).get('name'),
+        work_item_type=WorkItemType(
+            id=inward_work_item.get('fields', {}).get('issuetype', {}).get('id'),
+            name=inward_work_item.get('fields', {}).get('issuetype', {}).get('name'),
+            subtask=inward_work_item.get('fields', {}).get('issuetype', {}).get('subtask', False),
         ),
         link_type=item.get('type', {}).get('inward'),
         relation_type='inward',
     )
 
 
-def _build_related_outward_issue(item: dict, outward_issue: dict) -> RelatedJiraIssue:
-    return RelatedJiraIssue(
-        id=item.get('id'),
-        key=outward_issue.get('key'),
-        summary=outward_issue.get('fields', {}).get('summary'),
-        priority=IssuePriority(
-            id=outward_issue.get('fields', {}).get('priority').get('id'),
-            name=outward_issue.get('fields', {}).get('priority').get('name'),
+def _build_related_outward_work_item(item: dict, outward_work_item: dict) -> RelatedJiraWorkItem:
+    return RelatedJiraWorkItem(
+        id=str(item.get('id', '')),
+        key=str(outward_work_item.get('key', '')),
+        summary=outward_work_item.get('fields', {}).get('summary'),
+        priority=WorkItemPriority(
+            id=outward_work_item.get('fields', {}).get('priority').get('id'),
+            name=outward_work_item.get('fields', {}).get('priority').get('name'),
         )
-        if outward_issue.get('fields', {}).get('priority')
+        if outward_work_item.get('fields', {}).get('priority')
         else None,
-        status=IssueStatus(
-            id=str(outward_issue.get('fields', {}).get('status', {}).get('id')),
-            name=outward_issue.get('fields', {}).get('status', {}).get('name'),
+        status=WorkItemStatus(
+            id=str(outward_work_item.get('fields', {}).get('status', {}).get('id')),
+            name=outward_work_item.get('fields', {}).get('status', {}).get('name'),
+            status_category_color=(
+                outward_work_item.get('fields', {})
+                .get('status', {})
+                .get('statusCategory', {})
+                .get('colorName')
+            ),
         ),
-        issue_type=IssueType(
-            id=outward_issue.get('fields', {}).get('issuetype', {}).get('id'),
-            name=outward_issue.get('fields', {}).get('issuetype', {}).get('name'),
+        work_item_type=WorkItemType(
+            id=outward_work_item.get('fields', {}).get('issuetype', {}).get('id'),
+            name=outward_work_item.get('fields', {}).get('issuetype', {}).get('name'),
+            subtask=outward_work_item.get('fields', {}).get('issuetype', {}).get('subtask', False),
         ),
         link_type=item.get('type', {}).get('outward'),
         relation_type='outward',

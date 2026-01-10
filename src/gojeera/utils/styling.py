@@ -1,36 +1,26 @@
-WORK_ITEM_STATUS_STYLES = {
-    'done': 'green',
-    'in review': 'dark_olive_green',
-    'in progress': 'blue',
-    'to do': 'yellow',
-}
-
-WORK_ITEM_TYPE_STYLES = {
-    'bug': 'red',
-    'epic': 'yellow',
-    'task': 'blue',
-}
+"""Styling utilities for work items."""
 
 
-def get_style_for_work_item_status(status_name: str) -> str:
-    """Gets the style definition for displaying the status of a work item in the search results.
+def map_jira_status_color_to_textual(jira_color: str | None, for_background: bool = False) -> str:
+    """Maps Jira status category color names to Textual colors."""
+    if not jira_color:
+        return 'surface' if for_background else 'text'
 
-    Args:
-        status_name:
+    normalized_color = jira_color.lower().replace('_', '-')
 
-    Returns:
-        A color name or CSS-style definition; e.g. #FF0000 or 'red'
-    """
-    return WORK_ITEM_STATUS_STYLES.get(status_name, '') or ''
+    if for_background:
+        color_map = {
+            'yellow': 'warning-muted',
+            'green': 'success-muted',
+            'blue-gray': 'accent-muted',
+            'medium-gray': 'surface',
+        }
+    else:
+        color_map = {
+            'yellow': 'text-warning',
+            'green': 'text-success',
+            'blue-gray': 'text-accent',
+            'medium-gray': 'text-muted',
+        }
 
-
-def get_style_for_work_item_type(status_name: str) -> str:
-    """Gets the style definition for displaying the type of work item in the search results.
-
-    Args:
-        status_name: the name of the status.
-
-    Returns:
-        A color name or CSS-style definition; e.g. #FF0000 or 'red'
-    """
-    return WORK_ITEM_TYPE_STYLES.get(status_name, '') or ''
+    return color_map.get(normalized_color, 'surface' if for_background else 'text')

@@ -1,36 +1,111 @@
 """This module provides functions for dealing with Jira fields."""
 
+from enum import Enum
 from typing import Any
 
 
+class FieldMode(Enum):
+    """Enum to distinguish between field creation and update contexts."""
+
+    CREATE = 'create'
+    UPDATE = 'update'
+
+
+class BaseField:
+    def setup_base_field(
+        self,
+        mode: FieldMode,
+        field_id: str,
+        title: str | None = None,
+        required: bool = False,
+        compact: bool = True,
+    ) -> None:
+        self.mode = mode
+        self.field_id = field_id
+        self.label_text = title or field_id
+        self._required = required
+
+        if required:
+            if hasattr(self, 'add_class'):
+                self.add_class('required')  # type: ignore[call-non-callable]
+
+    @property
+    def required(self) -> bool:
+        return getattr(self, '_required', False)
+
+    @required.setter
+    def required(self, value: bool) -> None:
+        self._required = value
+        if hasattr(self, 'add_class') and hasattr(self, 'remove_class'):
+            if value:
+                self.add_class('required')  # type: ignore[call-non-callable]
+            else:
+                self.remove_class('required')  # type: ignore[call-non-callable]
+
+    def mark_required(self) -> None:
+        self.required = True
+
+
+class BaseUpdateField:
+    def setup_update_field(
+        self,
+        jira_field_key: str,
+        original_value: Any = None,
+        field_supports_update: bool = True,
+    ) -> None:
+        self.jira_field_key = jira_field_key
+        self._original_value = original_value
+        self._field_supports_update = field_supports_update
+
+        if hasattr(self, 'disabled'):
+            self.disabled = not field_supports_update
+
+    @property
+    def original_value(self) -> Any:
+        return self._original_value
+
+    @property
+    def update_enabled(self) -> bool:
+        return getattr(self, '_field_supports_update', True)
+
+    @update_enabled.setter
+    def update_enabled(self, value: bool) -> None:
+        self._field_supports_update = value
+        if hasattr(self, 'disabled'):
+            self.disabled = not value
+
+    @property
+    def value_has_changed(self) -> bool:
+        raise NotImplementedError('Subclasses must implement value_has_changed')
+
+
+class ValidationUtils:
+    """Shared validation utilities for field widgets."""
+
+    @staticmethod
+    def is_empty_or_whitespace(value: str | None) -> bool:
+        if value is None:
+            return True
+        if value == '':
+            return True
+        if value.strip() == '':
+            return True
+        return False
+
+    @staticmethod
+    def values_differ(original: Any, current: Any, ignore_whitespace: bool = True) -> bool:
+        if ignore_whitespace and isinstance(original, str) and isinstance(current, str):
+            return original.strip() != current.strip()
+        return original != current
+
+
 def get_custom_fields_values(fields_values: dict, edit_metadata_fields: dict) -> dict[str, Any]:
-    """Retrieves the values of all the custom fields associated to an issue.
-
-    ```{important}
-    To determine if a field is a custom field we use the edit metadata associated to the work item. However, some
-    (custom) fields MAY not appear in the edit metadata if they are not part of a editable screen. For example, this is
-    the case with the "flagged" field. Depending on the platform's configuration this field MAY or MAY NOT appear in
-    the edit metadata. As result, we also extract the value of the customs fields that appear in the issue's `fields`
-    attribute. This is done by iterating over all the fields and processing the fields that start with `customfield_`.
-    ```
-
-    Args:
-        fields_values: the values of all the fields known to an issue. This is a dictionary whose keys are the ID of
-        the fields and values are a Python object.
-        edit_metadata_fields: an issue's edit metadata's fields attribute. This is a dictionary whose keys are the ID
-        of the fields and values are dictionaries.
-
-    Returns:
-        A dictionary with the ID of the custom field and the (current) value of the field.
-    """
-
     values: dict[str, Any] = {}
     for field_id, field_data in edit_metadata_fields.items():
         schema = field_data.get('schema', {})
         if schema.get('customId') or schema.get('custom'):
-            # the field is custom
             values[field_id] = fields_values.get(field_id)
-    # extract the custom fields of the issue from the issue's current values
+
     for field_id, field_value in fields_values.items():
         if not field_id.lower().startswith('customfield_'):
             continue
@@ -42,44 +117,11 @@ def get_custom_fields_values(fields_values: dict, edit_metadata_fields: dict) ->
 def get_additional_fields_values(
     fields_values: dict[str, Any], ignored_fields: list[str]
 ) -> dict[str, Any]:
-    """Retrieves the values of all the non-custom fields and fields not handled by the JiraIssue factory associated to
-    an issue.
-
-    Args:
-        fields_values: a mapping of field key/id to field value as retrieved from the API.
-        ignored_fields: a list of field ids/keys to ignore.
-
-    Returns:
-        A dictionary with the ID of the field and the (current) value of the field.
-    """
-
     additional_fields: dict[str, Any] = {}
     for field_id, field_value in fields_values.items():
         if field_id in ignored_fields:
-            # this field's value is extracted by the factory separately
             continue
         if field_id.lower().startswith('customfield_'):
-            # this field's value is extracted by the factory separately
             continue
         additional_fields[field_id] = field_value
     return additional_fields
-
-
-def get_field_key(name: str, edit_metadata_fields: dict) -> dict | None:
-    """Retrieves the key of a Jira field from an issue's edit metadata.
-
-    Args:
-        name: the name of the field.
-        edit_metadata_fields: an issue's edit metadata's fields attribute.
-
-    Returns:
-        A dictionary with the `key` of the field and the `metadata` for updating the field.
-    """
-
-    for _, field_data in edit_metadata_fields.items():
-        if not (field_name := field_data.get('name')):
-            continue
-        if field_name.lower() != name.lower():
-            continue
-        return {'metadata': field_data, 'key': field_data.get('key')}
-    return None

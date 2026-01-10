@@ -2,7 +2,7 @@ from contextvars import ContextVar
 import os
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -10,13 +10,8 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-from gojeera.constants import (
-    DEFAULT_JIRA_API_VERSION,
-    ISSUE_SEARCH_DEFAULT_DAYS_INTERVAL,
-    ISSUE_SEARCH_DEFAULT_MAX_RESULTS,
-)
 from gojeera.files import get_config_file
-from gojeera.models import BaseModel, WorkItemsSearchOrderBy
+from gojeera.models import BaseModel
 
 
 class SSLConfiguration(BaseModel):
@@ -34,44 +29,71 @@ class SSLConfiguration(BaseModel):
     """The password for the key file."""
 
 
+class RemoteFiltersConfig(BaseModel):
+    """Configuration for fetching remote JQL filters from Jira API."""
+
+    enabled: bool = False
+    """If True, gojeera will fetch JQL filters from the Jira server and include them in the JQL autocomplete dropdown.
+    Default is False."""
+    include_shared: bool = False
+    """If True, fetch both personal filters and filters shared with you (through groups/projects).
+    If False, only fetch filters owned by the current user.
+    Default is False (personal filters only)."""
+    starred_only: bool = False
+    """If True, only fetch filters that are starred (marked as favorite) by the user. If False, fetch all filters.
+    Default is False (fetch all)."""
+    cache_ttl: int = 3600
+    """Time-to-live (in seconds) for cached remote filters. After this time, filters will be re-fetched from the server.
+    Default is 3600 seconds (1 hour)."""
+
+
+class JumperConfig(BaseModel):
+    """Configuration for the jumper overlay widget."""
+
+    enabled: bool = True
+    """If True (default), the jumper overlay is enabled and allows quick navigation between widgets."""
+    keys: list[str] = ['1', '2', '3', 'q', 'w', 'e', 'a', 's', 'd']
+    """List of keys to use for the jumper overlay. Default is ['1', '2', '3', 'q', 'w', 'e', 'a', 's', 'd']."""
+
+
+class JiraConfig(BaseSettings):
+    """Configuration for Jira API connection."""
+
+    api_username: str
+    """The username to use for connecting to the Jira API."""
+    api_token: SecretStr
+    """The token to use for connecting to the Jira API."""
+    api_base_url: str
+    """The base URL of the Jira API."""
+
+    model_config = SettingsConfigDict(
+        env_prefix='GOJEERA_JIRA__',
+        validate_assignment=True,
+        extra='ignore',  # Ignore extra env vars that don't match our fields
+    )
+
+
 class ApplicationConfiguration(BaseSettings):
     """The configuration for the gojeera application and CLI tool."""
 
-    jira_api_username: str
-    """The username to use for connecting to the Jira API."""
-    jira_api_token: SecretStr
-    """The token to use for connecting to the Jira API."""
-    jira_api_base_url: str
-    """The base URL of the Jira API."""
-    jira_api_version: int = DEFAULT_JIRA_API_VERSION
-    """The version of the JiraAPI that gojeera wil use. The default is 3 but you can set to 2 if your Jira installation
-    provides an older version of the API."""
-    cloud: bool = True
-    """Set this to False if your Jira instance run on-premises."""
-    use_bearer_authentication: bool = False
-    """Set this to True if your Jira instance uses Bearer authentication instead of Basic authentication."""
-    jira_user_group_id: str | None = None
-    """The ID of the group that contains all (or most) of the Jira users in your Jira installation. This value is used
-    as a fall back mechanism to fetch available users. This is only supported in the Jira Cloud Platform."""
-    jira_base_url: str | None = None
-    """This is the base URL of your Jira application. This is used for building the URLs of different web links in the
-    Jira TUI application. Example: https://<hostname>.atlassian.net"""
-    jira_account_id: str | None = None
-    """The ID of the Jira user using the application. This is useful if you want the user selection dropdown widgets to
-    automatically select your user from the options. It is also used as the default reporter of any new work item that
-    is created in the application."""
-    search_results_per_page: int = ISSUE_SEARCH_DEFAULT_MAX_RESULTS
-    """The number of results to show in the search results. The default is 30."""
-    search_issues_default_day_interval: int = ISSUE_SEARCH_DEFAULT_DAYS_INTERVAL
-    """This controls how many days worth of issues to fetch when no other search criteria has been defined."""
-    show_issue_web_links: bool = True
+    jira: JiraConfig = Field(default_factory=JiraConfig)
+    """Jira API connection configuration."""
+
+    @field_validator('jira', mode='before')
+    @classmethod
+    def validate_jira_config(cls, v):
+        """Ensure jira config has properly validated nested fields."""
+        if isinstance(v, dict):
+            if 'api_token' in v and isinstance(v['api_token'], str):
+                v = v.copy()
+                v['api_token'] = SecretStr(v['api_token'])
+        return v
+
+    show_work_item_web_links: bool = True
     """If True (default) then the application will retrieve the remote links related to a work item."""
     ignore_users_without_email: bool = True
     """Controls whether Jira users without an email address configured should be included in the list of users and users
     assignable to projects and work items."""
-    default_project_key_or_id: str | None = None
-    """A case-sensitive string that identifies a Jira project. If set then the app will use is as the default selected
-    project in the projects dropdown and will only fetch this project from your Jira instance."""
     custom_field_id_sprint: str | None = None
     """The name of the custom field used by your Jira application to identify the sprints. Example: customfield_12345"""
     fetch_attachments_on_delete: bool = True
@@ -82,82 +104,49 @@ class ApplicationConfiguration(BaseSettings):
     """When this is True (default) the application will fetch the comments of a work item after a comment is
     deleted from the list of comments. This makes the data more accurate but slower due to the extra request. When
     this is False the list of comments is updated in place."""
-    pre_defined_jql_expressions: dict | None = None
-    """A dictionary with pre-define JWL expressions to use in the JQL Expression Editor. Expects a mapping from
-    user-defined IDs into a dictionary with a label and the expression. Example:
+    jql_filters: list[dict[str, str]] | None = None
+    """A list of pre-defined JQL filters to use in the JQL Expression Editor. Each item should be a dictionary
+    with 'label' and 'expression' keys. Example:
 
-    1: {
-        'label': 'Find work created by John and sort it by created date asc',
-        'expression': 'creator = 'john' order by created asc'
-    },
-    2: {
-        'label': 'Find work due on 2100-12-31 and for the production environment',
-        'expression': 'dueDate = '2100-12-31' AND environment = 'production''
-    }
+    [
+        {
+            'label': 'Find work created by John and sort it by created date asc',
+            'expression': 'creator = "john" order by created asc'
+        },
+        {
+            'label': 'Find work due on 2100-12-31 and for the production environment',
+            'expression': 'dueDate = "2100-12-31" AND environment = "production"'
+        }
+    ]
     """
-    jql_expression_id_for_work_items_search: int | None = None
-    """If set to one of the expression IDs defined in pre_defined_jql_expressions then the app will use this expression
-    to retrieve work items when not criteria and JQL query is provided by the user."""
+    jql_filter_label_for_work_items_search: str | None = None
+    """If set to one of the filter labels defined in jql_filters then the app will use this expression
+    to retrieve work items when no criteria and JQL query is provided by the user."""
+    fetch_remote_filters: RemoteFiltersConfig = Field(default_factory=RemoteFiltersConfig)  # type: ignore[assignment]
+    """Configuration for fetching remote JQL filters from Jira API."""
+    jumper: JumperConfig = Field(default_factory=JumperConfig)  # type: ignore[assignment]
+    """Configuration for the jumper overlay widget."""
+    search_results_per_page: int = Field(default=20, ge=1, le=200)
+    """Number of search results to retrieve and display per page. Must be between 1 and 200. Default is 20."""
     search_results_truncate_work_item_summary: int | None = None
     """When this is defined the summary of a work item will be truncated to the specified length when it is displayed in
     the search results."""
-    search_results_style_work_item_status: bool = True
-    """If True (default) the status of a work item will be styled when it is displayed in the search results."""
-    search_results_style_work_item_type: bool = True
-    """If True (default) the type of a work item will be styled when it is displayed in the search results."""
-    on_start_up_only_fetch_projects: bool = True
-    """When this is True the application will only load the list of available projects at startup. The list
-    of status codes, users and work items types will be loaded when the user selects a project. If this is False then
-    the application fill load (i.e. fetch from the API) available status codes, users and work items types in addition
-    to the available projects. This may make the startup slower."""
-    tui_title: str | None = None
-    """An optional title for the application. This is displayed in the top bar."""
-    tui_custom_title: str | None = None
-    """A custom title for the application. If set, this overrides tui_title. If empty string, no title will be rendered."""
-    tui_title_include_jira_server_title: bool = True
-    """If `True` the application will fetch server information from the Jira API instance and use the server title or
-    server base URL to build the title of the application. If set to `False` the title will be the default or, to the
-    value of the `tui_custom_title` setting above; if defined."""
     log_file: str | None = None
     """The filename of the log file to use. If you set an empty string logging to a file is disabled."""
     log_level: str = 'WARNING'
     """The log level to use. Use Python's `logging` names: `CRITICAL`, `FATAL`, `ERROR`, `WARN`, `WARNING`, `INFO`,
     `DEBUG` and `NOTSET`."""
-    attachments_source_directory: str = '/'
-    """The directory to start the search of files that a user wants to attach to work items. The user will be able to
-    navigate though the sub-directories."""
-    confirm_before_quit: bool = False
+    confirm_before_quit: bool = True
     """If this is set to `True` then the application will show a pop-up screen so the user can confirm whether or not
     to quit the app. The default is `False` and the app simply exits."""
     theme: str | None = None
     """The name of the theme to use for the UI. Accept Textual themes."""
-    search_results_page_filtering_enabled: bool = True
-    """When this is True users will be able to filter search results by summary in the currently active results page
-    using an input field."""
-    search_results_page_filtering_minimum_term_length: int = 3
-    """When search_results_page_filtering_enabled is True this value controls the minimum number of characters that the
-    user needs to type in on order to filter results."""
-    full_text_search_minimum_term_length: int = 3
-    """When performing full-text search this value controls the minimum length of the search term provided by the
-    user. gojeera will always enforce a vlue >= 3; even if you set a value of 0 here."""
     enable_advanced_full_text_search: bool = True
     """When this is True gojeera will use Jira ability to do full-text search not only in summary and description
     fields but in any text-based field, including comments. This may be slower. If this is False gojeera will only
     search items by summary and description fields."""
-    ssl: SSLConfiguration | None = Field(default_factory=SSLConfiguration)
+    ssl: SSLConfiguration | None = Field(default_factory=SSLConfiguration)  # type: ignore[assignment]
     """SSL configuration for client-side certificates and CA bundle."""
-    search_results_default_order: WorkItemsSearchOrderBy = WorkItemsSearchOrderBy.CREATED_DESC
-    """The default order for search results. Accepts values from WorkItemsSearchOrderBy enum: CREATED_ASC,
-    CREATED_DESC, PRIORITY_ASC, PRIORITY_DESC, KEY_ASC, KEY_DESC."""
-    git_repositories: dict | None = None
-    """The Git repositories to create new branches based on work items. It expects a mapping from user-defined IDs into
-    a dictionary with the name of the repository and the path to the directory that contains the .git directory.
-    Example:
-    1: {
-        'name': 'The repo for my cool application',
-        'path': '/my/repository/.git
-    }
-    """
     search_on_startup: bool = False
     """If True, triggers a search automatically when the UI starts. Can be set via CLI argument --search-on-startup."""
     enable_updating_additional_fields: bool = False
@@ -175,9 +164,15 @@ class ApplicationConfiguration(BaseSettings):
     enable_images_support: bool = True
     """When this is set to `True` gojeera will attempt to display images attached to a work item in the Attachments
     tab."""
+    obfuscate_personal_info: bool = False
+    """When this is set to `True` the app header will obfuscate the username and instance URL for privacy. Default is
+    False."""
 
     model_config = SettingsConfigDict(
         extra='allow',
+        validate_assignment=True,
+        env_prefix='GOJEERA_',
+        env_nested_delimiter='__',
     )
 
     @classmethod
@@ -194,15 +189,19 @@ class ApplicationConfiguration(BaseSettings):
         else:
             conf_file = get_config_file()
 
-        if not conf_file.exists():
-            raise FileNotFoundError(f'Unable to find the config file you provided: {conf_file}')
-
-        return (
-            YamlConfigSettingsSource(settings_cls, yaml_file=conf_file),
-            env_settings,
-            dotenv_settings,
-            init_settings,
-        )
+        if conf_file.exists():
+            return (
+                init_settings,
+                env_settings,
+                dotenv_settings,
+                YamlConfigSettingsSource(settings_cls, yaml_file=conf_file),
+            )
+        else:
+            return (
+                init_settings,
+                env_settings,
+                dotenv_settings,
+            )
 
 
 CONFIGURATION: ContextVar[ApplicationConfiguration] = ContextVar('configuration')

@@ -1,439 +1,311 @@
-# gojeera Configuration
+# Configuration
 
-This guide covers all configuration options and settings for gojeera.
-All settings can be provided in a YAML file or via environment variables.
+gojeera uses a YAML configuration file to customize its behavior and connect to
+your Jira instance. This document describes all available configuration options.
 
-## Initial Configuration
+## Configuration File Location
 
-> [!TIP]
-> The application provides a sample configuration file called
-> `gojeera.example.yaml` that you can use to define yours.
+By default, gojeera looks for a configuration file at:
 
-Before using the application you need to provide basic configuration.
-All settings can be provided in a YAML file.
+- `~/.config/gojeera/gojeera.yaml` (Linux/macOS)
 
-The application uses the
-[XDG specification](https://specifications.freedesktop.org/basedir-spec/latest/)
-to locate config (and log) files. The default config file name is
-`config.yaml`. You can override the location via the environment variable
-`GOJEERA_CONFIG_FILE`. The application loads the config file this way:
-
-1. If `GOJEERA_CONFIG_FILE` is set, use that file.
-2. If not, if `XDG_CONFIG_HOME` is set, load
-   `${XDG_CONFIG_HOME}/gojeera/config.yaml`.
-3. If not, load `${HOME}/.config/gojeera/config.yaml`.
-
-## Jira API Credentials
-
-You must provide the following values to connect to your Jira instance:
-
-- `jira_api_username`: username for connecting to your Jira API.
-- `jira_api_token`: token for connecting to your Jira API. This can be
-  your Personal Access Token (PAT).
-- `jira_api_base_url`: the base URL of your Jira API.
-
-**Example:** Assuming your configuration file is at
-`${XDG_CONFIG_HOME}/gojeera/config.yaml`:
-
-```yaml
-jira_api_username: "bart@simpson.com"
-jira_api_token: "12345"
-jira_api_base_url: "https://<your-jira-instance-hostname>.atlassian.net"
-```
-
-## Choosing the Jira Platform
-
-Jira is available via the
-[Jira Cloud Platform's API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#about)
-and via the
-[Jira Data Center's API (aka. Jira on-premises)](https://developer.atlassian.com/server/jira/platform/rest/v11001/intro/#gettingstarted).
-gojeera can connect to both platforms, although support for Jira Data
-Center's API is limited.
-
-By default, gojeera connects to Jira Cloud Platform's API. However, if
-you want to use gojeera with your organization's on-premises
-installation, configure this via the config file:
-
-```yaml
-cloud: False
-```
-
-## Choosing the API Version
-
-> [!IMPORTANT]
-> When `cloud: False`, gojeera will use the correct version for the API
-> and ignore the value of `jira_api_version`. In other words,
-> `jira_api_version` is only applicable when `cloud: True`.
-
-gojeera supports
-[Jira REST API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/) and
-[Jira REST API v2](https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/).
-
-By default, gojeera uses Jira REST API v3, which is suited for Jira
-cloud instances. However, Jira also offers an on-premises
-installation mode where the API version may be v2 instead. To address
-this, gojeera lets you choose which version of the API to use.
-
-To set the API version, update your configuration file:
-
-```yaml
-jira_api_version: 2
-```
-
-## Configuration Settings Reference
-
-All settings can be set using environment variables with the format
-`GOJEERA_<name>`, where `<name>` is the setting name in the table below.
-
-**Example:** these are equivalent:
-
-- `GOJEERA_JIRA_API_USERNAME=foo@bar`
-- `jira_api_username=foo@bar`
-
-### Core Settings
-
-| Name                        | Type   | Required | Default | Description                                                                                                                                 |
-| --------------------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `jira_api_username`         | `str`  | `Yes`    | `None`  | Username to use for connecting to the Jira API                                                                                              |
-| `jira_api_token`            | `str`  | `Yes`    | `None`  | Token to use for connecting to the Jira API                                                                                                 |
-| `jira_api_base_url`         | `str`  | `Yes`    | `None`  | Base URL of the Jira API                                                                                                                    |
-| `jira_base_url`             | `str`  | `No`     | `None`  | Base URL of your Jira application. Used for building web links. Example: `https://<hostname>.atlassian.net`                                 |
-| `jira_account_id`           | `str`  | `No`     | `None`  | ID of the Jira user using the application. Useful for auto-selecting your user in dropdowns and used as default reporter for new work items |
-| `jira_user_group_id`        | `str`  | `No`     | `None`  | ID of the group that contains all (or most) of the Jira users in your installation. Used as a fallback mechanism to fetch available users   |
-| `cloud`                     | `bool` | `No`     | `True`  | Set to False if using Jira Data Center (on-premises)                                                                                        |
-| `jira_api_version`          | `int`  | `No`     | `3`     | API version to use. Only applicable when `cloud: True`                                                                                      |
-| `use_bearer_authentication` | `bool` | `No`     | `False` | Set to True if your Jira instance uses Bearer authentication instead of Basic                                                               |
-
-### Search and Display Settings
-
-| Name                                                | Type   | Required | Default                               | Description                                                                                             |
-| --------------------------------------------------- | ------ | -------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `search_results_per_page`                           | `int`  | `No`     | `30`                                  | Number of results to show in the search results                                                         |
-| `search_issues_default_day_interval`                | `int`  | `No`     | `15`                                  | Days worth of issues to fetch when no other search criteria has been defined                            |
-| `search_results_truncate_work_item_summary`         | `int`  | `No`     | `None`                                | When defined, work item summaries in search results are truncated to this length                        |
-| `search_results_style_work_item_status`             | `bool` | `No`     | `True`                                | If True, work item status is styled in search results                                                   |
-| `search_results_style_work_item_type`               | `bool` | `No`     | `True`                                | If True, work item type is styled in search results                                                     |
-| `search_results_default_order`                      | `str`  | `No`     | `WorkItemsSearchOrderBy.CREATED_DESC` | Default order for search results                                                                        |
-| `search_results_page_filtering_enabled`             | `bool` | `No`     | `True`                                | If True, users can refine search in search results                                                      |
-| `search_results_page_filtering_minimum_term_length` | `int`  | `No`     | `3`                                   | Minimum characters required to refine search results                                                    |
-| `full_text_search_minimum_term_length`              | `int`  | `No`     | `3`                                   | Minimum length of search term for full-text search. gojeera enforces a value >= 3                       |
-| `enable_advanced_full_text_search`                  | `bool` | `No`     | `True`                                | If True, full-text search works on any text-based Jira field; otherwise only on summary and description |
-
-### Work Item Settings
-
-| Name                          | Type   | Required | Default | Description                                                                                                                     |
-| ----------------------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `show_issue_web_links`        | `bool` | `No`     | `True`  | If True, application retrieves remote links related to a work item                                                              |
-| `ignore_users_without_email`  | `bool` | `No`     | `True`  | Controls whether Jira users without an email should be included in user lists                                                   |
-| `default_project_key_or_id`   | `str`  | `No`     | `None`  | Case-sensitive string that identifies a Jira project. If set, used as default selected project and only this project is fetched |
-| `custom_field_id_sprint`      | `str`  | `No`     | `None`  | Name of custom field used to identify sprints. Example: `customfield_12345`                                                     |
-| `fetch_attachments_on_delete` | `bool` | `No`     | `True`  | If True, fetch attachments after deleting one (more accurate but slower)                                                        |
-| `fetch_comments_on_delete`    | `bool` | `No`     | `True`  | If True, fetch comments after deleting one (more accurate but slower)                                                           |
-
-### JQL and Queries
-
-| Name                                      | Type   | Required | Default | Description                                                                                                                                              |
-| ----------------------------------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pre_defined_jql_expressions`             | `dict` | `No`     | `None`  | Pre-defined JQL expressions. See [Configuring Pre-defined JQL Expressions](#configuring-pre-defined-jql-expressions)                                     |
-| `jql_expression_id_for_work_items_search` | `int`  | `No`     | `None`  | If set to an expression ID from `pre_defined_jql_expressions`, app uses this expression to retrieve work items when no criteria or JQL query is provided |
-
-### UI Settings
-
-| Name                                  | Type   | Required | Default | Description                                                                                                  |
-| ------------------------------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------ |
-| `tui_title`                           | `str`  | `No`     | `None`  | Optional title for the application, displayed in top bar                                                     |
-| `tui_custom_title`                    | `str`  | `No`     | `None`  | Custom title for the application. Overrides `tui_title` if set. If set to empty string, no title is rendered |
-| `tui_title_include_jira_server_title` | `bool` | `No`     | `True`  | See [Include Jira Server Title in the UI Title](#include-jira-server-title-in-the-ui-title)                  |
-| `theme`                               | `str`  | `No`     | `None`  | Name of Textual theme to use. See [Choosing a Theme](#choosing-a-theme)                                      |
-| `confirm_before_quit`                 | `bool` | `No`     | `False` | If True, app asks for confirmation before quitting                                                           |
-| `enable_images_support`               | `bool` | `No`     | `True`  | If True, application displays images attached to work items in Attachments tab                               |
-
-### Startup and Performance
-
-| Name                              | Type   | Required | Default | Description                                                                 |
-| --------------------------------- | ------ | -------- | ------- | --------------------------------------------------------------------------- |
-| `on_start_up_only_fetch_projects` | `bool` | `No`     | `True`  | See [Fetching Only Projects on Startup](#fetching-only-projects-on-startup) |
-| `search_on_startup`               | `bool` | `No`     | `False` | When True, application searches work items on startup                       |
-
-### Advanced Field Configuration
-
-| Name                                  | Type         | Required | Default | Description                                                                                                                                                                                                 |
-| ------------------------------------- | ------------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable_updating_additional_fields`   | `bool`       | `No`     | `False` | When True, app displays (some) custom/system fields in issue details tab allowing updates. See [Enable Updating Additional Fields](#enable-updating-additional-fields)                                      |
-| `update_additional_fields_ignore_ids` | `list[dict]` | `No`     | `None`  | When `enable_updating_additional_fields = True`, fields with these IDs or keys are ignored in Details tab                                                                                                   |
-| `enable_creating_additional_fields`   | `bool`       | `No`     | `False` | When True, app renders ALL optional fields from create-metadata when creating work items. See [Configuring Optional Fields in Create Work Item Form](#configuring-optional-fields-in-create-work-item-form) |
-| `create_additional_fields_ignore_ids` | `list[str]`  | `No`     | `None`  | List of optional field IDs to exclude from create work item form. Example: `['priority', 'customfield_10001']`                                                                                              |
-
-### Other Settings
-
-| Name                           | Type               | Required | Default   | Description                                                                                                                |
-| ------------------------------ | ------------------ | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `attachments_source_directory` | `str`              | `No`     | `/`       | Directory to start the search of files to attach to work items. User can navigate through sub-directories                  |
-| `log_file`                     | `str`              | `No`     | `None`    | Name of the log file to use                                                                                                |
-| `log_level`                    | `str`              | `No`     | `WARNING` | Python's `logging` level to use                                                                                            |
-| `ssl`                          | `SSLConfiguration` | `No`     | `None`    | Settings for SSL                                                                                                           |
-| `git_repositories`             | `dict`             | `No`     | `None`    | Configure Git repos available for creating branches from the UI. See [Setting Git Repositories](#setting-git-repositories) |
-
-## Advanced Configuration
-
-### Choosing a Theme
-
-You can set the theme for the UI using
-[Textual Themes](https://textual.textualize.io/guide/design/).
-
-The default theme is `textual-dark`. If the theme you provide is not
-recognized, this default will be used.
-
-**Setting the theme in the configuration file:**
-
-```yaml
-theme: "monokai"
-```
-
-**Setting the theme on startup:**
-
-You can provide the theme name using the `--theme` (`-t`) argument when
-launching via the CLI command `gojeera ui`:
+You can override this location by setting the `GOJEERA_CONFIG_FILE`
+environment variable:
 
 ```bash
-gojeera ui --theme textual-light
+export GOJEERA_CONFIG_FILE=/path/to/your/config.yaml
 ```
 
-The application sets the theme based on these rules:
+## Configuration via Environment Variables
 
-1. `--theme` (`-t`) has priority over `config.theme`
-2. If neither `--theme` nor `config.theme` are defined, use the default
-3. If the theme name is not recognized, use the default
+All configuration options can be set via environment variables using the
+prefix `GOJEERA_`. For nested configurations, use double underscores
+(`__`) as delimiters.
 
-The app provides a CLI command to list supported themes:
+Examples:
 
 ```bash
-gojeera themes
+export GOJEERA_JIRA__API_USERNAME="your-email@example.com"
+export GOJEERA_JIRA__API_TOKEN="your-api-token"
+export GOJEERA_JIRA__API_BASE_URL="https://your-instance.atlassian.net"
+export GOJEERA_LOG_LEVEL="DEBUG"
+export GOJEERA_THEME="monokai"
 ```
 
-### Defining Custom Themes
+## Configuration Precedence
 
-gojeera allows you to define custom themes.  
-Custom themes are defined as YAML files in the `themes` directory within your gojeera
-config directory (for example, `~/.config/gojeera/themes/`).
+Configuration is loaded in the following order (later sources override
+earlier ones):
 
-Each theme file requires at minimum:
+1. Default values
+2. YAML configuration file
+3. Environment variables
+4. CLI arguments (for specific options)
 
-- `name`: A unique name for your theme (optional - will use filename if not specified)
-- `primary`: The primary color (hex color code)
+## Required Configuration
 
-Additional optional colors include:
+### Jira API Connection
 
-- `secondary`: An alternative branding color
-- `accent`: Used sparingly to draw attention
-- `foreground`: The default text color
-- `background`: The background color
-- `surface`: The default background color of widgets
-- `panel`: A color to differentiate parts of the UI
-- `success`: Indicates success
-- `warning`: Indicates a warning
-- `error`: Indicates an error
-
-You can also specify:
-
-- `dark`: Whether this is a dark theme (default: `true`)
-- `variables`: Additional theme variables as key-value pairs
-
-**Example: Creating a custom theme**
-
-Create a file `~/.config/gojeera/themes/arctic.yaml`:
+These settings are **required** to connect to your Jira instance:
 
 ```yaml
-name: "arctic"
-primary: "#88C0D0"
-secondary: "#81A1C1"
-accent: "#B48EAD"
-foreground: "#D8DEE9"
-background: "#2E3440"
-success: "#A3BE8C"
-warning: "#EBCB8B"
-error: "#BF616A"
-surface: "#3B4252"
-panel: "#434C5E"
-dark: true
-variables:
-  block-cursor-text-style: "none"
-  footer-key-foreground: "#88C0D0"
-  input-selection-background: "#81a1c1 35%"
+jira:
+  api_username: "your-email@example.com"
+  api_token: "your-api-token"
+  api_base_url: "https://your-instance.atlassian.net"
 ```
 
-Create a file `~/.config/gojeera/themes/ocean-light.yaml`:
+- **`api_username`** (**required**): Your Jira username or email address
+- **`api_token`** (**required**): Your Jira API token
+  ([generate one here](https://id.atlassian.com/manage-profile/security/api-tokens))
+- **`api_base_url`** (**required**): The base URL of your Jira instance
+
+## Optional Configuration
+
+### Display Settings
 
 ```yaml
-name: "ocean-light"
-primary: "#0077BE"
-secondary: "#00A0DC"
-foreground: "#2C3E50"
-background: "#F8F9FA"
-dark: false
+show_work_item_web_links: true
+search_results_per_page: 20
+search_results_truncate_work_item_summary: null
+theme: null
+obfuscate_personal_info: false
+enable_images_support: true
 ```
 
-Once defined, custom themes are available alongside built-in themes:
+- **`show_work_item_web_links`** (default: `true`): Retrieve and
+  display remote links related to work items
+- **`search_results_per_page`** (default: `20`, range: 1-200):
+  Number of search results to display per page
+- **`search_results_truncate_work_item_summary`** (optional):
+  Maximum length for work item summaries in search results (no
+  truncation if not set)
+- **`theme`** (optional): Name of the Textual theme to use for
+  the UI
+- **`obfuscate_personal_info`** (default: `false`): Obfuscate
+  username and instance URL in the app header for privacy
+- **`enable_images_support`** (default: `true`): Display images
+  attached to work items in the Attachments tab
 
-- Use `gojeera themes` to list all available themes (built-in and custom)
-- Use `gojeera ui --theme arctic` to launch with your custom theme
-- Set `theme: "arctic"` in your config to use it by default
-
-For more details on theme customization, see the
-[Textual Themes documentation](https://textual.textualize.io/guide/design/).
-
-### Configuring Pre-defined JQL Expressions
-
-To define your own JQL expressions, use the setting
-`pre_defined_jql_expressions`. These expressions are accessible via the
-JQL Expression Editor. Open the editor by going to the JQL Expression
-input and pressing `^e`. The setting accepts a dictionary of
-user-defined IDs whose values are expression details including a label
-and a string with the JQL expression value. The label is used as the
-dropdown selector label.
-
-**Example:**
+### Search Behavior
 
 ```yaml
-pre_defined_jql_expressions:
-  1:
-    {
-      "label": "Find work created by John and sort by created asc",
-      "expression": "creator = 'john' order by created asc",
-    }
-  2:
-    {
-      "label": "Find work due on 2100-12-31 for production",
-      "expression": "dueDate = '2100-12-31' AND environment = 'production'",
-    }
+enable_advanced_full_text_search: true
+search_on_startup: false
 ```
 
-### Fetching Only Projects on Startup
+- **`enable_advanced_full_text_search`** (default: `true`):
+  Enable full-text search across all text fields including comments
+  (may be slower). If `false`, only search in summary and description
+  fields
+- **`search_on_startup`** (default: `false`): Automatically
+  trigger a search when the UI starts (can also be set via CLI argument
+  `--search-on-startup`)
 
-When this setting is `True`, the application only loads the list of
-available projects at startup. Status codes, users, and work item types
-are loaded when the user selects a project. If `False`, the application
-loads (fetches from the API) status codes, users, and work item types
-in addition to projects, making startup a bit slower.
-
-### Include Jira Server Title in the UI Title
-
-If `tui_title_include_jira_server_title = True`, the application
-fetches server information from the Jira API and uses the server's
-title or server base URL to build the application title. If `False`,
-the title is set to the default or to the value of `tui_custom_title`
-if defined.
-
-You can use `tui_custom_title` to set a custom title. If set to an
-empty string (`""`), no title is rendered at all. If not set, the
-application falls back to using `tui_title`.
-
-### Enable Filtering Search Results
-
-gojeera allows you to further refine search results by filtering work
-items based on their summary. This feature is controlled by 2
-configuration variables.
-
-The variable `search_results_page_filtering_enabled` controls whether
-this feature is enabled or not. The default is enabled. When enabled,
-the user can press `/` while focused on the search results table. Doing
-so shows an input field that the user can use to refine results by
-filtering items whose summary field do not match the filtering
-criteria.
-
-In addition, the variable
-`search_results_page_filtering_minimum_term_length` defines the minimum
-number of characters required to start filtering results. The default
-is 3 but can be set to any value >= 1.
-
-### Setting the Default Order for Search Results
-
-You can control the default sort order for search results using the
-`search_results_default_order` configuration option. This determines
-how issues are ordered when you perform a search in gojeera.
-
-**Accepted values:**
-
-- `created asc`
-- `created desc`
-- `priority asc`
-- `priority desc`
-- `key asc`
-- `key desc`
-
-These correspond to the available sort orders in gojeera. The value you
-set must match one of the above exactly.
-
-**Example:**
+### User Management
 
 ```yaml
-search_results_default_order: "created desc"
+ignore_users_without_email: true
 ```
 
-You can still change the order interactively in the UI; this setting
-only controls the initial/default value.
+- **`ignore_users_without_email`** (default: `true`): Exclude
+  Jira users without an email address from user lists and assignment
+  options
 
-### Setting Git Repositories
-
-gojeera allows users to create Git branches
-directly from the UI. Once you select a work item, press `^g` to open a
-dialog to create a new Git branch using the work item's key as the
-initial value for the branch.
-
-To support this, you need to configure the repositories that the tool
-can use to create branches. In principle, there is no direct connection
-between projects and Git repos. A project may use different repos and a
-repo may be used in different projects. Because of this, you need to
-configure the Git repos you want to use.
-
-You can do this via the configuration variable `git_repositories`.
-Using this setting, you define repositories specifying an ID, a name,
-and a path to the repository's `.git` directory.
-
-**Example:**
+### Custom Fields
 
 ```yaml
-git_repositories:
-  1:
-    name: "My Project A"
-    path: "/projects/project-a/.git"
-  2:
-    name: "My Project B"
-    path: "/projects/project-b/.git"
+custom_field_id_sprint: "customfield_12345"
+enable_updating_additional_fields: false
+update_additional_fields_ignore_ids: null
+enable_creating_additional_fields: false
+create_additional_fields_ignore_ids: null
 ```
 
-Using this configuration, gojeera displays these repositories, and you
-can choose the target repo for creating a new branch.
+- **`custom_field_id_sprint`** (optional): The custom field ID
+  used by your Jira instance to identify sprints (e.g.,
+  `customfield_12345`)
+- **`enable_updating_additional_fields`** (default: `false`):
+  Allow viewing and updating additional custom and system fields
+- **`update_additional_fields_ignore_ids`** (optional): List
+  of field IDs to exclude from the Details tab when
+  `enable_updating_additional_fields` is `true`
+- **`enable_creating_additional_fields`** (default: `false`): Show
+  additional optional fields when creating work items. When `false`,
+  only `duedate` and `priority` are shown
+- **`create_additional_fields_ignore_ids`** (optional): List
+  of field IDs to exclude from the create form. Example:
+  `['customfield_10050', 'customfield_10051']`
 
-### Enable Updating Additional Fields
-
-By default, gojeera does not allow users to view and update these
-fields. To enable this feature, set the variable
-`enable_updating_additional_fields: True`.
-
-If you want to disable viewing/updating a
-specific system/custom field enabled by this feature, you can add the
-field's ID (or key) to a list of fields to ignore. To do so, set the
-configuration variable `update_additional_fields_ignore_ids`.
+### Performance Settings
 
 ```yaml
-enable_updating_additional_fields: True
-update_additional_fields_ignore_ids:
-  - customfield_12345
+fetch_attachments_on_delete: true
+fetch_comments_on_delete: true
 ```
 
-### Configuring Optional Fields in Create Work Item Form
+- **`fetch_attachments_on_delete`** (bool, default: `true`): Re-fetch
+  attachments after deletion for accuracy (slower). If `false`, update
+  the list in place (faster)
+- **`fetch_comments_on_delete`** (bool, default: `true`): Re-fetch
+  comments after deletion for accuracy (slower). If `false`, update the
+  list in place (faster)
 
-By default, gojeera does not allow users to view and update these
-fields. To enable this feature, set the variable
-`enable_creating_additional_fields: True`.
+### JQL Filters
 
-Use `create_additional_fields_ignore_ids` to hide specific fields from
-the default set. This is useful when you want to hide problematic
-fields.
+#### Local Filters
+
+Define local JQL filters that appear in the autocomplete dropdown with a
+⌂ symbol:
 
 ```yaml
-create_additional_fields_ignore_ids:
-  - customfield_10001
-  - customfield_10002
+jql_filters:
+  - label: "Work in the current sprint"
+    expression: "sprint in openSprints()"
+  - label: "My open work items"
+    expression: >
+      assignee = currentUser() AND status != Done
+      ORDER BY priority DESC
+  - label: "Recently updated"
+    expression: "updated >= -7d ORDER BY updated DESC"
+
+jql_filter_label_for_work_items_search: "Work in the current sprint"
 ```
+
+- **`jql_filters`** (optional): List of predefined JQL
+  filters. Each entry must have:
+  - `label` (string): Display name for the filter
+  - `expression` (string): The JQL query expression
+- **`jql_filter_label_for_work_items_search`** (optional):
+  Default filter label to use when no search criteria is provided. Must
+  match one of the labels in `jql_filters`
+
+#### Remote Filters
+
+Fetch saved filters from your Jira instance (shown with ☁ symbol in
+autocomplete):
+
+```yaml
+fetch_remote_filters:
+  enabled: true
+  include_shared: false
+  starred_only: false
+  cache_ttl: 3600
+```
+
+- **`fetch_remote_filters.enabled`** (default: `false`): Enable
+  fetching filters from the Jira API
+- **`fetch_remote_filters.include_shared`** (default: `false`):
+  Include filters shared with you via groups/projects. If `false`, only
+  fetch your personal filters
+- **`fetch_remote_filters.starred_only`** (default: `false`):
+  Only fetch filters you've starred (marked as favorite)
+- **`fetch_remote_filters.cache_ttl`** (default: `3600`): Cache
+  duration in seconds before re-fetching from the server
+
+### Jumper - Quick Navigation
+
+The jumper overlay allows quick keyboard navigation between widgets
+(activate with `Ctrl+\`):
+
+```yaml
+jumper:
+  enabled: true
+  keys:
+    - "1"
+    - "2"
+    - "3"
+    - "q"
+    - "w"
+    - "e"
+    - "a"
+    - "s"
+    - "d"
+```
+
+- **`jumper.enabled`** (default: `true`): Enable the jumper
+  overlay for quick navigation
+- **`jumper.keys`** (default: `['1', '2', '3', 'q', 'w',
+'e', 'a', 's', 'd']`): Keys to use for jumper targets
+
+### Logging
+
+```yaml
+log_file: null
+log_level: "WARNING"
+```
+
+- **`log_file`** (optional): Path to the log file. Set to an
+  empty string to disable file logging
+- **`log_level`** (default: `"WARNING"`): Log level using
+  Python's logging names: `CRITICAL`, `FATAL`, `ERROR`, `WARN`,
+  `WARNING`, `INFO`, `DEBUG`, `NOTSET`
+
+### SSL Configuration
+
+Configure SSL/TLS settings for secure connections:
+
+```yaml
+ssl:
+  verify_ssl: true
+  ca_bundle: null
+  certificate_file: null
+  key_file: null
+  password: null
+```
+
+- **`ssl.verify_ssl`** (default: `true`): Enable SSL certificate
+  verification for HTTP requests
+- **`ssl.ca_bundle`** (optional): Path to a custom CA bundle
+  file
+- **`ssl.certificate_file`** (optional): Path to a client-side
+  certificate file (e.g., `cert.pem`)
+- **`ssl.key_file`** (optional): Path to the private key file
+  for the certificate
+- **`ssl.password`** (optional): Password for the encrypted
+  key file
+
+### Miscellaneous
+
+```yaml
+confirm_before_quit: true
+```
+
+- **`confirm_before_quit`** (bool, default: `true`): Show a
+  confirmation dialog before quitting the application
+
+## Complete Example Configuration
+
+See [`gojeera.example.yaml`](../gojeera.example.yaml) for a complete
+example configuration file with common settings.
+
+## Minimal Configuration Example
+
+The minimum required configuration to get started:
+
+```yaml
+jira:
+  api_username: "your-email@example.com"
+  api_token: "your-api-token-here"
+  api_base_url: "https://your-instance.atlassian.net"
+```
+
+## Configuration Tips
+
+1. **Keep your API token secure**: Never commit your configuration file
+   with the actual API token to version control. Consider using
+   environment variables for sensitive data.
+
+2. **Privacy**: If sharing screenshots or demos, enable
+   `obfuscate_personal_info: true` to hide your username and instance
+   URL.
+
+3. **Custom sprints**: Most Jira Cloud instances use custom fields for
+   sprints. Find your sprint field ID by:
+   - Going to Jira Settings → Issues → Custom Fields
+   - Finding the "Sprint" field
+   - Using the field ID (e.g., `customfield_10010`)
+
+4. **JQL filters**: Use local filters for quick access to common
+   queries. Use remote filters to sync with your team's saved filters in
+   Jira.

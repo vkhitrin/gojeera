@@ -25,7 +25,8 @@ from gojeera.commands.render import (
 )
 from gojeera.config import ApplicationConfiguration
 from gojeera.exceptions import CLIException
-from gojeera.files import get_config_file
+from gojeera.files import get_config_file, get_themes_directory
+from gojeera.themes import create_themes_from_config, load_themes_from_directory
 
 console = Console()
 
@@ -58,12 +59,27 @@ def version():
 
 
 @cli.command(
-    'themes', help='List the available built-in themes. Using a theme: gojeera ui --theme <NAME>'
+    'themes',
+    help='List the available themes. Using a theme: gojeera ui --theme <NAME>',
 )
 def themes():
     console.print('Available built-in themes\n')
     renderer = ThemesRenderer()
     renderer.render(console, list(BUILTIN_THEMES.keys()))
+
+    custom_themes = []
+
+    try:
+        themes_dir = get_themes_directory()
+        directory_themes = load_themes_from_directory(themes_dir)
+        custom_themes.extend(directory_themes)
+    except Exception as e:
+        console.print(f'\n[yellow]Warning: Could not load themes from directory: {str(e)}[/yellow]')
+
+    if custom_themes:
+        console.print('\nAvailable custom themes\n')
+        custom_theme_names = [theme.name for theme in custom_themes]
+        renderer.render(console, custom_theme_names)
 
 
 @cli.command('config', help='Shows the location of the configuration file.')
@@ -451,10 +467,31 @@ def ui(
     focus_item_on_startup: int | None = None,
 ):
     """Launches the gojeera application."""
-    if theme and theme not in BUILTIN_THEMES:
-        console.print('The name of the theme you provided is not supported.')
-        console.print('To see the list of supported themes run: gojeera themes')
-        sys.exit(1)
+    # Validate theme if provided
+    if theme:
+        valid_themes = set(BUILTIN_THEMES.keys())
+
+        # Load custom themes from directory
+        try:
+            themes_dir = get_themes_directory()
+            directory_themes = load_themes_from_directory(themes_dir)
+            valid_themes.update(t.name for t in directory_themes)
+        except Exception:
+            pass
+
+        # Also check config-based themes (deprecated)
+        try:
+            settings = ApplicationConfiguration()  # type: ignore[call-arg] # noqa
+            if settings.custom_themes:
+                config_themes = create_themes_from_config(settings.custom_themes)
+                valid_themes.update(t.name for t in config_themes)
+        except Exception:
+            pass
+
+        if theme not in valid_themes:
+            console.print('The name of the theme you provided is not supported.')
+            console.print('To see the list of supported themes run: gojeera themes')
+            sys.exit(1)
 
     # Validate that --focus-item-on-startup requires --search-on-startup
     if focus_item_on_startup is not None:

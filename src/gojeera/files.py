@@ -53,3 +53,14 @@ def get_log_file() -> Path:
         A `Path` of the logs file.
     """
     return get_logs_directory() / LOG_FILE_FILE_NAME
+
+
+def get_themes_directory() -> Path:
+    """Retrieves the directory where custom theme files are stored.
+
+    Returns:
+        A `Path` of the themes directory.
+    """
+    themes_dir = get_config_directory() / 'themes'
+    themes_dir.mkdir(exist_ok=True, parents=True)
+    return themes_dir

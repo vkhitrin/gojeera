@@ -10,8 +10,9 @@ from textual.binding import Binding
 from gojeera.api_controller.controller import APIController, APIControllerResponse
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.constants import LOGGER_NAME
-from gojeera.files import get_log_file
+from gojeera.files import get_log_file, get_themes_directory
 from gojeera.models import JiraServerInfo
+from gojeera.themes import create_themes_from_config, load_themes_from_directory
 from gojeera.widgets.config_info import ConfigFileScreen
 from gojeera.widgets.quit import QuitScreen
 from gojeera.widgets.screens import MainScreen
@@ -104,7 +105,20 @@ class JiraApp(App):
 
         self.server_info: JiraServerInfo | None = None
         self._setup_logging()
+        self._register_custom_themes()
         self._setup_theme(user_theme)
+
+    def _register_custom_themes(self) -> None:
+        """Register custom themes from the themes directory and config file (deprecated)."""
+        # Load themes from the themes directory (preferred method)
+        try:
+            themes_dir = get_themes_directory()
+            directory_themes = load_themes_from_directory(themes_dir)
+            for theme in directory_themes:
+                self.register_theme(theme)
+                self.logger.info(f'Registered custom theme from directory: {theme.name}')
+        except Exception as e:
+            self.logger.warning(f'Error loading themes from directory: {str(e)}')
 
     def _setup_theme(self, user_theme: str | None = None) -> None:
         if input_theme := (user_theme or CONFIGURATION.get().theme):

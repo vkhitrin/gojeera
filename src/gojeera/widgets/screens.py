@@ -288,7 +288,7 @@ class MainScreen(Screen):
 
     @property
     def run_button(self) -> Button:
-        return self.query_one('#run-button', expect_type=Button)
+        return self.query_one('#search-button', expect_type=Button)
 
     @property
     def tabs(self) -> TabbedContent:
@@ -391,8 +391,8 @@ class MainScreen(Screen):
                 yield JQLSearchWidget()
                 yield Button(
                     'Search',
-                    id='run-button',
-                    variant='warning',
+                    id='search-button',
+                    variant='primary',
                     disabled=False,
                     flat=True,
                     compact=True,
@@ -862,7 +862,7 @@ class MainScreen(Screen):
         }
         self.search_results_container.hide_loading()
 
-    @on(Button.Pressed, '#run-button')
+    @on(Button.Pressed, '#search-button')
     async def handle_run_button(self) -> None:
         self.run_worker(self.action_search())
 

@@ -211,6 +211,77 @@ The app provides a CLI command to list supported themes:
 gojeera themes
 ```
 
+### Defining Custom Themes
+
+gojeera allows you to define custom themes.  
+Custom themes are defined as YAML files in the `themes` directory within your gojeera
+config directory (for example, `~/.config/gojeera/themes/`).
+
+Each theme file requires at minimum:
+
+- `name`: A unique name for your theme (optional - will use filename if not specified)
+- `primary`: The primary color (hex color code)
+
+Additional optional colors include:
+
+- `secondary`: An alternative branding color
+- `accent`: Used sparingly to draw attention
+- `foreground`: The default text color
+- `background`: The background color
+- `surface`: The default background color of widgets
+- `panel`: A color to differentiate parts of the UI
+- `success`: Indicates success
+- `warning`: Indicates a warning
+- `error`: Indicates an error
+
+You can also specify:
+
+- `dark`: Whether this is a dark theme (default: `true`)
+- `variables`: Additional theme variables as key-value pairs
+
+**Example: Creating a custom theme**
+
+Create a file `~/.config/gojeera/themes/arctic.yaml`:
+
+```yaml
+name: "arctic"
+primary: "#88C0D0"
+secondary: "#81A1C1"
+accent: "#B48EAD"
+foreground: "#D8DEE9"
+background: "#2E3440"
+success: "#A3BE8C"
+warning: "#EBCB8B"
+error: "#BF616A"
+surface: "#3B4252"
+panel: "#434C5E"
+dark: true
+variables:
+  block-cursor-text-style: "none"
+  footer-key-foreground: "#88C0D0"
+  input-selection-background: "#81a1c1 35%"
+```
+
+Create a file `~/.config/gojeera/themes/ocean-light.yaml`:
+
+```yaml
+name: "ocean-light"
+primary: "#0077BE"
+secondary: "#00A0DC"
+foreground: "#2C3E50"
+background: "#F8F9FA"
+dark: false
+```
+
+Once defined, custom themes are available alongside built-in themes:
+
+- Use `gojeera themes` to list all available themes (built-in and custom)
+- Use `gojeera ui --theme arctic` to launch with your custom theme
+- Set `theme: "arctic"` in your config to use it by default
+
+For more details on theme customization, see the
+[Textual Themes documentation](https://textual.textualize.io/guide/design/).
+
 ### Configuring Pre-defined JQL Expressions
 
 To define your own JQL expressions, use the setting

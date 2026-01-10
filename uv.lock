@@ -639,6 +639,90 @@ wheels = [
 ]
 
 [[package]]
+name = "gojeera"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "atlas-doc-parser" },
+    { name = "click" },
+    { name = "gitpython" },
+    { name = "httpx" },
+    { name = "pydantic-settings", extra = ["yaml"] },
+    { name = "python-dateutil" },
+    { name = "python-json-logger" },
+    { name = "python-magic" },
+    { name = "textual", extra = ["syntax"] },
+    { name = "textual-autocomplete" },
+    { name = "textual-image" },
+    { name = "xdg-base-dirs" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "textual-dev" },
+]
+docs = [
+    { name = "myst-parser" },
+    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "sphinx", version = "8.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "sphinx-design" },
+    { name = "sphinx-markdown-builder" },
+    { name = "sphinx-rtd-theme" },
+    { name = "sphinxcontrib-mermaid" },
+]
+lint = [
+    { name = "mypy" },
+    { name = "ruff" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "respx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "atlas-doc-parser", git = "https://github.com/MacHu-GWU/atlas_doc_parser-project" },
+    { name = "click", specifier = "==8.3.0" },
+    { name = "gitpython", specifier = ">=3.1.45" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.11.0" },
+    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "python-json-logger", specifier = ">=4.0.0" },
+    { name = "python-magic", specifier = ">=0.4.27" },
+    { name = "textual", extras = ["syntax"], specifier = ">=6.4.0" },
+    { name = "textual-autocomplete", specifier = ">=4.0.6" },
+    { name = "textual-image", specifier = ">=0.8.4" },
+    { name = "xdg-base-dirs", specifier = ">=6.0.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "textual-dev", specifier = ">=1.8.0" },
+]
+docs = [
+    { name = "myst-parser", specifier = ">=4.0.1" },
+    { name = "sphinx", specifier = ">=8.1.3" },
+    { name = "sphinx-design", specifier = ">=0.6.1" },
+    { name = "sphinx-markdown-builder", specifier = ">=0.6.8" },
+    { name = "sphinx-rtd-theme", specifier = ">=3.0.2" },
+    { name = "sphinxcontrib-mermaid", specifier = ">=1.0.0" },
+]
+lint = [
+    { name = "mypy", specifier = ">=1.18.2" },
+    { name = "ruff", specifier = ">=0.14.3" },
+]
+test = [
+    { name = "pytest", specifier = ">8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.2.0" },
+    { name = "pytest-cov", specifier = ">6.2.1" },
+    { name = "respx", specifier = ">=0.22.0" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -721,90 +805,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
-]
-
-[[package]]
-name = "jiratui"
-version = "1.6.2"
-source = { editable = "." }
-dependencies = [
-    { name = "atlas-doc-parser" },
-    { name = "click" },
-    { name = "gitpython" },
-    { name = "httpx" },
-    { name = "pydantic-settings", extra = ["yaml"] },
-    { name = "python-dateutil" },
-    { name = "python-json-logger" },
-    { name = "python-magic" },
-    { name = "textual", extra = ["syntax"] },
-    { name = "textual-autocomplete" },
-    { name = "textual-image" },
-    { name = "xdg-base-dirs" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "textual-dev" },
-]
-docs = [
-    { name = "myst-parser" },
-    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "sphinx", version = "8.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "sphinx-design" },
-    { name = "sphinx-markdown-builder" },
-    { name = "sphinx-rtd-theme" },
-    { name = "sphinxcontrib-mermaid" },
-]
-lint = [
-    { name = "mypy" },
-    { name = "ruff" },
-]
-test = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "respx" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "atlas-doc-parser", git = "https://github.com/MacHu-GWU/atlas_doc_parser-project" },
-    { name = "click", specifier = "==8.3.0" },
-    { name = "gitpython", specifier = ">=3.1.45" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.11.0" },
-    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
-    { name = "python-json-logger", specifier = ">=4.0.0" },
-    { name = "python-magic", specifier = ">=0.4.27" },
-    { name = "textual", extras = ["syntax"], specifier = ">=6.4.0" },
-    { name = "textual-autocomplete", specifier = ">=4.0.6" },
-    { name = "textual-image", specifier = ">=0.8.4" },
-    { name = "xdg-base-dirs", specifier = ">=6.0.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit", specifier = ">=4.3.0" },
-    { name = "textual-dev", specifier = ">=1.8.0" },
-]
-docs = [
-    { name = "myst-parser", specifier = ">=4.0.1" },
-    { name = "sphinx", specifier = ">=8.1.3" },
-    { name = "sphinx-design", specifier = ">=0.6.1" },
-    { name = "sphinx-markdown-builder", specifier = ">=0.6.8" },
-    { name = "sphinx-rtd-theme", specifier = ">=3.0.2" },
-    { name = "sphinxcontrib-mermaid", specifier = ">=1.0.0" },
-]
-lint = [
-    { name = "mypy", specifier = ">=1.18.2" },
-    { name = "ruff", specifier = ">=0.14.3" },
-]
-test = [
-    { name = "pytest", specifier = ">8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.2.0" },
-    { name = "pytest-cov", specifier = ">6.2.1" },
-    { name = "respx", specifier = ">=0.22.0" },
 ]
 
 [[package]]

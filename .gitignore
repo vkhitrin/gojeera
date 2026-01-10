@@ -143,7 +143,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-.env.jiratui
+.env.gojeera
 
 # Spyder project settings
 .spyderproject

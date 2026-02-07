@@ -63,6 +63,8 @@ test = [
     "pytest>8.4.1",
     "pytest-asyncio>=1.2.0",
     "pytest-cov>6.2.1",
+    "pytest-textual-snapshot>=1.0.0",
+    "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
 ]
 

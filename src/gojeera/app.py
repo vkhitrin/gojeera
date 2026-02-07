@@ -243,7 +243,7 @@ class MainScreen(Screen):
         work_item_container.can_focus = False
 
         work_item_middle_container = self.query_one(
-            '#work-item-middle-container', expect_type=Vertical
+            '#work-item-information-container', expect_type=Vertical
         )
         work_item_middle_container.can_focus = False
 

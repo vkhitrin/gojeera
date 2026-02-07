@@ -546,6 +546,7 @@ class WorkItemFields(Container, can_focus=False):
                     work_item_key=self.work_item.key,
                     mode='new',
                     current_remaining_estimate=current_remaining_estimate,
+                    started=datetime.now().strftime('%Y-%m-%d %H:%M'),
                 ),
                 self._request_adding_worklog,
             )
@@ -691,12 +692,13 @@ class WorkItemFields(Container, can_focus=False):
                 )
             return
 
-    def _update_priority_selection(self, priorities, priority_id: str) -> None:
-        for priority in priorities or []:
-            if priority[1] == priority_id:
-                self.priority_selector._original_value = priority_id
-                self.priority_selector.value = priority_id
-                return
+    def _update_priority_selection(self, priority_id: str) -> None:
+        self.priority_selector.value = priority_id
+        self.priority_selector._original_value = priority_id
+
+    def _update_assignee_selection(self, assignee_id: str) -> None:
+        self.assignee_selector.value = assignee_id
+        self.assignee_selector.original_value = assignee_id
 
     def _setup_priority_selector(
         self, work_item_edit_meta: dict | None, work_item_priority: WorkItemPriority
@@ -708,9 +710,13 @@ class WorkItemFields(Container, can_focus=False):
                 priorities: list[tuple[str, str]] = []
                 for v in priority_field.get('allowedValues', []):
                     priorities.append((v.get('name'), v.get('id')))
+
                 self.priority_selector.set_options(priorities)
+
                 if work_item_priority:
-                    self._update_priority_selection(priorities, work_item_priority.id)
+                    self.set_timer(
+                        0.01, lambda: self._update_priority_selection(work_item_priority.id)
+                    )
         else:
             self.priority_selector.update_enabled = False
 
@@ -900,8 +906,8 @@ class WorkItemFields(Container, can_focus=False):
         has_field_changes = bool(payload)
 
         has_status_change = (
-            self.work_item_status_selector.value != Select.BLANK
-            and self.work_item_status_selector.selection is not None
+            self.work_item_status_selector.selection is not None
+            and self.work_item_status_selector.selection != self.work_item.status.id
         )
 
         return has_field_changes or has_status_change
@@ -1131,9 +1137,10 @@ class WorkItemFields(Container, can_focus=False):
         if selectable_users:
             self.assignee_selector.set_options(selectable_users)
             if current_assignee:
-                self.assignee_selector.original_value = current_assignee.account_id
-
-                self.assignee_selector.value = current_assignee.account_id
+                self.set_timer(
+                    0.01,
+                    lambda: self._update_assignee_selection(current_assignee.account_id),
+                )
             else:
                 self.assignee_selector.original_value = None
             self.assignee_selector.update_enabled = bool(field_is_editable)
@@ -1143,8 +1150,10 @@ class WorkItemFields(Container, can_focus=False):
                     [(current_assignee.display_name, current_assignee.account_id)]
                 )
 
-                self.assignee_selector.original_value = current_assignee.account_id
-                self.assignee_selector.value = current_assignee.account_id
+                self.set_timer(
+                    0.01,
+                    lambda: self._update_assignee_selection(current_assignee.account_id),
+                )
                 self.assignee_selector.update_enabled = bool(field_is_editable)
             else:
                 self.assignee_selector.original_value = None
@@ -1239,11 +1248,6 @@ class WorkItemFields(Container, can_focus=False):
             if not self.work_item or self.work_item.key != work_item_key:
                 return
 
-            if work_item.status:
-                self.work_item_status_selector.original_value = work_item.status.id
-            else:
-                self.work_item_status_selector.original_value = None
-
         with self.app.batch_update():
             if work_item.resolution_date:
                 self.work_item_resolution_date_field.value = datetime.strftime(
@@ -1318,9 +1322,15 @@ class WorkItemFields(Container, can_focus=False):
 
             self._update_all_field_labels_styling()
 
-        def finalize_form_load() -> None:
-            self.has_pending_changes = False
+        status_name = work_item.status.name if work_item and work_item.status else None
+        status_id = work_item.status.id if work_item and work_item.status else None
 
+        def finalize_form_load() -> None:
+            if status_name and status_id:
+                self.work_item_status_selector.original_value = status_id
+                self.work_item_status_selector.prompt = status_name
+
+            self.has_pending_changes = False
             self._loading_form = False
 
         self.call_after_refresh(finalize_form_load)

@@ -1,0 +1,10 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+    "statusColor": "#EA7D24",
+    "description": "Major loss of function.",
+    "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+    "name": "High",
+    "id": "10001"
+  }
+]

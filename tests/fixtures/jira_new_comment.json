@@ -1,0 +1,40 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/94264/comment/231669",
+  "id": "231669",
+  "author": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
+    "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+    "emailAddress": "testuser@example.com",
+    "displayName": "Test User",
+    "active": true,
+    "timeZone": "UTC",
+    "accountType": "atlassian"
+  },
+  "body": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is a new test comment added via the UI."
+          }
+        ]
+      }
+    ]
+  },
+  "updateAuthor": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
+    "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+    "emailAddress": "testuser@example.com",
+    "displayName": "Test User",
+    "active": true,
+    "timeZone": "UTC",
+    "accountType": "atlassian"
+  },
+  "created": "2026-02-10T10:00:00.000+0000",
+  "updated": "2026-02-10T10:00:00.000+0000",
+  "jsdPublic": true
+}

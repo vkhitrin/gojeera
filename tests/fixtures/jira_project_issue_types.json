@@ -1,0 +1,22 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10001",
+    "id": "10001",
+    "description": "A task that needs to be done.",
+    "iconUrl": "https://example.atlassian.net/secure/viewavatar?size=xsmall&avatarId=10318&avatarType=issuetype",
+    "name": "Task",
+    "subtask": false,
+    "avatarId": 10318,
+    "hierarchyLevel": 0
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10002",
+    "id": "10002",
+    "description": "A small piece of work that is part of a larger task.",
+    "iconUrl": "https://example.atlassian.net/secure/viewavatar?size=xsmall&avatarId=10316&avatarType=issuetype",
+    "name": "Sub-task",
+    "subtask": true,
+    "avatarId": 10316,
+    "hierarchyLevel": -1
+  }
+]

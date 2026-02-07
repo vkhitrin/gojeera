@@ -1,0 +1,2377 @@
+{
+  "changelog": null,
+  "editmeta": null,
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+  "fields": {
+    "aggregateprogress": {
+      "percent": 9,
+      "progress": 60,
+      "total": 660
+    },
+    "aggregatetimeestimate": 600,
+    "aggregatetimeoriginalestimate": null,
+    "aggregatetimespent": 60,
+    "assignee": null,
+    "attachment": [
+      {
+        "author": {
+          "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+          "accountType": "atlassian",
+          "active": true,
+          "avatarUrls": {
+            "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+            "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+            "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+            "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+          },
+          "displayName": "Test User",
+          "emailAddress": "testuser@example.com",
+          "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+          "timeZone": "America/New_York"
+        },
+        "content": "https://jira-example.atlassian.net/rest/api/3/attachment/content/20001",
+        "created": "2026-01-31T20:53:55.140+0200",
+        "filename": "text.txt",
+        "id": "20001",
+        "mimeType": "text/plain",
+        "self": "https://jira-example.atlassian.net/rest/api/3/attachment/20001",
+        "size": 18
+      }
+    ],
+    "comment": {
+      "comments": [
+        {
+          "author": {
+            "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+            "accountType": "atlassian",
+            "active": true,
+            "avatarUrls": {
+              "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+              "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+              "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+              "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+            },
+            "displayName": "Test User",
+            "emailAddress": "testuser@example.com",
+            "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+            "timeZone": "America/New_York"
+          },
+          "body": {
+            "content": [
+              {
+                "attrs": {
+                  "level": 1
+                },
+                "content": [
+                  {
+                    "text": "GitHub Flavored Markdown (GFM) All-in-One Test",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "1. Alerts (Admonitions)",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "panelType": "info"
+                },
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ],
+                        "text": "Note:",
+                        "type": "text"
+                      },
+                      {
+                        "text": " Highlights information that users should take into account, even when skimming.",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "panel"
+              },
+              {
+                "attrs": {
+                  "panelType": "success"
+                },
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ],
+                        "text": "Tip:",
+                        "type": "text"
+                      },
+                      {
+                        "text": " Optional information to help a user be more successful.",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "panel"
+              },
+              {
+                "attrs": {
+                  "panelType": "note"
+                },
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ],
+                        "text": "Important:",
+                        "type": "text"
+                      },
+                      {
+                        "text": " Crucial information necessary for users to succeed.",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "panel"
+              },
+              {
+                "attrs": {
+                  "panelType": "warning"
+                },
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ],
+                        "text": "Warning:",
+                        "type": "text"
+                      },
+                      {
+                        "text": " Critical content demanding immediate user attention due to potential risks.",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "panel"
+              },
+              {
+                "attrs": {
+                  "panelType": "error"
+                },
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ],
+                        "text": "Caution:",
+                        "type": "text"
+                      },
+                      {
+                        "text": " Negative potential consequences of an action.",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "panel"
+              },
+              {
+                "type": "rule"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "2. Text Formatting",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "type": "strong"
+                      }
+                    ],
+                    "text": "Bold Text",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "em"
+                      }
+                    ],
+                    "text": "Italic Text",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "em"
+                      },
+                      {
+                        "type": "strong"
+                      }
+                    ],
+                    "text": "Bold and Italic",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "strike"
+                      }
+                    ],
+                    "text": "Strikethrough",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "strong"
+                      }
+                    ],
+                    "text": "Bold and",
+                    "type": "text"
+                  },
+                  {
+                    "text": " ",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "strike"
+                      },
+                      {
+                        "type": "strong"
+                      }
+                    ],
+                    "text": "Strikethrough",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "type": "code"
+                      }
+                    ],
+                    "text": "Inline Code",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "type": "rule"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "3. Lists",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "level": 3
+                },
+                "content": [
+                  {
+                    "text": "Checkboxes (Task List)",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "text": "☑  Completed task",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "content": [
+                  {
+                    "text": "☐  Incomplete task",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "content": [
+                  {
+                    "text": "☐  ",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "attrs": {
+                          "href": "https://github.com"
+                        },
+                        "type": "link"
+                      }
+                    ],
+                    "text": "Links in tasks works too",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "attrs": {
+                  "level": 3
+                },
+                "content": [
+                  {
+                    "text": "Nested Lists",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "content": [
+                          {
+                            "text": "First item",
+                            "type": "text"
+                          }
+                        ],
+                        "type": "paragraph"
+                      },
+                      {
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "content": [
+                                  {
+                                    "text": "Unordered sub-item",
+                                    "type": "text"
+                                  }
+                                ],
+                                "type": "paragraph"
+                              }
+                            ],
+                            "type": "listItem"
+                          },
+                          {
+                            "content": [
+                              {
+                                "content": [
+                                  {
+                                    "text": "Another sub-item",
+                                    "type": "text"
+                                  }
+                                ],
+                                "type": "paragraph"
+                              }
+                            ],
+                            "type": "listItem"
+                          }
+                        ],
+                        "type": "bulletList"
+                      }
+                    ],
+                    "type": "listItem"
+                  },
+                  {
+                    "content": [
+                      {
+                        "content": [
+                          {
+                            "text": "Second item",
+                            "type": "text"
+                          }
+                        ],
+                        "type": "paragraph"
+                      },
+                      {
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "content": [
+                                  {
+                                    "text": "Ordered sub-item A",
+                                    "type": "text"
+                                  }
+                                ],
+                                "type": "paragraph"
+                              }
+                            ],
+                            "type": "listItem"
+                          },
+                          {
+                            "content": [
+                              {
+                                "content": [
+                                  {
+                                    "text": "Ordered sub-item B",
+                                    "type": "text"
+                                  }
+                                ],
+                                "type": "paragraph"
+                              }
+                            ],
+                            "type": "listItem"
+                          }
+                        ],
+                        "type": "orderedList"
+                      }
+                    ],
+                    "type": "listItem"
+                  }
+                ],
+                "type": "orderedList"
+              },
+              {
+                "type": "rule"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "4. Code Blocks",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "level": 3
+                },
+                "content": [
+                  {
+                    "text": "Syntax Highlighting (JavaScript)",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "language": "javascript"
+                },
+                "content": [
+                  {
+                    "text": "const greet = (name) => {\n  console.log(`Hello, ${name}!`);\n}\ngreet(\"GitHub\");\n",
+                    "type": "text"
+                  }
+                ],
+                "type": "codeBlock"
+              },
+              {
+                "attrs": {
+                  "level": 3
+                },
+                "content": [
+                  {
+                    "text": "Syntax Highlighting (diff)",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "language": "diff"
+                },
+                "content": [
+                  {
+                    "text": "- const userStatus = \"offline\";\n+ const userStatus = \"online\";\n! const userStatus = \"away\"; // (Orange/Warning in some renderers)\n# This is a comment/metadata line\n",
+                    "type": "text"
+                  }
+                ],
+                "type": "codeBlock"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "5. Table",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Left Align",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableHeader"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Center Align",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableHeader"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Right Align",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableHeader"
+                      }
+                    ],
+                    "type": "tableRow"
+                  },
+                  {
+                    "content": [
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Item 1",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Value",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "$100",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      }
+                    ],
+                    "type": "tableRow"
+                  },
+                  {
+                    "content": [
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Item 2",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Value",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "$50",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      }
+                    ],
+                    "type": "tableRow"
+                  },
+                  {
+                    "content": [
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Item 3",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "Value",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      },
+                      {
+                        "attrs": {},
+                        "content": [
+                          {
+                            "content": [
+                              {
+                                "text": "$10",
+                                "type": "text"
+                              }
+                            ],
+                            "type": "paragraph"
+                          }
+                        ],
+                        "type": "tableCell"
+                      }
+                    ],
+                    "type": "tableRow"
+                  }
+                ],
+                "type": "table"
+              },
+              {
+                "attrs": {
+                  "level": 1
+                },
+                "content": [
+                  {
+                    "text": "Atlassian Document Format Test",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "1. User Mentions",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "attrs": {
+                          "href": "https://example.atlassian.net/jira/people/123456:abcd1234-1234-1234-1234-abcdef123456"
+                        },
+                        "type": "link"
+                      }
+                    ],
+                    "text": "@Test User",
+                    "type": "text"
+                  },
+                  {
+                    "text": ", ",
+                    "type": "text"
+                  },
+                  {
+                    "marks": [
+                      {
+                        "attrs": {
+                          "href": "https://example.atlassian.net/jira/people/123456:efgh5678-5678-5678-5678-efghij789012"
+                        },
+                        "type": "link"
+                      }
+                    ],
+                    "text": "@Test User",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "attrs": {
+                          "href": "https://example.atlassian.net/jira/people/123456:ijkl9012-9012-9012-9012-ijklmn345678"
+                        },
+                        "type": "link"
+                      }
+                    ],
+                    "text": "@Test User",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "2. Date",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "type": "code"
+                      }
+                    ],
+                    "text": "[date]2026-01-28",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "3. Emojis",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "text": "😀  🚀 🫡",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "4.  Status",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "type": "code"
+                      }
+                    ],
+                    "text": "[status:n]TEST",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "content": [
+                  {
+                    "marks": [
+                      {
+                        "type": "code"
+                      }
+                    ],
+                    "text": "[status:r]STATUS AGAIN",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              },
+              {
+                "attrs": {
+                  "level": 2
+                },
+                "content": [
+                  {
+                    "text": "5.  Decisions",
+                    "type": "text"
+                  }
+                ],
+                "type": "heading"
+              },
+              {
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "code"
+                          }
+                        ],
+                        "text": "[decision:d]Test",
+                        "type": "text"
+                      }
+                    ],
+                    "type": "paragraph"
+                  }
+                ],
+                "type": "blockquote"
+              }
+            ],
+            "type": "doc",
+            "version": 1
+          },
+          "created": "2026-01-26T02:16:48.667+0200",
+          "id": "30001",
+          "jsdPublic": true,
+          "self": "https://jira-example.atlassian.net/rest/api/3/issue/10001/comment/30001",
+          "updateAuthor": {
+            "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+            "accountType": "atlassian",
+            "active": true,
+            "avatarUrls": {
+              "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+              "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+              "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+              "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+            },
+            "displayName": "Test User",
+            "emailAddress": "testuser@example.com",
+            "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+            "timeZone": "America/New_York"
+          },
+          "updated": "2026-02-01T00:28:00.434+0200"
+        }
+      ],
+      "maxResults": 1,
+      "self": "https://jira-example.atlassian.net/rest/api/3/issue/10001/comment",
+      "startAt": 0,
+      "total": 1
+    },
+    "components": [
+      {
+        "id": "11282",
+        "name": "Engineering",
+        "self": "https://jira-example.atlassian.net/rest/api/3/component/11282"
+      }
+    ],
+    "created": "2026-01-25T00:32:30.396+0200",
+    "creator": {
+      "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {
+        "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+        "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+        "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+        "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+      },
+      "displayName": "Test User",
+      "emailAddress": "testuser@example.com",
+      "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+      "timeZone": "America/New_York"
+    },
+    "customfield_10100": "2|i06ugh:",
+    "customfield_10101": null,
+    "customfield_10102": null,
+    "customfield_10106": 3,
+    "customfield_10200": [
+      {
+        "id": "10105",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10105",
+        "value": "Not Deployed"
+      }
+    ],
+    "customfield_10201": null,
+    "customfield_10301": null,
+    "customfield_10400": null,
+    "customfield_10401": [],
+    "customfield_10402": null,
+    "customfield_10403": [],
+    "customfield_10404": null,
+    "customfield_10405": null,
+    "customfield_10406": null,
+    "customfield_10411": null,
+    "customfield_10416": [
+      {
+        "id": "10210",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10210",
+        "value": "Test"
+      }
+    ],
+    "customfield_10500": "{}",
+    "customfield_10501": null,
+    "customfield_10502": null,
+    "customfield_10503": null,
+    "customfield_10504": null,
+    "customfield_10505": null,
+    "customfield_10506": null,
+    "customfield_10507": null,
+    "customfield_10508": null,
+    "customfield_10509": "2026-01-29",
+    "customfield_10510": null,
+    "customfield_10512": null,
+    "customfield_10513": null,
+    "customfield_10516": null,
+    "customfield_10517": null,
+    "customfield_10518": null,
+    "customfield_10519": null,
+    "customfield_10525": {
+      "id": "10320",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10320",
+      "value": "Low"
+    },
+    "customfield_10527": null,
+    "customfield_10528": null,
+    "customfield_10529": null,
+    "customfield_10530": null,
+    "customfield_10531": null,
+    "customfield_10532": null,
+    "customfield_10533": null,
+    "customfield_10534": null,
+    "customfield_10535": null,
+    "customfield_10536": null,
+    "customfield_10537": null,
+    "customfield_10538": null,
+    "customfield_10539": null,
+    "customfield_10540": null,
+    "customfield_10547": null,
+    "customfield_10548": null,
+    "customfield_10549": null,
+    "customfield_10555": null,
+    "customfield_10557": null,
+    "customfield_10563": null,
+    "customfield_10566": null,
+    "customfield_10567": null,
+    "customfield_10569": null,
+    "customfield_10575": null,
+    "customfield_10578": null,
+    "customfield_10579": null,
+    "customfield_10580": null,
+    "customfield_10581": null,
+    "customfield_10583": null,
+    "customfield_10584": null,
+    "customfield_10588": null,
+    "customfield_10590": {
+      "id": "10586",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10586",
+      "value": "Functional"
+    },
+    "customfield_10591": null,
+    "customfield_10592": null,
+    "customfield_10593": null,
+    "customfield_10594": null,
+    "customfield_10597": 0,
+    "customfield_10598": 0,
+    "customfield_10600": null,
+    "customfield_10602": null,
+    "customfield_10610": {
+      "id": "10660",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10660",
+      "value": "NO"
+    },
+    "customfield_10614": null,
+    "customfield_10615": null,
+    "customfield_10617": null,
+    "customfield_10619": null,
+    "customfield_10620": null,
+    "customfield_10621": null,
+    "customfield_10622": null,
+    "customfield_10623": null,
+    "customfield_10624": null,
+    "customfield_10625": null,
+    "customfield_10626": null,
+    "customfield_10627": null,
+    "customfield_10628": null,
+    "customfield_10629": null,
+    "customfield_10630": null,
+    "customfield_10631": null,
+    "customfield_10632": null,
+    "customfield_10633": null,
+    "customfield_10634": null,
+    "customfield_10635": null,
+    "customfield_10636": null,
+    "customfield_10637": null,
+    "customfield_10641": {
+      "id": "10715",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10715",
+      "value": "Low"
+    },
+    "customfield_10642": null,
+    "customfield_10644": {
+      "id": "10728",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10728",
+      "value": "Low"
+    },
+    "customfield_10645": [],
+    "customfield_10646": null,
+    "customfield_10647": null,
+    "customfield_10648": null,
+    "customfield_10650": null,
+    "customfield_10658": null,
+    "customfield_10659": null,
+    "customfield_10660": null,
+    "customfield_10661": null,
+    "customfield_10666": null,
+    "customfield_10684": null,
+    "customfield_10685": null,
+    "customfield_10689": null,
+    "customfield_10694": null,
+    "customfield_10697": null,
+    "customfield_10699": null,
+    "customfield_10700": null,
+    "customfield_10701": null,
+    "customfield_10702": null,
+    "customfield_10703": null,
+    "customfield_10704": null,
+    "customfield_10705": [
+      {
+        "id": "10871",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10871",
+        "value": "No"
+      }
+    ],
+    "customfield_10712": [
+      {
+        "id": "10880",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10880",
+        "value": "Engineering"
+      }
+    ],
+    "customfield_10713": null,
+    "customfield_10723": null,
+    "customfield_10727": null,
+    "customfield_10735": [
+      {
+        "id": "10941",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10941",
+        "value": "No"
+      }
+    ],
+    "customfield_10739": null,
+    "customfield_10743": [
+      {
+        "id": "10945",
+        "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/10945",
+        "value": "No"
+      }
+    ],
+    "customfield_10744": null,
+    "customfield_10745": null,
+    "customfield_10746": null,
+    "customfield_10748": null,
+    "customfield_10776": null,
+    "customfield_10777": null,
+    "customfield_10778": null,
+    "customfield_10782": null,
+    "customfield_10783": null,
+    "customfield_10784": null,
+    "customfield_10785": null,
+    "customfield_10790": null,
+    "customfield_10791": null,
+    "customfield_10792": null,
+    "customfield_10794": null,
+    "customfield_10795": {
+      "id": "11027",
+      "self": "https://jira-example.atlassian.net/rest/api/3/customFieldOption/11027",
+      "value": "PS"
+    },
+    "customfield_10796": null,
+    "customfield_10797": null,
+    "customfield_10798": null,
+    "customfield_10799": null,
+    "customfield_10800": null,
+    "customfield_10801": null,
+    "customfield_10802": null,
+    "customfield_10803": null,
+    "customfield_10804": null,
+    "customfield_10805": null,
+    "customfield_10829": null,
+    "customfield_10862": null,
+    "customfield_10895": null,
+    "customfield_10928": null,
+    "description": {
+      "content": [
+        {
+          "attrs": {
+            "level": 1
+          },
+          "content": [
+            {
+              "text": "GitHub Flavored Markdown (GFM) All-in-One Test",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "1. Alerts (Admonitions)",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "panelType": "info"
+          },
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Note:",
+                  "type": "text"
+                },
+                {
+                  "text": " Highlights information that users should take into account, even when skimming.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "panel"
+        },
+        {
+          "attrs": {
+            "panelType": "success"
+          },
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Tip:",
+                  "type": "text"
+                },
+                {
+                  "text": " Optional information to help a user be more successful.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "panel"
+        },
+        {
+          "attrs": {
+            "panelType": "note"
+          },
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Important:",
+                  "type": "text"
+                },
+                {
+                  "text": " Crucial information necessary for users to succeed.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "panel"
+        },
+        {
+          "attrs": {
+            "panelType": "warning"
+          },
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Warning:",
+                  "type": "text"
+                },
+                {
+                  "text": " Critical content demanding immediate user attention due to potential risks.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "panel"
+        },
+        {
+          "attrs": {
+            "panelType": "error"
+          },
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Caution:",
+                  "type": "text"
+                },
+                {
+                  "text": " Negative potential consequences of an action.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "panel"
+        },
+        {
+          "type": "rule"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "2. Text Formatting",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "marks": [
+                {
+                  "type": "strong"
+                }
+              ],
+              "text": "Bold Text",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "em"
+                }
+              ],
+              "text": "Italic Text",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "em"
+                },
+                {
+                  "type": "strong"
+                }
+              ],
+              "text": "Bold and Italic",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "strike"
+                }
+              ],
+              "text": "Strikethrough",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "strong"
+                }
+              ],
+              "text": "Bold and",
+              "type": "text"
+            },
+            {
+              "text": " ",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "strike"
+                },
+                {
+                  "type": "strong"
+                }
+              ],
+              "text": "Strikethrough",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "type": "code"
+                }
+              ],
+              "text": "Inline Code",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "type": "rule"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "3. Lists",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "level": 3
+          },
+          "content": [
+            {
+              "text": "Checkboxes (Task List)",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "text": "☑  Completed task",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "content": [
+            {
+              "text": "☐  Incomplete task",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "content": [
+            {
+              "text": "☐  ",
+              "type": "text"
+            },
+            {
+              "marks": [
+                {
+                  "attrs": {
+                    "href": "https://github.com"
+                  },
+                  "type": "link"
+                }
+              ],
+              "text": "Links in tasks works too",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attrs": {
+            "level": 3
+          },
+          "content": [
+            {
+              "text": "Nested Lists",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "content": [
+                {
+                  "content": [
+                    {
+                      "text": "First item",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                },
+                {
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "content": [
+                            {
+                              "text": "Unordered sub-item",
+                              "type": "text"
+                            }
+                          ],
+                          "type": "paragraph"
+                        }
+                      ],
+                      "type": "listItem"
+                    },
+                    {
+                      "content": [
+                        {
+                          "content": [
+                            {
+                              "text": "Another sub-item",
+                              "type": "text"
+                            }
+                          ],
+                          "type": "paragraph"
+                        }
+                      ],
+                      "type": "listItem"
+                    }
+                  ],
+                  "type": "bulletList"
+                }
+              ],
+              "type": "listItem"
+            },
+            {
+              "content": [
+                {
+                  "content": [
+                    {
+                      "text": "Second item",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                },
+                {
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "content": [
+                            {
+                              "text": "Ordered sub-item A",
+                              "type": "text"
+                            }
+                          ],
+                          "type": "paragraph"
+                        }
+                      ],
+                      "type": "listItem"
+                    },
+                    {
+                      "content": [
+                        {
+                          "content": [
+                            {
+                              "text": "Ordered sub-item B",
+                              "type": "text"
+                            }
+                          ],
+                          "type": "paragraph"
+                        }
+                      ],
+                      "type": "listItem"
+                    }
+                  ],
+                  "type": "orderedList"
+                }
+              ],
+              "type": "listItem"
+            }
+          ],
+          "type": "orderedList"
+        },
+        {
+          "type": "rule"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "4. Code Blocks",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "level": 3
+          },
+          "content": [
+            {
+              "text": "Syntax Highlighting (JavaScript)",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "language": "javascript"
+          },
+          "content": [
+            {
+              "text": "const greet = (name) => {\n  console.log(`Hello, ${name}!`);\n}\ngreet(\"GitHub\");\n",
+              "type": "text"
+            }
+          ],
+          "type": "codeBlock"
+        },
+        {
+          "attrs": {
+            "level": 3
+          },
+          "content": [
+            {
+              "text": "Syntax Highlighting (diff)",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "language": "diff"
+          },
+          "content": [
+            {
+              "text": "- const userStatus = \"offline\";\n+ const userStatus = \"online\";\n! const userStatus = \"away\"; // (Orange/Warning in some renderers)\n# This is a comment/metadata line\n",
+              "type": "text"
+            }
+          ],
+          "type": "codeBlock"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "5. Table",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "content": [
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Left Align",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableHeader"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Center Align",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableHeader"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Right Align",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableHeader"
+                }
+              ],
+              "type": "tableRow"
+            },
+            {
+              "content": [
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Item 1",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Value",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "$100",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            },
+            {
+              "content": [
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Item 2",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Value",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "$50",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            },
+            {
+              "content": [
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Item 3",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "Value",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "attrs": {},
+                  "content": [
+                    {
+                      "content": [
+                        {
+                          "text": "$10",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "attrs": {
+            "level": 1
+          },
+          "content": [
+            {
+              "text": "Atlassian Document Format Test",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "1. User Mentions",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "attrs": {
+                "accessLevel": "",
+                "id": "123456:abcd1234-1234-1234-1234-abcdef123456",
+                "text": "@Test User"
+              },
+              "type": "mention"
+            },
+            {
+              "text": ", ",
+              "type": "text"
+            },
+            {
+              "attrs": {
+                "accessLevel": "",
+                "id": "123456:efgh5678-5678-5678-5678-efghij789012",
+                "text": "@Test User"
+              },
+              "type": "mention"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "content": [
+            {
+              "attrs": {
+                "accessLevel": "",
+                "id": "123456:ijkl9012-9012-9012-9012-ijklmn345678",
+                "text": "@Test User"
+              },
+              "type": "mention"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "2. Date",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "marks": [
+                {
+                  "type": "code"
+                }
+              ],
+              "text": "[date]2026-01-28",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "3. Emojis",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "text": "😀  🚀 🫡",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "4.  Status",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "marks": [
+                {
+                  "type": "code"
+                }
+              ],
+              "text": "[status:n]TEST",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "content": [
+            {
+              "marks": [
+                {
+                  "type": "code"
+                }
+              ],
+              "text": "[status:r]STATUS AGAIN",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "text": "5.  Decisions",
+              "type": "text"
+            }
+          ],
+          "type": "heading"
+        },
+        {
+          "content": [
+            {
+              "content": [
+                {
+                  "marks": [
+                    {
+                      "type": "code"
+                    }
+                  ],
+                  "text": "[decision:d]Test",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "blockquote"
+        }
+      ],
+      "type": "doc",
+      "version": 1
+    },
+    "duedate": null,
+    "environment": null,
+    "fixVersions": [],
+    "issuelinks": [
+      {
+        "id": "50001",
+        "outwardIssue": {
+          "fields": {
+            "issuetype": {
+              "avatarId": 10316,
+              "description": "A small piece of work that's part of a larger task.",
+              "hierarchyLevel": -1,
+              "iconUrl": "https://jira-example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+              "id": "10003",
+              "name": "Sub-task",
+              "self": "https://jira-example.atlassian.net/rest/api/3/issuetype/10003",
+              "subtask": true
+            },
+            "priority": {
+              "iconUrl": "https://jira-example.atlassian.net/images/icons/priorities/medium.svg",
+              "id": "10101",
+              "name": "Med-High",
+              "self": "https://jira-example.atlassian.net/rest/api/3/priority/10101"
+            },
+            "status": {
+              "description": "",
+              "iconUrl": "https://jira-example.atlassian.net/",
+              "id": "10001",
+              "name": "Done",
+              "self": "https://jira-example.atlassian.net/rest/api/3/status/10001",
+              "statusCategory": {
+                "colorName": "green",
+                "id": 3,
+                "key": "done",
+                "name": "Done",
+                "self": "https://jira-example.atlassian.net/rest/api/3/statuscategory/3"
+              }
+            },
+            "summary": "Cloned Test Sub-Task"
+          },
+          "id": "10002",
+          "key": "EXAMPLE-1235",
+          "self": "https://jira-example.atlassian.net/rest/api/3/issue/10002"
+        },
+        "self": "https://jira-example.atlassian.net/rest/api/3/issueLink/50001",
+        "type": {
+          "id": "10001",
+          "inward": "is cloned by",
+          "name": "Cloners",
+          "outward": "clones",
+          "self": "https://jira-example.atlassian.net/rest/api/3/issueLinkType/10001"
+        }
+      }
+    ],
+    "issuetype": {
+      "avatarId": 10316,
+      "description": "A small piece of work that's part of a larger task.",
+      "hierarchyLevel": -1,
+      "iconUrl": "https://jira-example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+      "id": "10003",
+      "name": "Sub-task",
+      "self": "https://jira-example.atlassian.net/rest/api/3/issuetype/10003",
+      "subtask": true
+    },
+    "labels": [],
+    "lastViewed": "2026-02-07T09:07:55.596+0200",
+    "parent": {
+      "fields": {
+        "issuetype": {
+          "avatarId": 10318,
+          "description": "A small, distinct piece of work.",
+          "hierarchyLevel": 0,
+          "iconUrl": "https://jira-example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+          "id": "10008",
+          "name": "Task",
+          "self": "https://jira-example.atlassian.net/rest/api/3/issuetype/10008",
+          "subtask": false
+        },
+        "priority": {
+          "iconUrl": "https://jira-example.atlassian.net/images/icons/priorities/low_new.svg",
+          "id": "4",
+          "name": "Low",
+          "self": "https://jira-example.atlassian.net/rest/api/3/priority/4"
+        },
+        "status": {
+          "description": "",
+          "iconUrl": "https://jira-example.atlassian.net/images/icons/statuses/generic.png",
+          "id": "10002",
+          "name": "In Development",
+          "self": "https://jira-example.atlassian.net/rest/api/3/status/10002",
+          "statusCategory": {
+            "colorName": "yellow",
+            "id": 4,
+            "key": "indeterminate",
+            "name": "In Progress",
+            "self": "https://jira-example.atlassian.net/rest/api/3/statuscategory/4"
+          }
+        },
+        "summary": "Parent Test Task"
+      },
+      "id": "10003",
+      "key": "EXAMPLE-1236",
+      "self": "https://jira-example.atlassian.net/rest/api/3/issue/10003"
+    },
+    "priority": {
+      "iconUrl": "https://jira-example.atlassian.net/images/icons/priorities/medium.svg",
+      "id": "10101",
+      "name": "Med-High",
+      "self": "https://jira-example.atlassian.net/rest/api/3/priority/10101"
+    },
+    "progress": {
+      "percent": 9,
+      "progress": 60,
+      "total": 660
+    },
+    "project": {
+      "avatarUrls": {
+        "16x16": "https://jira-example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10900?size=xsmall",
+        "24x24": "https://jira-example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10900?size=small",
+        "32x32": "https://jira-example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10900?size=medium",
+        "48x48": "https://jira-example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10900"
+      },
+      "id": "60001",
+      "key": "EXAMPLE",
+      "name": "Test Project",
+      "projectTypeKey": "software",
+      "self": "https://jira-example.atlassian.net/rest/api/3/project/60001",
+      "simplified": false
+    },
+    "reporter": {
+      "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {
+        "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+        "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+        "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+        "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+      },
+      "displayName": "Test User",
+      "emailAddress": "testuser@example.com",
+      "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+      "timeZone": "America/New_York"
+    },
+    "resolution": null,
+    "resolutiondate": null,
+    "security": null,
+    "status": {
+      "description": "",
+      "iconUrl": "https://jira-example.atlassian.net/images/icons/statuses/generic.png",
+      "id": "10258",
+      "name": "Dev Pending",
+      "self": "https://jira-example.atlassian.net/rest/api/3/status/10258",
+      "statusCategory": {
+        "colorName": "blue-gray",
+        "id": 2,
+        "key": "new",
+        "name": "To Do",
+        "self": "https://jira-example.atlassian.net/rest/api/3/statuscategory/2"
+      }
+    },
+    "statusCategory": {
+      "colorName": "blue-gray",
+      "id": 2,
+      "key": "new",
+      "name": "To Do",
+      "self": "https://jira-example.atlassian.net/rest/api/3/statuscategory/2"
+    },
+    "statuscategorychangedate": "2026-02-07T03:50:31.170+0200",
+    "subtasks": [],
+    "summary": "Test Sub-Task Description",
+    "timeestimate": 600,
+    "timeoriginalestimate": null,
+    "timespent": 60,
+    "timetracking": {
+      "remainingEstimate": "10m",
+      "remainingEstimateSeconds": 600,
+      "timeSpent": "1m",
+      "timeSpentSeconds": 60
+    },
+    "updated": "2026-02-07T04:19:08.507+0200",
+    "versions": [],
+    "votes": {
+      "hasVoted": false,
+      "self": "https://jira-example.atlassian.net/rest/api/3/issue/EXAMPLE-1234/votes",
+      "votes": 0
+    },
+    "watches": {
+      "isWatching": true,
+      "self": "https://jira-example.atlassian.net/rest/api/3/issue/EXAMPLE-1234/watchers",
+      "watchCount": 1
+    },
+    "worklog": {
+      "maxResults": 20,
+      "startAt": 0,
+      "total": 1,
+      "worklogs": [
+        {
+          "author": {
+            "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+            "accountType": "atlassian",
+            "active": true,
+            "avatarUrls": {
+              "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+              "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+              "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+              "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+            },
+            "displayName": "Test User",
+            "emailAddress": "testuser@example.com",
+            "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+            "timeZone": "America/New_York"
+          },
+          "comment": {
+            "content": [],
+            "type": "doc",
+            "version": 1
+          },
+          "created": "2026-01-29T20:22:54.087+0200",
+          "id": "40001",
+          "issueId": "10001",
+          "self": "https://jira-example.atlassian.net/rest/api/3/issue/10001/worklog/40001",
+          "started": "2026-01-30T04:22:00.000+0200",
+          "timeSpent": "1m",
+          "timeSpentSeconds": 60,
+          "updateAuthor": {
+            "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
+            "accountType": "atlassian",
+            "active": true,
+            "avatarUrls": {
+              "16x16": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/16",
+              "24x24": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/24",
+              "32x32": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/32",
+              "48x48": "https://avatar.example.com/123456:abcd1234-1234-1234-1234-abcdef123456/avatar1234-5678-9012-3456-789012345678/48"
+            },
+            "displayName": "Test User",
+            "emailAddress": "testuser@example.com",
+            "self": "https://jira-example.atlassian.net/rest/api/3/user?accountId=712020%3A403b9a3f-d68e-46a1-83f3-8f87a7b55857",
+            "timeZone": "America/New_York"
+          },
+          "updated": "2026-01-29T20:23:13.736+0200"
+        }
+      ]
+    },
+    "workratio": -1
+  },
+  "fieldsToInclude": null,
+  "id": "10001",
+  "key": "EXAMPLE-1234",
+  "names": null,
+  "operations": null,
+  "properties": null,
+  "renderedFields": null,
+  "schema": null,
+  "self": "https://jira-example.atlassian.net/rest/api/3/issue/10001",
+  "transitions": null,
+  "versionedRepresentations": null
+}

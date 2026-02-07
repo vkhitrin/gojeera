@@ -40,4 +40,8 @@ analyze-codebase: ##Analyzes codebase
 
 .PHONY: test
 test: ##Run tests
-	uv run --no-sync pytest src/gojeera
+	uv run pytest -n auto tests
+
+.PHONY: test-update-snapshots
+test-update-snapshots: ##Run tests and update snapshots
+	uv run pytest -n auto tests --snapshot-update

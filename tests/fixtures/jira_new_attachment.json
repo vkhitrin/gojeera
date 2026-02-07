@@ -1,0 +1,24 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/attachment/66812",
+  "id": "66812",
+  "filename": "new_test_file.txt",
+  "author": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+    "accountId": "555000:11111111-1111-1111-1111-111111111111",
+    "emailAddress": "testuser@example.com",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/avatar.png",
+      "24x24": "https://example.atlassian.net/avatar.png",
+      "16x16": "https://example.atlassian.net/avatar.png",
+      "32x32": "https://example.atlassian.net/avatar.png"
+    },
+    "displayName": "Test User",
+    "active": true,
+    "timeZone": "Asia/Jerusalem",
+    "accountType": "atlassian"
+  },
+  "created": "2026-02-06T10:00:00.000+0200",
+  "size": 1024,
+  "mimeType": "text/plain",
+  "content": "https://example.atlassian.net/rest/api/3/attachment/content/66812"
+}

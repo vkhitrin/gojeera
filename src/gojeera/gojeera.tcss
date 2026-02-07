@@ -247,7 +247,7 @@ UnifiedSearchBar>Button:focus>Static {
   border: none;
 }
 
-#work-item-middle-container {
+#work-item-information-container {
   width: 50%;
   border: none;
   border-subtitle-align: left;
@@ -258,7 +258,7 @@ UnifiedSearchBar>Button:focus>Static {
   padding-bottom: 0;
 }
 
-#work-item-middle-container:focus-within {
+#work-item-information-container:focus-within {
   border: none;
 }
 

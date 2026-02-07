@@ -113,16 +113,22 @@ class CommentScreen(ModalScreen[str]):
         jumper = self.query_one(ExtendedJumper)
         jumper.show()
 
-    async def action_insert_mention(self) -> None:
+    def action_insert_mention(self) -> None:
         from gojeera.utils.mention_helpers import insert_user_mention
 
-        await insert_user_mention(
-            app=self.app,
-            target_widget=self.comment_field,
-            work_item_key=self.work_item_key,
+        self.run_worker(
+            insert_user_mention(
+                app=self.app,
+                target_widget=self.comment_field,
+                work_item_key=self.work_item_key,
+            ),
+            exclusive=False,
         )
 
-    async def action_insert_decision(self) -> None:
+    def action_insert_decision(self) -> None:
+        self.run_worker(self._insert_decision_worker(), exclusive=False)
+
+    async def _insert_decision_worker(self) -> None:
         textarea = self.comment_field.query_one(TextArea)
         cursor_position = textarea.cursor_location
 
@@ -138,7 +144,10 @@ class CommentScreen(ModalScreen[str]):
 
             textarea.insert(insertion_text)
 
-    async def action_insert_alert(self) -> None:
+    def action_insert_alert(self) -> None:
+        self.run_worker(self._insert_alert_worker(), exclusive=False)
+
+    async def _insert_alert_worker(self) -> None:
         textarea = self.comment_field.query_one(TextArea)
         cursor_position = textarea.cursor_location
 

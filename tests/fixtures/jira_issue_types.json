@@ -1,0 +1,20 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10003",
+    "id": "10003",
+    "description": "A small, distinct piece of work.",
+    "iconUrl": "https://example.atlassian.net/images/icons/issuetypes/subtask.png",
+    "name": "Sub-task",
+    "subtask": true,
+    "hierarchyLevel": -1
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+    "id": "10004",
+    "description": "A task that needs to be done.",
+    "iconUrl": "https://example.atlassian.net/images/icons/issuetypes/task.png",
+    "name": "Task",
+    "subtask": false,
+    "hierarchyLevel": 0
+  }
+]

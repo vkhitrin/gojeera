@@ -1,5 +1,5 @@
 import re
-from typing import cast
+from typing import Literal, cast, overload
 
 from atlas_doc_parser.api import parse_node
 from markdown_it import MarkdownIt
@@ -1091,6 +1091,14 @@ def _detect_malformed_markdown(text: str, tokens: list) -> list[str]:
                         )
 
     return warnings
+
+
+@overload
+def text_to_adf(text: str, track_warnings: Literal[False] = False) -> dict: ...
+
+
+@overload
+def text_to_adf(text: str, track_warnings: Literal[True]) -> tuple[dict, list[str]]: ...
 
 
 def text_to_adf(text: str, track_warnings: bool = False) -> dict | tuple[dict, list[str]]:

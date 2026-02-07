@@ -45,7 +45,7 @@ class WorkItemInformation(Vertical):
     work_item: Reactive[JiraWorkItem | None] = reactive(None, always_update=True)
 
     def __init__(self, **kwargs):
-        super().__init__(id='work-item-middle-container', **kwargs)
+        super().__init__(id='work-item-information-container', **kwargs)
 
     def compose(self) -> ComposeResult:
         yield WorkItemBreadcrumb()

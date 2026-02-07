@@ -1,0 +1,55 @@
+{
+  "author": {
+    "accountId": "555000:11111111-1111-1111-1111-111111111111",
+    "accountType": "atlassian",
+    "active": true,
+    "avatarUrls": {
+      "16x16": "https://avatar-test.example.com/16",
+      "24x24": "https://avatar-test.example.com/24",
+      "32x32": "https://avatar-test.example.com/32",
+      "48x48": "https://avatar-test.example.com/48"
+    },
+    "displayName": "Test User",
+    "emailAddress": "testuser@example.com",
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+    "timeZone": "America/New_York"
+  },
+  "comment": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "New worklog entry for testing."
+          }
+        ]
+      }
+    ]
+  },
+  "created": "2026-02-07T14:00:00.000+0000",
+  "id": "10003",
+  "issueId": "94264",
+  "self": "https://example.atlassian.net/rest/api/3/issue/94264/worklog/10003",
+  "started": "2026-02-07T14:00:00.000+0000",
+  "timeSpent": "3h",
+  "timeSpentSeconds": 10800,
+  "updateAuthor": {
+    "accountId": "555000:11111111-1111-1111-1111-111111111111",
+    "accountType": "atlassian",
+    "active": true,
+    "avatarUrls": {
+      "16x16": "https://avatar-test.example.com/16",
+      "24x24": "https://avatar-test.example.com/24",
+      "32x32": "https://avatar-test.example.com/32",
+      "48x48": "https://avatar-test.example.com/48"
+    },
+    "displayName": "Test User",
+    "emailAddress": "testuser@example.com",
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+    "timeZone": "America/New_York"
+  },
+  "updated": "2026-02-07T14:00:00.000+0000"
+}

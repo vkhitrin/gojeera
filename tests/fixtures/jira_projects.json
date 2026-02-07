@@ -1,0 +1,26 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/project/search",
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 1,
+  "isLast": true,
+  "values": [
+    {
+      "expand": "description,lead,url,projectKeys,permissions,insight",
+      "self": "https://example.atlassian.net/rest/api/3/project/60001",
+      "id": "60001",
+      "key": "EXAMPLE",
+      "name": "Test Project",
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.net/secure/projectavatar?pid=60001&avatarId=10324",
+        "24x24": "https://example.atlassian.net/secure/projectavatar?size=small&pid=60001&avatarId=10324",
+        "16x16": "https://example.atlassian.net/secure/projectavatar?size=xsmall&pid=60001&avatarId=10324",
+        "32x32": "https://example.atlassian.net/secure/projectavatar?size=medium&pid=60001&avatarId=10324"
+      },
+      "projectTypeKey": "software",
+      "simplified": false,
+      "style": "classic",
+      "isPrivate": false
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "10000",
+  "key": "EXAMPLE",
+  "name": "Example Project",
+  "issueTypes": [
+    {
+      "id": "10001",
+      "description": "A task that needs to be done.",
+      "iconUrl": "https://example.atlassian.net/secure/viewavatar?size=xsmall&avatarId=10318&avatarType=issuetype",
+      "name": "Task",
+      "subtask": false,
+      "avatarId": 10318,
+      "hierarchyLevel": 0
+    },
+    {
+      "id": "10002",
+      "description": "A subtask for a main task.",
+      "iconUrl": "https://example.atlassian.net/secure/viewavatar?size=xsmall&avatarId=10316&avatarType=issuetype",
+      "name": "Sub-task",
+      "subtask": true,
+      "avatarId": 10316,
+      "hierarchyLevel": -1
+    }
+  ]
+}

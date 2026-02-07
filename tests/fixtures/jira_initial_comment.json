@@ -1,0 +1,100 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/94264/comment/231668",
+  "id": "231668",
+  "author": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+    "accountId": "555000:11111111-1111-1111-1111-111111111111",
+    "emailAddress": "testuser@example.com",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/avatar.png",
+      "24x24": "https://example.atlassian.net/avatar.png",
+      "16x16": "https://example.atlassian.net/avatar.png",
+      "32x32": "https://example.atlassian.net/avatar.png"
+    },
+    "displayName": "Test User",
+    "active": true,
+    "timeZone": "Asia/Jerusalem",
+    "accountType": "atlassian"
+  },
+  "body": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "mention",
+            "attrs": {
+              "id": "555000:22222222-2222-2222-2222-222222222222",
+              "text": "@Test User",
+              "accessLevel": "",
+              "localId": "9b8394a6-18bf-45e5-8191-ff0c5689cdb7"
+            }
+          },
+          {
+            "type": "text",
+            "text": ","
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Completed! The approval settings have been configured successfully:"
+          }
+        ]
+      },
+      {
+        "type": "mediaSingle",
+        "attrs": {
+          "width": 792,
+          "widthType": "pixel",
+          "layout": "align-start"
+        },
+        "content": [
+          {
+            "type": "media",
+            "attrs": {
+              "type": "file",
+              "id": "215bdf1c-05e7-4495-9df7-409f113785a4",
+              "alt": "image-20260205-112310.png",
+              "collection": "",
+              "height": 381,
+              "width": 1234
+            }
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "The repository now requires at least one approval from the designated approvers group."
+          }
+        ]
+      }
+    ]
+  },
+  "updateAuthor": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+    "accountId": "555000:11111111-1111-1111-1111-111111111111",
+    "emailAddress": "testuser@example.com",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/avatar.png",
+      "24x24": "https://example.atlassian.net/avatar.png",
+      "16x16": "https://example.atlassian.net/avatar.png",
+      "32x32": "https://example.atlassian.net/avatar.png"
+    },
+    "displayName": "Test User",
+    "active": true,
+    "timeZone": "Asia/Jerusalem",
+    "accountType": "atlassian"
+  },
+  "created": "2026-02-05T13:23:36.022+0200",
+  "updated": "2026-02-05T13:23:44.526+0200",
+  "jsdPublic": true
+}

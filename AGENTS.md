@@ -27,6 +27,7 @@ Atlassian Jira with a focus on cloud instances using API v3.
 
 1. Make changes to the codebase.
 2. Analyze codebase using `make analyze-codebase` and attempt to fix all issues.
+3. Run tests using `make test`.
 
 ## Code Style Conventions
 

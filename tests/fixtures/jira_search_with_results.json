@@ -1,0 +1,4579 @@
+{
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+      "id": "94264",
+      "self": "https://example.atlassian.net/rest/api/3/issue/94264",
+      "key": "EXAMPLE-19539",
+      "fields": {
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        },
+        "resolution": {
+          "self": "https://example.atlassian.net/rest/api/3/resolution/10000",
+          "id": "10000",
+          "description": "Work has been completed on this issue.",
+          "name": "Done"
+        },
+        "customfield_10630": null,
+        "customfield_10631": null,
+        "customfield_10510": null,
+        "customfield_10621": null,
+        "customfield_10500": "{}",
+        "customfield_10743": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10945",
+            "value": "No",
+            "id": "10945"
+          }
+        ],
+        "customfield_10622": null,
+        "customfield_10501": null,
+        "customfield_10623": null,
+        "customfield_10744": null,
+        "customfield_10502": null,
+        "customfield_10503": null,
+        "customfield_10745": null,
+        "customfield_10624": null,
+        "customfield_10504": null,
+        "customfield_10625": null,
+        "customfield_10746": null,
+        "customfield_10626": null,
+        "customfield_10505": null,
+        "customfield_10627": null,
+        "customfield_10506": null,
+        "customfield_10748": null,
+        "customfield_10628": null,
+        "customfield_10507": null,
+        "customfield_10508": null,
+        "customfield_10629": null,
+        "customfield_10509": "2026-02-05",
+        "lastViewed": "2026-02-05T13:24:19.045+0200",
+        "customfield_10620": null,
+        "labels": [],
+        "customfield_10862": null,
+        "customfield_10610": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
+          "value": "NO",
+          "id": "10660"
+        },
+        "customfield_10735": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10941",
+            "value": "No",
+            "id": "10941"
+          }
+        ],
+        "customfield_10614": null,
+        "aggregatetimeoriginalestimate": null,
+        "customfield_10615": null,
+        "customfield_10617": null,
+        "customfield_10739": null,
+        "customfield_10619": null,
+        "issuelinks": [
+          {
+            "id": "10001",
+            "type": {
+              "id": "10000",
+              "name": "Blocks",
+              "inward": "is blocked by",
+              "outward": "blocks"
+            },
+            "outwardIssue": {
+              "id": "94265",
+              "key": "EXAMPLE-19540",
+              "self": "https://example.atlassian.net/rest/api/3/issue/94265",
+              "fields": {
+                "summary": "Deploy code quality changes to staging",
+                "status": {
+                  "name": "To Do",
+                  "statusCategory": {
+                    "key": "new",
+                    "colorName": "blue-gray"
+                  }
+                },
+                "priority": {
+                  "id": "10001",
+                  "name": "High"
+                },
+                "issuetype": {
+                  "name": "Task"
+                }
+              }
+            }
+          },
+          {
+            "id": "10002",
+            "type": {
+              "id": "10001",
+              "name": "Relates",
+              "inward": "relates to",
+              "outward": "relates to"
+            },
+            "inwardIssue": {
+              "id": "94266",
+              "key": "EXAMPLE-19541",
+              "self": "https://example.atlassian.net/rest/api/3/issue/94266",
+              "fields": {
+                "summary": "Update documentation for merge approval process",
+                "status": {
+                  "name": "Done",
+                  "statusCategory": {
+                    "key": "done",
+                    "colorName": "green"
+                  }
+                },
+                "priority": {
+                  "id": "10002",
+                  "name": "Medium"
+                },
+                "issuetype": {
+                  "name": "Documentation"
+                }
+              }
+            }
+          }
+        ],
+        "remotelink": [
+          {
+            "id": 10050,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10050",
+            "globalId": "appId=com.example.gitlab&issueId=EXAMPLE-19539&linkId=123",
+            "application": {
+              "type": "com.example.gitlab",
+              "name": "GitLab"
+            },
+            "relationship": "merge request",
+            "object": {
+              "url": "https://gitlab.example.com/project/merge_requests/456",
+              "title": "MR #456: Add merge approval settings",
+              "status": {
+                "resolved": true,
+                "icon": {
+                  "url16x16": "https://gitlab.example.com/favicon.ico"
+                }
+              }
+            }
+          },
+          {
+            "id": 10051,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10051",
+            "globalId": "appId=com.example.confluence&issueId=EXAMPLE-19539&linkId=789",
+            "application": {
+              "type": "com.example.confluence",
+              "name": "Confluence"
+            },
+            "relationship": "documentation",
+            "object": {
+              "url": "https://confluence.example.com/display/DEV/Merge+Approval+Process",
+              "title": "Merge Approval Process Documentation",
+              "status": {
+                "resolved": false,
+                "icon": {
+                  "url16x16": "https://confluence.example.com/favicon.ico"
+                }
+              }
+            }
+          },
+          {
+            "id": 10052,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10052",
+            "object": {
+              "url": "https://api-docs.example.com/v2/repository-settings",
+              "title": "Repository Settings API Documentation",
+              "summary": "API reference for configuring repository merge approval settings",
+              "icon": {
+                "url16x16": "https://api-docs.example.com/favicon.ico"
+              }
+            }
+          },
+          {
+            "id": 10053,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10053",
+            "globalId": "appId=com.example.slack&issueId=EXAMPLE-19539&linkId=456",
+            "application": {
+              "type": "com.example.slack",
+              "name": "Slack"
+            },
+            "relationship": "discussion",
+            "object": {
+              "url": "https://example.slack.com/archives/C123456/p1738756800123456",
+              "title": "Team discussion: Merge approval requirements",
+              "summary": "Engineering team discussion about implementing merge approvals",
+              "icon": {
+                "url16x16": "https://slack.example.com/favicon.ico"
+              }
+            }
+          },
+          {
+            "id": 10054,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10054",
+            "object": {
+              "url": "https://monitoring.example.com/dashboard/repo-config",
+              "title": "Repository Configuration Dashboard",
+              "icon": {
+                "url16x16": "https://monitoring.example.com/favicon.ico"
+              },
+              "status": {
+                "resolved": true,
+                "icon": {
+                  "url16x16": "https://monitoring.example.com/status-ok.png"
+                }
+              }
+            }
+          },
+          {
+            "id": 10055,
+            "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/remotelink/10055",
+            "globalId": "appId=com.example.github&issueId=EXAMPLE-19539&linkId=789",
+            "application": {
+              "type": "com.example.github",
+              "name": "GitHub"
+            },
+            "relationship": "reference",
+            "object": {
+              "url": "https://github.com/example/settings-templates/pull/234",
+              "title": "PR #234: Add approval settings template",
+              "summary": "Pull request with configuration template for merge approvals",
+              "icon": {
+                "url16x16": "https://github.com/favicon.ico"
+              },
+              "status": {
+                "resolved": true,
+                "icon": {
+                  "url16x16": "https://github.com/merged-icon.png"
+                }
+              }
+            }
+          }
+        ],
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "components": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/component/11282",
+            "id": "11282",
+            "name": "Engineering"
+          }
+        ],
+        "customfield_10600": null,
+        "customfield_10723": null,
+        "customfield_10602": null,
+        "customfield_10727": null,
+        "subtasks": [
+          {
+            "id": "94267",
+            "key": "EXAMPLE-19501",
+            "self": "https://example.atlassian.net/rest/api/3/issue/94267",
+            "fields": {
+              "summary": "Existing subtask 1",
+              "status": {
+                "name": "To Do",
+                "statusCategory": {
+                  "key": "new",
+                  "colorName": "blue-gray"
+                }
+              },
+              "priority": {
+                "id": "10002",
+                "name": "Medium"
+              },
+              "issuetype": {
+                "id": "10002",
+                "name": "Sub-task",
+                "subtask": true
+              }
+            }
+          },
+          {
+            "id": "94268",
+            "key": "EXAMPLE-19512",
+            "self": "https://example.atlassian.net/rest/api/3/issue/94268",
+            "fields": {
+              "summary": "Existing subtask 2",
+              "status": {
+                "name": "In Progress",
+                "statusCategory": {
+                  "key": "indeterminate",
+                  "colorName": "yellow"
+                }
+              },
+              "priority": {
+                "id": "10001",
+                "name": "High"
+              },
+              "issuetype": {
+                "id": "10002",
+                "name": "Sub-task",
+                "subtask": true
+              }
+            }
+          },
+          {
+            "id": "94269",
+            "key": "EXAMPLE-19523",
+            "self": "https://example.atlassian.net/rest/api/3/issue/94269",
+            "fields": {
+              "summary": "Existing subtask 3",
+              "status": {
+                "name": "Done",
+                "statusCategory": {
+                  "key": "done",
+                  "colorName": "green"
+                }
+              },
+              "priority": {
+                "id": "10002",
+                "name": "Medium"
+              },
+              "issuetype": {
+                "id": "10002",
+                "name": "Sub-task",
+                "subtask": true
+              }
+            }
+          },
+          {
+            "id": "94270",
+            "key": "EXAMPLE-19534",
+            "self": "https://example.atlassian.net/rest/api/3/issue/94270",
+            "fields": {
+              "summary": "Existing subtask 4",
+              "status": {
+                "name": "To Do",
+                "statusCategory": {
+                  "key": "new",
+                  "colorName": "blue-gray"
+                }
+              },
+              "priority": {
+                "id": "10003",
+                "name": "Low"
+              },
+              "issuetype": {
+                "id": "10002",
+                "name": "Sub-task",
+                "subtask": true
+              }
+            }
+          },
+          {
+            "id": "94271",
+            "key": "EXAMPLE-19545",
+            "self": "https://example.atlassian.net/rest/api/3/issue/94271",
+            "fields": {
+              "summary": "Existing subtask 5",
+              "status": {
+                "name": "To Do",
+                "statusCategory": {
+                  "key": "new",
+                  "colorName": "blue-gray"
+                }
+              },
+              "priority": {
+                "id": "10002",
+                "name": "Medium"
+              },
+              "issuetype": {
+                "id": "10002",
+                "name": "Sub-task",
+                "subtask": true
+              }
+            }
+          }
+        ],
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
+          "accountId": "555000:22222222-2222-2222-2222-222222222222",
+          "emailAddress": "user2@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10712": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11011",
+            "value": "Testing",
+            "id": "11011"
+          },
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10880",
+            "value": "Engineering",
+            "id": "10880"
+          }
+        ],
+        "customfield_10713": null,
+        "progress": {
+          "progress": 300,
+          "total": 300,
+          "percent": 100
+        },
+        "votes": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/votes",
+          "votes": 0,
+          "hasVoted": false
+        },
+        "worklog": {
+          "startAt": 0,
+          "maxResults": 20,
+          "total": 1,
+          "worklogs": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94264/worklog/22262",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:23:50.748+0200",
+              "updated": "2026-02-05T13:23:50.748+0200",
+              "started": "2026-02-05T13:18:45.749+0200",
+              "timeSpent": "5m",
+              "timeSpentSeconds": 300,
+              "id": "22262",
+              "issueId": "94264"
+            }
+          ]
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10459",
+          "id": "10459",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/avatar.png",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10321,
+          "hierarchyLevel": 0
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10446",
+          "id": "10446",
+          "key": "EXAMPLE",
+          "name": "Test Project",
+          "projectTypeKey": "software",
+          "simplified": false,
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          }
+        },
+        "customfield_10700": null,
+        "customfield_10701": null,
+        "customfield_10702": null,
+        "customfield_10703": null,
+        "resolutiondate": "2026-02-05T13:24:25.050+0200",
+        "customfield_10704": null,
+        "customfield_10705": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10871",
+            "value": "No",
+            "id": "10871"
+          }
+        ],
+        "customfield_10829": null,
+        "watches": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/watchers",
+          "watchCount": 3,
+          "isWatching": true
+        },
+        "updated": "2026-02-05T13:24:25.078+0200",
+        "timeoriginalestimate": null,
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Configure the repository to require at least one approval before merge requests can be merged."
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "This will ensure code quality and prevent unapproved changes from being deployed to staging."
+                }
+              ]
+            }
+          ]
+        },
+        "timetracking": {
+          "remainingEstimate": "0m",
+          "timeSpent": "5m",
+          "remainingEstimateSeconds": 0,
+          "timeSpentSeconds": 300
+        },
+        "customfield_10800": null,
+        "customfield_10801": null,
+        "customfield_10802": null,
+        "customfield_10803": null,
+        "customfield_10804": null,
+        "customfield_10805": null,
+        "customfield_10928": null,
+        "summary": "Update merge request approval settings in repository",
+        "environment": null,
+        "duedate": null,
+        "comment": {
+          "comments": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94264/comment/231668",
+              "id": "231668",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "mention",
+                        "attrs": {
+                          "id": "555000:22222222-2222-2222-2222-222222222222",
+                          "text": "@Test User",
+                          "accessLevel": "",
+                          "localId": "9b8394a6-18bf-45e5-8191-ff0c5689cdb7"
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": ","
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Completed! The approval settings have been configured successfully:"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "mediaSingle",
+                    "attrs": {
+                      "width": 792,
+                      "widthType": "pixel",
+                      "layout": "align-start"
+                    },
+                    "content": [
+                      {
+                        "type": "media",
+                        "attrs": {
+                          "type": "file",
+                          "id": "215bdf1c-05e7-4495-9df7-409f113785a4",
+                          "alt": "image-20260205-112310.png",
+                          "collection": "",
+                          "height": 381,
+                          "width": 1234
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "The repository now requires at least one approval from the designated approvers group."
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:23:36.022+0200",
+              "updated": "2026-02-05T13:23:44.526+0200",
+              "jsdPublic": true
+            }
+          ],
+          "self": "https://example.atlassian.net/rest/api/3/issue/94264/comment",
+          "maxResults": 1,
+          "total": 1,
+          "startAt": 0
+        },
+        "statuscategorychangedate": "2026-02-05T13:24:25.079+0200",
+        "customfield_10590": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10586",
+          "value": "Functional",
+          "id": "10586"
+        },
+        "customfield_10591": null,
+        "customfield_10592": null,
+        "customfield_10593": null,
+        "fixVersions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/11485",
+            "id": "11485",
+            "description": "All the Engineering tasks not forcing Staging deployment",
+            "name": "Tasks",
+            "archived": false,
+            "released": false
+          }
+        ],
+        "customfield_10594": null,
+        "customfield_10597": 0.0,
+        "customfield_10598": 0.0,
+        "customfield_10588": null,
+        "customfield_10106": null,
+        "customfield_10580": null,
+        "customfield_10581": null,
+        "customfield_10583": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "name": "Med-High",
+          "id": "10101"
+        },
+        "customfield_10584": null,
+        "customfield_10100": "2|i06xep:",
+        "customfield_10101": null,
+        "customfield_10102": null,
+        "customfield_10578": null,
+        "customfield_10699": null,
+        "customfield_10579": null,
+        "timeestimate": 0,
+        "versions": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10001",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Done",
+          "id": "10001",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "customfield_10694": null,
+        "customfield_10575": null,
+        "customfield_10697": null,
+        "customfield_10566": null,
+        "customfield_10567": null,
+        "customfield_10689": null,
+        "customfield_10569": null,
+        "aggregatetimeestimate": 0,
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
+          "accountId": "555000:22222222-2222-2222-2222-222222222222",
+          "emailAddress": "user2@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "aggregateprogress": {
+          "progress": 300,
+          "total": 300,
+          "percent": 100
+        },
+        "customfield_10684": null,
+        "customfield_10563": null,
+        "customfield_10200": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10105",
+            "value": "Not Deployed",
+            "id": "10105"
+          }
+        ],
+        "customfield_10201": null,
+        "customfield_10685": null,
+        "customfield_10797": null,
+        "customfield_10555": null,
+        "customfield_10798": null,
+        "customfield_10557": null,
+        "customfield_10799": null,
+        "timespent": 300,
+        "customfield_10790": null,
+        "customfield_10791": null,
+        "customfield_10792": null,
+        "aggregatetimespent": 300,
+        "customfield_10794": null,
+        "customfield_10795": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11027",
+          "value": "AA",
+          "id": "11027"
+        },
+        "customfield_10796": null,
+        "customfield_10666": null,
+        "customfield_10547": null,
+        "customfield_10548": null,
+        "customfield_10549": null,
+        "workratio": -1,
+        "created": "2026-02-05T09:50:42.027+0200",
+        "customfield_10660": null,
+        "customfield_10540": null,
+        "customfield_10661": null,
+        "customfield_10782": null,
+        "customfield_10783": null,
+        "customfield_10784": null,
+        "customfield_10785": null,
+        "customfield_10301": null,
+        "customfield_10533": null,
+        "customfield_10534": null,
+        "customfield_10776": null,
+        "customfield_10535": null,
+        "customfield_10777": null,
+        "customfield_10778": null,
+        "customfield_10536": null,
+        "customfield_10537": null,
+        "customfield_10416": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10210",
+            "value": "Test",
+            "id": "10210"
+          }
+        ],
+        "customfield_10658": null,
+        "customfield_10659": null,
+        "customfield_10538": null,
+        "customfield_10539": null,
+        "customfield_10650": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A33333333-3333-3333-3333-333333333333",
+          "accountId": "555000:33333333-3333-3333-3333-333333333333",
+          "emailAddress": "user3@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10530": null,
+        "customfield_10531": null,
+        "customfield_10411": null,
+        "customfield_10532": null,
+        "customfield_10895": null,
+        "customfield_10401": [],
+        "customfield_10644": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10728",
+          "value": "Low",
+          "id": "10728"
+        },
+        "customfield_10402": null,
+        "customfield_10645": [],
+        "security": null,
+        "customfield_10403": [],
+        "customfield_10404": null,
+        "customfield_10525": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10320",
+          "value": "Low",
+          "id": "10320"
+        },
+        "customfield_10646": null,
+        "customfield_10405": null,
+        "attachment": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/attachment/66811",
+            "id": "66811",
+            "filename": "image-20260205-112310.png",
+            "author": {
+              "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+              "accountId": "555000:11111111-1111-1111-1111-111111111111",
+              "emailAddress": "testuser@example.com",
+              "avatarUrls": {
+                "48x48": "https://example.atlassian.net/avatar.png",
+                "24x24": "https://example.atlassian.net/avatar.png",
+                "16x16": "https://example.atlassian.net/avatar.png",
+                "32x32": "https://example.atlassian.net/avatar.png"
+              },
+              "displayName": "Test User",
+              "active": true,
+              "timeZone": "Asia/Jerusalem",
+              "accountType": "atlassian"
+            },
+            "created": "2026-02-05T13:23:35.459+0200",
+            "size": 250404,
+            "mimeType": "image/png",
+            "content": "https://example.atlassian.net/rest/api/3/attachment/content/66811",
+            "thumbnail": "https://example.atlassian.net/rest/api/3/attachment/thumbnail/66811"
+          }
+        ],
+        "customfield_10647": null,
+        "customfield_10406": null,
+        "customfield_10648": null,
+        "customfield_10527": null,
+        "customfield_10528": null,
+        "customfield_10529": null,
+        "customfield_10641": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10715",
+          "value": "Low",
+          "id": "10715"
+        },
+        "customfield_10400": null,
+        "customfield_10642": null,
+        "customfield_10632": null,
+        "customfield_10633": null,
+        "customfield_10512": "2026-02-05T13:23:36.022+0200",
+        "customfield_10513": "10022_*:*_1_*:*_12819379_*|*_10340_*:*_1_*:*_0_*|*_10002_*:*_1_*:*_1566",
+        "customfield_10634": null,
+        "customfield_10635": null,
+        "customfield_10636": null,
+        "customfield_10637": null,
+        "customfield_10516": null,
+        "customfield_10517": null,
+        "customfield_10518": null,
+        "customfield_10519": null
+      },
+      "editmeta": {
+        "fields": {
+          "summary": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "system": "summary"
+            },
+            "name": "Summary",
+            "key": "summary",
+            "operations": [
+              "set"
+            ]
+          },
+          "priority": {
+            "required": true,
+            "schema": {
+              "type": "priority",
+              "system": "priority"
+            },
+            "name": "Priority",
+            "key": "priority",
+            "operations": [
+              "set"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10000",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/blocker.svg",
+                "name": "Blocker",
+                "id": "10000"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+                "name": "High",
+                "id": "10001"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Med-High",
+                "id": "10101"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10002",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Medium",
+                "id": "10002"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10003",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/low.svg",
+                "name": "Low",
+                "id": "10003"
+              }
+            ]
+          },
+          "assignee": {
+            "required": false,
+            "schema": {
+              "type": "user",
+              "system": "assignee"
+            },
+            "name": "Assignee",
+            "key": "assignee",
+            "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?issueKey=EXAMPLE-19539&query=",
+            "operations": [
+              "set"
+            ]
+          },
+          "labels": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "string",
+              "system": "labels"
+            },
+            "name": "Labels",
+            "key": "labels",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ]
+          },
+          "components": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "component",
+              "system": "components"
+            },
+            "name": "Components",
+            "key": "components",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10001",
+                "id": "10001",
+                "name": "Backend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10002",
+                "id": "10002",
+                "name": "Frontend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10003",
+                "id": "10003",
+                "name": "API"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10004",
+                "id": "10004",
+                "name": "Database"
+              }
+            ]
+          },
+          "duedate": {
+            "required": false,
+            "schema": {
+              "type": "date",
+              "system": "duedate"
+            },
+            "name": "Due Date",
+            "key": "duedate",
+            "operations": [
+              "set"
+            ]
+          },
+          "versions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "versions"
+            },
+            "name": "Affects Version/s",
+            "key": "versions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              }
+            ]
+          },
+          "fixVersions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "fixVersions"
+            },
+            "name": "Fix Version/s",
+            "key": "fixVersions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10102",
+                "id": "10102",
+                "name": "2.0.0",
+                "released": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+      "id": "94263",
+      "self": "https://example.atlassian.net/rest/api/3/issue/94263",
+      "key": "EXAMPLE-19538",
+      "fields": {
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        },
+        "resolution": {
+          "self": "https://example.atlassian.net/rest/api/3/resolution/10000",
+          "id": "10000",
+          "description": "Work has been completed on this issue.",
+          "name": "Done"
+        },
+        "customfield_10630": null,
+        "customfield_10631": null,
+        "customfield_10510": null,
+        "customfield_10621": null,
+        "customfield_10500": "{pullrequest={dataType=pullrequest, state=OPEN, stateCount=4}, json={\"cachedValue\":{\"errors\":[],\"summary\":{\"pullrequest\":{\"overall\":{\"count\":4,\"lastUpdated\":\"2026-02-05T11:22:01.473+0200\",\"stateCount\":4,\"state\":\"OPEN\",\"dataType\":\"pullrequest\",\"open\":true},\"byInstanceType\":{\"GitLab\":{\"count\":4,\"name\":\"GitLab\"}}}}},\"isStale\":true}}",
+        "customfield_10743": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10945",
+            "value": "No",
+            "id": "10945"
+          }
+        ],
+        "customfield_10622": null,
+        "customfield_10501": null,
+        "customfield_10623": null,
+        "customfield_10744": null,
+        "customfield_10502": null,
+        "customfield_10503": null,
+        "customfield_10745": null,
+        "customfield_10624": null,
+        "customfield_10504": null,
+        "customfield_10625": null,
+        "customfield_10746": null,
+        "customfield_10626": null,
+        "customfield_10505": null,
+        "customfield_10627": null,
+        "customfield_10506": null,
+        "customfield_10748": null,
+        "customfield_10628": null,
+        "customfield_10507": null,
+        "customfield_10508": null,
+        "customfield_10629": null,
+        "customfield_10509": "2026-02-05",
+        "lastViewed": "2026-02-06T09:58:06.450+0200",
+        "customfield_10620": null,
+        "labels": [
+          "Engineering"
+        ],
+        "customfield_10862": null,
+        "customfield_10610": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
+          "value": "NO",
+          "id": "10660"
+        },
+        "customfield_10735": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10941",
+            "value": "No",
+            "id": "10941"
+          }
+        ],
+        "customfield_10614": null,
+        "aggregatetimeoriginalestimate": null,
+        "customfield_10615": null,
+        "customfield_10617": null,
+        "customfield_10739": null,
+        "customfield_10619": null,
+        "issuelinks": [],
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "components": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/component/11282",
+            "id": "11282",
+            "name": "Engineering"
+          }
+        ],
+        "customfield_10600": null,
+        "customfield_10723": null,
+        "customfield_10602": null,
+        "customfield_10727": null,
+        "subtasks": [],
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10712": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10880",
+            "value": "Engineering",
+            "id": "10880"
+          }
+        ],
+        "customfield_10713": null,
+        "progress": {
+          "progress": 37800,
+          "total": 37800,
+          "percent": 100
+        },
+        "votes": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19538/votes",
+          "votes": 0,
+          "hasVoted": false
+        },
+        "worklog": {
+          "startAt": 0,
+          "maxResults": 20,
+          "total": 1,
+          "worklogs": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/worklog/22296",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T20:27:16.531+0200",
+              "updated": "2026-02-05T20:27:16.531+0200",
+              "started": "2026-02-05T09:57:12.060+0200",
+              "timeSpent": "1d 2h 30m",
+              "timeSpentSeconds": 37800,
+              "id": "22296",
+              "issueId": "94263"
+            }
+          ]
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10459",
+          "id": "10459",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/avatar.png",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10321,
+          "hierarchyLevel": 0
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10446",
+          "id": "10446",
+          "key": "EXAMPLE",
+          "name": "Test Project",
+          "projectTypeKey": "software",
+          "simplified": false,
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          }
+        },
+        "customfield_10700": null,
+        "customfield_10701": null,
+        "customfield_10702": null,
+        "customfield_10703": null,
+        "resolutiondate": "2026-02-05T20:27:22.819+0200",
+        "customfield_10704": null,
+        "customfield_10705": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10871",
+            "value": "No",
+            "id": "10871"
+          }
+        ],
+        "customfield_10829": null,
+        "watches": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19538/watchers",
+          "watchCount": 2,
+          "isWatching": true
+        },
+        "updated": "2026-02-05T20:27:22.875+0200",
+        "timeoriginalestimate": null,
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Add automated code quality checks to the CI pipeline to improve code standards and catch issues early."
+                }
+              ]
+            }
+          ]
+        },
+        "timetracking": {
+          "remainingEstimate": "0m",
+          "timeSpent": "1d 2h 30m",
+          "remainingEstimateSeconds": 0,
+          "timeSpentSeconds": 37800
+        },
+        "customfield_10800": null,
+        "customfield_10801": null,
+        "customfield_10802": null,
+        "customfield_10803": null,
+        "customfield_10804": null,
+        "customfield_10805": null,
+        "customfield_10928": null,
+        "summary": "Implement automated code quality checks in CI pipeline",
+        "environment": null,
+        "duedate": null,
+        "comment": {
+          "comments": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment/231662",
+              "id": "231662",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Working on integrating the linting tools into the pipeline."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Initial implementation will include",
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": ":"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "bulletList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "We will use the "
+                              },
+                              {
+                                "type": "text",
+                                "text": "eslint",
+                                "marks": [
+                                  {
+                                    "type": "code"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " tool for JavaScript code analysis."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "We will add style checking with prettier formatter."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "We will "
+                              },
+                              {
+                                "type": "text",
+                                "text": "not",
+                                "marks": [
+                                  {
+                                    "type": "strong"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " be using cached results initially."
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T12:39:31.153+0200",
+              "updated": "2026-02-05T12:39:31.153+0200",
+              "jsdPublic": true
+            },
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment/231667",
+              "id": "231667",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "This task is taking longer than anticipated due to:"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "orderedList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Need to review and update configuration files across multiple repositories to ensure consistent linting rules."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "The existing "
+                              },
+                              {
+                                "type": "text",
+                                "text": "lint-config",
+                                "marks": [
+                                  {
+                                    "type": "code"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " package needs to be updated to support the new version."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Testing different configurations on feature branches is taking time to ensure optimal performance."
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Note that this is a partial implementation of the quality checks",
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": ":"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "orderedList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "We are not using cached lint results yet."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "We are not publishing "
+                              },
+                              {
+                                "type": "text",
+                                "text": "code coverage",
+                                "marks": [
+                                  {
+                                    "type": "code"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " reports in CI jobs yet."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Using older "
+                              },
+                              {
+                                "type": "text",
+                                "text": "lint-config",
+                                "marks": [
+                                  {
+                                    "type": "code"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " version temporarily."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Using community "
+                              },
+                              {
+                                "type": "text",
+                                "text": "eslint-plugin",
+                                "marks": [
+                                  {
+                                    "type": "code"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "text",
+                                "text": " instead of our custom plugin."
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "If we continue with this approach as our primary quality check solution, we will need to revisit these points.",
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:19:54.704+0200",
+              "updated": "2026-02-05T13:19:54.704+0200",
+              "jsdPublic": true
+            },
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment/231672",
+              "id": "231672",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "In addition to the previous updates, I have also made the following improvements:"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "orderedList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Created dedicated configuration files for each project type to ensure appropriate linting rules are applied."
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Optimized the linting process to run in parallel where possible, reducing overall CI execution time."
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:48:56.528+0200",
+              "updated": "2026-02-05T13:48:56.528+0200",
+              "jsdPublic": true
+            },
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment/231686",
+              "id": "231686",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "We need to use the "
+                      },
+                      {
+                        "type": "text",
+                        "text": "legacy",
+                        "marks": [
+                          {
+                            "type": "code"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": " configuration format because the newer "
+                      },
+                      {
+                        "type": "text",
+                        "text": "flat config",
+                        "marks": [
+                          {
+                            "type": "strong"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": " is not yet supported by all our plugins."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "We previously checked plugin compatibility, but the required plugins don't support the new configuration format yet."
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T15:01:24.116+0200",
+              "updated": "2026-02-05T15:01:24.116+0200",
+              "jsdPublic": true
+            },
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment/231732",
+              "id": "231732",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Successfully integrated the automated code quality checks into the CI pipeline."
+                      },
+                      {
+                        "type": "hardBreak"
+                      },
+                      {
+                        "type": "text",
+                        "text": "As mentioned in previous comments, this implementation focuses on essential functionality and can be enhanced later if needed."
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T20:27:09.153+0200",
+              "updated": "2026-02-05T20:27:09.153+0200",
+              "jsdPublic": true
+            }
+          ],
+          "self": "https://example.atlassian.net/rest/api/3/issue/94263/comment",
+          "maxResults": 5,
+          "total": 5,
+          "startAt": 0
+        },
+        "statuscategorychangedate": "2026-02-05T20:27:22.875+0200",
+        "customfield_10590": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10586",
+          "value": "Functional",
+          "id": "10586"
+        },
+        "customfield_10591": null,
+        "customfield_10592": null,
+        "customfield_10593": null,
+        "fixVersions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/11485",
+            "id": "11485",
+            "description": "All the Engineering tasks not forcing Staging deployment",
+            "name": "Tasks",
+            "archived": false,
+            "released": false
+          }
+        ],
+        "customfield_10594": null,
+        "customfield_10597": 0.0,
+        "customfield_10598": 0.0,
+        "customfield_10588": null,
+        "customfield_10106": 0.5,
+        "customfield_10580": null,
+        "customfield_10581": null,
+        "customfield_10583": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/2",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/major_new.svg",
+          "name": "High",
+          "id": "2"
+        },
+        "customfield_10584": null,
+        "customfield_10100": "2|i06xeh:",
+        "customfield_10101": null,
+        "customfield_10102": null,
+        "customfield_10578": null,
+        "customfield_10699": null,
+        "customfield_10579": null,
+        "timeestimate": 0,
+        "versions": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10001",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Done",
+          "id": "10001",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "customfield_10694": null,
+        "customfield_10575": null,
+        "customfield_10697": null,
+        "customfield_10566": null,
+        "customfield_10567": null,
+        "customfield_10689": null,
+        "customfield_10569": null,
+        "aggregatetimeestimate": 0,
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "aggregateprogress": {
+          "progress": 37800,
+          "total": 37800,
+          "percent": 100
+        },
+        "customfield_10684": null,
+        "customfield_10563": null,
+        "customfield_10200": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10105",
+            "value": "Not Deployed",
+            "id": "10105"
+          }
+        ],
+        "customfield_10201": null,
+        "customfield_10685": null,
+        "customfield_10797": null,
+        "customfield_10555": null,
+        "customfield_10798": null,
+        "customfield_10557": null,
+        "customfield_10799": null,
+        "timespent": 37800,
+        "customfield_10790": null,
+        "customfield_10791": null,
+        "customfield_10792": null,
+        "aggregatetimespent": 37800,
+        "customfield_10794": null,
+        "customfield_10795": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11027",
+          "value": "AA",
+          "id": "11027"
+        },
+        "customfield_10796": null,
+        "customfield_10666": null,
+        "customfield_10547": null,
+        "customfield_10548": null,
+        "customfield_10549": null,
+        "workratio": -1,
+        "created": "2026-02-05T09:34:47.301+0200",
+        "customfield_10660": null,
+        "customfield_10540": null,
+        "customfield_10661": null,
+        "customfield_10782": null,
+        "customfield_10783": null,
+        "customfield_10784": null,
+        "customfield_10785": null,
+        "customfield_10301": null,
+        "customfield_10533": null,
+        "customfield_10534": null,
+        "customfield_10776": null,
+        "customfield_10535": null,
+        "customfield_10777": null,
+        "customfield_10778": null,
+        "customfield_10536": null,
+        "customfield_10537": null,
+        "customfield_10416": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10210",
+            "value": "Test",
+            "id": "10210"
+          }
+        ],
+        "customfield_10658": null,
+        "customfield_10659": null,
+        "customfield_10538": null,
+        "customfield_10539": null,
+        "customfield_10650": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A33333333-3333-3333-3333-333333333333",
+          "accountId": "555000:33333333-3333-3333-3333-333333333333",
+          "emailAddress": "user3@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10530": null,
+        "customfield_10531": null,
+        "customfield_10411": null,
+        "customfield_10532": null,
+        "customfield_10895": null,
+        "customfield_10401": [],
+        "customfield_10644": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10728",
+          "value": "Low",
+          "id": "10728"
+        },
+        "customfield_10402": null,
+        "customfield_10645": [],
+        "security": null,
+        "customfield_10403": [],
+        "customfield_10404": null,
+        "customfield_10525": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10320",
+          "value": "Low",
+          "id": "10320"
+        },
+        "customfield_10646": null,
+        "customfield_10405": null,
+        "attachment": [],
+        "customfield_10647": null,
+        "customfield_10406": null,
+        "customfield_10648": null,
+        "customfield_10527": null,
+        "customfield_10528": null,
+        "customfield_10529": null,
+        "customfield_10641": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10715",
+          "value": "Low",
+          "id": "10715"
+        },
+        "customfield_10400": null,
+        "customfield_10642": null,
+        "customfield_10632": null,
+        "customfield_10633": null,
+        "customfield_10512": null,
+        "customfield_10513": "10022_*:*_1_*:*_1061725_*|*_10340_*:*_1_*:*_0_*|*_10002_*:*_1_*:*_38091770",
+        "customfield_10634": null,
+        "customfield_10635": null,
+        "customfield_10636": null,
+        "customfield_10637": null,
+        "customfield_10516": null,
+        "customfield_10517": null,
+        "customfield_10518": null,
+        "customfield_10519": null
+      },
+      "editmeta": {
+        "fields": {
+          "summary": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "system": "summary"
+            },
+            "name": "Summary",
+            "key": "summary",
+            "operations": [
+              "set"
+            ]
+          },
+          "priority": {
+            "required": true,
+            "schema": {
+              "type": "priority",
+              "system": "priority"
+            },
+            "name": "Priority",
+            "key": "priority",
+            "operations": [
+              "set"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10000",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/blocker.svg",
+                "name": "Blocker",
+                "id": "10000"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+                "name": "High",
+                "id": "10001"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Med-High",
+                "id": "10101"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10002",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Medium",
+                "id": "10002"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10003",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/low.svg",
+                "name": "Low",
+                "id": "10003"
+              }
+            ]
+          },
+          "assignee": {
+            "required": false,
+            "schema": {
+              "type": "user",
+              "system": "assignee"
+            },
+            "name": "Assignee",
+            "key": "assignee",
+            "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?issueKey=EXAMPLE-19539&query=",
+            "operations": [
+              "set"
+            ]
+          },
+          "labels": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "string",
+              "system": "labels"
+            },
+            "name": "Labels",
+            "key": "labels",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ]
+          },
+          "components": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "component",
+              "system": "components"
+            },
+            "name": "Components",
+            "key": "components",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10001",
+                "id": "10001",
+                "name": "Backend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10002",
+                "id": "10002",
+                "name": "Frontend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10003",
+                "id": "10003",
+                "name": "API"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10004",
+                "id": "10004",
+                "name": "Database"
+              }
+            ]
+          },
+          "duedate": {
+            "required": false,
+            "schema": {
+              "type": "date",
+              "system": "duedate"
+            },
+            "name": "Due Date",
+            "key": "duedate",
+            "operations": [
+              "set"
+            ]
+          },
+          "versions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "versions"
+            },
+            "name": "Affects Version/s",
+            "key": "versions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              }
+            ]
+          },
+          "fixVersions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "fixVersions"
+            },
+            "name": "Fix Version/s",
+            "key": "fixVersions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10102",
+                "id": "10102",
+                "name": "2.0.0",
+                "released": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+      "id": "93992",
+      "self": "https://example.atlassian.net/rest/api/3/issue/93992",
+      "key": "EXAMPLE-19530",
+      "fields": {
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        },
+        "resolution": null,
+        "customfield_10630": null,
+        "customfield_10631": null,
+        "customfield_10510": null,
+        "customfield_10621": null,
+        "customfield_10500": "{}",
+        "customfield_10743": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10945",
+            "value": "No",
+            "id": "10945"
+          }
+        ],
+        "customfield_10622": null,
+        "customfield_10501": null,
+        "customfield_10623": null,
+        "customfield_10744": null,
+        "customfield_10502": null,
+        "customfield_10503": null,
+        "customfield_10745": null,
+        "customfield_10624": null,
+        "customfield_10504": null,
+        "customfield_10625": null,
+        "customfield_10746": null,
+        "customfield_10626": null,
+        "customfield_10505": null,
+        "customfield_10627": null,
+        "customfield_10506": null,
+        "customfield_10748": null,
+        "customfield_10628": null,
+        "customfield_10507": null,
+        "customfield_10508": null,
+        "customfield_10629": null,
+        "customfield_10509": null,
+        "lastViewed": null,
+        "customfield_10620": null,
+        "labels": [
+          "QA"
+        ],
+        "customfield_10862": null,
+        "customfield_10610": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
+          "value": "NO",
+          "id": "10660"
+        },
+        "customfield_10735": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10941",
+            "value": "No",
+            "id": "10941"
+          }
+        ],
+        "customfield_10614": null,
+        "aggregatetimeoriginalestimate": null,
+        "customfield_10615": null,
+        "customfield_10617": null,
+        "customfield_10739": null,
+        "customfield_10619": null,
+        "issuelinks": [],
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "components": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/component/11315",
+            "id": "11315",
+            "name": "PIP"
+          }
+        ],
+        "customfield_10600": null,
+        "customfield_10723": null,
+        "customfield_10602": null,
+        "customfield_10727": null,
+        "subtasks": [],
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A44444444-4444-4444-4444-444444444444",
+          "accountId": "555000:44444444-4444-4444-4444-444444444444",
+          "emailAddress": "user4@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10712": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10880",
+            "value": "Engineering",
+            "id": "10880"
+          }
+        ],
+        "customfield_10713": null,
+        "progress": {
+          "progress": 0,
+          "total": 0
+        },
+        "votes": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19530/votes",
+          "votes": 0,
+          "hasVoted": false
+        },
+        "worklog": {
+          "startAt": 0,
+          "maxResults": 20,
+          "total": 0,
+          "worklogs": []
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10008",
+          "id": "10008",
+          "description": "A small, distinct piece of work.",
+          "iconUrl": "https://example.atlassian.net/avatar.png",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10318,
+          "hierarchyLevel": 0
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10446",
+          "id": "10446",
+          "key": "EXAMPLE",
+          "name": "Test Project",
+          "projectTypeKey": "software",
+          "simplified": false,
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          }
+        },
+        "customfield_10700": null,
+        "customfield_10701": null,
+        "customfield_10702": null,
+        "customfield_10703": null,
+        "resolutiondate": null,
+        "customfield_10704": null,
+        "customfield_10705": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10871",
+            "value": "No",
+            "id": "10871"
+          }
+        ],
+        "customfield_10829": null,
+        "watches": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19530/watchers",
+          "watchCount": 2,
+          "isWatching": false
+        },
+        "updated": "2026-02-04T14:41:10.159+0200",
+        "timeoriginalestimate": null,
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "To properly test the distributed caching system, I need two application servers configured behind the same load balancer, both connected to the same database instance."
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "I am currently working in "
+                },
+                {
+                  "type": "text",
+                  "text": "staging-cluster-01",
+                  "marks": [
+                    {
+                      "type": "code"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": ", where one application server and database already exist."
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "text",
+                  "text": "Environment ID: ",
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "ENV4KDNGOM025FK"
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "text",
+                  "text": "apiKey",
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": ": 48yL6n8N39pPQ0MDsTWWn0XojekRxVJRa5lYYQb6"
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "text",
+                  "text": "serverId",
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": ": SRV54ERJ8X6PUDC"
+                }
+              ]
+            }
+          ]
+        },
+        "timetracking": {},
+        "customfield_10800": null,
+        "customfield_10801": null,
+        "customfield_10802": null,
+        "customfield_10803": null,
+        "customfield_10804": null,
+        "customfield_10805": null,
+        "customfield_10928": null,
+        "summary": "Configure load balancer for staging environment with multiple backend servers",
+        "environment": null,
+        "duedate": null,
+        "comment": {
+          "comments": [],
+          "self": "https://example.atlassian.net/rest/api/3/issue/93992/comment",
+          "maxResults": 0,
+          "total": 0,
+          "startAt": 0
+        },
+        "statuscategorychangedate": "2026-02-04T14:41:07.442+0200",
+        "customfield_10590": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10586",
+          "value": "Functional",
+          "id": "10586"
+        },
+        "customfield_10591": null,
+        "customfield_10592": null,
+        "customfield_10593": null,
+        "fixVersions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/14425",
+            "id": "14425",
+            "description": "",
+            "name": "Test Project MNG+INT (Q1RC1) - Feb-15'th (5.2608.X)",
+            "archived": false,
+            "released": false,
+            "releaseDate": "2026-02-15"
+          }
+        ],
+        "customfield_10594": null,
+        "customfield_10597": 0.0,
+        "customfield_10598": 0.0,
+        "customfield_10588": null,
+        "customfield_10106": null,
+        "customfield_10580": null,
+        "customfield_10581": null,
+        "customfield_10583": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "name": "Med-High",
+          "id": "10101"
+        },
+        "customfield_10584": null,
+        "customfield_10100": "2|i06xbt:",
+        "customfield_10101": null,
+        "customfield_10102": null,
+        "customfield_10578": null,
+        "customfield_10699": null,
+        "customfield_10579": null,
+        "timeestimate": null,
+        "versions": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10022",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Backlog",
+          "id": "10022",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "customfield_10694": null,
+        "customfield_10575": null,
+        "customfield_10697": null,
+        "customfield_10566": null,
+        "customfield_10567": null,
+        "customfield_10689": null,
+        "customfield_10569": null,
+        "aggregatetimeestimate": null,
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A44444444-4444-4444-4444-444444444444",
+          "accountId": "555000:44444444-4444-4444-4444-444444444444",
+          "emailAddress": "user4@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "aggregateprogress": {
+          "progress": 0,
+          "total": 0
+        },
+        "customfield_10684": null,
+        "customfield_10563": null,
+        "customfield_10200": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10105",
+            "value": "Not Deployed",
+            "id": "10105"
+          }
+        ],
+        "customfield_10201": null,
+        "customfield_10685": null,
+        "customfield_10797": null,
+        "customfield_10555": null,
+        "customfield_10798": null,
+        "customfield_10557": null,
+        "customfield_10799": null,
+        "timespent": null,
+        "customfield_10790": null,
+        "customfield_10791": null,
+        "customfield_10792": null,
+        "aggregatetimespent": null,
+        "customfield_10794": null,
+        "customfield_10795": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11027",
+          "value": "AA",
+          "id": "11027"
+        },
+        "customfield_10796": null,
+        "customfield_10666": null,
+        "customfield_10547": null,
+        "customfield_10548": null,
+        "customfield_10549": null,
+        "workratio": -1,
+        "created": "2026-02-04T14:41:06.886+0200",
+        "customfield_10660": null,
+        "customfield_10540": null,
+        "customfield_10661": null,
+        "customfield_10782": null,
+        "customfield_10783": null,
+        "customfield_10784": null,
+        "customfield_10785": null,
+        "customfield_10301": null,
+        "customfield_10533": null,
+        "customfield_10534": null,
+        "customfield_10776": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10999",
+          "value": "Integrations",
+          "id": "10999"
+        },
+        "customfield_10535": null,
+        "customfield_10777": null,
+        "customfield_10778": null,
+        "customfield_10536": null,
+        "customfield_10537": null,
+        "customfield_10416": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10210",
+            "value": "Test",
+            "id": "10210"
+          }
+        ],
+        "customfield_10658": null,
+        "customfield_10659": null,
+        "customfield_10538": null,
+        "customfield_10539": null,
+        "customfield_10650": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A66666666-6666-6666-6666-666666666666",
+          "accountId": "555000:66666666-6666-6666-6666-666666666666",
+          "emailAddress": "user6@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10530": null,
+        "customfield_10531": null,
+        "customfield_10411": null,
+        "customfield_10532": null,
+        "customfield_10895": null,
+        "customfield_10401": [],
+        "customfield_10644": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10728",
+          "value": "Low",
+          "id": "10728"
+        },
+        "customfield_10402": null,
+        "customfield_10645": [],
+        "security": null,
+        "customfield_10403": [],
+        "customfield_10404": null,
+        "customfield_10525": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10320",
+          "value": "Low",
+          "id": "10320"
+        },
+        "customfield_10646": null,
+        "customfield_10405": null,
+        "attachment": [],
+        "customfield_10647": null,
+        "customfield_10406": null,
+        "customfield_10648": null,
+        "customfield_10527": null,
+        "customfield_10528": null,
+        "customfield_10529": null,
+        "customfield_10641": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10715",
+          "value": "Low",
+          "id": "10715"
+        },
+        "customfield_10400": null,
+        "customfield_10642": null,
+        "customfield_10632": null,
+        "customfield_10633": null,
+        "customfield_10512": null,
+        "customfield_10513": null,
+        "customfield_10634": null,
+        "customfield_10635": null,
+        "customfield_10636": null,
+        "customfield_10637": null,
+        "customfield_10516": null,
+        "customfield_10517": null,
+        "customfield_10518": null,
+        "customfield_10519": null
+      },
+      "editmeta": {
+        "fields": {
+          "summary": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "system": "summary"
+            },
+            "name": "Summary",
+            "key": "summary",
+            "operations": [
+              "set"
+            ]
+          },
+          "priority": {
+            "required": true,
+            "schema": {
+              "type": "priority",
+              "system": "priority"
+            },
+            "name": "Priority",
+            "key": "priority",
+            "operations": [
+              "set"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10000",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/blocker.svg",
+                "name": "Blocker",
+                "id": "10000"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+                "name": "High",
+                "id": "10001"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Med-High",
+                "id": "10101"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10002",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Medium",
+                "id": "10002"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10003",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/low.svg",
+                "name": "Low",
+                "id": "10003"
+              }
+            ]
+          },
+          "assignee": {
+            "required": false,
+            "schema": {
+              "type": "user",
+              "system": "assignee"
+            },
+            "name": "Assignee",
+            "key": "assignee",
+            "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?issueKey=EXAMPLE-19539&query=",
+            "operations": [
+              "set"
+            ]
+          },
+          "labels": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "string",
+              "system": "labels"
+            },
+            "name": "Labels",
+            "key": "labels",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ]
+          },
+          "components": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "component",
+              "system": "components"
+            },
+            "name": "Components",
+            "key": "components",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10001",
+                "id": "10001",
+                "name": "Backend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10002",
+                "id": "10002",
+                "name": "Frontend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10003",
+                "id": "10003",
+                "name": "API"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10004",
+                "id": "10004",
+                "name": "Database"
+              }
+            ]
+          },
+          "duedate": {
+            "required": false,
+            "schema": {
+              "type": "date",
+              "system": "duedate"
+            },
+            "name": "Due Date",
+            "key": "duedate",
+            "operations": [
+              "set"
+            ]
+          },
+          "versions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "versions"
+            },
+            "name": "Affects Version/s",
+            "key": "versions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              }
+            ]
+          },
+          "fixVersions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "fixVersions"
+            },
+            "name": "Fix Version/s",
+            "key": "fixVersions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10102",
+                "id": "10102",
+                "name": "2.0.0",
+                "released": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+      "id": "93926",
+      "self": "https://example.atlassian.net/rest/api/3/issue/93926",
+      "key": "EXAMPLE-19529",
+      "fields": {
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        },
+        "resolution": {
+          "self": "https://example.atlassian.net/rest/api/3/resolution/10000",
+          "id": "10000",
+          "description": "Work has been completed on this issue.",
+          "name": "Done"
+        },
+        "customfield_10630": null,
+        "customfield_10631": null,
+        "customfield_10510": null,
+        "customfield_10621": null,
+        "customfield_10500": "{}",
+        "customfield_10743": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10945",
+            "value": "No",
+            "id": "10945"
+          }
+        ],
+        "customfield_10622": null,
+        "customfield_10501": null,
+        "customfield_10623": null,
+        "customfield_10744": null,
+        "customfield_10502": null,
+        "customfield_10503": null,
+        "customfield_10745": null,
+        "customfield_10624": null,
+        "customfield_10504": null,
+        "customfield_10625": null,
+        "customfield_10746": null,
+        "customfield_10626": null,
+        "customfield_10505": null,
+        "customfield_10627": null,
+        "customfield_10506": null,
+        "customfield_10748": null,
+        "customfield_10628": null,
+        "customfield_10507": null,
+        "customfield_10508": null,
+        "customfield_10629": null,
+        "customfield_10509": "2026-02-05",
+        "lastViewed": "2026-02-06T09:57:15.134+0200",
+        "customfield_10620": null,
+        "labels": [],
+        "customfield_10862": null,
+        "customfield_10610": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
+          "value": "NO",
+          "id": "10660"
+        },
+        "customfield_10735": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10941",
+            "value": "No",
+            "id": "10941"
+          }
+        ],
+        "customfield_10614": null,
+        "aggregatetimeoriginalestimate": null,
+        "customfield_10615": null,
+        "customfield_10617": null,
+        "customfield_10739": null,
+        "customfield_10619": null,
+        "issuelinks": [
+          {
+            "id": "68821",
+            "self": "https://example.atlassian.net/rest/api/3/issueLink/68821",
+            "type": {
+              "id": "10000",
+              "name": "Blocks",
+              "inward": "is blocked by",
+              "outward": "blocks",
+              "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10000"
+            },
+            "outwardIssue": {
+              "id": "66476",
+              "key": "EXAMPLE-10869",
+              "self": "https://example.atlassian.net/rest/api/3/issue/66476",
+              "fields": {
+                "summary": "Fix authentication timeout errors in background jobs",
+                "status": {
+                  "self": "https://example.atlassian.net/rest/api/3/status/10339",
+                  "description": "",
+                  "iconUrl": "https://example.atlassian.net/",
+                  "name": "QA In Progress",
+                  "id": "10339",
+                  "statusCategory": {
+                    "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+                    "id": 4,
+                    "key": "indeterminate",
+                    "colorName": "yellow",
+                    "name": "In Progress"
+                  }
+                },
+                "priority": {
+                  "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                  "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                  "name": "Med-High",
+                  "id": "10101"
+                },
+                "issuetype": {
+                  "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+                  "id": "10004",
+                  "description": "A problem or error.",
+                  "iconUrl": "https://example.atlassian.net/avatar.png",
+                  "name": "Bug",
+                  "subtask": false,
+                  "avatarId": 10303,
+                  "hierarchyLevel": 0
+                }
+              }
+            }
+          }
+        ],
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "components": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/component/11282",
+            "id": "11282",
+            "name": "Engineering"
+          }
+        ],
+        "customfield_10600": null,
+        "customfield_10723": null,
+        "customfield_10602": null,
+        "customfield_10727": null,
+        "subtasks": [],
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A55555555-5555-5555-5555-555555555555",
+          "accountId": "555000:55555555-5555-5555-5555-555555555555",
+          "emailAddress": "user5@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10712": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10880",
+            "value": "Engineering",
+            "id": "10880"
+          }
+        ],
+        "customfield_10713": null,
+        "progress": {
+          "progress": 600,
+          "total": 600,
+          "percent": 100
+        },
+        "votes": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19529/votes",
+          "votes": 0,
+          "hasVoted": false
+        },
+        "worklog": {
+          "startAt": 0,
+          "maxResults": 20,
+          "total": 1,
+          "worklogs": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/93926/worklog/22263",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:38:20.514+0200",
+              "updated": "2026-02-05T13:38:20.514+0200",
+              "started": "2026-02-05T13:28:18.017+0200",
+              "timeSpent": "10m",
+              "timeSpentSeconds": 600,
+              "id": "22263",
+              "issueId": "93926"
+            }
+          ]
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10459",
+          "id": "10459",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/avatar.png",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10321,
+          "hierarchyLevel": 0
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10446",
+          "id": "10446",
+          "key": "EXAMPLE",
+          "name": "Test Project",
+          "projectTypeKey": "software",
+          "simplified": false,
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          }
+        },
+        "customfield_10700": null,
+        "customfield_10701": null,
+        "customfield_10702": null,
+        "customfield_10703": null,
+        "resolutiondate": "2026-02-05T13:38:22.355+0200",
+        "customfield_10704": null,
+        "customfield_10705": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10871",
+            "value": "No",
+            "id": "10871"
+          }
+        ],
+        "customfield_10829": null,
+        "watches": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19529/watchers",
+          "watchCount": 3,
+          "isWatching": true
+        },
+        "updated": "2026-02-05T16:08:09.136+0200",
+        "timeoriginalestimate": null,
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Description:",
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": " Please provide access to the development database instance so I can perform necessary testing and verification of the new features."
+                }
+              ]
+            }
+          ]
+        },
+        "timetracking": {
+          "remainingEstimate": "0m",
+          "timeSpent": "10m",
+          "remainingEstimateSeconds": 0,
+          "timeSpentSeconds": 600
+        },
+        "customfield_10800": null,
+        "customfield_10801": null,
+        "customfield_10802": null,
+        "customfield_10803": null,
+        "customfield_10804": null,
+        "customfield_10805": null,
+        "customfield_10928": null,
+        "summary": "Request database access for development testing",
+        "environment": null,
+        "duedate": null,
+        "comment": {
+          "comments": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/issue/93926/comment/231670",
+              "id": "231670",
+              "author": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "mention",
+                        "attrs": {
+                          "id": "555000:55555555-5555-5555-5555-555555555555",
+                          "text": "@Test User",
+                          "accessLevel": "",
+                          "localId": "bd3239f1-98ab-4192-8983-b3441707131a"
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": ", I have configured the database access for your account."
+                      },
+                      {
+                        "type": "hardBreak"
+                      },
+                      {
+                        "type": "text",
+                        "text": "The connection details and credentials are the same as before."
+                      }
+                    ]
+                  }
+                ]
+              },
+              "updateAuthor": {
+                "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+                "accountId": "555000:11111111-1111-1111-1111-111111111111",
+                "emailAddress": "testuser@example.com",
+                "avatarUrls": {
+                  "48x48": "https://example.atlassian.net/avatar.png",
+                  "24x24": "https://example.atlassian.net/avatar.png",
+                  "16x16": "https://example.atlassian.net/avatar.png",
+                  "32x32": "https://example.atlassian.net/avatar.png"
+                },
+                "displayName": "Test User",
+                "active": true,
+                "timeZone": "Asia/Jerusalem",
+                "accountType": "atlassian"
+              },
+              "created": "2026-02-05T13:38:12.957+0200",
+              "updated": "2026-02-05T13:38:12.957+0200",
+              "jsdPublic": true
+            }
+          ],
+          "self": "https://example.atlassian.net/rest/api/3/issue/93926/comment",
+          "maxResults": 1,
+          "total": 1,
+          "startAt": 0
+        },
+        "statuscategorychangedate": "2026-02-05T13:38:22.380+0200",
+        "customfield_10590": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10586",
+          "value": "Functional",
+          "id": "10586"
+        },
+        "customfield_10591": null,
+        "customfield_10592": null,
+        "customfield_10593": null,
+        "fixVersions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/11485",
+            "id": "11485",
+            "description": "All the Engineering tasks not forcing Staging deployment",
+            "name": "Tasks",
+            "archived": false,
+            "released": false
+          }
+        ],
+        "customfield_10594": null,
+        "customfield_10597": 0.0,
+        "customfield_10598": 0.0,
+        "customfield_10588": null,
+        "customfield_10106": null,
+        "customfield_10580": null,
+        "customfield_10581": null,
+        "customfield_10583": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "name": "Med-High",
+          "id": "10101"
+        },
+        "customfield_10584": null,
+        "customfield_10100": "2|i06xbd:",
+        "customfield_10101": null,
+        "customfield_10102": null,
+        "customfield_10578": null,
+        "customfield_10699": null,
+        "customfield_10579": null,
+        "timeestimate": 0,
+        "versions": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10001",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Done",
+          "id": "10001",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "customfield_10694": null,
+        "customfield_10575": null,
+        "customfield_10697": null,
+        "customfield_10566": null,
+        "customfield_10567": null,
+        "customfield_10689": null,
+        "customfield_10569": null,
+        "aggregatetimeestimate": 0,
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A55555555-5555-5555-5555-555555555555",
+          "accountId": "555000:55555555-5555-5555-5555-555555555555",
+          "emailAddress": "user5@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "aggregateprogress": {
+          "progress": 600,
+          "total": 600,
+          "percent": 100
+        },
+        "customfield_10684": null,
+        "customfield_10563": null,
+        "customfield_10200": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10105",
+            "value": "Not Deployed",
+            "id": "10105"
+          }
+        ],
+        "customfield_10201": null,
+        "customfield_10685": null,
+        "customfield_10797": null,
+        "customfield_10555": null,
+        "customfield_10798": null,
+        "customfield_10557": null,
+        "customfield_10799": null,
+        "timespent": 600,
+        "customfield_10790": null,
+        "customfield_10791": null,
+        "customfield_10792": null,
+        "aggregatetimespent": 600,
+        "customfield_10794": null,
+        "customfield_10795": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11027",
+          "value": "AA",
+          "id": "11027"
+        },
+        "customfield_10796": null,
+        "customfield_10666": null,
+        "customfield_10547": null,
+        "customfield_10548": null,
+        "customfield_10549": null,
+        "workratio": -1,
+        "created": "2026-02-04T13:24:07.351+0200",
+        "customfield_10660": null,
+        "customfield_10540": null,
+        "customfield_10661": null,
+        "customfield_10782": null,
+        "customfield_10783": null,
+        "customfield_10784": null,
+        "customfield_10785": null,
+        "customfield_10301": null,
+        "customfield_10533": null,
+        "customfield_10534": null,
+        "customfield_10776": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10999",
+          "value": "Integrations",
+          "id": "10999"
+        },
+        "customfield_10535": null,
+        "customfield_10777": null,
+        "customfield_10778": null,
+        "customfield_10536": null,
+        "customfield_10537": null,
+        "customfield_10416": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10210",
+            "value": "Test",
+            "id": "10210"
+          }
+        ],
+        "customfield_10658": null,
+        "customfield_10659": null,
+        "customfield_10538": null,
+        "customfield_10539": null,
+        "customfield_10650": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A33333333-3333-3333-3333-333333333333",
+          "accountId": "555000:33333333-3333-3333-3333-333333333333",
+          "emailAddress": "user3@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10530": null,
+        "customfield_10531": null,
+        "customfield_10411": null,
+        "customfield_10532": null,
+        "customfield_10895": null,
+        "customfield_10401": [],
+        "customfield_10644": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10728",
+          "value": "Low",
+          "id": "10728"
+        },
+        "customfield_10402": null,
+        "customfield_10645": [],
+        "security": null,
+        "customfield_10403": [],
+        "customfield_10404": null,
+        "customfield_10525": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10320",
+          "value": "Low",
+          "id": "10320"
+        },
+        "customfield_10646": null,
+        "customfield_10405": null,
+        "attachment": [],
+        "customfield_10647": null,
+        "customfield_10406": null,
+        "customfield_10648": null,
+        "customfield_10527": null,
+        "customfield_10528": null,
+        "customfield_10529": null,
+        "customfield_10641": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10715",
+          "value": "Low",
+          "id": "10715"
+        },
+        "customfield_10400": null,
+        "customfield_10642": null,
+        "customfield_10632": null,
+        "customfield_10633": null,
+        "customfield_10512": "2026-02-05T13:38:12.957+0200",
+        "customfield_10513": "10022_*:*_1_*:*_87247638_*|*_10340_*:*_1_*:*_0_*|*_10002_*:*_1_*:*_2327",
+        "customfield_10634": null,
+        "customfield_10635": null,
+        "customfield_10636": null,
+        "customfield_10637": null,
+        "customfield_10516": null,
+        "customfield_10517": null,
+        "customfield_10518": null,
+        "customfield_10519": null
+      },
+      "editmeta": {
+        "fields": {
+          "summary": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "system": "summary"
+            },
+            "name": "Summary",
+            "key": "summary",
+            "operations": [
+              "set"
+            ]
+          },
+          "priority": {
+            "required": true,
+            "schema": {
+              "type": "priority",
+              "system": "priority"
+            },
+            "name": "Priority",
+            "key": "priority",
+            "operations": [
+              "set"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10000",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/blocker.svg",
+                "name": "Blocker",
+                "id": "10000"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+                "name": "High",
+                "id": "10001"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Med-High",
+                "id": "10101"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10002",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Medium",
+                "id": "10002"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10003",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/low.svg",
+                "name": "Low",
+                "id": "10003"
+              }
+            ]
+          },
+          "assignee": {
+            "required": false,
+            "schema": {
+              "type": "user",
+              "system": "assignee"
+            },
+            "name": "Assignee",
+            "key": "assignee",
+            "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?issueKey=EXAMPLE-19539&query=",
+            "operations": [
+              "set"
+            ]
+          },
+          "labels": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "string",
+              "system": "labels"
+            },
+            "name": "Labels",
+            "key": "labels",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ]
+          },
+          "components": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "component",
+              "system": "components"
+            },
+            "name": "Components",
+            "key": "components",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10001",
+                "id": "10001",
+                "name": "Backend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10002",
+                "id": "10002",
+                "name": "Frontend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10003",
+                "id": "10003",
+                "name": "API"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10004",
+                "id": "10004",
+                "name": "Database"
+              }
+            ]
+          },
+          "duedate": {
+            "required": false,
+            "schema": {
+              "type": "date",
+              "system": "duedate"
+            },
+            "name": "Due Date",
+            "key": "duedate",
+            "operations": [
+              "set"
+            ]
+          },
+          "versions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "versions"
+            },
+            "name": "Affects Version/s",
+            "key": "versions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              }
+            ]
+          },
+          "fixVersions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "fixVersions"
+            },
+            "name": "Fix Version/s",
+            "key": "fixVersions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10102",
+                "id": "10102",
+                "name": "2.0.0",
+                "released": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
+      "id": "93891",
+      "self": "https://example.atlassian.net/rest/api/3/issue/93891",
+      "key": "EXAMPLE-19527",
+      "fields": {
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        },
+        "resolution": null,
+        "customfield_10630": null,
+        "customfield_10631": null,
+        "customfield_10510": null,
+        "customfield_10621": null,
+        "customfield_10500": "{}",
+        "customfield_10743": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10945",
+            "value": "No",
+            "id": "10945"
+          }
+        ],
+        "customfield_10622": null,
+        "customfield_10501": null,
+        "customfield_10623": null,
+        "customfield_10744": null,
+        "customfield_10502": null,
+        "customfield_10503": null,
+        "customfield_10745": null,
+        "customfield_10624": null,
+        "customfield_10504": null,
+        "customfield_10625": null,
+        "customfield_10746": null,
+        "customfield_10626": null,
+        "customfield_10505": null,
+        "customfield_10627": null,
+        "customfield_10506": null,
+        "customfield_10748": null,
+        "customfield_10628": null,
+        "customfield_10507": null,
+        "customfield_10508": null,
+        "customfield_10629": null,
+        "customfield_10509": null,
+        "lastViewed": null,
+        "customfield_10620": null,
+        "labels": [
+          "QA"
+        ],
+        "customfield_10862": null,
+        "customfield_10610": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
+          "value": "NO",
+          "id": "10660"
+        },
+        "customfield_10735": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10941",
+            "value": "No",
+            "id": "10941"
+          }
+        ],
+        "customfield_10614": null,
+        "aggregatetimeoriginalestimate": null,
+        "customfield_10615": null,
+        "customfield_10617": null,
+        "customfield_10739": null,
+        "customfield_10619": null,
+        "issuelinks": [],
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "emailAddress": "testuser@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "components": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/component/11315",
+            "id": "11315",
+            "name": "PIP"
+          }
+        ],
+        "customfield_10600": null,
+        "customfield_10723": null,
+        "customfield_10602": null,
+        "customfield_10727": null,
+        "subtasks": [],
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A44444444-4444-4444-4444-444444444444",
+          "accountId": "555000:44444444-4444-4444-4444-444444444444",
+          "emailAddress": "user4@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10712": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10880",
+            "value": "Engineering",
+            "id": "10880"
+          }
+        ],
+        "customfield_10713": null,
+        "progress": {
+          "progress": 0,
+          "total": 0
+        },
+        "votes": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19527/votes",
+          "votes": 0,
+          "hasVoted": false
+        },
+        "worklog": {
+          "startAt": 0,
+          "maxResults": 20,
+          "total": 0,
+          "worklogs": []
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10008",
+          "id": "10008",
+          "description": "A small, distinct piece of work.",
+          "iconUrl": "https://example.atlassian.net/avatar.png",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10318,
+          "hierarchyLevel": 0
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10446",
+          "id": "10446",
+          "key": "EXAMPLE",
+          "name": "Test Project",
+          "projectTypeKey": "software",
+          "simplified": false,
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          }
+        },
+        "customfield_10700": null,
+        "customfield_10701": null,
+        "customfield_10702": null,
+        "customfield_10703": null,
+        "resolutiondate": null,
+        "customfield_10704": null,
+        "customfield_10705": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10871",
+            "value": "No",
+            "id": "10871"
+          }
+        ],
+        "customfield_10829": null,
+        "watches": {
+          "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19527/watchers",
+          "watchCount": 2,
+          "isWatching": false
+        },
+        "updated": "2026-02-04T12:53:49.485+0200",
+        "timeoriginalestimate": null,
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "I'm trying to use the mock service in namespace dev-cluster, but the pod never becomes Ready, "
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "text",
+                  "text": "so the service has no ready endpoints and cannot be accessed."
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "The mock service pods are stuck in Init:0/1. The main container never starts because the init container is waiting on dependencies."
+                }
+              ]
+            }
+          ]
+        },
+        "timetracking": {},
+        "customfield_10800": null,
+        "customfield_10801": null,
+        "customfield_10802": null,
+        "customfield_10803": null,
+        "customfield_10804": null,
+        "customfield_10805": null,
+        "customfield_10928": null,
+        "summary": "Fix container initialization failure in development cluster",
+        "environment": null,
+        "duedate": null,
+        "comment": {
+          "comments": [],
+          "self": "https://example.atlassian.net/rest/api/3/issue/93891/comment",
+          "maxResults": 0,
+          "total": 0,
+          "startAt": 0
+        },
+        "statuscategorychangedate": "2026-02-04T12:53:47.532+0200",
+        "customfield_10590": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10586",
+          "value": "Functional",
+          "id": "10586"
+        },
+        "customfield_10591": null,
+        "customfield_10592": null,
+        "customfield_10593": null,
+        "fixVersions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/14425",
+            "id": "14425",
+            "description": "",
+            "name": "Test Project MNG+INT (Q1RC1) - Feb-15'th (5.2608.X)",
+            "archived": false,
+            "released": false,
+            "releaseDate": "2026-02-15"
+          }
+        ],
+        "customfield_10594": null,
+        "customfield_10597": 0.0,
+        "customfield_10598": 0.0,
+        "customfield_10588": null,
+        "customfield_10106": null,
+        "customfield_10580": null,
+        "customfield_10581": null,
+        "customfield_10583": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "name": "Med-High",
+          "id": "10101"
+        },
+        "customfield_10584": null,
+        "customfield_10100": "2|i06xax:",
+        "customfield_10101": null,
+        "customfield_10102": null,
+        "customfield_10578": null,
+        "customfield_10699": null,
+        "customfield_10579": null,
+        "timeestimate": null,
+        "versions": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10022",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Backlog",
+          "id": "10022",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "customfield_10694": null,
+        "customfield_10575": null,
+        "customfield_10697": null,
+        "customfield_10566": null,
+        "customfield_10567": null,
+        "customfield_10689": null,
+        "customfield_10569": null,
+        "aggregatetimeestimate": null,
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A44444444-4444-4444-4444-444444444444",
+          "accountId": "555000:44444444-4444-4444-4444-444444444444",
+          "emailAddress": "user4@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "aggregateprogress": {
+          "progress": 0,
+          "total": 0
+        },
+        "customfield_10684": null,
+        "customfield_10563": null,
+        "customfield_10200": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10105",
+            "value": "Not Deployed",
+            "id": "10105"
+          }
+        ],
+        "customfield_10201": null,
+        "customfield_10685": null,
+        "customfield_10797": null,
+        "customfield_10555": null,
+        "customfield_10798": null,
+        "customfield_10557": null,
+        "customfield_10799": null,
+        "timespent": null,
+        "customfield_10790": null,
+        "customfield_10791": null,
+        "customfield_10792": null,
+        "aggregatetimespent": null,
+        "customfield_10794": null,
+        "customfield_10795": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/11027",
+          "value": "AA",
+          "id": "11027"
+        },
+        "customfield_10796": null,
+        "customfield_10666": null,
+        "customfield_10547": null,
+        "customfield_10548": null,
+        "customfield_10549": null,
+        "workratio": -1,
+        "created": "2026-02-04T12:53:46.959+0200",
+        "customfield_10660": null,
+        "customfield_10540": null,
+        "customfield_10661": null,
+        "customfield_10782": null,
+        "customfield_10783": null,
+        "customfield_10784": null,
+        "customfield_10785": null,
+        "customfield_10301": null,
+        "customfield_10533": null,
+        "customfield_10534": null,
+        "customfield_10776": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10999",
+          "value": "Integrations",
+          "id": "10999"
+        },
+        "customfield_10535": null,
+        "customfield_10777": null,
+        "customfield_10778": null,
+        "customfield_10536": null,
+        "customfield_10537": null,
+        "customfield_10416": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10210",
+            "value": "Test",
+            "id": "10210"
+          }
+        ],
+        "customfield_10658": null,
+        "customfield_10659": null,
+        "customfield_10538": null,
+        "customfield_10539": null,
+        "customfield_10650": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A66666666-6666-6666-6666-666666666666",
+          "accountId": "555000:66666666-6666-6666-6666-666666666666",
+          "emailAddress": "user6@example.com",
+          "avatarUrls": {
+            "48x48": "https://example.atlassian.net/avatar.png",
+            "24x24": "https://example.atlassian.net/avatar.png",
+            "16x16": "https://example.atlassian.net/avatar.png",
+            "32x32": "https://example.atlassian.net/avatar.png"
+          },
+          "displayName": "Test User",
+          "active": true,
+          "timeZone": "Asia/Jerusalem",
+          "accountType": "atlassian"
+        },
+        "customfield_10530": null,
+        "customfield_10531": null,
+        "customfield_10411": null,
+        "customfield_10532": null,
+        "customfield_10895": null,
+        "customfield_10401": [],
+        "customfield_10644": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10728",
+          "value": "Low",
+          "id": "10728"
+        },
+        "customfield_10402": null,
+        "customfield_10645": [],
+        "security": null,
+        "customfield_10403": [],
+        "customfield_10404": null,
+        "customfield_10525": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10320",
+          "value": "Low",
+          "id": "10320"
+        },
+        "customfield_10646": null,
+        "customfield_10405": null,
+        "attachment": [],
+        "customfield_10647": null,
+        "customfield_10406": null,
+        "customfield_10648": null,
+        "customfield_10527": null,
+        "customfield_10528": null,
+        "customfield_10529": null,
+        "customfield_10641": {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10715",
+          "value": "Low",
+          "id": "10715"
+        },
+        "customfield_10400": null,
+        "customfield_10642": null,
+        "customfield_10632": null,
+        "customfield_10633": null,
+        "customfield_10512": null,
+        "customfield_10513": null,
+        "customfield_10634": null,
+        "customfield_10635": null,
+        "customfield_10636": null,
+        "customfield_10637": null,
+        "customfield_10516": null,
+        "customfield_10517": null,
+        "customfield_10518": null,
+        "customfield_10519": null
+      },
+      "editmeta": {
+        "fields": {
+          "summary": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "system": "summary"
+            },
+            "name": "Summary",
+            "key": "summary",
+            "operations": [
+              "set"
+            ]
+          },
+          "priority": {
+            "required": true,
+            "schema": {
+              "type": "priority",
+              "system": "priority"
+            },
+            "name": "Priority",
+            "key": "priority",
+            "operations": [
+              "set"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10000",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/blocker.svg",
+                "name": "Blocker",
+                "id": "10000"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10001",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+                "name": "High",
+                "id": "10001"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10101",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Med-High",
+                "id": "10101"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10002",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+                "name": "Medium",
+                "id": "10002"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/priority/10003",
+                "iconUrl": "https://example.atlassian.net/images/icons/priorities/low.svg",
+                "name": "Low",
+                "id": "10003"
+              }
+            ]
+          },
+          "assignee": {
+            "required": false,
+            "schema": {
+              "type": "user",
+              "system": "assignee"
+            },
+            "name": "Assignee",
+            "key": "assignee",
+            "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?issueKey=EXAMPLE-19539&query=",
+            "operations": [
+              "set"
+            ]
+          },
+          "labels": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "string",
+              "system": "labels"
+            },
+            "name": "Labels",
+            "key": "labels",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ]
+          },
+          "components": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "component",
+              "system": "components"
+            },
+            "name": "Components",
+            "key": "components",
+            "operations": [
+              "add",
+              "set",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10001",
+                "id": "10001",
+                "name": "Backend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10002",
+                "id": "10002",
+                "name": "Frontend"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10003",
+                "id": "10003",
+                "name": "API"
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/component/10004",
+                "id": "10004",
+                "name": "Database"
+              }
+            ]
+          },
+          "duedate": {
+            "required": false,
+            "schema": {
+              "type": "date",
+              "system": "duedate"
+            },
+            "name": "Due Date",
+            "key": "duedate",
+            "operations": [
+              "set"
+            ]
+          },
+          "versions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "versions"
+            },
+            "name": "Affects Version/s",
+            "key": "versions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              }
+            ]
+          },
+          "fixVersions": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "version",
+              "system": "fixVersions"
+            },
+            "name": "Fix Version/s",
+            "key": "fixVersions",
+            "operations": [
+              "set",
+              "add",
+              "remove"
+            ],
+            "allowedValues": [
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10100",
+                "id": "10100",
+                "name": "1.0.0",
+                "released": true
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10101",
+                "id": "10101",
+                "name": "1.1.0",
+                "released": false
+              },
+              {
+                "self": "https://example.atlassian.net/rest/api/3/version/10102",
+                "id": "10102",
+                "name": "2.0.0",
+                "released": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "nextPageToken": "dU9Pb1cycUIwcTVvYmMxRmRKWUlwd21HSkFEdkJzRmtsT1BaSnliaVB4NUV4bktadXJOTGk1UzkxVWN4a2wxOQ==",
+  "isLast": false
+}

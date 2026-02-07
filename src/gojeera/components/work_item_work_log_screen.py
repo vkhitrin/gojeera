@@ -241,6 +241,7 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
                 work_item_key=self._work_item_key,
                 mode='new',
                 current_remaining_estimate=self._current_remaining_estimate,
+                started=datetime.now().strftime('%Y-%m-%d %H:%M'),
             )
         )
 

@@ -752,7 +752,7 @@ class AddWorkItemScreen(ModalScreen):
         self._metadata_fetched_for = (project_key, work_item_type_id)
 
         await self.dynamic_fields_container.remove_children()
-        application = cast(JiraApp, self.app)
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.get_work_item_create_metadata(
             project_key, work_item_type_id
         )

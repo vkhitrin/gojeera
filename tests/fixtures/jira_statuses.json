@@ -1,0 +1,30 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10258",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Dev Pending",
+    "id": "10258",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10001",
+    "description": "Work has been completed on this issue.",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "id": "10001",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  }
+]

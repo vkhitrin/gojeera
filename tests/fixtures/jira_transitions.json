@@ -1,0 +1,43 @@
+{
+  "transitions": [
+    {
+      "id": "11",
+      "name": "To Do",
+      "to": {
+        "id": "10000",
+        "name": "To Do",
+        "description": "Work waiting to be started",
+        "statusCategory": {
+          "key": "new",
+          "colorName": "blue-gray"
+        }
+      }
+    },
+    {
+      "id": "21",
+      "name": "In Progress",
+      "to": {
+        "id": "10002",
+        "name": "In Progress",
+        "description": "Work is actively being done",
+        "statusCategory": {
+          "key": "indeterminate",
+          "colorName": "yellow"
+        }
+      }
+    },
+    {
+      "id": "31",
+      "name": "Done",
+      "to": {
+        "id": "10001",
+        "name": "Done",
+        "description": "Work has been completed",
+        "statusCategory": {
+          "key": "done",
+          "colorName": "green"
+        }
+      }
+    }
+  ]
+}

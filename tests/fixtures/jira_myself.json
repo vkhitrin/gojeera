@@ -1,0 +1,16 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+  "accountId": "555000:11111111-1111-1111-1111-111111111111",
+  "accountType": "atlassian",
+  "emailAddress": "testuser@example.com",
+  "avatarUrls": {
+    "48x48": "https://avatar.example.com/avatar.png",
+    "24x24": "https://avatar.example.com/avatar.png",
+    "16x16": "https://avatar.example.com/avatar.png",
+    "32x32": "https://avatar.example.com/avatar.png"
+  },
+  "displayName": "Test User",
+  "active": true,
+  "timeZone": "America/New_York",
+  "locale": "en_US"
+}

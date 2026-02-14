@@ -21,93 +21,6 @@ logger = logging.getLogger('gojeera')
 class CheckboxStyledParagraph(MarkdownParagraph):
     """Markdown paragraph with checkbox, date, status, and decision styling."""
 
-    DEFAULT_CSS = """
-    GojeeraMarkdown MarkdownHeader {
-        margin: 0;
-        width: auto;
-    }
-
-    GojeeraMarkdown MarkdownH1,
-    GojeeraMarkdown MarkdownH2,
-    GojeeraMarkdown MarkdownH3,
-    GojeeraMarkdown MarkdownH4,
-    GojeeraMarkdown MarkdownH5,
-    GojeeraMarkdown MarkdownH6 {
-        margin: 0 0 1 0;
-        width: auto;
-        content-align: left top;
-        padding-left: 1;
-        padding-right: 1;
-        text-style: bold;
-    }
-
-    GojeeraMarkdown MarkdownH1 > MarkdownBlock,
-    GojeeraMarkdown MarkdownH2 > MarkdownBlock,
-    GojeeraMarkdown MarkdownH3 > MarkdownBlock,
-    GojeeraMarkdown MarkdownH4 > MarkdownBlock,
-    GojeeraMarkdown MarkdownH5 > MarkdownBlock,
-    GojeeraMarkdown MarkdownH6 > MarkdownBlock {
-        width: auto;
-    }
-
-    GojeeraMarkdown > MarkdownParagraph {
-        margin: 0 0 1 0;
-    }
-
-    GojeeraMarkdown MarkdownBulletList,
-    GojeeraMarkdown MarkdownOrderedList {
-        margin: 0 0 1 0;
-        padding: 0;
-    }
-
-    GojeeraMarkdown MarkdownOrderedList {
-        margin-left: 0;
-        padding-left: 0;
-    }
-
-    GojeeraMarkdown MarkdownListItem {
-        margin: 0;
-        padding: 0;
-    }
-
-    GojeeraMarkdown MarkdownListItem > Vertical > MarkdownParagraph {
-        margin: 0;
-    }
-
-    GojeeraMarkdown MarkdownListItem > Vertical > MarkdownBlock {
-        margin: 0;
-    }
-
-
-
-    GojeeraMarkdown MarkdownFence > Label {
-        padding: 0;
-    }
-
-    GojeeraMarkdown MarkdownH1 {
-        background: $primary 30%;
-    }
-
-    GojeeraMarkdown MarkdownH2 {
-        background: $primary 20%;
-    }
-
-    GojeeraMarkdown MarkdownH3 {
-        background: $primary 15%;
-    }
-
-    GojeeraMarkdown MarkdownH4 {
-        background: $primary 10%;
-    }
-
-    GojeeraMarkdown MarkdownH5 {
-        background: $primary 7%;
-    }
-
-    GojeeraMarkdown MarkdownH6 {
-        background: $primary 5%;
-    }
-    """
     _style_cache: dict[str, Style] = {}
 
     _whitespace_pattern = re.compile(r'\s+')
@@ -406,6 +319,92 @@ class GojeeraMarkdown(Markdown):
     """
     Custom Markdown widget that extends GitHub Flavored Markdown
     with custom Atlassian Document Format logic.
+    """
+
+    DEFAULT_CSS = """
+    GojeeraMarkdown MarkdownHeader {
+        margin: 0;
+        width: auto;
+    }
+
+    GojeeraMarkdown MarkdownH1,
+    GojeeraMarkdown MarkdownH2,
+    GojeeraMarkdown MarkdownH3,
+    GojeeraMarkdown MarkdownH4,
+    GojeeraMarkdown MarkdownH5,
+    GojeeraMarkdown MarkdownH6 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        text-style: bold;
+    }
+
+    GojeeraMarkdown MarkdownH1 > MarkdownBlock,
+    GojeeraMarkdown MarkdownH2 > MarkdownBlock,
+    GojeeraMarkdown MarkdownH3 > MarkdownBlock,
+    GojeeraMarkdown MarkdownH4 > MarkdownBlock,
+    GojeeraMarkdown MarkdownH5 > MarkdownBlock,
+    GojeeraMarkdown MarkdownH6 > MarkdownBlock {
+        width: auto;
+    }
+
+    GojeeraMarkdown > MarkdownParagraph {
+        margin: 0 0 1 0;
+    }
+
+    GojeeraMarkdown MarkdownBulletList,
+    GojeeraMarkdown MarkdownOrderedList {
+        margin: 0 0 1 0;
+        padding: 0;
+    }
+
+    GojeeraMarkdown MarkdownOrderedList {
+        margin-left: 0;
+        padding-left: 0;
+    }
+
+    GojeeraMarkdown MarkdownListItem {
+        margin: 0;
+        padding: 0;
+    }
+
+    GojeeraMarkdown MarkdownListItem > Vertical > MarkdownParagraph {
+        margin: 0;
+    }
+
+    GojeeraMarkdown MarkdownListItem > Vertical > MarkdownBlock {
+        margin: 0;
+    }
+
+    GojeeraMarkdown MarkdownFence > Label {
+        padding: 0;
+    }
+
+    GojeeraMarkdown MarkdownH1 {
+        background: $primary 30%;
+    }
+
+    GojeeraMarkdown MarkdownH2 {
+        background: $primary 20%;
+    }
+
+    GojeeraMarkdown MarkdownH3 {
+        background: $primary 15%;
+    }
+
+    GojeeraMarkdown MarkdownH4 {
+        background: $primary 10%;
+    }
+
+    GojeeraMarkdown MarkdownH5 {
+        background: $primary 7%;
+    }
+
+    GojeeraMarkdown MarkdownH6 {
+        background: $primary 5%;
+    }
     """
 
     checkbox_unchecked_style: str = '$primary'

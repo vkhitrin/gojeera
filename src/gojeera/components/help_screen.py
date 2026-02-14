@@ -41,7 +41,7 @@ class HelpScreen(ModalScreen):
         filename = inspect.getfile(HelpScreen)
         directory = os.path.dirname(filename)
         directories = directory.split('/')[:-1]
-        directories.append('../../docs/usage.md')
+        directories.append('/usage.md')
         return '/'.join(directories)
 
     async def on_mount(self):

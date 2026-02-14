@@ -72,7 +72,7 @@ Options:
 
 ## Usage
 
-Visit [usage.md](./docs/usage.md).
+Visit [usage.md](./src/gojeera/usage.md).
 
 ## Configuration
 

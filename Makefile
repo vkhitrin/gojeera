@@ -15,7 +15,7 @@ lint: ##Lint using ruff
 	@uv run ruff check .
 
 .PHONY: type-check
-type-check: ##Typecheck using typ:
+type-check: ##Typecheck using ty
 	@uv run ty check
 
 .PHONY: deadcode

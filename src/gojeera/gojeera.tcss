@@ -2,6 +2,10 @@
   scrollbar-size-vertical: 1;
 }
 
+LoadingIndicator {
+  background: transparent;
+}
+
 AppHeader {
   height: auto;
   dock: top;
@@ -697,34 +701,11 @@ WorkItemCommentsWidget {
   margin-bottom: 0;
 }
 
-#work-item-fields-form>#sprint-field-container {
-  margin: 0;
-  margin-top: 0;
-  margin-bottom: 1;
-  margin-right: 2;
-  padding: 0;
-  height: auto;
-  width: 100%;
-  align: left middle;
-}
-
-#work-item-fields-form>#sprint-field-container>Label {
-  width: auto;
-  height: auto;
-  padding-right: 1;
-  text-style: bold;
-}
-
-#work-item-fields-form>#sprint-field-container>ReadOnlyInputField {
-  width: 1fr;
-}
-
 
 #work-item-fields-form Horizontal {
   height: auto;
   width: 100%;
   align: left middle;
-  margin-bottom: 1;
 }
 
 #work-item-fields-form Horizontal>Label {
@@ -746,7 +727,8 @@ WorkItemCommentsWidget {
 #work-item-fields-form Horizontal>WorkItemLabels,
 #work-item-fields-form Horizontal>MultiSelect,
 #work-item-fields-form Horizontal>NumericInput,
-#work-item-fields-form Horizontal>DateInput {
+#work-item-fields-form Horizontal>DateInput,
+#work-item-fields-form Horizontal>SprintPicker {
   width: 1fr;
   min-width: 10;
 }
@@ -754,7 +736,8 @@ WorkItemCommentsWidget {
 
 #work-item-fields-form Horizontal>WorkItemStatusSelectionInput,
 #work-item-fields-form Horizontal>UserSelectionInput,
-#work-item-fields-form Horizontal>SelectionWidget {
+#work-item-fields-form Horizontal>SelectionWidget,
+#work-item-fields-form Horizontal>SprintPicker {
   height: 1;
 }
 
@@ -1647,10 +1630,10 @@ AddWorkItemScreen #description-field-container {
 
 AddWorkItemScreen DynamicFieldsWidgets {
   height: auto;
+  min-height: 3;
   margin: 0;
   padding: 0;
 }
-
 
 AddWorkItemScreen DynamicFieldsWidgets>* {
   margin-bottom: 1;
@@ -1787,27 +1770,32 @@ AddWorkItemScreen TextArea {
 }
 
 AddWorkItemScreen Select>SelectCurrent,
-AddWorkItemScreen LazySelect>SelectCurrent {
+AddWorkItemScreen LazySelect>SelectCurrent,
+AddWorkItemScreen SprintPicker>SelectCurrent {
   background: $surface-lighten-1;
 }
 
 AddWorkItemScreen Select>SelectOverlay,
-AddWorkItemScreen LazySelect>SelectOverlay {
+AddWorkItemScreen LazySelect>SelectOverlay,
+AddWorkItemScreen SprintPicker>SelectOverlay {
   background: $surface-lighten-1;
 }
 
 AddWorkItemScreen Select>SelectOverlay>OptionList,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList {
+AddWorkItemScreen LazySelect>SelectOverlay>OptionList,
+AddWorkItemScreen SprintPicker>SelectOverlay>OptionList {
   background: $surface-lighten-1;
 }
 
 AddWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option {
+AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option,
+AddWorkItemScreen SprintPicker>SelectOverlay>OptionList>.option-list--option {
   background: $surface-lighten-1;
 }
 
 AddWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option-highlighted,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option-highlighted {
+AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option-highlighted,
+AddWorkItemScreen SprintPicker>SelectOverlay>OptionList>.option-list--option-highlighted {
   background: $primary;
 }
 

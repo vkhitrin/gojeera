@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import Any
 
+from gojeera.constants import CustomFieldType
+
 
 class FieldMode(Enum):
     """Enum to distinguish between field creation and update contexts."""
@@ -125,3 +127,20 @@ def get_additional_fields_values(
             continue
         additional_fields[field_id] = field_value
     return additional_fields
+
+
+def get_sprint_field_id_from_fields_data(fields_data: list[dict[str, Any]]) -> str | None:
+    for field in fields_data:
+        field_id = field.get('fieldId')
+        schema_custom = field.get('schema', {}).get('custom')
+        if field_id and schema_custom == CustomFieldType.GH_SPRINT.value:
+            return field_id
+    return None
+
+
+def get_sprint_field_id_from_editmeta(edit_metadata_fields: dict[str, Any]) -> str | None:
+    for field_id, field_meta in edit_metadata_fields.items():
+        schema_custom = field_meta.get('schema', {}).get('custom')
+        if schema_custom == CustomFieldType.GH_SPRINT.value:
+            return field_id
+    return None

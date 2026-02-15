@@ -205,3 +205,17 @@ class TestNewWorkItemScreen:
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=fill_save_and_search_work_item)
+
+    def test_new_work_item_with_sprint_selection(
+        self,
+        snap_compare,
+        mock_configuration_with_sprints,
+        mock_jira_api_with_sprints,
+        mock_user_info,
+    ):
+        """Snapshot: New work item screen with sprint selection dropdown enabled."""
+        config = mock_configuration_with_sprints
+
+        app = JiraApp(settings=config, user_info=mock_user_info)
+
+        assert snap_compare(app, terminal_size=(120, 40), run_before=open_and_select_project)

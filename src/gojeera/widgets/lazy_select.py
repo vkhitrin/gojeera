@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from textual.widgets import Static
+from textual.widgets._select import SelectCurrent
+
 from gojeera.widgets.vim_select import VimSelect
 
 
@@ -46,8 +49,15 @@ class LazySelect(VimSelect):
         if not self._is_loading:
             return
         spinner = self.SPINNER_FRAMES[self._spinner_index]
-        self.prompt = f'{self._original_prompt} {spinner}'
+        new_prompt = f'{self._original_prompt} {spinner}'
         self._spinner_index = (self._spinner_index + 1) % len(self.SPINNER_FRAMES)
+        self.prompt = new_prompt
+        try:
+            select_current = self.query_one(SelectCurrent)
+            select_current.placeholder = new_prompt
+            select_current.query_one('#label', Static).update(new_prompt)
+        except Exception:
+            pass
 
     def _stop_spinner(self) -> None:
         if self._is_loading:
@@ -56,6 +66,13 @@ class LazySelect(VimSelect):
                 self._spinner_timer.stop()
                 self._spinner_timer = None
             self.prompt = self._original_prompt
+            try:
+                select_current = self.query_one(SelectCurrent)
+                select_current.placeholder = self._original_prompt
+                if self.value == self.BLANK:
+                    select_current.query_one('#label', Static).update(self._original_prompt)
+            except Exception:
+                pass
 
     def set_options(self, options) -> None:
         super().set_options(options)

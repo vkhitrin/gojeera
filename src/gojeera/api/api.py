@@ -17,9 +17,10 @@ from gojeera.utils.obfuscation import obfuscate_account_id
 
 
 class JiraAPI:
-    """Implements methods to connect to the Jira REST API provided by the Jira Cloud Platform."""
+    """Implements methods to connect to the Jira REST API endpoints."""
 
-    API_PATH_PREFIX = '/rest/api/3/'
+    REST_API_PATH_PREFIX = '/rest/api/3/'
+    AGILE_API_PATH_PREFIX = '/rest/agile/1.0/'
 
     def __init__(
         self,
@@ -29,25 +30,33 @@ class JiraAPI:
         configuration: ApplicationConfiguration,
     ):
         self._client = AsyncJiraClient(
-            base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
+            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
 
         self._sync_client = JiraClient(
-            base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
+            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
 
         self._async_http_client = AsyncHTTPClient(
-            base_url=f'{base_url.rstrip("/")}{self.API_PATH_PREFIX}',
+            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
             api_username=api_username,
             api_token=api_token.strip(),
             configuration=configuration,
         )
+
+        self._agile_client = AsyncJiraClient(
+            base_url=f'{base_url.rstrip("/")}{self.AGILE_API_PATH_PREFIX}',
+            api_username=api_username,
+            api_token=api_token.strip(),
+            configuration=configuration,
+        )
+
         self._base_url = base_url
         self.logger = logging.getLogger(LOGGER_NAME)
 
@@ -66,6 +75,10 @@ class JiraAPI:
     @property
     def sync_client(self) -> JiraClient:
         return self._sync_client
+
+    @property
+    def agile_client(self) -> AsyncJiraClient:
+        return self._agile_client
 
     async def search_projects(
         self,
@@ -1298,3 +1311,156 @@ class JiraAPI:
             List of label suggestions or None if request fails
         """
         return await self._client.get_label_suggestions(query)
+
+    async def get_boards_for_project(
+        self,
+        project_key_or_id: str,
+        board_type: str | None = None,
+    ) -> list[dict]:
+        """Fetch boards for a project using Jira Software API.
+
+        Args:
+            project_key_or_id: Project key (e.g., 'PROJ') or ID
+            board_type: Optional filter - 'scrum', 'kanban', 'simple'
+
+        Returns:
+            List of board dictionaries
+        """
+        params: dict[str, Any] = {'projectKeyOrId': project_key_or_id}
+        if board_type:
+            params['type'] = board_type
+
+        boards = []
+        start_at = 0
+        max_results = 50
+
+        while True:
+            params['startAt'] = start_at
+            params['maxResults'] = max_results
+
+            try:
+                response = cast(
+                    dict,
+                    await self._agile_client.make_request(
+                        method=httpx.AsyncClient.get, url='board', params=params
+                    ),
+                )
+                values = response.get('values', [])
+                boards.extend(values)
+
+                is_last = response.get('isLast', True)
+                if is_last or not values:
+                    break
+
+                start_at += max_results
+
+            except Exception as e:
+                self.logger.warning(f'Failed to fetch boards for project {project_key_or_id}: {e}')
+                break
+
+        return boards
+
+    async def get_sprints_for_board(
+        self,
+        board_id: int,
+        state: str | None = None,
+    ) -> list[dict]:
+        """Fetch sprints for a board using Jira Software API.
+
+        Args:
+            board_id: The board ID
+            state: Optional filter - comma-separated: 'active', 'future', 'closed'
+                   Example: 'active,future'
+
+        Returns:
+            List of sprint dictionaries
+        """
+        params: dict[str, Any] = {}
+        if state:
+            params['state'] = state
+
+        sprints = []
+        start_at = 0
+        max_results = 50
+
+        while True:
+            params['startAt'] = start_at
+            params['maxResults'] = max_results
+
+            try:
+                response = cast(
+                    dict,
+                    await self._agile_client.make_request(
+                        method=httpx.AsyncClient.get,
+                        url=f'board/{board_id}/sprint',
+                        params=params,
+                    ),
+                )
+                values = response.get('values', [])
+                sprints.extend(values)
+
+                is_last = response.get('isLast', True)
+                if is_last or not values:
+                    break
+
+                start_at += max_results
+
+            except Exception as e:
+                self.logger.warning(f'Failed to fetch sprints for board {board_id}: {e}')
+                break
+
+        return sprints
+
+    async def get_sprints_for_project(
+        self,
+        project_key_or_id: str,
+        states: list[str] | None = None,
+    ) -> list[dict]:
+        """Fetch all sprints for a project from all boards.
+
+        Args:
+            project_key_or_id: Project key or ID
+            states: List of sprint states to filter - ['active', 'future']
+
+        Returns:
+            List of sprint dictionaries, sorted by state and name
+
+        Note:
+            - Same sprint can appear on multiple boards
+            - Returns unique sprints only
+            - Active sprints first, then future, then closed
+        """
+        # Default to active and future sprints only
+        if states is None:
+            states = ['active', 'future']
+
+        state_filter = ','.join(states) if states else None
+
+        boards = await self.get_boards_for_project(project_key_or_id)
+
+        if not boards:
+            self.logger.warning(f'No boards found for project {project_key_or_id}')
+            return []
+
+        all_sprints = []
+        for board in boards:
+            board_id = board.get('id')
+            if not board_id:
+                continue
+
+            sprints = await self.get_sprints_for_board(board_id, state_filter)
+            all_sprints.extend(sprints)
+
+        unique_sprints: dict[int, dict] = {}
+        for sprint in all_sprints:
+            sprint_id = sprint.get('id')
+            if sprint_id and sprint_id not in unique_sprints:
+                unique_sprints[sprint_id] = sprint
+
+        state_priority = {'active': 0, 'future': 1, 'closed': 2}
+        sorted_sprints = sorted(
+            unique_sprints.values(),
+            key=lambda s: (state_priority.get(s.get('state', ''), 99), s.get('name', '')),
+        )
+
+        return sorted_sprints

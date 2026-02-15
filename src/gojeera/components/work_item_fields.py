@@ -24,7 +24,10 @@ from gojeera.constants import (
 )
 from gojeera.exceptions import UpdateWorkItemException, ValidationError
 from gojeera.models import JiraUser, JiraWorkItem, TimeTracking, WorkItemPriority
-from gojeera.utils.fields import FieldMode
+from gojeera.utils.fields import (
+    FieldMode,
+    get_sprint_field_id_from_editmeta,
+)
 from gojeera.utils.styling import map_jira_status_color_to_textual
 from gojeera.utils.widgets_factory_utils import (
     DynamicFieldsWidgets,
@@ -42,6 +45,7 @@ from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.numeric_input import NumericInput
 from gojeera.widgets.read_only_input_field import ReadOnlyInputField
 from gojeera.widgets.selection import SelectionWidget
+from gojeera.widgets.sprint_picker import SprintPicker
 from gojeera.widgets.text_input import TextInput
 from gojeera.widgets.time_tracking import TimeTrackingWidget
 from gojeera.widgets.url import URL
@@ -202,14 +206,6 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#reporter', ReadOnlyInputField)
 
     @property
-    def work_item_sprint_field(self) -> ReadOnlyInputField:
-        return self.query_one('#sprint', ReadOnlyInputField)
-
-    @property
-    def sprint_field_container(self) -> Horizontal:
-        return self.query_one('#sprint-field-container', expect_type=Horizontal)
-
-    @property
     def work_item_resolution_field(self) -> ReadOnlyInputField:
         return self.query_one('#resolution', ReadOnlyInputField)
 
@@ -274,6 +270,14 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#story-points-field-container', expect_type=Horizontal)
 
     @property
+    def sprint_picker_widget(self) -> SprintPicker:
+        return self.query_one('#sprint', SprintPicker)
+
+    @property
+    def sprint_field_container(self) -> Horizontal:
+        return self.query_one('#sprint-field-container', expect_type=Horizontal)
+
+    @property
     def work_item_resolution_date_field(self) -> ReadOnlyInputField:
         return self.query_one('#resolution-date', ReadOnlyInputField)
 
@@ -289,8 +293,8 @@ class WorkItemFields(Container, can_focus=False):
     def pending_changes_notification_label(self) -> Label:
         try:
             return self.query_one('#pending-changes-notification-label', expect_type=Label)
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
+        except Exception:
+            pass
         raise ValueError('Notification label not found')
 
     @property
@@ -310,40 +314,36 @@ class WorkItemFields(Container, can_focus=False):
         with VerticalScroll(id='work-item-fields-form') as fields_form:
             fields_form.can_focus = False
 
-            with Horizontal(id='sprint-field-container'):
-                yield Label('Sprint').add_class('field_label')
-                yield ReadOnlyInputField(id='sprint')
-
             with StaticFieldsWidgets():
                 with Horizontal(id='status-field-container'):
-                    yield Label('Status').add_class('field_label')
+                    yield Label('Status')
                     yield WorkItemStatusSelectionInput([])
                 with Horizontal(id='resolution-field-container') as resolution_container:
                     resolution_container.display = False
-                    yield Label('Resolution').add_class('field_label')
+                    yield Label('Resolution')
                     yield ReadOnlyInputField(id='resolution')
                 with Horizontal(id='priority-field-container'):
-                    yield Label('Priority').add_class('field_label')
+                    yield Label('Priority')
                     yield SelectionWidget(
                         mode=FieldMode.UPDATE,
                         field_id='priority',
                         options=[],
                     )
                 with Horizontal(id='assignee-field-container'):
-                    yield Label('Assignee').add_class('field_label')
+                    yield Label('Assignee')
                     yield UserSelectionInput(users=[])
                 with Horizontal():
-                    yield Label('Reporter').add_class('field_label')
+                    yield Label('Reporter')
                     yield ReadOnlyInputField(id='reporter')
                 with Horizontal(id='labels-field-container'):
-                    yield Label('Labels').add_class('field_label')
+                    yield Label('Labels')
                     yield WorkItemLabels(
                         mode=FieldMode.UPDATE,
                         field_id='labels',
                         title='Labels',
                     )
                 with Horizontal(id='components-field-container'):
-                    yield Label('Components').add_class('field_label')
+                    yield Label('Components')
                     yield MultiSelect(
                         mode=FieldMode.UPDATE,
                         field_id='components',
@@ -352,7 +352,7 @@ class WorkItemFields(Container, can_focus=False):
                         required=False,
                     )
                 with Horizontal(id='affects-version-field-container'):
-                    yield Label('Affects Versions').add_class('field_label')
+                    yield Label('Affects Versions')
                     yield MultiSelect(
                         mode=FieldMode.UPDATE,
                         field_id='versions',
@@ -361,7 +361,7 @@ class WorkItemFields(Container, can_focus=False):
                         required=False,
                     )
                 with Horizontal(id='fix-version-field-container'):
-                    yield Label('Fix Versions').add_class('field_label')
+                    yield Label('Fix Versions')
                     yield MultiSelect(
                         mode=FieldMode.UPDATE,
                         field_id='fixVersions',
@@ -370,32 +370,40 @@ class WorkItemFields(Container, can_focus=False):
                         required=False,
                     )
                 with Horizontal(id='story-points-field-container'):
-                    yield Label('Story Points').add_class('field_label')
+                    yield Label('Story Points')
                     yield NumericInput(
                         mode=FieldMode.UPDATE,
                         field_id='story-points',
                         title='Story Points',
+                    )
+                with Horizontal(id='sprint-field-container') as sprint_container:
+                    sprint_container.display = False
+                    yield Label('Sprint')
+                    yield SprintPicker(
+                        mode=FieldMode.UPDATE,
+                        field_id='sprint',
+                        title='Sprint',
                     )
 
             yield DynamicFieldsWidgets()
 
             with DateMetadata():
                 with Horizontal():
-                    yield Label('Due Date').add_class('field_label')
+                    yield Label('Due Date')
                     yield DateInput(
                         mode=FieldMode.UPDATE,
                         field_id='due-date',
                         title='Due Date',
                     )
                 with Horizontal():
-                    yield Label('Updated').add_class('field_label')
+                    yield Label('Updated')
                     yield ReadOnlyInputField(id='updated')
                 with Horizontal():
-                    yield Label('Created').add_class('field_label')
+                    yield Label('Created')
                     yield ReadOnlyInputField(id='created')
                 with Horizontal(id='resolution-date-container') as resolution_date_container:
                     resolution_date_container.display = False
-                    yield Label('Resolution Date').add_class('field_label')
+                    yield Label('Resolution Date')
                     yield ReadOnlyInputField(id='resolution-date')
 
         yield Label('⚠ Pending changes', id='pending-changes-notification-label')
@@ -431,8 +439,8 @@ class WorkItemFields(Container, can_focus=False):
                 form.add_class('narrow')
             else:
                 form.remove_class('narrow')
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
+        except Exception:
+            pass
 
     def on_resize(self) -> None:
         self._update_layout_mode()
@@ -449,8 +457,8 @@ class WorkItemFields(Container, can_focus=False):
                 self.has_pending_changes = has_changes
 
                 self._update_all_field_labels_styling()
-            except Exception as e:
-                logger.debug(f'Exception occurred: {e}')
+            except Exception:
+                pass
 
     def _update_all_field_labels_styling(self) -> None:
         for wrapper in self.dynamic_fields_widgets_container.query(DynamicFieldWrapper):
@@ -465,6 +473,7 @@ class WorkItemFields(Container, can_focus=False):
             'affects-version-field-container': lambda: self.work_item_affects_version_widget,
             'fix-version-field-container': lambda: self.work_item_fix_version_widget,
             'story-points-field-container': lambda: self.work_item_story_points_widget,
+            'sprint-field-container': lambda: self.sprint_picker_widget,
         }
 
         for container_id, widget_getter in static_fields_map.items():
@@ -496,8 +505,7 @@ class WorkItemFields(Container, can_focus=False):
                     label.add_class('pending_field_label')
                 else:
                     label.remove_class('pending_field_label')
-            except Exception as e:
-                logger.debug(f'Exception occurred: {e}')
+            except Exception:
                 continue
 
     async def on_input_changed(self, event: Input.Changed) -> None:
@@ -721,6 +729,8 @@ class WorkItemFields(Container, can_focus=False):
             self.priority_selector.update_enabled = False
 
     async def watch_clear_form(self, clear: bool = False) -> None:
+        if clear and self._loading_form:
+            return
         if clear:
             self.work_item_resolution_field.value = ''
             self.resolution_field_container.display = False
@@ -728,8 +738,6 @@ class WorkItemFields(Container, can_focus=False):
             self.resolution_date_container.display = False
             self.work_item_last_update_date_field.value = ''
             self.reporter_field.value = ''
-            self.work_item_sprint_field.value = ''
-            self.sprint_field_container.display = False
             self.work_item_status_selector.value = Select.BLANK
             self.work_item_status_selector.prompt = 'Select a status'
             self.work_item_status_selector.disabled = False
@@ -753,6 +761,11 @@ class WorkItemFields(Container, can_focus=False):
             self.work_item_story_points_widget._original_value = None
             self.work_item_story_points_widget.update_enabled = False
             self.story_points_field_container.display = False
+
+            self.sprint_picker_widget.sprints = None
+            self.sprint_picker_widget._original_value = None
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
 
     def watch_is_loading(self, loading: bool) -> None:
         with self.app.batch_update():
@@ -783,8 +796,8 @@ class WorkItemFields(Container, can_focus=False):
                     time_tracking_data.remaining_estimate_seconds,
                 )
             return
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
+        except Exception:
+            pass
 
         self.time_tracking_container.remove_children()
 
@@ -861,6 +874,12 @@ class WorkItemFields(Container, can_focus=False):
                 story_points = self.work_item_story_points_widget.get_value_for_update()
 
                 payload[self.work_item_story_points_widget.jira_field_key] = story_points
+
+        if self.sprint_picker_widget.update_enabled:
+            if self.sprint_picker_widget.value_has_changed:
+                payload[self.sprint_picker_widget.jira_field_key] = (
+                    self.sprint_picker_widget.get_value_for_update()
+                )
 
         if CONFIGURATION.get().enable_updating_additional_fields:
             for wrapper in self.dynamic_fields_widgets_container.children:
@@ -1225,9 +1244,9 @@ class WorkItemFields(Container, can_focus=False):
     async def _populate_work_item_fields(self, work_item: JiraWorkItem) -> None:
         work_item_key = work_item.key
 
-        self._loading_form = True
-
         await self.watch_clear_form(True)
+
+        self._loading_form = True
 
         editable_fields: dict = self._determine_editable_fields(work_item)
 
@@ -1274,12 +1293,6 @@ class WorkItemFields(Container, can_focus=False):
                 self.work_item_created_date_field.value = datetime.strftime(
                     work_item.created, '%Y-%m-%d %H:%M'
                 )
-            if work_item.sprint:
-                self.work_item_sprint_field.value = work_item.sprint_name
-                self.sprint_field_container.display = True
-            else:
-                self.work_item_sprint_field.value = ''
-                self.sprint_field_container.display = False
 
             self.work_item_due_date_field.set_original_value(work_item.display_due_date)
             self.work_item_due_date_field.update_enabled = editable_fields.get(
@@ -1297,12 +1310,15 @@ class WorkItemFields(Container, can_focus=False):
             self._setup_affects_version_field(work_item, editable_fields),
             self._setup_fix_version_field(work_item, editable_fields),
             self._setup_story_points_field(work_item, editable_fields),
+            self._setup_sprint_field(work_item, editable_fields),
         ]
 
         if CONFIGURATION.get().enable_updating_additional_fields:
             setup_tasks.append(self._add_dynamic_fields_widgets(work_item, editable_fields))
 
         await asyncio.gather(*setup_tasks)
+
+        self.refresh(layout=True)
 
         self.is_loading = False
 
@@ -1424,6 +1440,10 @@ class WorkItemFields(Container, can_focus=False):
 
         edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
 
+        sprint_field_id = get_sprint_field_id_from_editmeta(edit_meta_fields)
+        if sprint_field_id:
+            skip_fields.add(sprint_field_id)
+
         # When editmeta is null, create read-only widgets for custom fields with values
         if not edit_meta_fields and work_item.custom_fields:
             # Fetch field metadata to get field names
@@ -1522,7 +1542,9 @@ class WorkItemFields(Container, can_focus=False):
                 self.dynamic_fields_widgets_container.display = True
 
             await asyncio.sleep(0)
-            await self._populate_user_picker_widgets(work_item, editable_fields)
+            self.run_worker(
+                self._populate_user_picker_widgets(work_item, editable_fields), exclusive=False
+            )
 
             self._setup_jump_mode()
         else:
@@ -1531,6 +1553,9 @@ class WorkItemFields(Container, can_focus=False):
     async def _populate_user_picker_widgets(
         self, work_item: JiraWorkItem, editable_fields: dict
     ) -> None:
+        # Small delay to ensure widgets are mounted
+        await asyncio.sleep(0.1)
+
         application = cast('JiraApp', self.app)  # noqa: F821
         user_picker_widgets = self.query(UserPicker)
 
@@ -1878,3 +1903,94 @@ class WorkItemFields(Container, can_focus=False):
         else:
             self.work_item_story_points_widget.update_enabled = False
             self.story_points_field_container.display = False
+
+    async def _setup_sprint_field(
+        self, work_item: JiraWorkItem, editable_fields: dict | None
+    ) -> None:
+        config = CONFIGURATION.get()
+
+        if not config.enable_sprint_selection:
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
+            return
+
+        if not editable_fields:
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
+            return
+
+        if not work_item.edit_meta or 'fields' not in work_item.edit_meta:
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
+            return
+
+        sprint_field_id = get_sprint_field_id_from_editmeta(work_item.edit_meta.get('fields', {}))
+
+        if not sprint_field_id:
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
+            return
+
+        field_can_be_updated = editable_fields.get(sprint_field_id, False)
+
+        self.sprint_field_container.display = True
+        self.sprint_picker_widget.jira_field_key = sprint_field_id
+        self.sprint_picker_widget.update_enabled = field_can_be_updated
+
+        current_sprint_id = work_item.sprint.id if work_item.sprint else None
+        if current_sprint_id is not None:
+            self.sprint_picker_widget._original_value = str(current_sprint_id)
+        else:
+            self.sprint_picker_widget._original_value = None
+
+        project_key = work_item.project.key if work_item.project else None
+
+        if not project_key:
+            self.sprint_picker_widget.update_enabled = False
+            self.sprint_field_container.display = False
+            return
+
+        self.sprint_picker_widget.start_loading()
+
+        # Fetch sprints in background so work item renders immediately.
+        self.run_worker(
+            self._populate_static_sprint_picker(
+                work_item_key=work_item.key,
+                project_key=project_key,
+                current_sprint_id=current_sprint_id,
+            ),
+            exclusive=False,
+        )
+
+    async def _populate_static_sprint_picker(
+        self,
+        work_item_key: str,
+        project_key: str,
+        current_sprint_id: int | None,
+    ) -> None:
+
+        try:
+            application = cast('JiraApp', self.app)  # noqa: F821
+            sprints_response = await application.api.get_sprints_for_project(project_key)
+
+            if not self.work_item or self.work_item.key != work_item_key:
+                return
+
+            if not sprints_response.success or not sprints_response.result:
+                logger.warning(f'Failed to fetch sprints for project {project_key}')
+                self.sprint_picker_widget.update_enabled = False
+                self.sprint_field_container.display = False
+                return
+
+            sprints_list = [(sprint.name, sprint.id) for sprint in sprints_response.result]
+            sprints_dict = {
+                'sprints': sprints_list,
+                'selection': current_sprint_id,
+            }
+            self.sprint_picker_widget.sprints = sprints_dict
+
+        except Exception as e:
+            logger.warning(f'Failed to fetch sprints for project {project_key}: {e}')
+            if self.work_item and self.work_item.key == work_item_key:
+                self.sprint_picker_widget.update_enabled = False
+                self.sprint_field_container.display = False

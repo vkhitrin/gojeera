@@ -227,9 +227,22 @@ class Attachment(BaseModel):
 
 @dataclass
 class JiraSprint(BaseModel):
-    id: str
+    id: int
     name: str
-    active: bool
+    state: str
+    boardId: int
+    goal: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
+    completeDate: str | None = None
+
+
+@dataclass
+class JiraBoard(BaseModel):
+    id: int
+    name: str
+    type: str
+    projectKey: str | None = None
 
 
 @dataclass

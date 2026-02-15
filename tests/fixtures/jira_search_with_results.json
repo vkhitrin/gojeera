@@ -54,7 +54,10 @@
         "customfield_10509": "2026-02-05",
         "lastViewed": "2026-02-05T13:24:19.045+0200",
         "customfield_10620": null,
-        "labels": [],
+        "labels": [
+          "backend",
+          "ci-cd"
+        ],
         "customfield_10862": null,
         "customfield_10610": {
           "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
@@ -268,9 +271,9 @@
         },
         "components": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/component/11282",
-            "id": "11282",
-            "name": "Engineering"
+            "self": "https://example.atlassian.net/rest/api/3/component/10001",
+            "id": "10001",
+            "name": "Backend"
           }
         ],
         "customfield_10600": null,
@@ -568,7 +571,7 @@
         "customfield_10928": null,
         "summary": "Update merge request approval settings in repository",
         "environment": null,
-        "duedate": null,
+        "duedate": "2026-03-15",
         "comment": {
           "comments": [
             {
@@ -688,12 +691,11 @@
         "customfield_10593": null,
         "fixVersions": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/version/11485",
-            "id": "11485",
-            "description": "All the Engineering tasks not forcing Staging deployment",
-            "name": "Tasks",
-            "archived": false,
-            "released": false
+            "self": "https://example.atlassian.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true,
+            "archived": false
           }
         ],
         "customfield_10594": null,
@@ -718,7 +720,14 @@
         "customfield_10699": null,
         "customfield_10579": null,
         "timeestimate": 0,
-        "versions": [],
+        "versions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true
+          }
+        ],
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10001",
           "description": "",
@@ -911,7 +920,20 @@
         "customfield_10516": null,
         "customfield_10517": null,
         "customfield_10518": null,
-        "customfield_10519": null
+        "customfield_10519": null,
+        "customfield_10020": [
+          {
+            "id": 10,
+            "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+            "state": "active",
+            "name": "Sprint 10",
+            "startDate": "2026-02-01T09:00:00.000Z",
+            "endDate": "2026-02-15T18:00:00.000Z",
+            "boardId": 1,
+            "goal": "Complete user authentication feature"
+          }
+        ],
+        "customfield_10016": 5.0
       },
       "editmeta": {
         "fields": {
@@ -1111,6 +1133,33 @@
                 "released": false
               }
             ]
+          },
+          "customfield_10020": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "json",
+              "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+              "customId": 10020
+            },
+            "name": "Sprint",
+            "key": "customfield_10020",
+            "operations": [
+              "set"
+            ]
+          },
+          "customfield_10016": {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+              "customId": 10016
+            },
+            "name": "Story Points",
+            "key": "customfield_10016",
+            "operations": [
+              "set"
+            ]
           }
         }
       }
@@ -1209,9 +1258,9 @@
         },
         "components": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/component/11282",
-            "id": "11282",
-            "name": "Engineering"
+            "self": "https://example.atlassian.net/rest/api/3/component/10001",
+            "id": "10001",
+            "name": "Backend"
           }
         ],
         "customfield_10600": null,
@@ -1374,7 +1423,7 @@
         "customfield_10928": null,
         "summary": "Implement automated code quality checks in CI pipeline",
         "environment": null,
-        "duedate": null,
+        "duedate": "2026-04-01",
         "comment": {
           "comments": [
             {
@@ -2012,12 +2061,11 @@
         "customfield_10593": null,
         "fixVersions": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/version/11485",
-            "id": "11485",
-            "description": "All the Engineering tasks not forcing Staging deployment",
-            "name": "Tasks",
-            "archived": false,
-            "released": false
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false,
+            "archived": false
           }
         ],
         "customfield_10594": null,
@@ -2042,7 +2090,14 @@
         "customfield_10699": null,
         "customfield_10579": null,
         "timeestimate": 0,
-        "versions": [],
+        "versions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ],
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10001",
           "description": "",
@@ -2209,7 +2264,20 @@
         "customfield_10516": null,
         "customfield_10517": null,
         "customfield_10518": null,
-        "customfield_10519": null
+        "customfield_10519": null,
+        "customfield_10020": [
+          {
+            "id": 10,
+            "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+            "state": "active",
+            "name": "Sprint 10",
+            "startDate": "2026-02-01T09:00:00.000Z",
+            "endDate": "2026-02-15T18:00:00.000Z",
+            "boardId": 1,
+            "goal": "Complete user authentication feature"
+          }
+        ],
+        "customfield_10016": 3.0
       },
       "editmeta": {
         "fields": {
@@ -2409,6 +2477,33 @@
                 "released": false
               }
             ]
+          },
+          "customfield_10020": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "json",
+              "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+              "customId": 10020
+            },
+            "name": "Sprint",
+            "key": "customfield_10020",
+            "operations": [
+              "set"
+            ]
+          },
+          "customfield_10016": {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+              "customId": 10016
+            },
+            "name": "Story Points",
+            "key": "customfield_10016",
+            "operations": [
+              "set"
+            ]
           }
         }
       }
@@ -2502,9 +2597,9 @@
         },
         "components": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/component/11315",
-            "id": "11315",
-            "name": "PIP"
+            "self": "https://example.atlassian.net/rest/api/3/component/10002",
+            "id": "10002",
+            "name": "Frontend"
           }
         ],
         "customfield_10600": null,
@@ -2693,7 +2788,7 @@
         "customfield_10928": null,
         "summary": "Configure load balancer for staging environment with multiple backend servers",
         "environment": null,
-        "duedate": null,
+        "duedate": "2026-04-15",
         "comment": {
           "comments": [],
           "self": "https://example.atlassian.net/rest/api/3/issue/93992/comment",
@@ -2712,13 +2807,11 @@
         "customfield_10593": null,
         "fixVersions": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/version/14425",
-            "id": "14425",
-            "description": "",
-            "name": "Test Project MNG+INT (Q1RC1) - Feb-15'th (5.2608.X)",
-            "archived": false,
+            "self": "https://example.atlassian.net/rest/api/3/version/10102",
+            "id": "10102",
+            "name": "2.0.0",
             "released": false,
-            "releaseDate": "2026-02-15"
+            "archived": false
           }
         ],
         "customfield_10594": null,
@@ -2743,7 +2836,14 @@
         "customfield_10699": null,
         "customfield_10579": null,
         "timeestimate": null,
-        "versions": [],
+        "versions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ],
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10022",
           "description": "",
@@ -2913,7 +3013,20 @@
         "customfield_10516": null,
         "customfield_10517": null,
         "customfield_10518": null,
-        "customfield_10519": null
+        "customfield_10519": null,
+        "customfield_10020": [
+          {
+            "id": 10,
+            "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+            "state": "active",
+            "name": "Sprint 10",
+            "startDate": "2026-02-01T09:00:00.000Z",
+            "endDate": "2026-02-15T18:00:00.000Z",
+            "boardId": 1,
+            "goal": "Complete user authentication feature"
+          }
+        ],
+        "customfield_10016": 8.0
       },
       "editmeta": {
         "fields": {
@@ -3113,6 +3226,33 @@
                 "released": false
               }
             ]
+          },
+          "customfield_10020": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "json",
+              "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+              "customId": 10020
+            },
+            "name": "Sprint",
+            "key": "customfield_10020",
+            "operations": [
+              "set"
+            ]
+          },
+          "customfield_10016": {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+              "customId": 10016
+            },
+            "name": "Story Points",
+            "key": "customfield_10016",
+            "operations": [
+              "set"
+            ]
           }
         }
       }
@@ -3171,7 +3311,9 @@
         "customfield_10509": "2026-02-05",
         "lastViewed": "2026-02-06T09:57:15.134+0200",
         "customfield_10620": null,
-        "labels": [],
+        "labels": [
+          "infrastructure"
+        ],
         "customfield_10862": null,
         "customfield_10610": {
           "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10660",
@@ -3259,9 +3401,9 @@
         },
         "components": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/component/11282",
-            "id": "11282",
-            "name": "Engineering"
+            "self": "https://example.atlassian.net/rest/api/3/component/10001",
+            "id": "10001",
+            "name": "Backend"
           }
         ],
         "customfield_10600": null,
@@ -3433,7 +3575,7 @@
         "customfield_10928": null,
         "summary": "Request database access for development testing",
         "environment": null,
-        "duedate": null,
+        "duedate": "2026-05-01",
         "comment": {
           "comments": [
             {
@@ -3521,12 +3663,11 @@
         "customfield_10593": null,
         "fixVersions": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/version/11485",
-            "id": "11485",
-            "description": "All the Engineering tasks not forcing Staging deployment",
-            "name": "Tasks",
-            "archived": false,
-            "released": false
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false,
+            "archived": false
           }
         ],
         "customfield_10594": null,
@@ -3551,7 +3692,14 @@
         "customfield_10699": null,
         "customfield_10579": null,
         "timeestimate": 0,
-        "versions": [],
+        "versions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ],
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10001",
           "description": "",
@@ -3722,7 +3870,20 @@
         "customfield_10516": null,
         "customfield_10517": null,
         "customfield_10518": null,
-        "customfield_10519": null
+        "customfield_10519": null,
+        "customfield_10020": [
+          {
+            "id": 10,
+            "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+            "state": "active",
+            "name": "Sprint 10",
+            "startDate": "2026-02-01T09:00:00.000Z",
+            "endDate": "2026-02-15T18:00:00.000Z",
+            "boardId": 1,
+            "goal": "Complete user authentication feature"
+          }
+        ],
+        "customfield_10016": 2.0
       },
       "editmeta": {
         "fields": {
@@ -3922,6 +4083,33 @@
                 "released": false
               }
             ]
+          },
+          "customfield_10020": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "json",
+              "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+              "customId": 10020
+            },
+            "name": "Sprint",
+            "key": "customfield_10020",
+            "operations": [
+              "set"
+            ]
+          },
+          "customfield_10016": {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+              "customId": 10016
+            },
+            "name": "Story Points",
+            "key": "customfield_10016",
+            "operations": [
+              "set"
+            ]
           }
         }
       }
@@ -4015,9 +4203,9 @@
         },
         "components": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/component/11315",
-            "id": "11315",
-            "name": "PIP"
+            "self": "https://example.atlassian.net/rest/api/3/component/10002",
+            "id": "10002",
+            "name": "Frontend"
           }
         ],
         "customfield_10600": null,
@@ -4149,7 +4337,7 @@
         "customfield_10928": null,
         "summary": "Fix container initialization failure in development cluster",
         "environment": null,
-        "duedate": null,
+        "duedate": "2026-05-15",
         "comment": {
           "comments": [],
           "self": "https://example.atlassian.net/rest/api/3/issue/93891/comment",
@@ -4168,13 +4356,11 @@
         "customfield_10593": null,
         "fixVersions": [
           {
-            "self": "https://example.atlassian.net/rest/api/3/version/14425",
-            "id": "14425",
-            "description": "",
-            "name": "Test Project MNG+INT (Q1RC1) - Feb-15'th (5.2608.X)",
-            "archived": false,
+            "self": "https://example.atlassian.net/rest/api/3/version/10102",
+            "id": "10102",
+            "name": "2.0.0",
             "released": false,
-            "releaseDate": "2026-02-15"
+            "archived": false
           }
         ],
         "customfield_10594": null,
@@ -4199,7 +4385,14 @@
         "customfield_10699": null,
         "customfield_10579": null,
         "timeestimate": null,
-        "versions": [],
+        "versions": [
+          {
+            "self": "https://example.atlassian.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ],
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10022",
           "description": "",
@@ -4369,7 +4562,20 @@
         "customfield_10516": null,
         "customfield_10517": null,
         "customfield_10518": null,
-        "customfield_10519": null
+        "customfield_10519": null,
+        "customfield_10020": [
+          {
+            "id": 10,
+            "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+            "state": "active",
+            "name": "Sprint 10",
+            "startDate": "2026-02-01T09:00:00.000Z",
+            "endDate": "2026-02-15T18:00:00.000Z",
+            "boardId": 1,
+            "goal": "Complete user authentication feature"
+          }
+        ],
+        "customfield_10016": 13.0
       },
       "editmeta": {
         "fields": {
@@ -4568,6 +4774,33 @@
                 "name": "2.0.0",
                 "released": false
               }
+            ]
+          },
+          "customfield_10020": {
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": "json",
+              "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+              "customId": 10020
+            },
+            "name": "Sprint",
+            "key": "customfield_10020",
+            "operations": [
+              "set"
+            ]
+          },
+          "customfield_10016": {
+            "required": false,
+            "schema": {
+              "type": "number",
+              "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+              "customId": 10016
+            },
+            "name": "Story Points",
+            "key": "customfield_10016",
+            "operations": [
+              "set"
             ]
           }
         }

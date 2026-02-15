@@ -115,16 +115,16 @@ ignore_users_without_email: true
 ### Custom Fields
 
 ```yaml
-custom_field_id_sprint: "customfield_12345"
+enable_sprint_selection: true
 enable_updating_additional_fields: false
 update_additional_fields_ignore_ids: null
 enable_creating_additional_fields: false
 create_additional_fields_ignore_ids: null
 ```
 
-- **`custom_field_id_sprint`** (optional): The custom field ID
-  used by your Jira instance to identify sprints (e.g.,
-  `customfield_12345`)
+- **`enable_sprint_selection`** (default: `true`): Enable the
+  sprint selection dropdown when creating or updating work items. When
+  `false`, the sprint field uses a plain text input
 - **`enable_updating_additional_fields`** (default: `false`):
   Allow viewing and updating additional custom and system fields
 - **`update_additional_fields_ignore_ids`** (optional): List
@@ -292,20 +292,15 @@ jira:
 
 ## Configuration Tips
 
-1. **Keep your API token secure**: Never commit your configuration file
-   with the actual API token to version control. Consider using
-   environment variables for sensitive data.
-
-2. **Privacy**: If sharing screenshots or demos, enable
+1. **Privacy**: If sharing screenshots or demos, enable
    `obfuscate_personal_info: true` to hide your username and instance
    URL.
 
-3. **Custom sprints**: Most Jira Cloud instances use custom fields for
-   sprints. Find your sprint field ID by:
-   - Going to Jira Settings → Issues → Custom Fields
-   - Finding the "Sprint" field
-   - Using the field ID (e.g., `customfield_10010`)
+2. **Sprint selection**: To enable the sprint dropdown when creating or
+   updating work items, set `enable_sprint_selection: true`.
+   The dropdown will show only active and future
+   sprints from all boards in the project.
 
-4. **JQL filters**: Use local filters for quick access to common
+3. **JQL filters**: Use local filters for quick access to common
    queries. Use remote filters to sync with your team's saved filters in
    Jira.

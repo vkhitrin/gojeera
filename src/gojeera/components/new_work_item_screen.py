@@ -17,7 +17,7 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.constants import PROCESS_OPTIONAL_FIELDS, SKIP_FIELDS, CustomFieldType
-from gojeera.utils.fields import FieldMode
+from gojeera.utils.fields import FieldMode, get_sprint_field_id_from_fields_data
 from gojeera.utils.widgets_factory_utils import (
     DynamicFieldsWidgets,
     StaticFieldsWidgets,
@@ -26,6 +26,8 @@ from gojeera.utils.widgets_factory_utils import (
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.lazy_select import LazySelect
+from gojeera.widgets.multi_select import MultiSelect
+from gojeera.widgets.sprint_picker import SprintPicker
 from gojeera.widgets.user_picker import UserPicker as UserPicker
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.work_item_labels import WorkItemLabels
@@ -57,6 +59,7 @@ class AddWorkItemScreen(ModalScreen):
         self._types_fetched_for_project: str | None = None
         self._users_fetched_for_project: str | None = None
         self._metadata_fetched_for: tuple[str, str] | None = None
+        self._sprint_field_id: str | None = None
 
         self._cache = get_cache()
 
@@ -99,6 +102,10 @@ class AddWorkItemScreen(ModalScreen):
     @property
     def dynamic_fields_container(self) -> DynamicFieldsWidgets:
         return self.query_one(DynamicFieldsWidgets)
+
+    @property
+    def sprint_picker_widget(self) -> SprintPicker:
+        return self.query_one('#sprint', SprintPicker)
 
     @property
     def required_tracker(self) -> Static:
@@ -284,6 +291,15 @@ class AddWorkItemScreen(ModalScreen):
                             compact=True,
                         )
                         yield assignee_widget
+
+                    with Vertical(id='sprint-field-container') as sprint_container:
+                        sprint_container.display = False
+                        yield Label('Sprint').add_class('field_label')
+                        yield SprintPicker(
+                            mode=FieldMode.CREATE,
+                            field_id='sprint',
+                            title='Sprint',
+                        )
 
                 with Vertical(id='summary-field-container'):
                     label = Label('Summary').add_class('field_label')
@@ -751,12 +767,27 @@ class AddWorkItemScreen(ModalScreen):
 
         self._metadata_fetched_for = (project_key, work_item_type_id)
 
-        await self.dynamic_fields_container.remove_children()
+        self.dynamic_fields_container.loading = True
+
         application = cast('JiraApp', self.app)
+        config = CONFIGURATION.get()
+
         response: APIControllerResponse = await application.api.get_work_item_create_metadata(
             project_key, work_item_type_id
         )
+
+        if isinstance(response, Exception):
+            self.dynamic_fields_container.loading = False
+            self.notify(
+                f'Error fetching metadata: {str(response)}',
+                severity='error',
+                title='Create Work Item',
+            )
+            return
+
         if not response.success or not response.result:
+            self.dynamic_fields_container.loading = False
+
             self.notify(
                 'Unable to find the required information for creating work items.',
                 severity='error',
@@ -796,11 +827,14 @@ class AddWorkItemScreen(ModalScreen):
                     else:
                         self.reporter_selector.display = False
 
-            config = CONFIGURATION.get()
             ignore_list = config.create_additional_fields_ignore_ids or []
             enable_additional = config.enable_creating_additional_fields
 
             skip_fields = set(SKIP_FIELDS) | set(ignore_list)
+
+            sprint_field_id = get_sprint_field_id_from_fields_data(fields_data)
+            if sprint_field_id:
+                skip_fields.add(sprint_field_id)
 
             metadata_fields: list[Widget] = build_dynamic_widgets(
                 mode=FieldMode.CREATE,
@@ -810,9 +844,23 @@ class AddWorkItemScreen(ModalScreen):
                 enable_additional=enable_additional,
                 process_optional_fields=set(PROCESS_OPTIONAL_FIELDS),
             )
+            self.dynamic_fields_container.loading = False
+            await self.dynamic_fields_container.remove_children()
             await self.dynamic_fields_container.mount_all(metadata_fields)
 
             self._make_dynamic_widgets_jumpable()
+
+            if sprint_field_id and config.enable_sprint_selection:
+                try:
+                    self._sprint_field_id = sprint_field_id
+                    sprint_container = self.query_one('#sprint-field-container')
+                    sprint_container.display = True
+                    self.sprint_picker_widget.start_loading()
+                    self.run_worker(
+                        self._populate_sprint_picker_widgets(project_key), exclusive=False
+                    )
+                except Exception:
+                    pass
 
             user_picker_widgets = self.dynamic_fields_container.query(UserPicker)
             if user_picker_widgets:
@@ -828,7 +876,6 @@ class AddWorkItemScreen(ModalScreen):
     def _format_field_value(
         self, field_id: str, value: Any, field_metadata: dict, widget: Widget | None = None
     ) -> Any:
-        from gojeera.widgets.multi_select import MultiSelect
 
         if not value:
             return None
@@ -882,6 +929,62 @@ class AddWorkItemScreen(ModalScreen):
                 return {'id': value}
 
         return value
+
+    async def _populate_user_picker_widgets(self, project_key: str) -> None:
+        """Populate user picker widgets with available users for the project.
+
+        Args:
+            project_key: The project key to fetch users for
+        """
+        application = cast('JiraApp', self.app)
+        user_picker_widgets = self.dynamic_fields_container.query(UserPicker)
+
+        if not user_picker_widgets:
+            return
+
+        try:
+            users_response = await application.api.search_users_assignable_to_projects(
+                project_keys=[project_key],
+                active=True,
+            )
+            if users_response.success and users_response.result:
+                users_data = {'users': users_response.result, 'selection': None}
+                for user_picker in user_picker_widgets:
+                    user_picker.users = users_data
+        except Exception as e:
+            logger.warning(f'Failed to fetch users for project {project_key}: {e}')
+
+    async def _populate_sprint_picker_widgets(self, project_key: str) -> None:
+        application = cast('JiraApp', self.app)
+
+        config = CONFIGURATION.get()
+        if not config.enable_sprint_selection:
+            return
+
+        try:
+            sprint_picker = self.sprint_picker_widget
+        except Exception:
+            return
+
+        try:
+            sprints_response = await application.api.get_sprints_for_project(project_key)
+            if sprints_response.success and sprints_response.result:
+                sprints_list = [(sprint.name, sprint.id) for sprint in sprints_response.result]
+                sprints_data = {'sprints': sprints_list, 'selection': None}
+                sprint_picker.sprints = sprints_data
+            else:
+                sprint_picker.sprints = {'sprints': [], 'selection': None}
+                try:
+                    self.query_one('#sprint-field-container').display = False
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f'Failed to fetch sprints for project {project_key}: {e}')
+            sprint_picker.sprints = {'sprints': [], 'selection': None}
+            try:
+                self.query_one('#sprint-field-container').display = False
+            except Exception:
+                pass
 
     @on(Button.Pressed, '#add-work-item-button-save')
     def handle_save(self) -> None:
@@ -941,6 +1044,12 @@ class AddWorkItemScreen(ModalScreen):
                         data[field_id] = formatted_value
                 elif value:
                     data[field_id] = value
+
+            sprint_picker = self.sprint_picker_widget
+            if self._sprint_field_id and sprint_picker.is_mounted:
+                sprint_value = sprint_picker.get_value_for_create()
+                if sprint_value is not None:
+                    data[self._sprint_field_id] = sprint_value
 
             self.notify('Creating the work item...', title='Create Work Item')
             self.dismiss(data)

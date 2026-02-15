@@ -1,6 +1,23 @@
 {
   "changelog": null,
-  "editmeta": null,
+  "editmeta": {
+    "fields": {
+      "customfield_10020": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": "json",
+          "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+          "customId": 10020
+        },
+        "name": "Sprint",
+        "key": "customfield_10020",
+        "operations": [
+          "set"
+        ]
+      }
+    }
+  },
   "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10402.requestTypePractice",
   "fields": {
     "aggregateprogress": {
@@ -2361,7 +2378,19 @@
         }
       ]
     },
-    "workratio": -1
+    "workratio": -1,
+    "customfield_10020": [
+      {
+        "id": 10,
+        "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+        "state": "active",
+        "name": "Sprint 10",
+        "startDate": "2026-02-01T09:00:00.000Z",
+        "endDate": "2026-02-15T18:00:00.000Z",
+        "boardId": 1,
+        "goal": "Complete user authentication feature"
+      }
+    ]
   },
   "fieldsToInclude": null,
   "id": "10001",

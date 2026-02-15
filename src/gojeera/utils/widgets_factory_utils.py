@@ -6,6 +6,7 @@ from textual.containers import Horizontal, VerticalGroup
 from textual.widget import Widget
 from textual.widgets import Label, Select
 
+from gojeera.config import CONFIGURATION
 from gojeera.constants import LOGGER_NAME, CustomFieldType
 from gojeera.utils.fields import FieldMode
 from gojeera.widgets.adf_textarea import ADFTextAreaWidget
@@ -14,6 +15,7 @@ from gojeera.widgets.date_time_input import DateTimeInput
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.numeric_input import NumericInput
 from gojeera.widgets.selection import SelectionWidget
+from gojeera.widgets.sprint_picker import SprintPicker
 from gojeera.widgets.text_input import TextInput
 from gojeera.widgets.url import URL
 from gojeera.widgets.user_picker import UserPicker
@@ -116,6 +118,7 @@ class DynamicFieldWrapper(Horizontal):
     DynamicFieldWrapper > TextInput,
     DynamicFieldWrapper > WorkItemLabels,
     DynamicFieldWrapper > UserPicker,
+    DynamicFieldWrapper > SprintPicker,
     DynamicFieldWrapper > ADFTextAreaWidget {
         width: 1fr;
     }
@@ -553,6 +556,46 @@ class WidgetBuilder:
             create_widget, metadata.name, metadata.required, widget_class=ADFTextAreaWidget
         )
 
+    @staticmethod
+    def build_sprint_selection(
+        mode: FieldMode,
+        metadata: FieldMetadata,
+        current_value: int | None = None,
+    ) -> Widget:
+        """Build sprint selection widget with lazy loading.
+
+        Args:
+            mode: CREATE or UPDATE
+            metadata: Field metadata from Jira
+            current_value: Current sprint ID (int) for UPDATE mode
+
+        Returns:
+            DynamicFieldWrapper containing SprintPicker
+        """
+
+        def create_widget():
+            # Convert int sprint ID to string for SprintPicker
+            value_id = str(current_value) if current_value else None
+
+            if mode == FieldMode.CREATE:
+                return SprintPicker(
+                    mode=mode,
+                    field_id=metadata.field_id,
+                    title=metadata.name,
+                    required=metadata.required,
+                )
+            else:  # UPDATE mode
+                return SprintPicker(
+                    mode=mode,
+                    field_id=metadata.field_id,
+                    title=metadata.name,
+                    required=metadata.required,
+                    original_value=value_id,
+                    field_supports_update=metadata.supports_update,
+                )
+
+        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+
 
 def map_field_to_widget(
     mode: FieldMode,
@@ -560,6 +603,12 @@ def map_field_to_widget(
     current_value: Any = None,
 ) -> Widget | None:
     builder = WidgetBuilder()
+
+    if metadata.custom_type == CustomFieldType.GH_SPRINT.value:
+        logger.debug(
+            f'map_field_to_widget called for sprint field: {metadata.name} ({metadata.field_id}), '
+            f'is_custom_field: {metadata.is_custom_field}, mode: {mode}'
+        )
 
     if metadata.is_custom_field:
         custom_type = metadata.custom_type
@@ -600,6 +649,39 @@ def map_field_to_widget(
             if metadata.allowed_values:
                 options = AllowedValuesParser.parse_options(metadata.allowed_values)
                 return builder.build_selection(mode, metadata, options, current_value=current_value)
+
+        elif custom_type == CustomFieldType.GH_EPIC_LINK.value:
+            return builder.build_text(mode, metadata, current_value)
+
+        elif custom_type == CustomFieldType.GH_SPRINT.value:
+            # Check if sprint selection feature is enabled
+            config = CONFIGURATION.get()
+            logger.debug(
+                f'Processing sprint field {metadata.name} ({metadata.field_id}), '
+                f'enable_sprint_selection: {config.enable_sprint_selection}'
+            )
+            if config.enable_sprint_selection:
+                # Extract sprint ID from current value
+                sprint_id = None
+                if current_value:
+                    if isinstance(current_value, dict):
+                        sprint_id = current_value.get('id')
+                    elif isinstance(current_value, int):
+                        sprint_id = current_value
+                    elif isinstance(current_value, str):
+                        try:
+                            sprint_id = int(current_value)
+                        except ValueError:
+                            pass
+
+                logger.debug(
+                    f'Building SprintPicker for {metadata.name} with sprint_id: {sprint_id}'
+                )
+                return builder.build_sprint_selection(mode, metadata, sprint_id)
+            else:
+                # Fallback to text input if feature disabled
+                logger.debug(f'Sprint selection disabled, using text input for {metadata.name}')
+                return builder.build_text(mode, metadata, current_value)
 
         elif custom_type == CustomFieldType.TEXTAREA.value:
             if mode == FieldMode.UPDATE:
@@ -665,23 +747,54 @@ def build_dynamic_widgets(
     process_optional_fields = process_optional_fields or set()
     current_values = current_values or {}
 
+    logger.debug(f'Building dynamic widgets for {len(fields_data)} fields')
+
     for field_data in fields_data:
         field_id = field_data.get('fieldId', '')
         field_key = field_data.get('key', '')
         field_name = field_data.get('name', '')
         required = field_data.get('required', False)
+        custom_type = field_data.get('schema', {}).get('custom')
+
+        if custom_type == CustomFieldType.GH_SPRINT.value:
+            logger.debug(
+                f'Found sprint field in build_dynamic_widgets: {field_name} ({field_id}), '
+                f'required: {required}, custom_type: {custom_type}'
+            )
+
+    for field_data in fields_data:
+        field_id = field_data.get('fieldId', '')
+        field_key = field_data.get('key', '')
+        field_name = field_data.get('name', '')
+        required = field_data.get('required', False)
+        custom_type = field_data.get('schema', {}).get('custom')
+
+        if custom_type == CustomFieldType.GH_SPRINT.value:
+            logger.debug(
+                f'Processing sprint field in second loop: {field_name} ({field_id}), '
+                f'mode: {mode}, required: {required}'
+            )
 
         field_identifiers = {field_id.lower(), field_key.lower(), field_name.lower()}
         skip_fields_lower = {f.lower() for f in skip_fields}
 
         if any(fid in skip_fields_lower for fid in field_identifiers if fid):
+            if custom_type == CustomFieldType.GH_SPRINT.value:
+                logger.debug('Sprint field SKIPPED: in skip_fields')
             continue
 
         if mode == FieldMode.CREATE and not required:
             if field_id in skip_fields_lower:
+                if custom_type == CustomFieldType.GH_SPRINT.value:
+                    logger.debug('Sprint field SKIPPED: field_id in skip_fields (CREATE mode)')
                 continue
 
             if not enable_additional and field_id not in process_optional_fields:
+                if custom_type == CustomFieldType.GH_SPRINT.value:
+                    logger.debug(
+                        f'Sprint field SKIPPED: not in process_optional_fields '
+                        f'(enable_additional: {enable_additional})'
+                    )
                 continue
 
         metadata = FieldMetadata(field_data)
@@ -693,6 +806,12 @@ def build_dynamic_widgets(
             current_value = current_values.get(field_id)
 
         widget = map_field_to_widget(mode, metadata, current_value)
+
+        if metadata.custom_type == CustomFieldType.GH_SPRINT.value:
+            logger.debug(
+                f'Sprint widget creation result: {widget is not None}, '
+                f'widget type: {type(widget).__name__ if widget else "None"}'
+            )
 
         if widget:
             if field_id and field_id.startswith('customfield'):

@@ -1,0 +1,49 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 4,
+  "isLast": true,
+  "values": [
+    {
+      "id": 9,
+      "self": "https://example.atlassian.net/rest/agile/1.0/sprint/9",
+      "state": "closed",
+      "name": "Sprint 9",
+      "startDate": "2026-01-18T09:00:00.000Z",
+      "endDate": "2026-01-31T18:00:00.000Z",
+      "completeDate": "2026-01-31T18:00:00.000Z",
+      "originBoardId": 1,
+      "goal": "Fix critical bugs and tech debt"
+    },
+    {
+      "id": 10,
+      "self": "https://example.atlassian.net/rest/agile/1.0/sprint/10",
+      "state": "active",
+      "name": "Sprint 10",
+      "startDate": "2026-02-01T09:00:00.000Z",
+      "endDate": "2026-02-15T18:00:00.000Z",
+      "originBoardId": 1,
+      "goal": "Complete user authentication feature"
+    },
+    {
+      "id": 11,
+      "self": "https://example.atlassian.net/rest/agile/1.0/sprint/11",
+      "state": "future",
+      "name": "Sprint 11",
+      "startDate": "2026-02-16T09:00:00.000Z",
+      "endDate": "2026-03-01T18:00:00.000Z",
+      "originBoardId": 1,
+      "goal": "Implement payment processing"
+    },
+    {
+      "id": 12,
+      "self": "https://example.atlassian.net/rest/agile/1.0/sprint/12",
+      "state": "future",
+      "name": "Sprint 12",
+      "startDate": "2026-03-02T09:00:00.000Z",
+      "endDate": "2026-03-15T18:00:00.000Z",
+      "originBoardId": 1,
+      "goal": "Add reporting dashboard"
+    }
+  ]
+}

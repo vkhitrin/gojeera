@@ -4,7 +4,6 @@ from typing import Any
 
 from dateutil.parser import isoparse
 
-from gojeera.config import CONFIGURATION
 from gojeera.constants import LOGGER_NAME
 from gojeera.models import (
     Attachment,
@@ -21,7 +20,11 @@ from gojeera.models import (
     WorkItemStatus,
     WorkItemType,
 )
-from gojeera.utils.fields import get_additional_fields_values, get_custom_fields_values
+from gojeera.utils.fields import (
+    get_additional_fields_values,
+    get_custom_fields_values,
+    get_sprint_field_id_from_editmeta,
+)
 
 logger = logging.getLogger(LOGGER_NAME)
 
@@ -64,15 +67,6 @@ class WorkItemFactory:
                 time_spent_seconds=time_tracking.get('timeSpentSeconds'),
             )
 
-        sprint: JiraSprint | None = None
-        if sprint_custom_field_id := CONFIGURATION.get().custom_field_id_sprint:
-            if sprint_ids := fields.get(sprint_custom_field_id):
-                sprint = JiraSprint(
-                    id=sprint_ids[0].get('id'),
-                    name=sprint_ids[0].get('name'),
-                    active=sprint_ids[0].get('active'),
-                )
-
         attachments: list[Attachment] = []
         for item in fields.get(JiraWorkItemGenericFields.ATTACHMENT.value, []):
             creator = None
@@ -112,6 +106,29 @@ class WorkItemFactory:
             fields,
             [item.value for item in JiraWorkItemGenericFields],
         )
+
+        sprint: JiraSprint | None = None
+        if editmeta := data.get('editmeta', {}):
+            edit_fields = editmeta.get('fields', {})
+            sprint_field_id = get_sprint_field_id_from_editmeta(edit_fields)
+            if sprint_field_id:
+                sprint_value = fields.get(sprint_field_id)
+                if sprint_value and isinstance(sprint_value, list) and len(sprint_value) > 0:
+                    sprint_data = sprint_value[0]
+                    if isinstance(sprint_data, dict):
+                        try:
+                            sprint = JiraSprint(
+                                id=sprint_data.get('id'),
+                                name=sprint_data.get('name'),
+                                state=sprint_data.get('state', 'unknown'),
+                                boardId=sprint_data.get('boardId', 0),
+                                goal=sprint_data.get('goal'),
+                                startDate=sprint_data.get('startDate'),
+                                endDate=sprint_data.get('endDate'),
+                                completeDate=sprint_data.get('completeDate'),
+                            )
+                        except Exception as e:
+                            logger.warning(f'Failed to parse sprint data: {e}')
 
         return JiraWorkItem(
             id=str(data.get('id', '')),

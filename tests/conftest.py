@@ -30,7 +30,48 @@ def mock_configuration():
 
     config = ApplicationConfiguration(
         jira=jira_config,
-        custom_field_id_sprint=None,
+        enable_sprint_selection=True,
+        show_work_item_web_links=True,
+        ignore_users_without_email=True,
+        fetch_attachments_on_delete=True,
+        fetch_comments_on_delete=True,
+        jql_filters=None,
+        jql_filter_label_for_work_items_search=None,
+        search_results_per_page=20,
+        search_results_truncate_work_item_summary=None,
+        log_file=None,
+        log_level='WARNING',
+        confirm_before_quit=True,
+        theme=None,
+        enable_advanced_full_text_search=True,
+        search_on_startup=False,
+        enable_updating_additional_fields=False,
+        update_additional_fields_ignore_ids=None,
+        enable_creating_additional_fields=False,
+        create_additional_fields_ignore_ids=None,
+        enable_images_support=True,
+        obfuscate_personal_info=False,
+    )
+
+    token = CONFIGURATION.set(config)
+
+    yield config
+
+    CONFIGURATION.reset(token)
+
+
+@pytest.fixture
+def mock_configuration_with_sprints():
+    """Configuration with sprint selection enabled for sprint-related tests."""
+    jira_config = JiraConfig(
+        api_username='testuser@example.com',
+        api_token=SecretStr('test-token'),
+        api_base_url='https://example.atlassian.net',
+    )
+
+    config = ApplicationConfiguration(
+        jira=jira_config,
+        enable_sprint_selection=True,
         show_work_item_web_links=True,
         ignore_users_without_email=True,
         fetch_attachments_on_delete=True,
@@ -197,6 +238,20 @@ def mock_project_example_with_fixture_issue_types(mock_jira_issue_types):
             },
         )
     )
+
+
+def mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE'):
+    respx.get(
+        'https://example.atlassian.net/rest/agile/1.0/board',
+        params={'projectKeyOrId': project_key, 'startAt': 0, 'maxResults': 50},
+    ).mock(return_value=Response(200, json=mock_jira_agile_boards))
+
+
+def mock_agile_sprints(mock_jira_agile_sprints, board_id=1):
+    respx.get(
+        f'https://example.atlassian.net/rest/agile/1.0/board/{board_id}/sprint',
+        params={'state': 'active,future', 'startAt': 0, 'maxResults': 50},
+    ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
 
 
 def setup_common_mocks(
@@ -379,6 +434,16 @@ def mock_jira_work_item_link_types():
 @pytest.fixture
 def mock_jira_configuration():
     return load_fixture('jira_configuration.json')
+
+
+@pytest.fixture
+def mock_jira_agile_boards():
+    return load_fixture('jira_agile_boards.json')
+
+
+@pytest.fixture
+def mock_jira_agile_sprints():
+    return load_fixture('jira_agile_sprints.json')
 
 
 # Helper fixtures for common mock patterns
@@ -1327,10 +1392,18 @@ async def mock_jira_api_with_search_results(
     mock_jira_users,
     mock_jira_work_item_link_types,
     mock_jira_transitions,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_myself(mock_jira_myself)
+
+        # Mock Agile API endpoints for sprints (needed since sprint setup runs unconditionally
+        # when enable_sprint_selection=True)
+        mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE')
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=1)
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=2)
 
         # Extract subtasks from parent issue for JQL search handler
         parent_issue = next(
@@ -2520,6 +2593,278 @@ async def mock_jira_api_with_subtask_creation(
 
         # Mock JQL validation endpoint
         mock_jql_validation()
+
+        # Mock work item link types endpoint
+        respx.get('https://example.atlassian.net/rest/api/3/issueLinkType').mock(
+            return_value=Response(200, json=mock_jira_work_item_link_types)
+        )
+
+        yield
+
+
+@pytest.fixture
+async def mock_jira_api_with_sprints(
+    mock_jira_server_info,
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_statuses,
+    mock_jira_myself,
+    mock_jira_users,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
+):
+    """Mock Jira API with sprint selection enabled."""
+    async with respx.mock:
+        mock_server_info(mock_jira_server_info)
+        mock_myself(mock_jira_myself)
+        mock_projects_search(mock_jira_projects)
+        mock_project_example_with_fixture_issue_types(mock_jira_issue_types)
+
+        # Mock users assignable to project
+        respx.get(
+            'https://example.atlassian.net/rest/api/3/user/assignable/multiProjectSearch'
+        ).mock(return_value=Response(200, json=mock_jira_users))
+
+        # Mock Agile API endpoints for sprints
+        mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE')
+        # Mock sprints for board 1
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=1)
+        # Mock sprints for board 2 (same sprints for simplicity)
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=2)
+
+        # Mock create metadata endpoint with sprint field
+        respx.get(
+            url__regex=r'https://example\.atlassian\.net/rest/api/3/issue/createmeta/EXAMPLE/issuetypes/10004.*'
+        ).mock(
+            return_value=Response(
+                200,
+                json={
+                    'fields': [
+                        {'fieldId': 'project', 'required': True, 'operations': ['set']},
+                        {'fieldId': 'issuetype', 'required': True, 'operations': ['set']},
+                        {'fieldId': 'summary', 'required': True, 'operations': ['set']},
+                        {'fieldId': 'description', 'required': False, 'operations': ['set']},
+                        {'fieldId': 'reporter', 'required': False, 'operations': ['set']},
+                        {'fieldId': 'assignee', 'required': False, 'operations': ['set']},
+                        {
+                            'fieldId': 'priority',
+                            'name': 'Priority',
+                            'required': True,
+                            'operations': ['set'],
+                            'schema': {'type': 'priority', 'system': 'priority'},
+                            'allowedValues': [
+                                {'id': '1', 'name': 'Highest'},
+                                {'id': '2', 'name': 'High'},
+                                {'id': '3', 'name': 'Medium'},
+                                {'id': '4', 'name': 'Low'},
+                                {'id': '5', 'name': 'Lowest'},
+                            ],
+                        },
+                        {
+                            'fieldId': 'customfield_10020',
+                            'name': 'Sprint',
+                            'required': False,
+                            'operations': ['set'],
+                            'schema': {
+                                'type': 'array',
+                                'items': 'string',
+                                'custom': 'com.pyxis.greenhopper.jira:gh-sprint',
+                                'customId': 10020,
+                            },
+                        },
+                        {
+                            'fieldId': 'labels',
+                            'name': 'Labels',
+                            'required': False,
+                            'operations': ['add', 'set', 'remove'],
+                            'schema': {'type': 'array', 'items': 'string', 'system': 'labels'},
+                        },
+                        {
+                            'fieldId': 'duedate',
+                            'name': 'Due Date',
+                            'required': False,
+                            'operations': ['set'],
+                            'schema': {'type': 'date', 'system': 'duedate'},
+                        },
+                    ]
+                },
+            )
+        )
+
+        # Mock statuses
+        respx.get('https://example.atlassian.net/rest/api/3/status').mock(
+            return_value=Response(200, json=mock_jira_statuses)
+        )
+
+        # Mock issue types
+        respx.get('https://example.atlassian.net/rest/api/3/issuetype').mock(
+            return_value=Response(200, json=mock_jira_issue_types)
+        )
+
+        # Mock JQL validation endpoint
+        respx.post('https://example.atlassian.net/rest/api/3/jql/parse').mock(
+            return_value=Response(200, json={'valid': True, 'errors': []})
+        )
+
+        # Mock search endpoint (empty results for initial state)
+        respx.post('https://example.atlassian.net/rest/api/3/search/jql').mock(
+            return_value=Response(200, json={'issues': [], 'total': 0})
+        )
+
+        # Mock issue creation endpoint
+        respx.post('https://example.atlassian.net/rest/api/3/issue').mock(
+            return_value=Response(
+                201,
+                json={
+                    'id': '10001',
+                    'key': 'EXAMPLE-3',
+                    'self': 'https://example.atlassian.net/rest/api/3/issue/10001',
+                },
+            )
+        )
+
+        yield
+
+
+@pytest.fixture
+async def mock_jira_api_with_search_results_and_sprints(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_search_with_results,
+    mock_jira_projects,
+    mock_jira_users,
+    mock_jira_work_item_link_types,
+    mock_jira_transitions,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
+):
+    """Mock Jira API with search results and sprint selection enabled."""
+    async with respx.mock:
+        mock_server_info(mock_jira_server_info)
+        mock_myself(mock_jira_myself)
+
+        # Mock Agile API endpoints for sprints
+        mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE')
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=1)
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=2)
+
+        # Extract subtasks from parent issue for JQL search handler
+        parent_issue = next(
+            (
+                issue
+                for issue in mock_jira_search_with_results['issues']
+                if issue['key'] == 'EXAMPLE-19539'
+            ),
+            None,
+        )
+
+        subtasks_for_jql = []
+        if parent_issue:
+            parent_subtasks = parent_issue['fields'].get('subtasks', [])
+            for subtask_summary in parent_subtasks:
+                # Expand the minimal subtask info to full issue format for JQL search response
+                full_subtask = {
+                    'id': subtask_summary['id'],
+                    'key': subtask_summary['key'],
+                    'self': subtask_summary['self'],
+                    'fields': {
+                        'summary': subtask_summary['fields']['summary'],
+                        'status': subtask_summary['fields']['status'],
+                        'priority': subtask_summary['fields']['priority'],
+                        'issuetype': subtask_summary['fields']['issuetype'],
+                        'assignee': subtask_summary['fields'].get('assignee'),
+                        'parent': {
+                            'key': 'EXAMPLE-19539',
+                            'fields': {'summary': parent_issue['fields']['summary']},
+                        },
+                    },
+                }
+                subtasks_for_jql.append(full_subtask)
+
+        # Custom handler for JQL search to return subtasks when querying by parent
+        def search_handler(request):
+            body = json.loads(request.content)
+            jql = body.get('jql', '')
+
+            # Return subtasks for parent search
+            if 'parent=EXAMPLE-19539' in jql:
+                return Response(
+                    200,
+                    json={
+                        'issues': subtasks_for_jql,
+                        'maxResults': len(subtasks_for_jql),
+                        'total': len(subtasks_for_jql),
+                        'startAt': 0,
+                    },
+                )
+
+            # Return main search results for other queries
+            return Response(200, json=mock_jira_search_with_results)
+
+        # Mock search endpoint with custom handler
+        respx.post('https://example.atlassian.net/rest/api/3/search/jql').mock(
+            side_effect=search_handler
+        )
+
+        # Mock approximate count with custom handler
+        def count_handler(request):
+            body = json.loads(request.content)
+            jql = body.get('jql', '')
+            if 'parent=EXAMPLE-19539' in jql:
+                return Response(200, json={'count': len(subtasks_for_jql)})
+            return Response(
+                200, json={'count': len(mock_jira_search_with_results.get('issues', []))}
+            )
+
+        respx.post('https://example.atlassian.net/rest/api/3/search/approximate-count').mock(
+            side_effect=count_handler
+        )
+
+        # Mock get specific work items for each issue in the search results
+        for issue in mock_jira_search_with_results.get('issues', []):
+            issue_key = issue.get('key')
+            if issue_key:
+                respx.get(f'https://example.atlassian.net/rest/api/3/issue/{issue_key}').mock(
+                    return_value=Response(200, json=issue)
+                )
+                # Mock remote links endpoint for each work item
+                remote_links = issue.get('fields', {}).get('remotelink', [])
+                respx.get(
+                    f'https://example.atlassian.net/rest/api/3/issue/{issue_key}/remotelink'
+                ).mock(return_value=Response(200, json=remote_links))
+                # Mock status transitions endpoint with available transitions
+                transitions_data = mock_jira_transitions
+                respx.get(
+                    f'https://example.atlassian.net/rest/api/3/issue/{issue_key}/transitions'
+                ).mock(return_value=Response(200, json=transitions_data))
+
+        # Mock get individual subtasks
+        for subtask in subtasks_for_jql:
+            subtask_key = subtask.get('key')
+            if subtask_key:
+                respx.get(f'https://example.atlassian.net/rest/api/3/issue/{subtask_key}').mock(
+                    return_value=Response(200, json=subtask)
+                )
+                respx.get(
+                    f'https://example.atlassian.net/rest/api/3/issue/{subtask_key}/remotelink'
+                ).mock(return_value=Response(200, json=[]))
+                respx.get(
+                    f'https://example.atlassian.net/rest/api/3/issue/{subtask_key}/transitions'
+                ).mock(return_value=Response(200, json=mock_jira_transitions))
+
+        # Mock projects, issue types, and statuses
+        respx.get('https://example.atlassian.net/rest/api/3/project/search').mock(
+            return_value=Response(200, json=mock_jira_projects)
+        )
+
+        # Mock assignable users endpoints
+        mock_assignable_users(mock_jira_users)
+        mock_assignable_users_single_project(mock_jira_users)
+
+        # Mock JQL validation endpoint
+        respx.post('https://example.atlassian.net/rest/api/3/jql/parse').mock(
+            return_value=Response(200, json={'valid': True, 'errors': []})
+        )
 
         # Mock work item link types endpoint
         respx.get('https://example.atlassian.net/rest/api/3/issueLinkType').mock(

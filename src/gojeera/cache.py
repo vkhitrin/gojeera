@@ -11,6 +11,7 @@ from gojeera.constants import (
     CACHE_TTL_PROJECT_USERS,
     CACHE_TTL_PROJECTS,
     CACHE_TTL_REMOTE_FILTERS,
+    CACHE_TTL_SPRINTS,
     CACHE_TTL_STATUSES,
     CACHE_TTL_TYPES,
     CACHE_TTL_USERS,
@@ -48,6 +49,7 @@ class ApplicationCache:
             'project_types': CACHE_TTL_PROJECT_TYPES,
             'project_statuses': CACHE_TTL_PROJECT_STATUSES,
             'remote_filters': CACHE_TTL_REMOTE_FILTERS,
+            'sprints': CACHE_TTL_SPRINTS,
         }
 
     def _make_key(self, cache_type: str, identifier: str | None = None) -> str:

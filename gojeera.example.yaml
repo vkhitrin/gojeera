@@ -7,7 +7,7 @@ jira:
 jira_base_url: "https://<your-hostname>.atlassian.net"
 show_work_item_web_links: True
 ignore_users_without_email: True
-custom_field_id_sprint: "customfield_<MY-PROJECT-SPRINT-FIELD-ID>"
+enable_sprint_selection: true
 search_results_per_page: 20
 
 # Local JQL filters (shown with ⌂ symbol in autocomplete)

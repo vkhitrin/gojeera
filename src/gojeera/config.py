@@ -94,8 +94,9 @@ class ApplicationConfiguration(BaseSettings):
     ignore_users_without_email: bool = True
     """Controls whether Jira users without an email address configured should be included in the list of users and users
     assignable to projects and work items."""
-    custom_field_id_sprint: str | None = None
-    """The name of the custom field used by your Jira application to identify the sprints. Example: customfield_12345"""
+    enable_sprint_selection: bool = True
+    """If True (default), enables the sprint selection dropdown when creating or updating work items. When False,
+    the sprint field uses a plain text input."""
     fetch_attachments_on_delete: bool = True
     """When this is True (default) the application will fetch the attachments of a work item after an attachment is
     deleted from the list of attachments. This makes the data more accurate but slower due to the extra request. When

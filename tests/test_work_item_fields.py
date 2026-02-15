@@ -16,12 +16,6 @@ async def open_work_item_and_view_fields(pilot):
     await pilot.app.workers.wait_for_complete()
     await asyncio.sleep(0.5)
 
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
     fields_widget = pilot.app.screen.query_one(WorkItemFields)
 
     status_selector = fields_widget.work_item_status_selector
@@ -101,7 +95,7 @@ class TestWorkItemFields:
     ):
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_work_item_and_view_fields)
+        assert snap_compare(app, terminal_size=(120, 60), run_before=open_work_item_and_view_fields)
 
     def test_work_item_fields_with_pending_priority_change(
         self,
@@ -113,7 +107,7 @@ class TestWorkItemFields:
     ):
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=modify_priority_field)
+        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_priority_field)
 
     def test_work_item_fields_with_pending_assignee_change(
         self,
@@ -125,7 +119,7 @@ class TestWorkItemFields:
     ):
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=modify_assignee_field)
+        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_assignee_field)
 
     def test_work_item_fields_with_pending_due_date_change(
         self,
@@ -137,4 +131,4 @@ class TestWorkItemFields:
     ):
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=modify_due_date_field)
+        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_due_date_field)

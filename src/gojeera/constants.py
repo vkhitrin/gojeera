@@ -13,9 +13,6 @@ LOGGER_NAME = 'gojeera'
 LOG_FILE_FILE_NAME = 'gojeera.log'
 """Default log file name."""
 
-API_PATH_PREFIX = '/rest/api/3/'
-"""Jira REST API v3 path prefix."""
-
 RECORDS_PER_PAGE_SEARCH_PROJECTS = 100
 """The maximum number of items to return per page when searching for projects. The number should be between 1 and
 100."""
@@ -62,6 +59,9 @@ CACHE_TTL_PROJECT_STATUSES = 3600
 CACHE_TTL_REMOTE_FILTERS = 3600
 """Cache TTL for remote JQL filters from Jira server."""
 
+CACHE_TTL_SPRINTS = 3600
+"""Cache TTL for project sprints."""
+
 SKIP_FIELDS = [
     'project',
     'issuetype',
@@ -93,6 +93,8 @@ class CustomFieldType(Enum):
     SD_REQUEST_LANGUAGE = (
         'com.atlassian.servicedesk.servicedesk-lingo-integration-plugin:sd-request-language'
     )
+    GH_EPIC_LINK = 'com.pyxis.greenhopper.jira:gh-epic-link'
+    GH_SPRINT = 'com.pyxis.greenhopper.jira:gh-sprint'
 
 
 class SupportedAttachmentVisualizationMimeTypes(Enum):
@@ -139,6 +141,5 @@ class WorkItemUnsupportedUpdateFieldKeys(Enum):
     REPORTER = 'reporter'
     PROJECT = 'project'
     WORK_ITEM_TYPE = 'issuetype'
-    SPRINT = 'sprint'
     TEAM = 'team'
     ENVIRONMENT = 'environment'

@@ -36,6 +36,7 @@ from gojeera.models import (
     JiraGlobalSettings,
     JiraMyselfInfo,
     JiraServerInfo,
+    JiraSprint,
     JiraTimeTrackingConfiguration,
     JiraUser,
     JiraUserGroup,
@@ -2454,3 +2455,66 @@ class APIController:
         suggestions = response.get('suggestions', [])
 
         return APIControllerResponse(result=suggestions)
+
+    async def get_sprints_for_project(self, project_key: str) -> APIControllerResponse:
+        """Get active and future sprints for a project with caching.
+
+        Args:
+            project_key: The project key
+
+        Returns:
+            An instance of `APIControllerResponse` with a list of JiraSprint models and `success = True`.
+            If an error occurs then `success = False` and the error message in the `error` key.
+        """
+        cached_sprints = self.cache.get('sprints', project_key)
+        if cached_sprints is not None:
+            return APIControllerResponse(result=cached_sprints)
+
+        try:
+            sprints_data = await self.api.get_sprints_for_project(
+                project_key, states=['active', 'future']
+            )
+
+            sprints: list[JiraSprint] = []
+            for sprint_data in sprints_data:
+                try:
+                    sprint_id = sprint_data.get('id')
+                    sprint_name = sprint_data.get('name')
+                    sprint_state = sprint_data.get('state')
+                    sprint_board_id = sprint_data.get('boardId')
+
+                    if not sprint_id or not sprint_name or not sprint_state:
+                        self.logger.warning(
+                            f'Skipping sprint with missing required fields: {sprint_data}'
+                        )
+                        continue
+
+                    sprint = JiraSprint(
+                        id=sprint_id,
+                        name=sprint_name,
+                        state=sprint_state,
+                        boardId=sprint_board_id if sprint_board_id is not None else 0,
+                        goal=sprint_data.get('goal'),
+                        startDate=sprint_data.get('startDate'),
+                        endDate=sprint_data.get('endDate'),
+                        completeDate=sprint_data.get('completeDate'),
+                    )
+                    sprints.append(sprint)
+                except Exception as e:
+                    self.logger.warning(f'Failed to parse sprint: {e}')
+                    continue
+
+            self.cache.set('sprints', sprints, project_key)
+
+            return APIControllerResponse(result=sprints)
+
+        except Exception as e:
+            exception_details: dict = self._extract_exception_details(e)
+            self.logger.error(
+                f'Failed to fetch sprints for project {project_key}',
+                extra={
+                    'project_key': project_key,
+                    **exception_details.get('extra', {}),
+                },
+            )
+            return APIControllerResponse(success=False, error=exception_details.get('message'))

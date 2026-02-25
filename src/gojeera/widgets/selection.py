@@ -22,7 +22,7 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
         options: list[tuple[str, str]],
         title: str | None = None,
         required: bool = False,
-        initial_value: Any = Select.BLANK,
+        initial_value: Any = Select.NULL,
         original_value: str | None = None,
         field_supports_update: bool = True,
         allow_blank: bool = True,
@@ -60,7 +60,7 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
                 self.value = original_value
             self.add_class('create-work-item-generic-selector')
         else:
-            if initial_value != Select.BLANK:
+            if initial_value != Select.NULL:
                 self.value = initial_value
             self.add_class('create-work-item-generic-selector')
 
@@ -76,7 +76,7 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
         if self.mode != FieldMode.CREATE:
             raise ValueError('get_value_for_create() only valid in CREATE mode')
 
-        if self.value and self.value != Select.BLANK:
+        if self.value and self.value != Select.NULL:
             return {'id': self.value}
         return None
 

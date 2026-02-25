@@ -490,7 +490,7 @@ class WorkItemFields(Container, can_focus=False):
                 if container_id == 'status-field-container':
                     has_changed = (
                         hasattr(widget, 'value')
-                        and widget.value != Select.BLANK
+                        and widget.value != Select.NULL
                         and hasattr(widget, 'selection')
                         and widget.selection is not None
                     )
@@ -573,7 +573,7 @@ class WorkItemFields(Container, can_focus=False):
                     self.assignee_selector.value = updated_work_item.assignee.account_id
                 else:
                     self.assignee_selector.original_value = None
-                    self.assignee_selector.value = Select.BLANK
+                    self.assignee_selector.value = Select.NULL
 
                 if updated_work_item.priority:
                     self.priority_selector._original_value = updated_work_item.priority.id
@@ -583,7 +583,7 @@ class WorkItemFields(Container, can_focus=False):
                     self.work_item_status_selector.prompt = updated_work_item.status.name
                     self.work_item_status_selector.original_value = updated_work_item.status.id
 
-                    self.work_item_status_selector.value = Select.BLANK
+                    self.work_item_status_selector.value = Select.NULL
 
                 self._setup_time_tracking(updated_work_item.time_tracking)
 
@@ -738,12 +738,12 @@ class WorkItemFields(Container, can_focus=False):
             self.resolution_date_container.display = False
             self.work_item_last_update_date_field.value = ''
             self.reporter_field.value = ''
-            self.work_item_status_selector.value = Select.BLANK
+            self.work_item_status_selector.value = Select.NULL
             self.work_item_status_selector.prompt = 'Select a status'
             self.work_item_status_selector.disabled = False
-            self.assignee_selector.value = Select.BLANK
+            self.assignee_selector.value = Select.NULL
             self.assignee_selector.original_value = None
-            self.priority_selector.value = Select.BLANK
+            self.priority_selector.value = Select.NULL
             self.priority_selector.update_enabled = True
             self.work_item_due_date_field.set_original_value(None)
             await self.work_item_labels_widget.set_labels([])

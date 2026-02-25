@@ -340,7 +340,7 @@ class WidgetBuilder:
         mode: FieldMode,
         metadata: FieldMetadata,
         options: list[tuple[str, str]],
-        initial_value: Any = Select.BLANK,
+        initial_value: Any = Select.NULL,
         current_value: str | None = None,
     ) -> Widget:
         def create_widget():
@@ -349,7 +349,7 @@ class WidgetBuilder:
                 init_val = initial_value
                 if metadata.has_default and metadata.default_value:
                     allow_blank = False
-                    init_val = metadata.default_value.get('id', Select.BLANK)
+                    init_val = metadata.default_value.get('id', Select.NULL)
 
                 return SelectionWidget(
                     mode=mode,
@@ -358,7 +358,7 @@ class WidgetBuilder:
                     title=metadata.name,
                     required=metadata.required,
                     initial_value=init_val,
-                    allow_blank=allow_blank or (init_val == Select.BLANK),
+                    allow_blank=allow_blank or (init_val == Select.NULL),
                     prompt='',
                 )
             else:

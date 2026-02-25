@@ -386,17 +386,17 @@ class MainScreen(Screen):
             work_item_type_str = search_data.get('type')
             search_field_work_item_type = (
                 int(work_item_type_str)
-                if work_item_type_str and work_item_type_str != Select.BLANK
+                if work_item_type_str and work_item_type_str != Select.NULL
                 else None
             )
             status_str = search_data.get('status')
             search_field_status = (
-                int(status_str) if status_str and status_str != Select.BLANK else None
+                int(status_str) if status_str and status_str != Select.NULL else None
             )
 
-            if project_key == Select.BLANK:
+            if project_key == Select.NULL:
                 project_key = None
-            if search_field_assignee == Select.BLANK:
+            if search_field_assignee == Select.NULL:
                 search_field_assignee = None
         elif mode in ('text', 'jql'):
             jql_expression = search_data.get('jql')

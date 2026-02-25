@@ -80,11 +80,11 @@ class SprintPicker(LazySelect, BaseField, BaseUpdateField):
         if self.mode != FieldMode.UPDATE:
             raise ValueError('get_value_for_update() only valid in UPDATE mode')
 
-        if self.value is Select.BLANK or not self.value:
+        if self.value is Select.NULL or not self.value:
             return None
 
         value_str = str(self.value).strip()
-        if value_str and value_str != 'Select.BLANK':
+        if value_str and value_str != 'Select.NULL':
             return int(value_str)
         return None
 
@@ -92,11 +92,11 @@ class SprintPicker(LazySelect, BaseField, BaseUpdateField):
         if self.mode != FieldMode.CREATE:
             raise ValueError('get_value_for_create() only valid in CREATE mode')
 
-        if self.value is Select.BLANK or not self.value:
+        if self.value is Select.NULL or not self.value:
             return None
 
         value_str = str(self.value).strip()
-        if value_str and value_str != 'Select.BLANK':
+        if value_str and value_str != 'Select.NULL':
             return int(value_str)
         return None
 
@@ -109,10 +109,10 @@ class SprintPicker(LazySelect, BaseField, BaseUpdateField):
             return False
 
         current_value = None
-        if self.value is not Select.BLANK and self.value:
+        if self.value is not Select.NULL and self.value:
             value_str = str(self.value).strip()
 
-            if value_str and value_str != 'Select.BLANK':
+            if value_str and value_str != 'Select.NULL':
                 current_value = value_str
 
         original_value = self.original_value

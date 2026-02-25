@@ -53,7 +53,7 @@ async def modify_assignee_field(pilot):
         current_value = assignee_selector.value
 
         for _label, value in assignee_selector._options:
-            if value != current_value and value != Select.BLANK:
+            if value != current_value and value != Select.NULL:
                 assignee_selector.value = value
                 break
         await asyncio.sleep(0.3)

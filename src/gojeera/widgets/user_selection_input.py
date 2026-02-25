@@ -41,7 +41,7 @@ class UserSelectionInput(VimSelect):
 
     @property
     def selection(self) -> str | None:
-        if self.value == Select.BLANK:
+        if self.value == Select.NULL:
             return None
 
         return cast(str | None, self.value) if self.value else None

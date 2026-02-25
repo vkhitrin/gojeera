@@ -118,15 +118,15 @@ class AddWorkItemScreen(ModalScreen):
         work_item_type_value = self.work_item_type_selector.value
         reporter_value = self.reporter_selector.value if self._reporter_is_editable else True
 
-        if not project_value or project_value == Select.BLANK:
+        if not project_value or project_value == Select.NULL:
             pending_fields.append('Project')
-        if not work_item_type_value or work_item_type_value == Select.BLANK:
+        if not work_item_type_value or work_item_type_value == Select.NULL:
             pending_fields.append('Issue Type')
         if not self.summary_field.value:
             pending_fields.append('Summary')
 
         if self._reporter_is_editable:
-            if not reporter_value or reporter_value == Select.BLANK:
+            if not reporter_value or reporter_value == Select.NULL:
                 pending_fields.append('Reporter')
 
         desc_text = self.description_field.text.strip()
@@ -211,7 +211,7 @@ class AddWorkItemScreen(ModalScreen):
                     is_empty = True
 
             elif isinstance(widget, (SelectionWidget, UserPicker)):
-                if not widget.value or widget.value == Select.BLANK:
+                if not widget.value or widget.value == Select.NULL:
                     is_empty = True
 
             elif isinstance(widget, (DateInput, DateTimeInput)):
@@ -678,7 +678,7 @@ class AddWorkItemScreen(ModalScreen):
     @on(Select.Changed, '#create-work-item-select-project')
     def handle_project_selection(self) -> None:
         project_value = self.project_selector.value
-        if project_value and project_value != Select.BLANK:
+        if project_value and project_value != Select.NULL:
             self._selected_project_key = str(project_value)
         else:
             self._selected_project_key = None
@@ -721,9 +721,9 @@ class AddWorkItemScreen(ModalScreen):
 
         if (
             project_value
-            and project_value != Select.BLANK
+            and project_value != Select.NULL
             and work_item_type_value
-            and work_item_type_value != Select.BLANK
+            and work_item_type_value != Select.NULL
         ):
             self.dynamic_fields_container.display = True
 
@@ -819,7 +819,7 @@ class AddWorkItemScreen(ModalScreen):
 
                         if (
                             self._reporter_account_id
-                            and self.reporter_selector.value == Select.BLANK
+                            and self.reporter_selector.value == Select.NULL
                         ):
                             self.reporter_selector.value = self._reporter_account_id
 
@@ -997,11 +997,11 @@ class AddWorkItemScreen(ModalScreen):
             reporter_value = self.reporter_selector.value
 
             data = {
-                'project_key': project_value if project_value != Select.BLANK else None,
+                'project_key': project_value if project_value != Select.NULL else None,
                 'work_item_type_id': work_item_type_value
-                if work_item_type_value != Select.BLANK
+                if work_item_type_value != Select.NULL
                 else None,
-                'assignee_account_id': assignee_value if assignee_value != Select.BLANK else None,
+                'assignee_account_id': assignee_value if assignee_value != Select.NULL else None,
                 'summary': self.summary_field.value,
                 'description': self.description_field.text.strip()
                 if self.description_field.text
@@ -1010,7 +1010,7 @@ class AddWorkItemScreen(ModalScreen):
 
             if self._reporter_is_editable:
                 data['reporter_account_id'] = (
-                    reporter_value if reporter_value != Select.BLANK else None
+                    reporter_value if reporter_value != Select.NULL else None
                 )
 
             if self._parent_work_item_key:

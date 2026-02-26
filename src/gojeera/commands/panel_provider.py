@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 
 from textual.command import DiscoveryHit, Hit, Hits, Provider
@@ -108,6 +109,8 @@ class PanelCommandProvider(Provider):
     async def _insert_panel_on_screen(self, target_screen: Screen) -> None:
         action_method = getattr(target_screen, 'action_insert_alert', None)
         if action_method and callable(action_method):
-            target_screen.run_worker(action_method(), exclusive=False)
+            result = action_method()
+            if inspect.isawaitable(result):
+                target_screen.run_worker(result, exclusive=False)
         else:
             pass

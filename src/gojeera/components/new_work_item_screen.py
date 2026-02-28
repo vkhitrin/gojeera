@@ -767,6 +767,12 @@ class AddWorkItemScreen(ModalScreen):
 
         self._metadata_fetched_for = (project_key, work_item_type_id)
 
+        self._sprint_field_id = None
+        try:
+            self.query_one('#sprint-field-container').display = False
+        except Exception:
+            pass
+
         self.dynamic_fields_container.loading = True
 
         application = cast('JiraApp', self.app)
@@ -850,7 +856,11 @@ class AddWorkItemScreen(ModalScreen):
 
             self._make_dynamic_widgets_jumpable()
 
-            if sprint_field_id and config.enable_sprint_selection:
+            if (
+                sprint_field_id
+                and config.enable_sprint_selection
+                and not self._parent_work_item_key
+            ):
                 try:
                     self._sprint_field_id = sprint_field_id
                     sprint_container = self.query_one('#sprint-field-container')
@@ -958,7 +968,7 @@ class AddWorkItemScreen(ModalScreen):
         application = cast('JiraApp', self.app)
 
         config = CONFIGURATION.get()
-        if not config.enable_sprint_selection:
+        if not config.enable_sprint_selection or self._parent_work_item_key:
             return
 
         try:
@@ -1046,7 +1056,11 @@ class AddWorkItemScreen(ModalScreen):
                     data[field_id] = value
 
             sprint_picker = self.sprint_picker_widget
-            if self._sprint_field_id and sprint_picker.is_mounted:
+            if (
+                self._sprint_field_id
+                and sprint_picker.is_mounted
+                and not self._parent_work_item_key
+            ):
                 sprint_value = sprint_picker.get_value_for_create()
                 if sprint_value is not None:
                     data[self._sprint_field_id] = sprint_value

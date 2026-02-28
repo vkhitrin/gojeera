@@ -116,6 +116,8 @@ class MainScreen(Screen):
         self.focus_item_on_startup = focus_item_on_startup
         self.logger = logging.getLogger(LOGGER_NAME)
         self.current_loaded_work_item_key: str | None = None
+        self._active_search_data: dict | None = None
+        self._active_search_term: str | None = None
 
     @property
     def tabs(self) -> ExtendedTabbedContent:
@@ -367,9 +369,10 @@ class MainScreen(Screen):
         calculate_total: bool = True,
         search_term: str | None = None,
         page: int | None = None,
+        search_data: dict | None = None,
     ) -> WorkItemSearchResult:
-        search_data = self.unified_search_bar.get_search_data()
-        mode = search_data.get('mode', 'basic')
+        effective_search_data = search_data or self.unified_search_bar.get_search_data()
+        mode = effective_search_data.get('mode', 'basic')
 
         search_field_status: int | None = None
         search_field_created_from: date | None = None
@@ -380,16 +383,16 @@ class MainScreen(Screen):
         jql_expression: str | None = None
 
         if mode == 'basic':
-            project_key = search_data.get('project')
-            search_field_assignee = search_data.get('assignee')
+            project_key = effective_search_data.get('project')
+            search_field_assignee = effective_search_data.get('assignee')
 
-            work_item_type_str = search_data.get('type')
+            work_item_type_str = effective_search_data.get('type')
             search_field_work_item_type = (
                 int(work_item_type_str)
                 if work_item_type_str and work_item_type_str != Select.NULL
                 else None
             )
-            status_str = search_data.get('status')
+            status_str = effective_search_data.get('status')
             search_field_status = (
                 int(status_str) if status_str and status_str != Select.NULL else None
             )
@@ -399,7 +402,7 @@ class MainScreen(Screen):
             if search_field_assignee == Select.NULL:
                 search_field_assignee = None
         elif mode in ('text', 'jql'):
-            jql_expression = search_data.get('jql')
+            jql_expression = effective_search_data.get('jql')
 
         jql_query: str | None = self._build_jql_query(
             search_term=search_term,
@@ -524,16 +527,28 @@ class MainScreen(Screen):
         next_page_token: str | None = None,
         search_term: str | None = None,
         page: int | None = None,
+        search_data: dict | None = None,
+        use_active_search: bool = False,
     ) -> None:
         self.search_results_container.show_loading()
         results: WorkItemSearchResult
 
-        search_data = self.unified_search_bar.get_search_data()
-        mode = search_data.get('mode')
-        work_item_key = search_data.get('work_item_key', '').strip() if mode == 'basic' else ''
+        effective_search_data = search_data
+        if use_active_search:
+            effective_search_data = self._active_search_data
+            if search_term is None:
+                search_term = self._active_search_term
+
+        if effective_search_data is None:
+            effective_search_data = self.unified_search_bar.get_search_data()
+
+        mode = effective_search_data.get('mode')
+        work_item_key = (
+            effective_search_data.get('work_item_key', '').strip() if mode == 'basic' else ''
+        )
 
         if mode in ('text', 'jql'):
-            jql = search_data.get('jql', '').strip()
+            jql = effective_search_data.get('jql', '').strip()
             if not jql:
                 self.search_results_container.hide_loading()
                 self.notify(
@@ -560,13 +575,19 @@ class MainScreen(Screen):
             results = await self._search_single_work_item(work_item_key)
         else:
             results = await self._search_work_items(
-                next_page_token=next_page_token, search_term=search_term, page=page
+                next_page_token=next_page_token,
+                search_term=search_term,
+                page=page,
+                search_data=effective_search_data,
             )
 
         list_view = self.search_results_list
 
         list_view.work_item_search_results = results.response
         list_view.focus()
+
+        self._active_search_data = effective_search_data
+        self._active_search_term = search_term
 
         total_pages = 1
         if results.total > 0:
@@ -648,6 +669,10 @@ class MainScreen(Screen):
         self.search_results_list.page = 1
 
         self.search_results_list.token_by_page = {}
+
+        if self.search_results_list.work_item_search_results is not None:
+            self.search_results_container.clear_search_metadata()
+        self.search_results_container.show_loading()
 
         next_page_token: str | None = self.search_results_list.token_by_page.get(
             self.search_results_list.page

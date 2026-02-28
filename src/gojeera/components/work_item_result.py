@@ -398,7 +398,12 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 
             screen = cast(MainScreen, self.screen)
             self.run_worker(
-                screen.search_work_items(next_page_token, page=self.page), exclusive=True
+                screen.search_work_items(
+                    next_page_token,
+                    page=self.page,
+                    use_active_search=True,
+                ),
+                exclusive=True,
             )
             self.refresh_bindings()
 
@@ -411,12 +416,15 @@ class WorkItemSearchResultsScroll(VerticalScroll):
         from gojeera.app import MainScreen
 
         screen = cast(MainScreen, self.screen)
-        self.run_worker(screen.search_work_items(next_page_token, page=self.page), exclusive=True)
+        self.run_worker(
+            screen.search_work_items(next_page_token, page=self.page, use_active_search=True),
+            exclusive=True,
+        )
         self.refresh_bindings()
 
 
 class WorkItemsContainer(Container):
-    pagination: Reactive[dict | None] = reactive(None)
+    pagination: Reactive[dict | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
 
     def __init__(self, *args, **kwargs):
@@ -458,6 +466,10 @@ class WorkItemsContainer(Container):
     def hide_loading(self) -> None:
         self.loading_container.display = False
         self.content_container.display = True
+
+    def clear_search_metadata(self) -> None:
+        self.query_one('#work-items-total-header', Static).update('')
+        self.query_one('#work-items-page-footer', Static).update('')
 
     def watch_pagination(self, response: dict) -> None:
         if response:

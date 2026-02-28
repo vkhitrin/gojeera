@@ -563,11 +563,152 @@ class WorkItemFields(Container, can_focus=False):
         if response and (response.get('work_logs_deleted') or response.get('work_logs_updated')):
             self.run_worker(self._refresh_work_item_fields())
 
+    @staticmethod
+    def _extract_field_id_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+
+        result: list[str] = []
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    item_id = item.get('id')
+                    if item_id is not None:
+                        result.append(str(item_id))
+                elif hasattr(item, 'id'):
+                    result.append(str(item.id))  # pyright: ignore[reportAttributeAccessIssue]
+                elif isinstance(item, (str, int)):
+                    result.append(str(item))
+        return result
+
+    @staticmethod
+    def _extract_dynamic_current_values(work_item: JiraWorkItem) -> dict[str, Any]:
+        current_values: dict[str, Any] = {}
+        edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
+
+        for field_id, field in edit_meta_fields.items():
+            field_key = field.get('key', '')
+
+            if field_id in work_item.get_custom_fields():
+                current_values[field_id] = work_item.get_custom_field_value(field_id)
+            elif field_id in work_item.get_additional_fields():
+                current_values[field_id] = work_item.get_additional_field_value(field_id)
+            elif hasattr(work_item, field_key) and field_key:
+                current_values[field_id] = getattr(work_item, field_key)
+
+        return current_values
+
+    async def _update_dynamic_widgets_values(
+        self, updated_work_item: JiraWorkItem, editable_fields: dict[str, bool]
+    ) -> None:
+        if not CONFIGURATION.get().enable_updating_additional_fields:
+            return
+
+        current_values = self._extract_dynamic_current_values(updated_work_item)
+
+        for child in self.dynamic_fields_widgets_container.children:
+            if isinstance(child, DynamicFieldWrapper):
+                dynamic_widget = child.widget
+                field_key = child.jira_field_key
+            else:
+                dynamic_widget = child
+                field_key = getattr(dynamic_widget, 'jira_field_key', '')
+
+            if not dynamic_widget or not field_key:
+                continue
+
+            current_value = current_values.get(field_key)
+            field_is_editable = editable_fields.get(field_key)
+
+            if isinstance(dynamic_widget, DateInput):
+                dynamic_widget.set_original_value(str(current_value) if current_value else None)
+            elif isinstance(dynamic_widget, DateTimeInput):
+                string_value = str(current_value) if current_value else ''
+                dynamic_widget._original_value = string_value
+                dynamic_widget.value = string_value
+            elif isinstance(dynamic_widget, NumericInput):
+                if current_value is None:
+                    dynamic_widget._original_value = None
+                    dynamic_widget.value = ''
+                else:
+                    float_value = float(current_value)
+                    dynamic_widget._original_value = float_value
+                    dynamic_widget.value = str(float_value)
+            elif isinstance(dynamic_widget, SelectionWidget):
+                selection_id = None
+                if isinstance(current_value, dict):
+                    selection_id = current_value.get('id')
+                elif current_value is not None:
+                    selection_id = str(current_value)
+
+                dynamic_widget._original_value = selection_id
+                try:
+                    dynamic_widget.value = selection_id if selection_id else Select.NULL
+                except Exception:
+                    dynamic_widget.value = Select.NULL
+            elif isinstance(dynamic_widget, URL) or isinstance(dynamic_widget, TextInput):
+                string_value = str(current_value) if current_value else ''
+                dynamic_widget._original_value = string_value
+                dynamic_widget.value = string_value
+            elif isinstance(dynamic_widget, WorkItemLabels):
+                labels = [str(v) for v in current_value] if isinstance(current_value, list) else []
+                await dynamic_widget.set_labels(labels)
+            elif isinstance(dynamic_widget, MultiSelect):
+                options = [
+                    (name, value_id) for name, value_id in dynamic_widget._name_to_id.items()
+                ]
+                original_ids = self._extract_field_id_list(current_value)
+                await dynamic_widget.update_options(
+                    options=options,
+                    original_value=original_ids,
+                    field_supports_update=dynamic_widget.update_enabled,
+                )
+            elif isinstance(dynamic_widget, UserPicker):
+                account_id = None
+                if isinstance(current_value, dict):
+                    account_id = current_value.get('accountId')
+                elif current_value is not None:
+                    account_id = str(current_value)
+
+                dynamic_widget._original_value = account_id
+                dynamic_widget.pending_value = account_id
+                dynamic_widget.value = account_id if account_id else Select.NULL
+
+            if field_is_editable is not None and hasattr(dynamic_widget, 'update_enabled'):
+                widget_with_update_enabled = cast(Any, dynamic_widget)
+                widget_with_update_enabled.update_enabled = bool(field_is_editable)
+
     async def _update_work_item_field_values(self, updated_work_item: JiraWorkItem) -> None:
-        if self.work_item:
+        if not self.work_item:
+            return
+
+        self._loading_form = True
+        try:
             self.work_item.__dict__.update(updated_work_item.__dict__)
+            editable_fields = self._determine_editable_fields(updated_work_item)
 
             with self.app.batch_update():
+                if updated_work_item.resolution_date:
+                    self.work_item_resolution_date_field.value = datetime.strftime(
+                        updated_work_item.resolution_date, '%Y-%m-%d %H:%M'
+                    )
+                    self.resolution_date_container.display = True
+                else:
+                    self.work_item_resolution_date_field.value = ''
+                    self.resolution_date_container.display = False
+
+                if updated_work_item.resolution:
+                    self.work_item_resolution_field.value = updated_work_item.resolution
+                    self.resolution_field_container.display = True
+                else:
+                    self.work_item_resolution_field.value = ''
+                    self.resolution_field_container.display = False
+
+                if updated_work_item.updated:
+                    self.work_item_last_update_date_field.value = datetime.strftime(
+                        updated_work_item.updated, '%Y-%m-%d %H:%M'
+                    )
+
                 if updated_work_item.assignee:
                     self.assignee_selector.original_value = updated_work_item.assignee.account_id
                     self.assignee_selector.value = updated_work_item.assignee.account_id
@@ -578,29 +719,55 @@ class WorkItemFields(Container, can_focus=False):
                 if updated_work_item.priority:
                     self.priority_selector._original_value = updated_work_item.priority.id
                     self.priority_selector.value = updated_work_item.priority.id
+                else:
+                    self.priority_selector._original_value = None
+                    self.priority_selector.value = Select.NULL
 
                 if updated_work_item.status:
                     self.work_item_status_selector.prompt = updated_work_item.status.name
                     self.work_item_status_selector.original_value = updated_work_item.status.id
-
                     self.work_item_status_selector.value = Select.NULL
+
+                self.work_item_due_date_field.set_original_value(updated_work_item.display_due_date)
+                self.work_item_due_date_field.update_enabled = editable_fields.get(
+                    self.work_item_due_date_field.jira_field_key, True
+                )
 
                 self._setup_time_tracking(updated_work_item.time_tracking)
 
-                if updated_work_item.updated:
-                    self.work_item_last_update_date_field.value = datetime.strftime(
-                        updated_work_item.updated, '%Y-%m-%d %H:%M'
-                    )
+            setup_tasks = [
+                self._retrieve_applicable_status_codes(
+                    updated_work_item.key,
+                    updated_work_item.status.name if updated_work_item.status else None,
+                    updated_work_item.status.status_category_color
+                    if updated_work_item.status
+                    else None,
+                ),
+                self._retrieve_users_assignable_to_work_item(
+                    updated_work_item.key,
+                    updated_work_item.assignee,
+                    editable_fields.get(self.assignee_selector.jira_field_key),
+                ),
+                self._setup_labels_field(updated_work_item, editable_fields),
+                self._setup_components_field(updated_work_item, editable_fields),
+                self._setup_affects_version_field(updated_work_item, editable_fields),
+                self._setup_fix_version_field(updated_work_item, editable_fields),
+                self._setup_story_points_field(updated_work_item, editable_fields),
+                self._setup_sprint_field(updated_work_item, editable_fields),
+                self._update_dynamic_widgets_values(updated_work_item, editable_fields),
+            ]
+            await asyncio.gather(*setup_tasks)
 
-                if updated_work_item.due_date:
-                    self.work_item_due_date_field.set_original_value(
-                        updated_work_item.display_due_date
-                    )
+            if CONFIGURATION.get().enable_updating_additional_fields:
+                self.run_worker(
+                    self._populate_user_picker_widgets(updated_work_item, editable_fields),
+                    exclusive=False,
+                )
 
-                if hasattr(updated_work_item, 'labels') and updated_work_item.labels is not None:
-                    await self.work_item_labels_widget.set_labels(updated_work_item.labels)
-
-            self._update_pending_changes_indicator()
+            self.has_pending_changes = False
+            self._update_all_field_labels_styling()
+        finally:
+            self._loading_form = False
 
     async def _refresh_work_item_fields(self) -> None:
         if not self.work_item or not self.work_item.key:
@@ -608,15 +775,17 @@ class WorkItemFields(Container, can_focus=False):
 
         work_item_key = self.work_item.key
 
-        self.work_item = None
-
         application = cast('JiraApp', self.app)  # noqa: F821
         work_item_fields_response = await application.api.get_work_item(
             work_item_id_or_key=work_item_key
         )
         if work_item_fields_response.success and work_item_fields_response.result:
             updated_work_item = work_item_fields_response.result.work_items[0]
-            self.work_item = updated_work_item
+
+            if self.work_item and self.work_item.key == updated_work_item.key:
+                await self._update_work_item_field_values(updated_work_item)
+            else:
+                self.work_item = updated_work_item
 
             if updated_work_item:
                 self.post_message(WorkItemUpdated(updated_work_item))

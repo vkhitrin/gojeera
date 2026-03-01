@@ -372,6 +372,78 @@ def _convert_panels_to_alerts(markdown: str) -> str:
     return '\n'.join(result_lines)
 
 
+def _normalize_single_cell_tables(markdown: str) -> str:
+    """Normalize single-row/single-cell tables to a parseable compact format.
+
+    atlas_doc_parser renders a table with one row and one cell as:
+
+    | A<br> |
+
+    which markdown-it parses as a paragraph, not as a table. This workaround
+    rewrites that shape to:
+
+    | A |
+    |-|
+
+    so Markdown->ADF parsing can recover a table node.
+
+    Args:
+        markdown: Markdown text potentially containing table output from atlas_doc_parser
+
+    Returns:
+        Markdown with single-row/single-cell table rows normalized
+    """
+
+    row_pattern = re.compile(r'^(?P<indent>\s*)\|\s*(?P<cell>(?:\\\||[^|\n])*)\s*<br>\s*\|\s*$')
+    separator_pattern = re.compile(r'^\s*\|\s*-+\s*\|\s*$')
+    table_like_pattern = re.compile(r'^\s*\|.*\|\s*$')
+
+    lines = markdown.split('\n')
+    normalized_lines = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        match = row_pattern.match(line)
+
+        if not match:
+            normalized_lines.append(line)
+            i += 1
+            continue
+
+        previous_line = lines[i - 1] if i > 0 else ''
+        next_line = lines[i + 1] if i + 1 < len(lines) else ''
+
+        previous_is_table_like = bool(table_like_pattern.match(previous_line))
+        next_is_table_like = bool(table_like_pattern.match(next_line))
+        next_is_separator = bool(separator_pattern.match(next_line))
+
+        indent = match.group('indent')
+        cell_text = match.group('cell').strip()
+
+        if next_is_separator and not previous_is_table_like:
+            next_after_separator = lines[i + 2] if i + 2 < len(lines) else ''
+            normalized_lines.append(f'{indent}| {cell_text} |')
+            normalized_lines.append(f'{indent}|-|')
+            if next_after_separator.strip() != '':
+                normalized_lines.append('')
+            i += 2
+            continue
+
+        if not previous_is_table_like and not next_is_table_like:
+            normalized_lines.append(f'{indent}| {cell_text} |')
+            normalized_lines.append(f'{indent}|-|')
+            if next_line.strip() != '':
+                normalized_lines.append('')
+            i += 1
+            continue
+
+        normalized_lines.append(line)
+        i += 1
+
+    return '\n'.join(normalized_lines)
+
+
 def fix_ordered_list_attrs(adf: dict) -> dict:
     """Add missing attrs to orderedList elements.
 
@@ -641,6 +713,8 @@ def convert_adf_to_markdown(value: dict, base_url: str | None = None) -> str:
     markdown = _render_task_checkboxes(markdown)
 
     markdown = _convert_panels_to_alerts(markdown)
+
+    markdown = _normalize_single_cell_tables(markdown)
 
     return markdown
 

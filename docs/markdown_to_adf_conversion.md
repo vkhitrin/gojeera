@@ -64,22 +64,23 @@ Markdown input.
 
 ### Block Patterns
 
-| Markdown Pattern  | ADF Node Type                | Processing Function            |
-| ----------------- | ---------------------------- | ------------------------------ |
-| Paragraph         | `paragraph`                  | `_convert_tokens_to_adf()`     |
-| `#` - `######`    | `heading` (level 1-6)        | `_convert_tokens_to_adf()`     |
-| `- item`          | `bulletList` + `listItem`    | `_convert_tokens_to_adf()`     |
-| `1. item`         | `orderedList` + `listItem`   | `_convert_tokens_to_adf()`     |
-| `- [ ]` / `- [x]` | `taskList` + `taskItem`      | `_convert_task_list_tokens()`  |
-| `lang`            | `codeBlock`                  | `_convert_tokens_to_adf()`     |
-| `> text`          | `blockquote`                 | `_convert_blockquote_tokens()` |
-| `> [!NOTE]`       | `panel` (info)               | `_convert_blockquote_tokens()` |
-| `> [!TIP]`        | `panel` (success)            | `_convert_blockquote_tokens()` |
-| `> [!IMPORTANT]`  | `panel` (note)               | `_convert_blockquote_tokens()` |
-| `> [!WARNING]`    | `panel` (warning)            | `_convert_blockquote_tokens()` |
-| `> [!CAUTION]`    | `panel` (error)              | `_convert_blockquote_tokens()` |
-| Markdown table    | `table` + `tableRow` + cells | `_convert_table_tokens()`      |
-| `---`             | `rule`                       | `_convert_tokens_to_adf()`     |
+| Markdown Pattern    | ADF Node Type                | Processing Function            |
+| ------------------- | ---------------------------- | ------------------------------ |
+| Paragraph           | `paragraph`                  | `_convert_tokens_to_adf()`     |
+| `#` - `######`      | `heading` (level 1-6)        | `_convert_tokens_to_adf()`     |
+| `- item`            | `bulletList` + `listItem`    | `_convert_tokens_to_adf()`     |
+| `1. item`           | `orderedList` + `listItem`   | `_convert_tokens_to_adf()`     |
+| `- [ ]` / `- [x]`   | `taskList` + `taskItem`      | `_convert_task_list_tokens()`  |
+| `lang`              | `codeBlock`                  | `_convert_tokens_to_adf()`     |
+| `> text`            | `blockquote`                 | `_convert_blockquote_tokens()` |
+| `> [!NOTE]`         | `panel` (info)               | `_convert_blockquote_tokens()` |
+| `> [!TIP]`          | `panel` (success)            | `_convert_blockquote_tokens()` |
+| `> [!IMPORTANT]`    | `panel` (note)               | `_convert_blockquote_tokens()` |
+| `> [!WARNING]`      | `panel` (warning)            | `_convert_blockquote_tokens()` |
+| `> [!CAUTION]`      | `panel` (error)              | `_convert_blockquote_tokens()` |
+| Markdown table      | `table` + `tableRow` + cells | `_convert_table_tokens()`      |
+| `\| A \|` + `\|-\|` | Single-cell table workaround | `_convert_table_tokens()`      |
+| `---`               | `rule`                       | `_convert_tokens_to_adf()`     |
 
 ### Inline Patterns
 
@@ -156,6 +157,9 @@ The conversion from ADF to Markdown follows these steps (in order):
     - **`_render_task_checkboxes()`** - Replace `- [ ]`/`- [x]` with `☐`/`☑`
     - **`_convert_panels_to_alerts()`** - Convert panel blockquotes to
       GitHub alerts
+    - **`_normalize_single_cell_tables()`** - Rewrite single-row/single-cell
+      table output from `| A<br> |` to `| A |` + `|-|` so Markdown→ADF parsing
+      recognizes it as a table
 
 ### Markdown → ADF Pipeline
 

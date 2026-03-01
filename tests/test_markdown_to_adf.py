@@ -101,3 +101,25 @@ class TestMarkdownToAdfConversion:
 
         rules = [node for node in content if node.get('type') == 'rule']
         assert len(rules) > 0
+
+    def test_convert_compact_single_cell_table(self):
+        markdown = '| A |\n|-|'
+
+        adf = text_to_adf(markdown)
+
+        assert adf['type'] == 'doc'
+        assert adf['version'] == 1
+        assert len(adf['content']) == 1
+
+        table = adf['content'][0]
+        assert table['type'] == 'table'
+        assert len(table['content']) == 1
+
+        table_row = table['content'][0]
+        assert table_row['type'] == 'tableRow'
+        assert len(table_row['content']) == 1
+
+        cell = table_row['content'][0]
+        assert cell['type'] == 'tableHeader'
+        assert cell['content'][0]['type'] == 'paragraph'
+        assert cell['content'][0]['content'][0]['text'] == 'A'

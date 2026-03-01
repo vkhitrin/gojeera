@@ -49,3 +49,105 @@ class TestAdfToMarkdownConversion:
         assert '🚀' in markdown
 
         assert '---' in markdown or '***' in markdown or '___' in markdown
+
+    def test_single_row_single_cell_table_renders_parseable_markdown(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'table',
+                    'content': [
+                        {
+                            'type': 'tableRow',
+                            'content': [
+                                {
+                                    'type': 'tableCell',
+                                    'content': [
+                                        {
+                                            'type': 'paragraph',
+                                            'content': [{'type': 'text', 'text': 'A'}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(adf)
+
+        assert markdown.strip() == '| A |\n|-|'
+
+    def test_single_cell_table_with_escaped_pipe_renders_parseable_markdown(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'table',
+                    'content': [
+                        {
+                            'type': 'tableRow',
+                            'content': [
+                                {
+                                    'type': 'tableCell',
+                                    'content': [
+                                        {
+                                            'type': 'paragraph',
+                                            'content': [
+                                                {
+                                                    'type': 'text',
+                                                    'text': 'Sample field | Sample value',
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(adf)
+
+        assert markdown.strip() == '| Sample field \\| Sample value |\n|-|'
+
+    def test_single_cell_table_is_terminated_before_next_paragraph(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'table',
+                    'content': [
+                        {
+                            'type': 'tableRow',
+                            'content': [
+                                {
+                                    'type': 'tableCell',
+                                    'content': [
+                                        {
+                                            'type': 'paragraph',
+                                            'content': [{'type': 'text', 'text': 'A'}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    'type': 'paragraph',
+                    'content': [{'type': 'text', 'text': 'Follow-up details go here'}],
+                },
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(adf)
+
+        assert '| A |\n|-|\n\nFollow-up details go here' in markdown

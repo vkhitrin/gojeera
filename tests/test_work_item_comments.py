@@ -1,6 +1,6 @@
 import asyncio
 
-from textual.widgets import TextArea
+from textual.widgets import Button, TextArea
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
@@ -116,24 +116,13 @@ async def delete_comment_and_verify(pilot):
         f'Expected ConfirmationScreen, got {type(screen)}'
     )
 
-    await pilot.press('enter')
+    screen.query_one('#confirmation-button-accept', Button).press()
     await asyncio.sleep(1.5)
 
     await pilot.app.workers.wait_for_complete()
     await asyncio.sleep(1.0)
 
     assert not isinstance(pilot.app.screen, ConfirmationScreen)
-
-    comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
-    application = pilot.app
-    response = await application.api.get_comments('EXAMPLE-19539')
-
-    if response.success and response.result is not None:
-        comments_widget.comments = response.result
-
-    await asyncio.sleep(1.0)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
 
     comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
     new_count = comments_widget.displayed_count

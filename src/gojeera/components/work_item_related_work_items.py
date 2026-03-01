@@ -11,7 +11,7 @@ from textual.widgets import LoadingIndicator
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
-from gojeera.models import JiraWorkItem, RelatedJiraWorkItem
+from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields, RelatedJiraWorkItem
 from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.extended_data_table import ExtendedDataTable
 
@@ -157,7 +157,8 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
             self.notify('Work items linked successfully', title=self.work_item_key)
 
             response = await application.api.get_work_item(
-                self.work_item_key, fields=['work_itemlinks']
+                self.work_item_key,
+                fields=[JiraWorkItemGenericFields.WORK_ITEM_LINKS.value],
             )
             if response.success and response.result and response.result.work_items:
                 work_item: JiraWorkItem = response.result.work_items[0]

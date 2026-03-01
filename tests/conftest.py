@@ -33,8 +33,6 @@ def mock_configuration():
         enable_sprint_selection=True,
         show_work_item_web_links=True,
         ignore_users_without_email=True,
-        fetch_attachments_on_delete=True,
-        fetch_comments_on_delete=True,
         jql_filters=None,
         jql_filter_label_for_work_items_search=None,
         search_results_per_page=20,
@@ -74,8 +72,6 @@ def mock_configuration_with_sprints():
         enable_sprint_selection=True,
         show_work_item_web_links=True,
         ignore_users_without_email=True,
-        fetch_attachments_on_delete=True,
-        fetch_comments_on_delete=True,
         jql_filters=None,
         jql_filter_label_for_work_items_search=None,
         search_results_per_page=20,
@@ -1876,12 +1872,11 @@ async def mock_jira_api_with_related_work_item_link(
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
 
-        # TODO: (vkhitrin) revisit this comment
         # Mock GET work item endpoint with updated issuelinks field for EXAMPLE-19539
         # This MUST be registered BEFORE the general loop below to take priority
-        # The application uses 'work_itemlinks' as the field name in the query
+        # The application uses 'issuelinks' as the field name in the query
         respx.get(
-            url__regex=r'https://example\.atlassian\.net/rest/api/3/issue/EXAMPLE-19539.*work_itemlinks'
+            url__regex=r'https://example\.atlassian\.net/rest/api/3/issue/EXAMPLE-19539.*issuelinks'
         ).mock(
             return_value=Response(
                 200,

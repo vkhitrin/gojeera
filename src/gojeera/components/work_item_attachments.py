@@ -13,8 +13,7 @@ from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.new_attachment_screen import AddAttachmentScreen
 from gojeera.components.save_attachment_screen import SaveAttachmentScreen
 from gojeera.components.view_attachment_screen import ViewAttachmentScreen
-from gojeera.config import CONFIGURATION
-from gojeera.models import Attachment, JiraWorkItemSearchResponse
+from gojeera.models import Attachment
 from gojeera.utils.mime import can_view_attachment
 from gojeera.utils.urls import build_external_url_for_attachment
 from gojeera.widgets.extended_data_table import ExtendedDataTable
@@ -314,27 +313,4 @@ class AttachmentsDataTable(ExtendedDataTable):
                 self.notify(
                     'File deleted successfully',
                 )
-                if CONFIGURATION.get().fetch_attachments_on_delete:
-                    if not self._work_item_key:
-                        self._update_attachments_after_delete()
-                    else:
-                        fetch_response = await screen.api.get_work_item(
-                            self._work_item_key, fields=['attachment']
-                        )
-                        if not fetch_response.success or not fetch_response.result:
-                            self._update_attachments_after_delete()
-                        else:
-                            if (
-                                self.parent is not None
-                                and self.parent.parent is not None
-                                and self.parent.parent.parent is not None
-                            ):
-                                attachments_widget = self.parent.parent.parent
-                                if isinstance(attachments_widget, WorkItemAttachmentsWidget):
-                                    work_item_data = cast(
-                                        JiraWorkItemSearchResponse, fetch_response.result
-                                    )
-                                    new_attachments = work_item_data.work_items[0].attachments
-                                    attachments_widget.attachments = new_attachments
-                else:
-                    self._update_attachments_after_delete()
+                self._update_attachments_after_delete()

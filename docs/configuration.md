@@ -137,20 +137,6 @@ create_additional_fields_ignore_ids: null
   of field IDs to exclude from the create form. Example:
   `['customfield_10050', 'customfield_10051']`
 
-### Performance Settings
-
-```yaml
-fetch_attachments_on_delete: true
-fetch_comments_on_delete: true
-```
-
-- **`fetch_attachments_on_delete`** (bool, default: `true`): Re-fetch
-  attachments after deletion for accuracy (slower). If `false`, update
-  the list in place (faster)
-- **`fetch_comments_on_delete`** (bool, default: `true`): Re-fetch
-  comments after deletion for accuracy (slower). If `false`, update the
-  list in place (faster)
-
 ### JQL Filters
 
 #### Local Filters

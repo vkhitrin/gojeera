@@ -97,14 +97,6 @@ class ApplicationConfiguration(BaseSettings):
     enable_sprint_selection: bool = True
     """If True (default), enables the sprint selection dropdown when creating or updating work items. When False,
     the sprint field uses a plain text input."""
-    fetch_attachments_on_delete: bool = True
-    """When this is True (default) the application will fetch the attachments of a work item after an attachment is
-    deleted from the list of attachments. This makes the data more accurate but slower due to the extra request. When
-    this is False the list of attachments is updated in place."""
-    fetch_comments_on_delete: bool = True
-    """When this is True (default) the application will fetch the comments of a work item after a comment is
-    deleted from the list of comments. This makes the data more accurate but slower due to the extra request. When
-    this is False the list of comments is updated in place."""
     jql_filters: list[dict[str, str]] | None = None
     """A list of pre-defined JQL filters to use in the JQL Expression Editor. Each item should be a dictionary
     with 'label' and 'expression' keys. Example:

@@ -18,7 +18,6 @@ from textual.widgets import LoadingIndicator, Static
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.config import CONFIGURATION
 from gojeera.models import WorkItemComment
 from gojeera.utils.urls import build_external_url_for_comment
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
@@ -205,19 +204,7 @@ class CommentContainer(Vertical, can_focus=False):
             )
         else:
             self.notify('Comment deleted successfully', title=work_item_key)
-            if CONFIGURATION.get().fetch_comments_on_delete:
-                response = await application.api.get_comments(work_item_key)
-                if not response.success or not (result := response.result):
-                    self._update_comments_after_delete()
-                else:
-                    current = self.parent
-                    while current is not None:
-                        if isinstance(current, WorkItemCommentsWidget):
-                            current.comments = result
-                            break
-                        current = current.parent
-            else:
-                self._update_comments_after_delete()
+            self._update_comments_after_delete()
 
     async def update_comment(self, work_item_key: str, comment_id: str, message: str) -> None:
         """Update a comment associated with the work item.
@@ -242,13 +229,18 @@ class CommentContainer(Vertical, can_focus=False):
             )
         else:
             self.notify('Comment updated successfully', title=work_item_key)
-
-            response = await application.api.get_comments(work_item_key)
-            if response.success and (result := response.result):
+            if isinstance(response.result, WorkItemComment):
+                updated_comment = response.result
                 current = self.parent
                 while current is not None:
                     if isinstance(current, WorkItemCommentsWidget):
-                        current.comments = result
+                        updated_comments: list[WorkItemComment] = []
+                        for comment in current.comments or []:
+                            if comment.id == updated_comment.id:
+                                updated_comments.append(updated_comment)
+                            else:
+                                updated_comments.append(comment)
+                        current.comments = updated_comments
                         break
                     current = current.parent
 
@@ -434,9 +426,9 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 )
             else:
                 self.notify('Comment added successfully', title=self.work_item_key)
-                response = await application.api.get_comments(self.work_item_key)
-                if response.success:
-                    self.comments = response.result or []
+                if isinstance(response.result, WorkItemComment):
+                    current_comments = self.comments or []
+                    self.comments = [response.result, *current_comments]
 
     async def watch_comments(self, items: list[WorkItemComment] | None) -> None:
         """Watch for changes to comments."""

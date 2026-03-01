@@ -1,7 +1,6 @@
 import asyncio
-import warnings
 
-import pytest
+from textual.widgets import Button
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp, MainScreen
@@ -71,7 +70,7 @@ async def delete_issue_link_and_verify(pilot):
         f'Expected ConfirmationScreen, got {type(screen)}'
     )
 
-    await pilot.press('enter')
+    screen.query_one('#confirmation-button-accept', Button).press()
 
     await asyncio.sleep(1.0)
     await pilot.app.workers.wait_for_complete()
@@ -86,14 +85,9 @@ async def delete_issue_link_and_verify(pilot):
 
     final_count = related_widget.displayed_count
 
-    if final_count == initial_count:
-        warnings.warn(
-            f'BUG DETECTED: RelatedWorkItemsWidget did not reload after deletion. '
-            f'Count remained at {final_count} instead of decreasing to {initial_count - 1}. '
-            f'The widget should automatically refresh when returning from the confirmation screen.',
-            UserWarning,
-            stacklevel=2,
-        )
+    assert final_count == initial_count - 1, (
+        f'Expected {initial_count - 1} related work items after deletion, got {final_count}'
+    )
 
 
 async def create_issue_link_and_verify(pilot):
@@ -193,8 +187,6 @@ class TestWorkItemRelatedWorkItems:
             run_before=select_work_item_and_highlight_related_work_item,
         )
 
-    @pytest.mark.documents_app_bug
-    @pytest.mark.filterwarnings('always::UserWarning')
     def test_delete_issue_link_and_verify_in_table(
         self,
         snap_compare,

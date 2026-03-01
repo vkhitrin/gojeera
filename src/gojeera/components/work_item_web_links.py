@@ -1,5 +1,5 @@
-import logging
 from typing import TYPE_CHECKING, cast
+from uuid import uuid4
 
 from textual import on
 from textual.app import ComposeResult
@@ -16,8 +16,6 @@ from gojeera.widgets.extended_data_table import ExtendedDataTable
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp, MainScreen
-
-logger = logging.getLogger('gojeera')
 
 
 class RemoteLinksDataTable(ExtendedDataTable):
@@ -52,6 +50,37 @@ class RemoteLinksDataTable(ExtendedDataTable):
         self._selected_link_title: str | None = None
         self._work_item_key: str | None = work_item_key
 
+    def _get_remote_links_widget(self) -> 'WorkItemRemoteLinksWidget | None':
+        current = self.parent
+        while current is not None:
+            if isinstance(current, WorkItemRemoteLinksWidget):
+                return current
+            current = current.parent
+        return None
+
+    async def _resolve_selected_link_id(self) -> bool:
+        if not self._selected_link_id or not self._selected_link_id.startswith('local-'):
+            return True
+        if not self._work_item_key:
+            return False
+
+        widget = self._get_remote_links_widget()
+        if not widget:
+            return False
+
+        await widget.fetch_remote_links(self._work_item_key)
+
+        selected_url = self._selected_link_url
+        selected_title = self._selected_link_title
+        if not selected_url:
+            return False
+
+        for link in widget.remote_links or []:
+            if link.url == selected_url and link.title == selected_title:
+                self._selected_link_id = link.id
+                return True
+        return False
+
     @on(ExtendedDataTable.RowHighlighted)
     def highlighted(self, event: ExtendedDataTable.RowHighlighted) -> None:
         if event.row_key.value is not None:
@@ -83,21 +112,23 @@ class RemoteLinksDataTable(ExtendedDataTable):
                     severity='error',
                     title=self._work_item_key,
                 )
-                self.notify(
-                    'Select a row, e.g. by clicking on it, before attempting to edit the link.',
-                    severity='error',
-                    title=self._work_item_key,
-                )
-        else:
-            await self.app.push_screen(
-                RemoteLinkScreen(
-                    self._work_item_key,
-                    link_id=self._selected_link_id,
-                    initial_url=self._selected_link_url,
-                    initial_title=self._selected_link_title,
-                ),
-                callback=self.handle_edit_save,
+            return
+
+        if not await self._resolve_selected_link_id():
+            self.notify(
+                'The link is still syncing. Please try again in a moment.', severity='warning'
             )
+            return
+
+        await self.app.push_screen(
+            RemoteLinkScreen(
+                self._work_item_key,
+                link_id=self._selected_link_id,
+                initial_url=self._selected_link_url,
+                initial_title=self._selected_link_title,
+            ),
+            callback=self.handle_edit_save,
+        )
 
     async def handle_edit_save(self, data: dict | None = None) -> None:
         if data and data.get('link_id'):
@@ -136,16 +167,31 @@ class RemoteLinksDataTable(ExtendedDataTable):
             else:
                 self.notify('Link updated successfully', title=self._work_item_key)
 
-                self.parent.parent.work_item_key = self._work_item_key  # type: ignore[union-attr]
+                widget = self._get_remote_links_widget()
+                if not widget:
+                    return
+
+                updated_links: list[WorkItemRemoteLink] = []
+                for link in getattr(widget, 'remote_links', None) or []:
+                    if link.id == link_id:
+                        updated_links.append(
+                            WorkItemRemoteLink(
+                                id=link.id,
+                                global_id=link.global_id,
+                                relationship=link.relationship,
+                                title=link_title,
+                                summary=link.summary,
+                                url=link_url,
+                                status_resolved=link.status_resolved,
+                            )
+                        )
+                    else:
+                        updated_links.append(link)
+                cast('WorkItemRemoteLinksWidget', widget).remote_links = updated_links
 
     async def action_delete_remote_link(self) -> None:
         if not self._selected_link_id:
             if self._work_item_key:
-                self.notify(
-                    'Select a row, e.g. by clicking on it, before attempting to delete the link.',
-                    severity='error',
-                    title=self._work_item_key,
-                )
                 self.notify(
                     'Select a row, e.g. by clicking on it, before attempting to delete the link.',
                     severity='error',
@@ -165,6 +211,11 @@ class RemoteLinksDataTable(ExtendedDataTable):
             if not self._selected_link_id:
                 self.notify('No link selected', severity='error')
                 return
+            if not await self._resolve_selected_link_id():
+                self.notify(
+                    'The link is still syncing. Please try again in a moment.', severity='warning'
+                )
+                return
 
             application = cast('JiraApp', self.app)  # noqa: F821
             response: APIControllerResponse = await application.api.delete_work_item_remote_link(
@@ -178,14 +229,21 @@ class RemoteLinksDataTable(ExtendedDataTable):
                 )
             else:
                 self.notify('Link deleted successfully', title=self._work_item_key)
-
-                self.parent.parent.work_item_key = self._work_item_key  # type: ignore[union-attr]
+                widget = self._get_remote_links_widget()
+                if not widget:
+                    return
+                cast('WorkItemRemoteLinksWidget', widget).remote_links = [
+                    link
+                    for link in (getattr(widget, 'remote_links', None) or [])
+                    if link.id != self._selected_link_id
+                ]
 
 
 class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
     """This widget handles adding and updating the list of remote links (aka. web links) associated to a work item."""
 
     work_item_key: Reactive[str | None] = reactive(None, always_update=True)
+    remote_links: Reactive[list[WorkItemRemoteLink] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)
 
     def __init__(self):
@@ -265,11 +323,22 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
             )
         else:
             self.notify('Link added successfully', title=self.work_item_key)
-
-            self.work_item_key = self.work_item_key
+            current_links = self.remote_links or []
+            self.remote_links = [
+                *current_links,
+                WorkItemRemoteLink(
+                    id=f'local-{uuid4().hex}',
+                    global_id='',
+                    relationship='',
+                    title=link_title,
+                    summary='',
+                    url=link_url,
+                    status_resolved=None,
+                ),
+            ]
+            self.run_worker(self.fetch_remote_links(self.work_item_key), exclusive=True)
 
     async def fetch_remote_links(self, work_item_key: str) -> None:
-        links: list[WorkItemRemoteLink] = []
         screen = cast('MainScreen', self.screen)  # noqa: F821
         response: APIControllerResponse = await screen.api.get_work_item_remote_links(work_item_key)
         if work_item_key:
@@ -293,19 +362,18 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
                 self.hide_loading()
             return
 
-        links = response.result or []
+        self.remote_links = response.result or []
 
+    def watch_remote_links(self, links: list[WorkItemRemoteLink] | None) -> None:
         with self.app.batch_update():
-            if existing_table := self.data_table:
-                await existing_table.remove()
+            self.content_container.remove_children()
 
             if not links:
-                self.loading_container.display = False
-                self.content_container.display = True
+                self.hide_loading()
                 self.displayed_count = 0
                 return
 
-            table = RemoteLinksDataTable(work_item_key)
+            table = RemoteLinksDataTable(self._work_item_key or '')
             table.add_columns('Title', 'URL', 'Relationship', 'Status')
 
             link_count = 0
@@ -329,19 +397,18 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
                 )
                 link_count += 1
 
-            await self.content_container.mount(table)
+            self.content_container.mount(table)
             self.hide_loading()
             self.displayed_count = link_count
 
     def watch_work_item_key(self, work_item_key: str | None = None) -> None:
         self._work_item_key = work_item_key
-
-        if existing_table := self.data_table:
-            existing_table.remove()
+        self.remote_links = None
 
         if not work_item_key:
             self.loading_container.display = False
             self.content_container.display = True
+            self.displayed_count = 0
             return
 
         self.show_loading()

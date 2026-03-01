@@ -1,9 +1,8 @@
 import asyncio
 from pathlib import Path
 import tempfile
-import warnings
 
-import pytest
+from textual.widgets import Button
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
@@ -119,7 +118,7 @@ async def delete_attachment_and_verify(pilot):
         f'Expected ConfirmationScreen, got {type(screen)}'
     )
 
-    await pilot.press('enter')
+    screen.query_one('#confirmation-button-accept', Button).press()
     await asyncio.sleep(1.0)
 
     await pilot.app.workers.wait_for_complete()
@@ -127,10 +126,10 @@ async def delete_attachment_and_verify(pilot):
 
     assert not isinstance(pilot.app.screen, ConfirmationScreen)
 
-    warnings.warn(
-        'AttachmentsWidget does not reload after deletion - snapshot shows 1 attachment instead of 0',
-        UserWarning,
-        stacklevel=2,
+    attachments_widget = pilot.app.screen.query_one(WorkItemAttachmentsWidget)
+    new_count = attachments_widget.displayed_count
+    assert new_count == initial_count - 1, (
+        f'Expected {initial_count - 1} attachments, got {new_count}'
     )
 
 
@@ -145,8 +144,6 @@ class TestWorkItemAttachments:
             run_before=select_work_item_with_attachments_and_highlight_row,
         )
 
-    @pytest.mark.documents_app_bug
-    @pytest.mark.filterwarnings('always::UserWarning')
     def test_delete_attachment_and_verify_in_table(
         self,
         snap_compare,

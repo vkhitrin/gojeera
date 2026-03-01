@@ -1,5 +1,6 @@
 import asyncio
 
+from textual.widgets import Button
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
@@ -145,17 +146,11 @@ async def delete_web_link_and_verify(pilot):
             f'Expected ConfirmationScreen, got {type(screen)}'
         )
 
-        await pilot.press('enter')
+        screen.query_one('#confirmation-button-accept', Button).press()
         await asyncio.sleep(1.5)
 
         await pilot.app.workers.wait_for_complete()
         await asyncio.sleep(1.0)
-
-        web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
-        web_links_widget.work_item_key = 'EXAMPLE-19539'
-        await asyncio.sleep(1.0)
-        await pilot.app.workers.wait_for_complete()
-        await asyncio.sleep(0.5)
 
         assert not isinstance(pilot.app.screen, ConfirmationScreen)
 

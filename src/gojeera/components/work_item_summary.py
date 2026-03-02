@@ -205,6 +205,26 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
             callback=self.handle_edit_work_item_info,
         )
 
+    async def _apply_updated_work_item_info(
+        self,
+        work_item: JiraWorkItem,
+        updates: dict,
+        screen: 'MainScreen',
+    ) -> None:
+        if 'summary' in updates:
+            work_item.summary = str(updates.get('summary') or '').strip()
+
+        if 'description' in updates:
+            description = updates.get('description')
+            work_item.description = description if description else None
+
+        self.work_item_summary_widget.update(work_item.summary)
+        await self._setup_work_item_description(work_item)
+
+        await screen.search_results_list.update_work_item_in_list(  # type: ignore[attr-defined]
+            work_item
+        )
+
     async def handle_edit_work_item_info(self, updates: dict | None) -> None:
         if not updates:
             return
@@ -230,9 +250,7 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
                 self.notify(
                     f'Work item {current_work_item.key} updated successfully',
                 )
-
-                screen.current_loaded_work_item_key = None
-                self.run_worker(screen.fetch_work_items(current_work_item.key), exclusive=True)
+                await self._apply_updated_work_item_info(current_work_item, updates, screen)
             else:
                 application.logger.error(
                     'Failed to update the work item',

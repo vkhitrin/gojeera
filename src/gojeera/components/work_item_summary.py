@@ -2,9 +2,9 @@ import traceback
 from typing import TYPE_CHECKING, cast
 
 from textual.app import ComposeResult
-from textual.containers import Center, Container, Vertical, VerticalGroup, VerticalScroll
+from textual.containers import Container, Vertical, VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator, Static
+from textual.widgets import Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.edit_work_item_info_screen import EditWorkItemInfoScreen
@@ -63,6 +63,7 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
 
     work_item: Reactive[JiraWorkItem | None] = reactive(None, always_update=True)
     clear_information: Reactive[bool] = reactive(False, always_update=True)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
         super().__init__(id='work_item_summary_container')
@@ -92,17 +93,10 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
         )
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one('#work-item-info-loading-container', expect_type=Center)
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one('#work-item-info-content', expect_type=VerticalGroup)
 
     def compose(self) -> ComposeResult:
-        with Center(id='work-item-info-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(id='work-item-info-content'):
             with WorkItemSummaryContainer():
                 yield WorkItemSummary()
@@ -167,15 +161,16 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
             self.work_item_description_widget.visible = False
 
     def show_loading(self) -> None:
-        self.loading_container.display = True
-        self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        self.loading_container.display = False
-        self.content_container.display = True
+        self.is_loading = False
 
         self.work_item_summary_widget.visible = True
         self.summary_container_widget.visible = True
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     def signal_fields_widget_ready(self) -> None:
         self._fields_widget_ready = True

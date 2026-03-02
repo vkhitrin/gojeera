@@ -4,9 +4,8 @@ import webbrowser
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, VerticalGroup, VerticalScroll
+from textual.containers import VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
@@ -50,6 +49,7 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
 
     work_items: Reactive[list[RelatedJiraWorkItem] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
         super().__init__(id='related_work_items')
@@ -68,10 +68,6 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         self._work_item_key = value
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one('.tab-loading-container', expect_type=Center)
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one('.tab-content-container', expect_type=VerticalGroup)
 
@@ -80,9 +76,6 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         return self.query_one(ExtendedDataTable)
 
     def compose(self) -> ComposeResult:
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
             table = ExtendedDataTable(id='related-work-items-table', cursor_type='row')
@@ -97,12 +90,13 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         table.add_column('Summary', key='summary', width=50)
 
     def show_loading(self) -> None:
-        self.loading_container.display = True
-        self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        self.loading_container.display = False
-        self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     def add_relationship(self, data: dict | None = None) -> None:
         if data:
@@ -267,8 +261,7 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
             table.clear()
 
             if not items:
-                self.loading_container.display = False
-                self.content_container.display = True
+                self.is_loading = False
                 table.display = False
                 self.displayed_count = 0
                 return
@@ -286,6 +279,5 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
                     key=work_item.id,
                 )
 
-            self.loading_container.display = False
-            self.content_container.display = True
+            self.is_loading = False
             self.displayed_count = len(items)

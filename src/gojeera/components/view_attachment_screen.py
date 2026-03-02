@@ -8,9 +8,10 @@ from PIL import UnidentifiedImageError
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Center, Horizontal, VerticalScroll
+from textual.reactive import Reactive, reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Footer, LoadingIndicator, Static, TextArea
+from textual.widgets import Button, Footer, Static, TextArea
 from textual_image.widget import Image
 
 from gojeera.api_controller.controller import APIControllerResponse
@@ -38,6 +39,7 @@ class ViewAttachmentScreen(ModalScreen):
         ('ctrl+s', 'download_attachment', 'Download'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self, attachment_id: str, attachment_file_type: str, attachment_file_name: str):
         super().__init__()
@@ -70,7 +72,7 @@ class ViewAttachmentScreen(ModalScreen):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='attachment-content'):
                 with Center():
-                    yield LoadingIndicator()
+                    pass
             with Horizontal(id='modal_footer'):
                 yield Button(
                     'Download', variant='success', id='attachment-button-download', compact=True
@@ -84,7 +86,8 @@ class ViewAttachmentScreen(ModalScreen):
         container = self.center_widget
 
         with self.app.batch_update():
-            await container.remove_children(LoadingIndicator)
+            self.is_loading = False
+            await container.remove_children()
             if response.success and response.result:
                 self._attachment_content = response.result
                 try:
@@ -107,6 +110,7 @@ class ViewAttachmentScreen(ModalScreen):
                 )
 
     async def on_mount(self) -> None:
+        self.is_loading = True
         self.run_worker(self._download_attachment(self._attachment_id))
 
         if CONFIGURATION.get().jumper.enabled:
@@ -163,6 +167,9 @@ class ViewAttachmentScreen(ModalScreen):
             return
         jumper = self.query_one(ExtendedJumper)
         jumper.show()
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.center_widget.loading = loading
 
 
 class FileAttachmentWidget:

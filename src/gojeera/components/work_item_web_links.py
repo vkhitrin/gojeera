@@ -4,9 +4,8 @@ from uuid import uuid4
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, VerticalGroup, VerticalScroll
+from textual.containers import VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
@@ -245,6 +244,7 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
     work_item_key: Reactive[str | None] = reactive(None, always_update=True)
     remote_links: Reactive[list[WorkItemRemoteLink] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
         super().__init__(id='work_item_remote_links')
@@ -253,10 +253,6 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
     @property
     def help_anchor(self) -> str:
         return '#web-links'
-
-    @property
-    def loading_container(self) -> Center:
-        return self.query_one('.tab-loading-container', Center)
 
     @property
     def content_container(self) -> VerticalGroup:
@@ -270,21 +266,18 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
             return None
 
     def compose(self) -> ComposeResult:
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
-        with VerticalGroup(classes='tab-content-container') as content:
-            content.display = True
+        content = VerticalGroup(classes='tab-content-container')
+        content.display = True
+        return [content]
 
     def show_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = True
-            self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = False
-            self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     async def action_add_remote_link(self) -> None:
         if self.work_item_key:
@@ -406,8 +399,7 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
         self.remote_links = None
 
         if not work_item_key:
-            self.loading_container.display = False
-            self.content_container.display = True
+            self.is_loading = False
             self.displayed_count = 0
             return
 

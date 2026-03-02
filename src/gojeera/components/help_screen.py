@@ -2,8 +2,9 @@ import inspect
 import os
 
 from textual.app import ComposeResult
+from textual.reactive import Reactive, reactive
 from textual.screen import ModalScreen
-from textual.widgets import Footer, LoadingIndicator, Markdown, Static
+from textual.widgets import Footer, Markdown, Static
 
 from gojeera.widgets.gojeera_markdown_viewer import GojeeraMarkdownViewer
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -17,6 +18,7 @@ class HelpScreen(ModalScreen):
         ('question_mark', 'app.pop_screen', 'Close Help'),
     ]
     TITLE = 'gojeera Help'
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self, anchor: str | None = None):
         super().__init__()
@@ -32,8 +34,6 @@ class HelpScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('gojeera Help', id='modal_title')
-
-            yield LoadingIndicator(id='help_loading')
         yield Footer(show_command_palette=False)
 
     @staticmethod
@@ -45,15 +45,14 @@ class HelpScreen(ModalScreen):
         return '/'.join(directories)
 
     async def on_mount(self):
+        self.is_loading = True
         self.call_after_refresh(self._load_content)
 
     async def _load_content(self) -> None:
         viewer = GojeeraMarkdownViewer(
             self._content, show_table_of_contents=True, id='help_viewer', open_links=False
         )
-
-        loading = self.query_one('#help_loading', LoadingIndicator)
-        await loading.remove()
+        self.is_loading = False
         await self.query_one('#modal_outer').mount(viewer)
 
         if self._anchor:
@@ -61,6 +60,9 @@ class HelpScreen(ModalScreen):
 
     def on_markdown_link_clicked(self, message: Markdown.LinkClicked) -> None:
         message.stop()
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.query_one('#modal_outer').loading = loading
 
     def on_click(self) -> None:
         self.app.pop_screen()

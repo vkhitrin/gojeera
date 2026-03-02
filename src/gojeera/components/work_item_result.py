@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, cast
 from rich.text import Text
 from textual.binding import Binding
 from textual.containers import (
-    Center,
     Container,
     Horizontal,
     Vertical,
@@ -12,7 +11,7 @@ from textual.containers import (
     VerticalScroll,
 )
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator, Static
+from textual.widgets import Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraWorkItem, JiraWorkItemSearchResponse
@@ -426,32 +425,25 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 class WorkItemsContainer(Container):
     pagination: Reactive[dict | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = CONFIGURATION.get()
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one('.tab-loading-container', Center)
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one('.tab-content-container', VerticalGroup)
 
     def compose(self):
-        """Compose the search results container with loading indicator."""
+        """Compose the search results container."""
         yield Static('', id='work-items-total-header')
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
             yield WorkItemSearchResultsScroll()
         yield Static('', id='work-items-page-footer')
 
     def on_mount(self) -> None:
-        self.loading_container.can_focus = False
         self.content_container.can_focus = False
         self.query_one('#work-items-total-header', Static).can_focus = False
         self.query_one('#work-items-page-footer', Static).can_focus = False
@@ -460,12 +452,13 @@ class WorkItemsContainer(Container):
             self.query_one(WorkItemSearchResultsScroll).jump_mode = 'focus'  # type: ignore[attr-defined]
 
     def show_loading(self) -> None:
-        self.loading_container.display = True
-        self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        self.loading_container.display = False
-        self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     def clear_search_metadata(self) -> None:
         self.query_one('#work-items-total-header', Static).update('')

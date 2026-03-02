@@ -6,14 +6,13 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import (
-    Center,
     Horizontal,
     Vertical,
     VerticalGroup,
     VerticalScroll,
 )
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator, Static
+from textual.widgets import Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.comment_screen import CommentScreen
@@ -332,6 +331,7 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
     comments: Reactive[list[WorkItemComment] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
         super().__init__(id='work_item_comments')
@@ -351,13 +351,6 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         self._work_item_key = value
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one(
-            '.tab-loading-container',
-            expect_type=Center,
-        )
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one(
             '.tab-content-container',
@@ -369,27 +362,22 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         return self.query_one(CommentsScrollView)
 
     def compose(self) -> ComposeResult:
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
 
             yield CommentsScrollView(id='comments-scroll-view')
 
     def on_mount(self) -> None:
-        self.loading_container.can_focus = False
         self.content_container.can_focus = False
 
     def show_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = True
-            self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = False
-            self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     def save_comment(self, content: str | None) -> None:
         if content and content.strip():
@@ -439,8 +427,7 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
             with self.app.batch_update():
                 for container in scroll_view.query(CommentContainer):
                     await container.remove()
-                self.loading_container.display = False
-                self.content_container.display = True
+                self.is_loading = False
                 self.displayed_count = 0
                 self._last_comment_ids = None
             return

@@ -3,9 +3,8 @@ from typing import TYPE_CHECKING, cast
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, VerticalGroup, VerticalScroll
+from textual.containers import VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator
 
 from gojeera.models import JiraWorkItem
 from gojeera.utils.urls import build_external_url_for_work_item
@@ -18,6 +17,7 @@ if TYPE_CHECKING:
 class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
     work_items: Reactive[list[JiraWorkItem] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     BINDINGS = [
         Binding(
@@ -57,10 +57,6 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
         self._work_item_key = value
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one('.tab-loading-container', Center)
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one('.tab-content-container', VerticalGroup)
 
@@ -69,9 +65,6 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
         return self.query_one(ExtendedDataTable)
 
     def compose(self) -> ComposeResult:
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
             table = ExtendedDataTable(id='subtasks-table', cursor_type='row')
@@ -86,12 +79,13 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
         table.add_column('Assignee', key='assignee', width=25)
 
     def show_loading(self) -> None:
-        self.loading_container.display = True
-        self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        self.loading_container.display = False
-        self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     async def action_load_selected_work_item(self) -> None:
         table = self.data_table
@@ -149,16 +143,14 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
             table.clear()
 
             if not items:
-                self.loading_container.display = False
-                self.content_container.display = True
+                self.is_loading = False
                 table.display = False
                 self.displayed_count = 0
                 return
 
             table.display = True
 
-            self.loading_container.display = False
-            self.content_container.display = True
+            self.is_loading = False
 
             for item in items:
                 work_item_type_name = item.work_item_type.name if item.work_item_type else 'Unknown'
@@ -180,6 +172,5 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
                     key=item.key,
                 )
 
-            self.loading_container.display = False
-            self.content_container.display = True
+            self.is_loading = False
             self.displayed_count = len(items)

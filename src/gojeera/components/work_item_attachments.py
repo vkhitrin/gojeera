@@ -4,9 +4,8 @@ from typing import cast
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Container, VerticalGroup, VerticalScroll
+from textual.containers import Container, VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import LoadingIndicator
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
@@ -31,6 +30,7 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
 
     attachments: Reactive[list[Attachment] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
         super().__init__(id='attachments')
@@ -49,10 +49,6 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
         self._work_item_key = value
 
     @property
-    def loading_container(self) -> Center:
-        return self.query_one('.tab-loading-container', Center)
-
-    @property
     def content_container(self) -> VerticalGroup:
         return self.query_one('.tab-content-container', VerticalGroup)
 
@@ -61,23 +57,18 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
         return self.query_one(AttachmentsContainer)
 
     def compose(self) -> ComposeResult:
-        with Center(classes='tab-loading-container') as loading_container:
-            loading_container.display = False
-            yield LoadingIndicator()
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
-            with AttachmentsContainer():
-                pass
+            yield AttachmentsContainer()
 
     def show_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = True
-            self.content_container.display = False
+        self.is_loading = True
 
     def hide_loading(self) -> None:
-        with self.app.batch_update():
-            self.loading_container.display = False
-            self.content_container.display = True
+        self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.content_container.loading = loading
 
     async def action_add_attachment(self) -> None:
         if self.work_item_key:
@@ -126,9 +117,7 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
 
         with self.app.batch_update():
             container.remove_children()
-
-            self.loading_container.display = False
-            self.content_container.display = True
+            self.is_loading = False
 
             if not attachments:
                 self.displayed_count = 0

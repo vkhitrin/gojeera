@@ -215,10 +215,6 @@ UnifiedSearchBar>Button:focus>Static {
   align: center middle;
 }
 
-#work-item-loading-indicator {
-  display: block;
-}
-
 #search-results-container {
   width: 25%;
   border: none;
@@ -587,12 +583,6 @@ WorkItemContainer.-hover .work-item-assignee {
   display: none;
 }
 
-.tab-loading-container {
-  align: center middle;
-  height: 100%;
-  width: 100%;
-}
-
 .tab-content-container {
   height: 100%;
   width: 100%;
@@ -824,11 +814,6 @@ HelpScreen GojeeraMarkdownViewer {
   padding: 0 2;
   scrollbar-size-vertical: 1;
   border: none;
-}
-
-HelpScreen #help_loading {
-  height: 1fr;
-  align: center middle;
 }
 
 CustomTitle {
@@ -2601,13 +2586,6 @@ JQLEditorScreen>Vertical {
   border: round $foreground;
   background: $background 70%;
   padding: 0 1;
-}
-
-#work-item-info-loading-container {
-  align: center middle;
-  height: 100%;
-  width: 100%;
-  display: none;
 }
 
 #work-item-info-description-scroll-container {

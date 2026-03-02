@@ -13,8 +13,9 @@ from textual.app import App, ComposeResult, InvalidThemeError
 from textual.binding import Binding
 from textual.command import CommandPalette
 from textual.containers import Center, Horizontal, Vertical
+from textual.reactive import Reactive, reactive
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Input, LoadingIndicator, Select
+from textual.widgets import Button, Footer, Input, Select
 from textual.worker import Worker
 
 from gojeera.api_controller.controller import APIController, APIControllerResponse
@@ -62,6 +63,8 @@ from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 
 class MainScreen(Screen):
     """The main screen of the application."""
+
+    is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     BINDINGS = [
         Binding(
@@ -197,7 +200,7 @@ class MainScreen(Screen):
                 yield WorkItemsContainer(id='search-results-container')
 
                 with Center(id='work-item-loading-container'):
-                    yield LoadingIndicator(id='work-item-loading-indicator')
+                    pass
 
                 yield WorkItemInformation()
 
@@ -237,7 +240,7 @@ class MainScreen(Screen):
         for content_tab in content_tabs:
             content_tab.can_focus = False
             if CONFIGURATION.get().jumper.enabled:
-                content_tab.jump_mode = 'click'
+                setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
 
         work_item_container = self.query_one(
             '#work-item-fields-container', expect_type=WorkItemFields
@@ -784,10 +787,7 @@ class MainScreen(Screen):
         if self.current_loaded_work_item_key == selected_work_item_key:
             return
 
-        self.work_item_loading_container.display = True
-
-        self.information_panel.display = False
-        self.fields_panel.display = False
+        self.is_loading = True
 
         self.work_item_info_container.show_loading()
         self.work_item_comments_widget.show_loading()
@@ -820,7 +820,7 @@ class MainScreen(Screen):
         )
 
         if not main_success or not main_response.result:
-            self.work_item_loading_container.display = False
+            self.is_loading = False
 
             self.work_item_info_container.hide_loading()
             self.work_item_comments_widget.hide_loading()
@@ -900,14 +900,21 @@ class MainScreen(Screen):
                     tabs_widget.display = True
                     tabs_widget.disabled = False
 
-                    self.work_item_loading_container.display = False
+                    self.is_loading = False
 
                     self.information_panel.display = True
                     self.fields_panel.display = True
             except Exception as e:
                 self.logger.error(f'Failed to signal WorkItemInformation: {e}')
 
-                self.work_item_loading_container.display = False
+                self.is_loading = False
+
+    def watch_is_loading(self, loading: bool) -> None:
+        self.work_item_loading_container.display = loading
+        self.work_item_loading_container.loading = loading
+        if loading:
+            self.information_panel.display = False
+            self.fields_panel.display = False
 
     async def clone_work_item(self, work_item_key: str) -> None:
         if not work_item_key:

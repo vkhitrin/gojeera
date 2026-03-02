@@ -791,8 +791,8 @@ class UnifiedSearchBar(Container):
             )
             return
 
-        mode_selector = self.query_one('#search-mode-selector', Select)
-        mode_selector.value = 'jql'
+        self.search_mode = 'jql'
+        self._update_mode_display('jql')
 
         jql_input = self.query_one('#unified-search-input', Input)
 

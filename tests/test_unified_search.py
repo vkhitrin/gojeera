@@ -184,7 +184,35 @@ async def open_jql_filters_dropdown(pilot):
     await asyncio.sleep(0.5)
 
 
+async def apply_initial_jql_filter_for_snapshot(pilot):
+    await wait_for_mount(pilot)
+
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    await search_bar.set_initial_jql_filter('Open Issues Assigned To Me')
+    await asyncio.sleep(0.2)
+
+
 class TestUnifiedSearch:
+    def test_set_initial_jql_filter(
+        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+    ):
+        filter_label = 'Open Issues Assigned To Me'
+        filter_expression = 'assignee = currentUser() AND resolution = Unresolved'
+
+        mock_configuration.jql_filters = [
+            {
+                'label': filter_label,
+                'expression': filter_expression,
+            }
+        ]
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=apply_initial_jql_filter_for_snapshot,
+        )
+
     def test_unified_search_basic_mode_initial(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):

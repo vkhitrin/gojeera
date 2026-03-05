@@ -11,14 +11,14 @@ from gojeera.config import CONFIGURATION
 class AppHeader(Vertical):
     """Custom header widget that displays the connected Jira instance."""
 
-    jira_url: reactive[str] = reactive('Loading...')
+    jira_url: reactive[str] = reactive('')
 
     @staticmethod
     def _obfuscate_string(value: str) -> str:
         return 'obfuscated' if value else value
 
     def on_mount(self) -> None:
-        self.set_timer(0.5, self._update_jira_url)
+        self._update_jira_url()
 
     def _update_jira_url(self) -> None:
         config = CONFIGURATION.get()
@@ -42,7 +42,7 @@ class AppHeader(Vertical):
 
         authenticated_user = config.jira.api_username
 
-        jira_url = self.jira_url
+        jira_url = self.jira_url or config.jira.api_base_url
         if config.obfuscate_personal_info:
             jira_url = self._obfuscate_string(jira_url)
             authenticated_user = self._obfuscate_string(authenticated_user)

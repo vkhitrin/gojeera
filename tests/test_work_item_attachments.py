@@ -83,6 +83,9 @@ async def upload_attachment_and_verify(pilot):
         assert new_attachment.filename == 'new_test_file.txt', (
             f'Expected filename "new_test_file.txt", got "{new_attachment.filename}"'
         )
+
+        await pilot.app.workers.wait_for_complete()
+        await asyncio.sleep(0.2)
     finally:
         if test_file_path.exists():
             test_file_path.unlink()

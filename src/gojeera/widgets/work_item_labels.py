@@ -40,6 +40,7 @@ class WorkItemLabels(MultiSelect):
             initial_value=original_value if mode == FieldMode.CREATE else None,
             original_value=original_value if mode == FieldMode.UPDATE else None,
             field_supports_update=supports_update,
+            allow_new_tags=True,
             **kwargs,
         )
 

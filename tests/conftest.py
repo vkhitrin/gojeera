@@ -250,6 +250,25 @@ def mock_agile_sprints(mock_jira_agile_sprints, board_id=1):
     ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
 
 
+def mock_agile_endpoints_for_example_project(
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
+):
+    mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE')
+    mock_agile_sprints(mock_jira_agile_sprints, board_id=1)
+    mock_agile_sprints(mock_jira_agile_sprints, board_id=2)
+    # Fallback matchers for requests with reordered or extra query params.
+    respx.get(url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board\?.*').mock(
+        return_value=Response(200, json=mock_jira_agile_boards)
+    )
+    respx.get(
+        url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board/1/sprint\?.*'
+    ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
+    respx.get(
+        url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board/2/sprint\?.*'
+    ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
+
+
 def setup_common_mocks(
     mock_jira_server_info,
     mock_jira_myself,
@@ -560,6 +579,8 @@ async def mock_jira_api_with_attachment_upload(
     mock_transitions_data,
     mock_project_issue_types,
     mock_jira_new_attachment,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         setup_common_mocks(
@@ -571,6 +592,7 @@ async def mock_jira_api_with_attachment_upload(
         )
         mock_search_with_results(mock_jira_search_with_results)
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock get specific work items for each issue in the search results
         for issue in mock_jira_search_with_results.get('issues', []):
@@ -604,6 +626,9 @@ async def mock_jira_api_with_attachment_upload(
                 remote_links = issue.get('fields', {}).get('remotelink', [])
                 respx.get(
                     f'https://example.atlassian.net/rest/api/3/issue/{issue_key}/remotelink'
+                ).mock(return_value=Response(200, json=remote_links))
+                respx.get(
+                    url__regex=rf'https://example\.atlassian\.net/rest/api/3/issue/{issue_key}/remotelink.*'
                 ).mock(return_value=Response(200, json=remote_links))
                 # Mock status transitions endpoint
                 respx.get(
@@ -667,11 +692,14 @@ async def mock_jira_api_with_issue_link_deletion(
     mock_jira_statuses,
     mock_project_issue_types,
     mock_jira_priorities,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_search_with_results(mock_jira_search_with_results)
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock projects endpoint
         respx.get('https://example.atlassian.net/rest/api/3/project').mock(
@@ -821,6 +849,8 @@ async def mock_jira_api_with_attachment_deletion(
     mock_jira_statuses,
     mock_transitions_data,
     mock_project_issue_types,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -829,6 +859,8 @@ async def mock_jira_api_with_attachment_deletion(
 
         # Mock search endpoint with results
         mock_search_with_results(mock_jira_search_with_results)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
@@ -849,7 +881,7 @@ async def mock_jira_api_with_attachment_deletion(
                     issue_without_attachment['fields']['attachment'] = []
 
                     respx.get(
-                        url__regex=rf'https://example\.atlassian\.net/rest/api/3/issue/{issue_key}.*'
+                        url__regex=rf'https://example\.atlassian\.net/rest/api/3/issue/{issue_key}(?:\?|$).*'
                     ).mock(
                         side_effect=[
                             Response(200, json=issue_with_attachment),
@@ -865,6 +897,9 @@ async def mock_jira_api_with_attachment_deletion(
                 remote_links = issue.get('fields', {}).get('remotelink', [])
                 respx.get(
                     f'https://example.atlassian.net/rest/api/3/issue/{issue_key}/remotelink'
+                ).mock(return_value=Response(200, json=remote_links))
+                respx.get(
+                    url__regex=rf'https://example\.atlassian\.net/rest/api/3/issue/{issue_key}/remotelink.*'
                 ).mock(return_value=Response(200, json=remote_links))
 
                 # Mock status transitions endpoint
@@ -930,6 +965,8 @@ async def mock_jira_api_with_web_link_deletion(
     mock_jira_statuses,
     mock_transitions_data,
     mock_project_issue_types,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -938,6 +975,7 @@ async def mock_jira_api_with_web_link_deletion(
 
         # Mock search endpoint with results
         mock_search_with_results(mock_jira_search_with_results)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
@@ -1048,6 +1086,8 @@ async def mock_jira_api_with_comment_deletion(
     mock_jira_statuses,
     mock_transitions_data,
     mock_project_issue_types,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -1056,6 +1096,7 @@ async def mock_jira_api_with_comment_deletion(
 
         # Mock search endpoint with results
         mock_search_with_results(mock_jira_search_with_results)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
@@ -1648,6 +1689,7 @@ async def mock_jira_api_with_new_work_item(
                         },
                         {
                             'fieldId': 'labels',
+                            'key': 'labels',
                             'name': 'Labels',
                             'required': False,
                             'operations': ['add', 'set', 'remove'],
@@ -1860,6 +1902,8 @@ async def mock_jira_api_with_related_work_item_link(
     mock_jira_users,
     mock_jira_work_item_link_types,
     mock_jira_transitions,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -1871,6 +1915,21 @@ async def mock_jira_api_with_related_work_item_link(
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+
+        # Mock Agile API endpoints used by sprint picker workers
+        mock_agile_boards(mock_jira_agile_boards, project_key='EXAMPLE')
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=1)
+        mock_agile_sprints(mock_jira_agile_sprints, board_id=2)
+        # Fallback matchers for agile requests where query params differ in order/shape
+        respx.get(url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board\?.*').mock(
+            return_value=Response(200, json=mock_jira_agile_boards)
+        )
+        respx.get(
+            url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board/1/sprint\?.*'
+        ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
+        respx.get(
+            url__regex=r'https://example\.atlassian\.net/rest/agile/1\.0/board/2/sprint\?.*'
+        ).mock(return_value=Response(200, json=mock_jira_agile_sprints))
 
         # Mock GET work item endpoint with updated issuelinks field for EXAMPLE-19539
         # This MUST be registered BEFORE the general loop below to take priority
@@ -2027,6 +2086,7 @@ async def mock_jira_api_with_related_work_item_link(
         mock_statuses([])
 
         # Mock assignable users endpoint
+        mock_assignable_users_single_project(mock_jira_users)
         mock_assignable_users(mock_jira_users)
 
         # Mock user assignable multi project search endpoint
@@ -2053,6 +2113,30 @@ async def mock_jira_api_with_related_work_item_link(
             return_value=Response(201, json={})
         )
 
+        # Mock the newly linked work item details (used by follow-up refresh flows)
+        respx.get('https://example.atlassian.net/rest/api/3/issue/EXAMPLE-100').mock(
+            return_value=Response(
+                200,
+                json={
+                    'id': '99999',
+                    'key': 'EXAMPLE-100',
+                    'self': 'https://example.atlassian.net/rest/api/3/issue/99999',
+                    'fields': {
+                        'summary': 'Test related work item for linking',
+                        'status': {
+                            'name': 'In Progress',
+                            'statusCategory': {'key': 'indeterminate', 'colorName': 'yellow'},
+                        },
+                        'priority': {'id': '10002', 'name': 'High'},
+                        'issuetype': {'name': 'Task', 'subtask': False},
+                    },
+                },
+            )
+        )
+        respx.get('https://example.atlassian.net/rest/api/3/issue/EXAMPLE-100/remotelink').mock(
+            return_value=Response(200, json=[])
+        )
+
         yield
 
 
@@ -2065,6 +2149,8 @@ async def mock_jira_api_with_web_link_creation(
     mock_jira_users,
     mock_jira_work_item_link_types,
     mock_jira_transitions,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -2073,6 +2159,7 @@ async def mock_jira_api_with_web_link_creation(
 
         # Mock search endpoint with results
         mock_search_with_results(mock_jira_search_with_results)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
@@ -2188,7 +2275,8 @@ async def mock_jira_api_with_web_link_creation(
         mock_issue_types([])
         mock_statuses([])
 
-        # Mock assignable users endpoint
+        # Mock assignable users endpoints
+        mock_assignable_users_single_project(mock_jira_users)
         mock_assignable_users(mock_jira_users)
 
         # Mock user assignable multi project search endpoint
@@ -2229,6 +2317,8 @@ async def mock_jira_api_with_comment_creation(
     mock_jira_project_example_with_issue_types,
     mock_jira_initial_comment,
     mock_jira_new_comment,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     async with respx.mock:
         # Mock server info and myself endpoints
@@ -2237,6 +2327,7 @@ async def mock_jira_api_with_comment_creation(
 
         # Mock search endpoint with results
         mock_search_with_results(mock_jira_search_with_results)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Mock approximate count endpoint
         mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
@@ -2348,7 +2439,8 @@ async def mock_jira_api_with_comment_creation(
         mock_issue_types([])
         mock_statuses([])
 
-        # Mock assignable users endpoint
+        # Mock assignable users endpoints
+        mock_assignable_users_single_project(mock_jira_users)
         mock_assignable_users(mock_jira_users)
 
         # Mock user assignable multi project search endpoint
@@ -2382,6 +2474,8 @@ async def mock_jira_api_with_subtask_creation(
     mock_jira_project_example_with_issue_types,
     mock_jira_work_item_link_types,
     mock_jira_transitions,
+    mock_jira_agile_boards,
+    mock_jira_agile_sprints,
 ):
     """Mock Jira API for subtask creation testing.
 
@@ -2391,6 +2485,7 @@ async def mock_jira_api_with_subtask_creation(
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_myself(mock_jira_myself)
+        mock_agile_endpoints_for_example_project(mock_jira_agile_boards, mock_jira_agile_sprints)
 
         # Create new subtask that will be returned after creation
         new_subtask = {
@@ -2669,6 +2764,7 @@ async def mock_jira_api_with_sprints(
                         },
                         {
                             'fieldId': 'labels',
+                            'key': 'labels',
                             'name': 'Labels',
                             'required': False,
                             'operations': ['add', 'set', 'remove'],

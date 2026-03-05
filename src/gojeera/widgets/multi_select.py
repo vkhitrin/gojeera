@@ -41,6 +41,7 @@ class MultiSelect(Tags, BaseField):
         initial_value: list[str] | None = None,
         original_value: list[str] | None = None,
         field_supports_update: bool = True,
+        allow_new_tags: bool = False,
     ):
         self.mode = mode
         self.field_id = field_id
@@ -75,7 +76,7 @@ class MultiSelect(Tags, BaseField):
             tag_values=self._all_option_names,
             show_x=True,
             start_with_tags_selected=False,
-            allow_new_tags=False,
+            allow_new_tags=allow_new_tags,
             id=field_id,
             disabled=mode == FieldMode.UPDATE and not field_supports_update,
         )
@@ -196,6 +197,30 @@ class MultiSelect(Tags, BaseField):
             for tag_name in self._initially_selected_tags:
                 if tag_name in self._all_option_names:
                     await self.add_new_tag(tag_name)
+
+    async def reset_last_tag(self) -> None:
+        """Safely reset the last tag when backspace is pressed on an empty TagInput.
+
+        The upstream textual-tags implementation assumes at least one tag exists and
+        raises ``NoMatches`` when the widget has no selected tags.
+        """
+
+        if not self.allow_new_tags:
+            return
+
+        try:
+            tags = list(self.query(Tag))
+            if not tags:
+                return
+
+            last_tag = tags[-1]
+
+            if last_tag.value in self.tag_values:
+                self.tag_values.discard(last_tag.value)
+
+            await last_tag.remove()
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """

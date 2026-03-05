@@ -221,9 +221,7 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
         self.work_item_summary_widget.update(work_item.summary)
         await self._setup_work_item_description(work_item)
 
-        await screen.search_results_list.update_work_item_in_list(  # type: ignore[attr-defined]
-            work_item
-        )
+        await screen.search_results_list.update_work_item_in_list(work_item)
 
     async def handle_edit_work_item_info(self, updates: dict | None) -> None:
         if not updates:

@@ -187,7 +187,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
             content_tabs = list(tabbed_content.query(ContentTab))
             for content_tab in content_tabs:
                 content_tab.can_focus = False
-                content_tab.jump_mode = 'click'
+                setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
 
             textarea = self.query_one(f'#{self.id}-textarea', TextArea)
             textarea.jump_mode = 'focus'  # type: ignore[attr-defined]

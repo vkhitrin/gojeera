@@ -114,10 +114,8 @@ class ExtendedTabbedContent(TabbedContent):
             from typing import cast
 
             from gojeera.components.new_work_item_screen import AddWorkItemScreen
-            from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
 
             screen = cast('MainScreen', self.screen)  # noqa: F821
-            subtasks_widget = self.query_one(WorkItemChildWorkItemsWidget)
 
             project_key = None
             if (
@@ -135,7 +133,7 @@ class ExtendedTabbedContent(TabbedContent):
                 AddWorkItemScreen(
                     project_key=project_key,
                     reporter_account_id=reporter_account_id,
-                    parent_work_item_key=subtasks_widget.work_item_key,
+                    parent_work_item=screen.work_item_info_container.work_item,
                 ),
                 callback=screen.new_work_item,
             )

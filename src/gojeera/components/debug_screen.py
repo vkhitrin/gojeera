@@ -100,7 +100,7 @@ class DebugInfoScreen(ModalScreen):
             tabs = self.query_one('#debug_tabs', TabbedContent)
             content_tabs = list(tabs.query(ContentTab))
             for content_tab in content_tabs:
-                content_tab.jump_mode = 'click'
+                setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
 
         await self._populate_config_section()
 

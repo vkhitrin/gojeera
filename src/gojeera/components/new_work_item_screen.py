@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
+    from gojeera.models import JiraWorkItem
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -45,12 +46,13 @@ class AddWorkItemScreen(ModalScreen):
         self,
         project_key: str | None = None,
         reporter_account_id: str | None = None,
-        parent_work_item_key: str | None = None,
+        parent_work_item: 'JiraWorkItem | None' = None,
     ):
         super().__init__()
         self._project_key = project_key
         self._reporter_account_id = reporter_account_id
-        self._parent_work_item_key = parent_work_item_key
+        self._parent_work_item = parent_work_item
+        self._parent_work_item_key = parent_work_item.key if parent_work_item else None
         self._field_metadata: dict[str, dict] = {}
         self._reporter_is_editable: bool = True
 
@@ -60,6 +62,9 @@ class AddWorkItemScreen(ModalScreen):
         self._users_fetched_for_project: str | None = None
         self._metadata_fetched_for: tuple[str, str] | None = None
         self._sprint_field_id: str | None = None
+        self._parent_sprint_id: int | None = None
+        self._parent_sprint_name: str | None = None
+        self._parent_sprint_loaded = False
 
         self._cache = get_cache()
 
@@ -360,6 +365,10 @@ class AddWorkItemScreen(ModalScreen):
         self.query_one('#summary-field-container').display = False
         self.query_one('#description-field-container').display = False
         self.dynamic_fields_container.display = False
+
+        if self._parent_work_item_key:
+            if self._parent_work_item is not None:
+                self._set_inherited_sprint_from_parent_work_item(self._parent_work_item)
 
         if self._project_key:
             self.fetch_projects()
@@ -871,6 +880,11 @@ class AddWorkItemScreen(ModalScreen):
                     )
                 except Exception:
                     pass
+            elif self._parent_work_item_key:
+                if self._parent_sprint_loaded:
+                    self._apply_subtask_sprint_read_only()
+                elif self._parent_work_item is not None:
+                    self._set_inherited_sprint_from_parent_work_item(self._parent_work_item)
 
             user_picker_widgets = self.dynamic_fields_container.query(UserPicker)
             if user_picker_widgets:
@@ -995,6 +1009,32 @@ class AddWorkItemScreen(ModalScreen):
                 self.query_one('#sprint-field-container').display = False
             except Exception:
                 pass
+
+    def _apply_subtask_sprint_read_only(self) -> None:
+        if not self._parent_work_item_key:
+            return
+
+        self.sprint_picker_widget.disabled = True
+        self.query_one('#sprint-field-container').display = True
+
+        if self._parent_sprint_id is not None and self._parent_sprint_name:
+            self.sprint_picker_widget.sprints = {
+                'sprints': [(self._parent_sprint_name, self._parent_sprint_id)],
+                'selection': self._parent_sprint_id,
+            }
+        else:
+            self.sprint_picker_widget.sprints = {'sprints': [], 'selection': None}
+
+    def _set_inherited_sprint_from_parent_work_item(self, parent_work_item: 'JiraWorkItem') -> None:
+        if parent_work_item.sprint:
+            self._parent_sprint_id = parent_work_item.sprint.id
+            self._parent_sprint_name = parent_work_item.sprint.name
+        else:
+            self._parent_sprint_id = None
+            self._parent_sprint_name = None
+
+        self._parent_sprint_loaded = True
+        self._apply_subtask_sprint_read_only()
 
     @on(Button.Pressed, '#add-work-item-button-save')
     def handle_save(self) -> None:

@@ -870,8 +870,9 @@ class WorkItemFields(Container, can_focus=False):
             return
 
     def _update_priority_selection(self, priority_id: str) -> None:
-        self.priority_selector.value = priority_id
-        self.priority_selector._original_value = priority_id
+        normalized_priority_id = str(priority_id)
+        self.priority_selector.value = normalized_priority_id
+        self.priority_selector._original_value = normalized_priority_id
 
     def _update_assignee_selection(self, assignee_id: str) -> None:
         self.assignee_selector.value = assignee_id
@@ -891,9 +892,7 @@ class WorkItemFields(Container, can_focus=False):
                 self.priority_selector.set_options(priorities)
 
                 if work_item_priority:
-                    self.set_timer(
-                        0.01, lambda: self._update_priority_selection(work_item_priority.id)
-                    )
+                    self._update_priority_selection(work_item_priority.id)
         else:
             self.priority_selector.update_enabled = False
 
@@ -2079,16 +2078,40 @@ class WorkItemFields(Container, can_focus=False):
         config = CONFIGURATION.get()
 
         if not config.enable_sprint_selection:
+            self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
             return
 
+        is_subtask = bool(work_item.parent_work_item_key) or bool(
+            work_item.work_item_type and work_item.work_item_type.subtask
+        )
+
+        if is_subtask:
+            self.sprint_picker_widget.disabled = True
+            self.sprint_picker_widget.update_enabled = False
+
+            if work_item.sprint:
+                self.sprint_field_container.display = True
+                self.sprint_picker_widget.sprints = {
+                    'sprints': [(work_item.sprint.name, work_item.sprint.id)],
+                    'selection': work_item.sprint.id,
+                }
+                self.sprint_picker_widget._original_value = str(work_item.sprint.id)
+            else:
+                self.sprint_picker_widget.sprints = {'sprints': [], 'selection': None}
+                self.sprint_picker_widget._original_value = None
+                self.sprint_field_container.display = False
+            return
+
         if not editable_fields:
+            self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
             return
 
         if not work_item.edit_meta or 'fields' not in work_item.edit_meta:
+            self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
             return
@@ -2096,6 +2119,7 @@ class WorkItemFields(Container, can_focus=False):
         sprint_field_id = get_sprint_field_id_from_editmeta(work_item.edit_meta.get('fields', {}))
 
         if not sprint_field_id:
+            self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
             return
@@ -2105,6 +2129,7 @@ class WorkItemFields(Container, can_focus=False):
         self.sprint_field_container.display = True
         self.sprint_picker_widget.jira_field_key = sprint_field_id
         self.sprint_picker_widget.update_enabled = field_can_be_updated
+        self.sprint_picker_widget.disabled = not field_can_be_updated
 
         current_sprint_id = work_item.sprint.id if work_item.sprint else None
         if current_sprint_id is not None:
@@ -2115,6 +2140,7 @@ class WorkItemFields(Container, can_focus=False):
         project_key = work_item.project.key if work_item.project else None
 
         if not project_key:
+            self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
             return

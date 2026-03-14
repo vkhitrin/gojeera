@@ -116,6 +116,10 @@ def fix_adf_text_with_marks(adf: dict) -> dict:
         new_content = []
 
         for i, node in enumerate(adf['content']):
+            if not isinstance(node, dict):
+                new_content.append(node)
+                continue
+
             node = fix_adf_text_with_marks(node)
 
             if node.get('type') == 'text' and 'marks' in node and 'text' in node:

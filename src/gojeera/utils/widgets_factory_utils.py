@@ -508,7 +508,7 @@ class WidgetBuilder:
     def build_multicheckboxes(
         mode: FieldMode,
         metadata: FieldMetadata,
-        current_value: list[dict] | None = None,
+        current_value: list[Any] | None = None,
     ) -> Widget:
         def create_widget():
             current_ids = []
@@ -516,8 +516,6 @@ class WidgetBuilder:
                 for item in current_value:
                     if isinstance(item, dict) and 'id' in item:
                         current_ids.append(str(item['id']))
-                    elif hasattr(item, 'id'):
-                        current_ids.append(str(item.id))
 
             options = AllowedValuesParser.parse_options(metadata.allowed_values or [])
 
@@ -749,6 +747,8 @@ def build_dynamic_widgets(
 
     logger.debug(f'Building dynamic widgets for {len(fields_data)} fields')
 
+    skip_fields_lower = {f.lower() for f in skip_fields}
+
     for field_data in fields_data:
         field_id = field_data.get('fieldId', '')
         field_key = field_data.get('key', '')
@@ -775,26 +775,19 @@ def build_dynamic_widgets(
                 f'mode: {mode}, required: {required}'
             )
 
-        field_identifiers = {field_id.lower(), field_key.lower(), field_name.lower()}
-        skip_fields_lower = {f.lower() for f in skip_fields}
-
+        field_identifiers = {
+            str(field_id).lower(),
+            str(field_key).lower(),
+            str(field_name).lower(),
+        }
         if any(fid in skip_fields_lower for fid in field_identifiers if fid):
-            if custom_type == CustomFieldType.GH_SPRINT.value:
-                logger.debug('Sprint field SKIPPED: in skip_fields')
             continue
 
         if mode == FieldMode.CREATE and not required:
-            if field_id in skip_fields_lower:
-                if custom_type == CustomFieldType.GH_SPRINT.value:
-                    logger.debug('Sprint field SKIPPED: field_id in skip_fields (CREATE mode)')
+            if str(field_id).lower() in skip_fields_lower:
                 continue
 
             if not enable_additional and field_id not in process_optional_fields:
-                if custom_type == CustomFieldType.GH_SPRINT.value:
-                    logger.debug(
-                        f'Sprint field SKIPPED: not in process_optional_fields '
-                        f'(enable_additional: {enable_additional})'
-                    )
                 continue
 
         metadata = FieldMetadata(field_data)

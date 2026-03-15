@@ -15,6 +15,18 @@ if TYPE_CHECKING:
 
 
 class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
+    DEFAULT_CSS = """
+    WorkItemChildWorkItemsWidget {
+        width: 100%;
+        height: 1fr;
+    }
+
+    WorkItemChildWorkItemsWidget > .tab-content-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
+
     work_items: Reactive[list[JiraWorkItem] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
     is_loading: Reactive[bool] = reactive(False, always_update=True)
@@ -105,7 +117,7 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
         await worker.wait()
 
         if screen.tabs and not screen.tabs.disabled:
-            screen.tabs.active = 'tab-summary'
+            screen.tabs.active = 'tab-description'
 
     async def action_view_selected_work_item(self) -> None:
         table = self.data_table

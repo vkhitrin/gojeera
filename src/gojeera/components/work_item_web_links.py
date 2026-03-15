@@ -241,6 +241,18 @@ class RemoteLinksDataTable(ExtendedDataTable):
 class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
     """This widget handles adding and updating the list of remote links (aka. web links) associated to a work item."""
 
+    DEFAULT_CSS = """
+    WorkItemRemoteLinksWidget {
+        width: 100%;
+        height: 1fr;
+    }
+
+    WorkItemRemoteLinksWidget > .tab-content-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
+
     work_item_key: Reactive[str | None] = reactive(None, always_update=True)
     remote_links: Reactive[list[WorkItemRemoteLink] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)

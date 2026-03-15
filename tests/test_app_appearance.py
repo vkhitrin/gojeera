@@ -1,23 +1,46 @@
+import asyncio
+
 from gojeera.app import JiraApp
 from gojeera.themes import create_theme_from_config
 
 from .test_helpers import wait_for_mount
 
 
+async def wait_for_loaded_work_item(pilot):
+    await wait_for_mount(pilot)
+
+    await pilot.press('ctrl+j')
+    await asyncio.sleep(0.5)
+
+    await pilot.press('enter')
+    await asyncio.sleep(0.8)
+
+    await pilot.app.workers.wait_for_complete()
+    await asyncio.sleep(0.5)
+
+
 class TestAppAppearance:
     """Snapshot tests to verify TUI appearance at various states."""
 
     def test_app_with_terminal_size_small(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
     ):
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(80, 24), run_before=wait_for_mount)
+        assert snap_compare(app, terminal_size=(80, 24), run_before=wait_for_loaded_work_item)
 
     def test_app_with_default_theme(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
     ):
         config = mock_configuration
 
@@ -25,10 +48,14 @@ class TestAppAppearance:
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_mount)
+        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_loaded_work_item)
 
     def test_app_with_theme_dracula(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
     ):
         config = mock_configuration
 
@@ -36,21 +63,14 @@ class TestAppAppearance:
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_mount)
-
-    def test_app_with_obfuscated_personal_info(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-
-        config.obfuscate_personal_info = True
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_mount)
+        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_loaded_work_item)
 
     def test_app_with_custom_theme(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
     ):
         config = mock_configuration
 
@@ -76,4 +96,4 @@ class TestAppAppearance:
         config.theme = 'custom-test-theme'
         app.theme = 'custom-test-theme'
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_mount)
+        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_loaded_work_item)

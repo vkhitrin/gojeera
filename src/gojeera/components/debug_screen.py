@@ -10,13 +10,14 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Static, TabbedContent, TabPane
+from textual.widgets import Static, TabbedContent, TabPane
 import yaml
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraGlobalSettings, JiraMyselfInfo, JiraServerInfo
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -55,15 +56,6 @@ class DebugInfoScreen(ModalScreen):
         super().__init__(name, id)
         self._cache = get_cache()
 
-    @staticmethod
-    def _obfuscate_if_enabled(value: str | None) -> str:
-        if not value:
-            return value or ''
-
-        if CONFIGURATION.get().obfuscate_personal_info:
-            return 'obfuscated'
-        return value
-
     @property
     def tabs(self) -> TabbedContent:
         return self.query_one('#debug_tabs', TabbedContent)
@@ -88,7 +80,7 @@ class DebugInfoScreen(ModalScreen):
                     with VerticalScroll():
                         yield GojeeraMarkdown(id='cache-markdown')
 
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
         container = self.query_one('#modal_outer')
@@ -131,9 +123,6 @@ class DebugInfoScreen(ModalScreen):
         json_str = config.model_dump_json(exclude={'jira'})
         data = json_lib.loads(json_str)
 
-        if CONFIGURATION.get().obfuscate_personal_info:
-            self._obfuscate_dict(data)
-
         yaml_output = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
         lines = ['### Configuration\n']
@@ -142,21 +131,6 @@ class DebugInfoScreen(ModalScreen):
         lines.append('```')
 
         config_md.update('\n'.join(lines))
-
-    def _obfuscate_dict(self, data: dict) -> None:
-        if not CONFIGURATION.get().obfuscate_personal_info:
-            return
-
-        for key, value in data.items():
-            if isinstance(value, dict):
-                self._obfuscate_dict(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        self._obfuscate_dict(item)
-            elif isinstance(value, str) and value:
-                if any(indicator in value.lower() for indicator in ['http', '@', 'user', 'name']):
-                    data[key] = 'obfuscated'
 
     async def _populate_cache_section(self) -> None:
         cache_md = self.query_one('#cache-markdown', expect_type=GojeeraMarkdown)
@@ -232,7 +206,7 @@ class DebugInfoScreen(ModalScreen):
 
         if server_info:
             lines.append('### Server Details\n')
-            lines.append(f'**Base URL**: `{self._obfuscate_if_enabled(server_info.base_url)}`  ')
+            lines.append(f'**Base URL**: `{server_info.base_url}`  ')
             lines.append(f'**Version**: `{server_info.get_version()}`  ')
             lines.append(f'**Deployment Type**: `{server_info.get_deployment_type()}`  ')
             lines.append(f'**Build Number**: `{server_info.get_build_number()}`  ')
@@ -243,12 +217,10 @@ class DebugInfoScreen(ModalScreen):
             lines.append(f'**Server Time Zone**: `{server_info.get_server_time_zone()}`  ')
 
             if server_info.get_display_url_confluence():
-                lines.append(
-                    f'**Confluence URL**: `{self._obfuscate_if_enabled(server_info.get_display_url_confluence())}`  '
-                )
+                lines.append(f'**Confluence URL**: `{server_info.get_display_url_confluence()}`  ')
             if server_info.get_display_url_servicedesk_help_center():
                 lines.append(
-                    f'**Servicedesk URL**: `{self._obfuscate_if_enabled(server_info.get_display_url_servicedesk_help_center())}`  '
+                    f'**Servicedesk URL**: `{server_info.get_display_url_servicedesk_help_center()}`  '
                 )
         else:
             lines.append('*Unable to fetch server information*')
@@ -280,20 +252,16 @@ class DebugInfoScreen(ModalScreen):
 
         if user_info:
             lines.append('### Account Details\n')
-            lines.append(
-                f'**Account ID**: `{self._obfuscate_if_enabled(user_info.get_account_id())}`  '
-            )
+            lines.append(f'**Account ID**: `{user_info.get_account_id()}`  ')
             lines.append(f'**Account Type**: `{user_info.account_type}`  ')
 
             status = '✓ Active' if user_info.active else '✗ Inactive'
             lines.append(f'**Status**: {status}  ')
 
             if user_info.display_name:
-                lines.append(
-                    f'**Display Name**: `{self._obfuscate_if_enabled(user_info.display_name)}`  '
-                )
+                lines.append(f'**Display Name**: `{user_info.display_name}`  ')
             if user_info.email:
-                lines.append(f'**Email**: `{self._obfuscate_if_enabled(user_info.email)}`  ')
+                lines.append(f'**Email**: `{user_info.email}`  ')
             if user_info.user_groups:
                 lines.append(f'**User Groups**: `{user_info.user_groups}`  ')
         else:

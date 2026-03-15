@@ -1,7 +1,7 @@
 import logging
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Label, ProgressBar
 
 logger = logging.getLogger('gojeera')
@@ -14,10 +14,32 @@ class TimeTrackingWidget(Vertical):
     TimeTrackingWidget {
         height: auto;
         width: 100%;
+        margin: 0;
+        padding: 0;
     }
 
     TimeTrackingWidget > Label {
         width: 100%;
+    }
+
+    #time-tracking-title {
+        color: $text-muted;
+        text-style: bold;
+    }
+
+    #time-tracking-stats {
+        width: 100%;
+        height: auto;
+    }
+
+    #time-tracking-logged {
+        width: 1fr;
+        color: $text;
+    }
+
+    #time-tracking-remaining {
+        width: auto;
+        color: $text-muted;
     }
 
     TimeTrackingWidget > ProgressBar {
@@ -29,6 +51,10 @@ class TimeTrackingWidget(Vertical):
 
     TimeTrackingWidget > ProgressBar > Bar {
         width: 100%;
+    }
+
+    #time-tracking-meta {
+        color: $text-muted;
     }
     """
 
@@ -55,39 +81,100 @@ class TimeTrackingWidget(Vertical):
     def progress_bar(self) -> ProgressBar:
         return self.query_one(ProgressBar)
 
-    def _build_first_row_text(self) -> str:
-        parts = []
-        if self._original_estimate:
-            parts.append(f'Original Estimate: {self._original_estimate}')
+    def _derive_logged_text(self) -> str:
         if self._time_spent:
-            parts.append(f'Time Spent: {self._time_spent}')
-        return ' | '.join(parts) if parts else ''
+            return self._time_spent.removesuffix(' logged')
+        if self._time_spent_seconds > 0:
+            return self._format_duration(self._time_spent_seconds)
+        if (
+            self._original_estimate_seconds is not None
+            and self._remaining_estimate_seconds is not None
+            and self._original_estimate_seconds > self._remaining_estimate_seconds
+        ):
+            logged_seconds = self._original_estimate_seconds - self._remaining_estimate_seconds
+            return self._format_duration(logged_seconds)
+        return ''
+
+    @staticmethod
+    def _format_duration(seconds: int) -> str:
+        if seconds <= 0:
+            return '0m'
+
+        hours, remainder = divmod(seconds, 3600)
+        minutes = remainder // 60
+        days, hours = divmod(hours, 8)
+
+        parts: list[str] = []
+        if days:
+            parts.append(f'{days}d')
+        if hours:
+            parts.append(f'{hours}h')
+        if minutes:
+            parts.append(f'{minutes}m')
+        return ' '.join(parts) if parts else '0m'
+
+    def _build_first_row_text(self) -> str:
+        logged_text = self._derive_logged_text()
+        return f'{logged_text} logged' if logged_text else '0m logged'
+
+    def _build_remaining_text(self) -> str:
+        logged_text = self._derive_logged_text()
+        has_remaining = bool(self._remaining_estimate) and self._remaining_estimate != '0m'
+        if has_remaining:
+            return f'{self._remaining_estimate} remaining'
+        if self._original_estimate and self._original_estimate != '0m':
+            return f'{self._original_estimate} remaining'
+        if logged_text:
+            return '0m remaining'
+        return ''
 
     def _build_second_row_text(self) -> str:
-        if self._remaining_estimate:
-            return f'Remaining Estimate: {self._remaining_estimate}'
+        if self._original_estimate and self._original_estimate != '0m':
+            return f'Original estimate {self._original_estimate}'
         return ''
 
     def compose(self) -> ComposeResult:
-        yield Label(self._build_first_row_text(), id='time-tracking-row1')
-        yield Label(self._build_second_row_text(), id='time-tracking-row2')
         pb = ProgressBar(total=100, show_percentage=False, show_eta=False)
         pb.styles.width = '100%'
+        with Horizontal(id='time-tracking-stats'):
+            yield Label(self._build_first_row_text(), id='time-tracking-logged')
+            yield Label(self._build_remaining_text(), id='time-tracking-remaining')
         yield pb
+        yield Label(self._build_second_row_text(), id='time-tracking-meta')
 
     def on_mount(self):
+        try:
+            logged_label = self.query_one('#time-tracking-logged', Label)
+            logged_label.update(self._build_first_row_text())
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+
+        try:
+            remaining_label = self.query_one('#time-tracking-remaining', Label)
+            remaining_label.update(self._build_remaining_text())
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+
+        try:
+            meta_label = self.query_one('#time-tracking-meta', Label)
+            meta_text = self._build_second_row_text()
+            meta_label.update(meta_text)
+            meta_label.display = bool(meta_text)
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+
         self.progress_bar.styles.width = '100%'
         self._update_progress()
 
     def _update_progress(self):
-        if self._original_estimate_seconds:
-            self.progress_bar.progress = (
-                self._time_spent_seconds * 100
-            ) / self._original_estimate_seconds
-        elif self._remaining_estimate_seconds and self._time_spent_seconds:
+        if self._remaining_estimate_seconds is not None and self._time_spent_seconds:
             self.progress_bar.progress = (self._time_spent_seconds * 100) / (
                 self._remaining_estimate_seconds + self._time_spent_seconds
             )
+        elif self._original_estimate_seconds:
+            self.progress_bar.progress = (
+                self._time_spent_seconds * 100
+            ) / self._original_estimate_seconds
         elif self._time_spent_seconds:
             self.progress_bar.progress = 100
         else:
@@ -110,14 +197,22 @@ class TimeTrackingWidget(Vertical):
         self._remaining_estimate_seconds = remaining_estimate_seconds
 
         try:
-            row1_label = self.query_one('#time-tracking-row1', Label)
-            row1_label.update(self._build_first_row_text())
+            logged_label = self.query_one('#time-tracking-logged', Label)
+            logged_label.update(self._build_first_row_text())
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
         try:
-            row2_label = self.query_one('#time-tracking-row2', Label)
-            row2_label.update(self._build_second_row_text())
+            remaining_label = self.query_one('#time-tracking-remaining', Label)
+            remaining_label.update(self._build_remaining_text())
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+
+        try:
+            meta_label = self.query_one('#time-tracking-meta', Label)
+            meta_text = self._build_second_row_text()
+            meta_label.update(meta_text)
+            meta_label.display = bool(meta_text)
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 

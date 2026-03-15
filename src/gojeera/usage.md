@@ -7,7 +7,7 @@ For configuration options, see [configuration.md](configuration.md).
 
 ## Overview
 
-![gojeera interface](/static/gojeera.svg)
+![gojeera interface](/tests/__snapshots__/test_app_appearance/TestAppAppearance.test_app_with_theme_dracula.svg)
 
 gojeera aims to provide a vim-like keyboard-driven interface for interacting with
 Jira work items. The main view is inspired by the Jira Cloud web UI, with a
@@ -38,15 +38,16 @@ gojeera --work-item-key "PROJ-123"
 
 ## Global Keybindings
 
-| Key      | Action          | Description                                   |
-| -------- | --------------- | --------------------------------------------- |
-| `Ctrl+C` | Quit            | Exit the application                          |
-| `Ctrl+\` | Jump Mode       | Activate jumper overlay for quick navigation  |
-| `Ctrl+P` | Command Palette | Open command palette                          |
-| `?`      | Help            | Open in-app help documentation                |
-| `F12`    | Debug Info      | Show debug information (config, server, user) |
-| `[`      | Previous Tab    | Navigate to previous tab in work item details |
-| `]`      | Next Tab        | Navigate to next tab in work item details     |
+| Key      | Action          | Description                                     |
+| -------- | --------------- | ----------------------------------------------- |
+| `Ctrl+C` | Quit            | Exit the application                            |
+| `Ctrl+\` | Jump Mode       | Activate jumper overlay for quick navigation    |
+| `Ctrl+P` | Command Palette | Open command palette                            |
+| `?`      | Help            | Open in-app help documentation                  |
+| `F11`    | Toggle Footer   | Show or hide the footer for the current session |
+| `F12`    | Debug Info      | Show debug information (config, server, user)   |
+| `[`      | Previous Tab    | Navigate to previous tab in work item details   |
+| `]`      | Next Tab        | Navigate to next tab in work item details       |
 
 ## Unified Search
 
@@ -345,14 +346,18 @@ Press `Ctrl+P` to access commands:
 - **Insert Decision**: Add a decision marker for meeting notes
 - **Insert Panel/Alert**: Add styled panels (NOTE, TIP, IMPORTANT, WARNING, CAUTION)
 
+**UI Commands**:
+
+- **Show Footer / Hide Footer**: Toggle footer visibility for the current session
+
 ## Jumper Mode
 
-![Jumper mode](/static/jumper_mode.svg)
+![Jumper mode](/tests/__snapshots__/test_jumper/TestJumper.test_main_screen_jumper_overlay.svg)
 
 The jumper overlay (`Ctrl+\`) allows quick keyboard navigation to different parts
 of the interface.
 
-Each visible widget is assigned a key. Press the corresponding key to jump
+Each active widget is assigned a key. Press the corresponding key to jump
 directly to that widget.
 
 ## Additional Resources

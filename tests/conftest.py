@@ -5,10 +5,13 @@ from pathlib import Path
 from httpx import Response
 from pydantic import SecretStr
 import pytest
+import pytest_textual_snapshot
 import respx
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
+
+pytest_textual_snapshot.SVGImageExtension.file_extension = 'svg'
 
 
 # NOTE: (vkhitrin) Clear the global application cache after each test
@@ -48,7 +51,6 @@ def mock_configuration():
         enable_creating_additional_fields=False,
         create_additional_fields_ignore_ids=None,
         enable_images_support=True,
-        obfuscate_personal_info=False,
     )
 
     token = CONFIGURATION.set(config)
@@ -87,7 +89,6 @@ def mock_configuration_with_sprints():
         enable_creating_additional_fields=False,
         create_additional_fields_ignore_ids=None,
         enable_images_support=True,
-        obfuscate_personal_info=False,
     )
 
     token = CONFIGURATION.set(config)

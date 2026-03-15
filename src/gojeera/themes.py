@@ -4,6 +4,11 @@ from pathlib import Path
 from textual.theme import Theme
 import yaml
 
+try:
+    from yaml import CSafeLoader as SafeLoader
+except ImportError:
+    from yaml import SafeLoader
+
 from gojeera.constants import LOGGER_NAME
 
 logger = logging.getLogger(LOGGER_NAME)
@@ -106,7 +111,7 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
     for yaml_file in yaml_files:
         try:
             with open(yaml_file, encoding='utf-8') as f:
-                theme_config = yaml.safe_load(f)
+                theme_config = yaml.load(f, Loader=SafeLoader)
 
             if not theme_config:
                 logger.warning(f'Empty theme file: {yaml_file.name}')

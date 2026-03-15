@@ -6,7 +6,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ItemGrid, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Label, Static, TextArea
+from textual.widgets import Button, Input, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.panel_picker_screen import PanelPickerScreen
@@ -15,6 +15,7 @@ from gojeera.utils.fields import FieldMode
 from gojeera.utils.mention_helpers import insert_user_mention
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -142,7 +143,7 @@ class LogWorkScreen(ModalScreen[dict]):
                     compact=True,
                 )
                 yield Button('Cancel', variant='error', id='log-work-button-quit', compact=True)
-        yield Footer()
+        yield ExtendedFooter()
 
     def on_mount(self) -> None:
         if self._mode == 'edit' and self._initial_description:

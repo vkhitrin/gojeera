@@ -1,11 +1,17 @@
+# ruff: noqa: E402
+from __future__ import annotations
+
 from dataclasses import dataclass
 import logging
-from typing import Any, Callable, cast
+import sys
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import defusedxml.ElementTree as ET
+
+# https://darren.codes/posts/python-startup-time/
+sys.modules['httpx._main'] = cast(Any, None)
 import httpx
 
-from gojeera.config import ApplicationConfiguration
 from gojeera.constants import LOGGER_NAME
 from gojeera.exceptions import (
     AuthorizationException,
@@ -15,7 +21,9 @@ from gojeera.exceptions import (
     ServiceInvalidResponseException,
     ServiceUnavailableException,
 )
-from gojeera.utils.obfuscation import obfuscate_url
+
+if TYPE_CHECKING:
+    from gojeera.config import ApplicationConfiguration
 
 
 @dataclass
@@ -146,9 +154,7 @@ class AsyncHTTPClient:
             if response.status_code == 201:
                 return self._empty_response(response)
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(
-                log_msg, extra={'url': obfuscate_url(url), 'status_code': response.status_code}
-            )
+            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
     @staticmethod
@@ -253,9 +259,7 @@ class JiraClient:
                 return {}
 
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(
-                log_msg, extra={'url': obfuscate_url(url), 'status_code': response.status_code}
-            )
+            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
         return response_json
@@ -316,7 +320,7 @@ class AsyncJiraClient(AsyncHTTPClient):
             )
         except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
             msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(msg, extra={'url': obfuscate_url(url)})
+            self.logger.error(msg, extra={'url': url})
             raise ServiceUnavailableException(msg, extra={'url': url}) from e
 
         try:
@@ -325,7 +329,7 @@ class AsyncJiraClient(AsyncHTTPClient):
             error_details: dict | None = self._parse_error_response(response)
 
             extra = {
-                'url': obfuscate_url(url),
+                'url': url,
                 'status_code': response.status_code,
             }
 
@@ -353,9 +357,7 @@ class AsyncJiraClient(AsyncHTTPClient):
             if response.status_code == 201:
                 return self._empty_response(response)
             log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(
-                log_msg, extra={'url': obfuscate_url(full_url), 'status_code': response.status_code}
-            )
+            self.logger.error(log_msg, extra={'url': full_url, 'status_code': response.status_code})
             raise ServiceInvalidResponseException(log_msg, extra={}) from e
 
     async def get_label_suggestions(self, query: str = '') -> Any | None:

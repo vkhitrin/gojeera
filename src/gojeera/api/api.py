@@ -1,19 +1,24 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from io import BufferedReader
 import json
 import logging
-from typing import Any, cast
+import sys
+from typing import TYPE_CHECKING, Any, cast
 
-import httpx
-import magic
+# https://darren.codes/posts/python-startup-time/
+sys.modules['httpx._main'] = cast(Any, None)
+import httpx  # noqa: E402
+import magic  # noqa: E402
 
-from gojeera.api.client import AsyncHTTPClient, AsyncJiraClient, JiraClient
-from gojeera.api.utils import build_work_item_search_jql
-from gojeera.config import ApplicationConfiguration
-from gojeera.constants import LOGGER_NAME, WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS
-from gojeera.exceptions import FileUploadException
-from gojeera.utils.adf_helpers import text_to_adf
-from gojeera.utils.obfuscation import obfuscate_account_id
+from gojeera.api.client import AsyncHTTPClient, AsyncJiraClient, JiraClient  # noqa: E402
+from gojeera.api.utils import build_work_item_search_jql  # noqa: E402
+from gojeera.constants import LOGGER_NAME, WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS  # noqa: E402
+from gojeera.exceptions import FileUploadException  # noqa: E402
+
+if TYPE_CHECKING:
+    from gojeera.config import ApplicationConfiguration
 
 
 class JiraAPI:
@@ -582,9 +587,7 @@ class JiraAPI:
         seen_ids = set()
 
         if account_id:
-            self.logger.info(
-                f'Fetching personal filters for account_id={obfuscate_account_id(account_id)}'
-            )
+            self.logger.info(f'Fetching personal filters for account_id={account_id}')
             personal_params: dict[str, Any] = {
                 'maxResults': max_results,
                 'expand': 'jql,favourite',
@@ -757,6 +760,7 @@ class JiraAPI:
         Returns:
             Dictionary with ADF body structure
         """
+        from gojeera.utils.adf_helpers import text_to_adf
 
         adf_doc = text_to_adf(message, track_warnings=False)
 
@@ -1288,6 +1292,7 @@ class JiraAPI:
         Returns:
             A dictionary with the payload's data for setting the worklog's comment/description in ADF format.
         """
+        from gojeera.utils.adf_helpers import text_to_adf
 
         return cast(dict, text_to_adf(message, track_warnings=False))
 

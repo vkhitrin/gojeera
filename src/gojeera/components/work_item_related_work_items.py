@@ -21,6 +21,18 @@ if TYPE_CHECKING:
 class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
     """A container for displaying the work items related to a work item."""
 
+    DEFAULT_CSS = """
+    RelatedWorkItemsWidget {
+        width: 100%;
+        height: 1fr;
+    }
+
+    RelatedWorkItemsWidget > .tab-content-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
+
     BINDINGS = [
         Binding(
             key='ctrl+g',
@@ -176,7 +188,7 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         await worker.wait()
 
         if screen.tabs and not screen.tabs.disabled:
-            self.set_timer(0.01, lambda: setattr(screen.tabs, 'active', 'tab-summary'))
+            self.set_timer(0.01, lambda: setattr(screen.tabs, 'active', 'tab-description'))
 
     async def action_view_selected_work_item(self) -> None:
         table = self.data_table

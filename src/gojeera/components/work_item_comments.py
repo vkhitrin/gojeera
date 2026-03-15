@@ -11,7 +11,9 @@ from textual.containers import (
     VerticalGroup,
     VerticalScroll,
 )
+from textual.css.query import NoMatches
 from textual.reactive import Reactive, reactive
+from textual.widget import MountError
 from textual.widgets import Static
 
 from gojeera.api_controller.controller import APIControllerResponse
@@ -329,6 +331,18 @@ class CommentsScrollView(VerticalScroll):
 class WorkItemCommentsWidget(Vertical, can_focus=False):
     """A container for displaying the comments of a work item using VerticalScroll."""
 
+    DEFAULT_CSS = """
+    WorkItemCommentsWidget {
+        width: 100%;
+        height: 1fr;
+    }
+
+    WorkItemCommentsWidget > .tab-content-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
+
     comments: Reactive[list[WorkItemComment] | None] = reactive(None)
     displayed_count: Reactive[int] = reactive(0)
     is_loading: Reactive[bool] = reactive(False, always_update=True)
@@ -421,7 +435,16 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     async def watch_comments(self, items: list[WorkItemComment] | None) -> None:
         """Watch for changes to comments."""
 
-        scroll_view = self.comments_scroll_view
+        if not self.is_attached:
+            return
+
+        try:
+            scroll_view = self.comments_scroll_view
+        except NoMatches:
+            return
+
+        if not scroll_view.is_attached:
+            return
 
         if not items:
             with self.app.batch_update():
@@ -451,6 +474,9 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
             items.sort(key=lambda x: x.updated or 0, reverse=True)
 
             for comment in items:
+                if not self.is_attached or not scroll_view.is_attached:
+                    return
+
                 base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
 
                 inner_container = Vertical(classes='comment-item-inner')
@@ -499,9 +525,15 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
                 comment_container.compose_add_child(inner_container)
 
-                await scroll_view.mount(comment_container)
+                try:
+                    await scroll_view.mount(comment_container)
+                except MountError:
+                    return
 
             self.hide_loading()
+
+        if not self.is_attached or not scroll_view.is_attached:
+            return
 
         scroll_view.reset_selection()
 

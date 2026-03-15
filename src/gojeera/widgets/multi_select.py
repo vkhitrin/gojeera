@@ -126,6 +126,7 @@ class MultiSelect(Tags, BaseField):
 
         tag = Tag(value)
         tag.show_x = self.show_x
+        tag.tooltip = value
         await self.mount(tag, before=f'#{self.field_id}_input_tag')
         self.selected_tags.add(value)
 

@@ -10,7 +10,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Footer, Input, Label, Select, Static, TextArea
+from textual.widgets import Button, Input, Label, Select, Static, TextArea
 from textual.worker import get_current_worker
 from textual_tags import Tag
 
@@ -25,6 +25,7 @@ from gojeera.utils.widgets_factory_utils import (
     build_dynamic_widgets,
 )
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.lazy_select import LazySelect
 from gojeera.widgets.multi_select import MultiSelect
@@ -338,7 +339,7 @@ class AddWorkItemScreen(ModalScreen):
                 )
 
             yield Static('Required: 0 pending', id='required-fields-tracker')
-        yield Footer()
+        yield ExtendedFooter()
 
     def on_mount(self):
         if self._parent_work_item_key:

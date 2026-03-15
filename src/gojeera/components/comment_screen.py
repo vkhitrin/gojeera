@@ -4,12 +4,13 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Label, Static, TextArea
+from textual.widgets import Button, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.panel_picker_screen import PanelPickerScreen
 from gojeera.config import CONFIGURATION
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -92,7 +93,7 @@ class CommentScreen(ModalScreen[str]):
                     compact=True,
                 )
                 yield Button('Cancel', variant='error', id=cancel_button_id, compact=True)
-        yield Footer()
+        yield ExtendedFooter()
 
     def on_mount(self) -> None:
         if self.initial_text:

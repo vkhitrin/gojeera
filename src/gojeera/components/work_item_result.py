@@ -23,6 +23,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger('gojeera')
 
 
+class WorkItemSpacer(Static, can_focus=False):
+    """Spacer row between work item cards."""
+
+    def __init__(self) -> None:
+        super().__init__('', classes='work-item-spacer')
+
+
 class WorkItemContainer(Vertical, can_focus=False):
     """A container for displaying work items."""
 
@@ -36,18 +43,18 @@ class WorkItemContainer(Vertical, can_focus=False):
     }
     
     WorkItemContainer.-selected {
-        background: $accent-muted;
-        color: $text-accent;
+        background: $surface-lighten-1;
+        color: $foreground;
     }
     
     WorkItemContainer.-loaded {
-        background: $primary-muted;
-        color: $text-primary;
+        background: $surface-darken-1;
+        color: $foreground;
     }
     
     WorkItemContainer.-loaded.-selected {
-        background: $primary-darken-3;
-        color: $text-muted;
+        background: $primary-muted;
+        color: $foreground;
     }
     """
 
@@ -222,8 +229,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
     ) -> None:
         if response is None:
             with self.app.batch_update():
-                for container in self.query(WorkItemContainer):
-                    await container.remove()
+                await self.remove_children()
                 self.display = False
 
                 if self.parent and isinstance(self.parent.parent, WorkItemsContainer):
@@ -232,8 +238,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 
         if not response.work_items:
             with self.app.batch_update():
-                for container in self.query(WorkItemContainer):
-                    await container.remove()
+                await self.remove_children()
                 self.display = False
 
                 if self.parent and isinstance(self.parent.parent, WorkItemsContainer):
@@ -241,16 +246,17 @@ class WorkItemSearchResultsScroll(VerticalScroll):
             return
 
         with self.app.batch_update():
-            old_containers = list(self.query(WorkItemContainer))
-            for container in old_containers:
-                await container.remove()
+            await self.remove_children()
 
             self.display = True
 
             if response.next_page_token:
                 self.token_by_page[self.page + 1] = response.next_page_token
 
-            for work_item in response.work_items:
+            for index, work_item in enumerate(response.work_items):
+                if index > 0:
+                    await self.mount(WorkItemSpacer())
+
                 container = WorkItemContainer(work_item)
 
                 if work_item.key == self.current_work_item_key:
@@ -437,15 +443,14 @@ class WorkItemsContainer(Container):
 
     def compose(self):
         """Compose the search results container."""
-        yield Static('', id='work-items-total-header')
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
             yield WorkItemSearchResultsScroll()
+        yield Static('', classes='work-items-section-spacer')
         yield Static('', id='work-items-page-footer')
 
     def on_mount(self) -> None:
         self.content_container.can_focus = False
-        self.query_one('#work-items-total-header', Static).can_focus = False
         self.query_one('#work-items-page-footer', Static).can_focus = False
 
         if CONFIGURATION.get().jumper.enabled:
@@ -461,7 +466,6 @@ class WorkItemsContainer(Container):
         self.content_container.loading = loading
 
     def clear_search_metadata(self) -> None:
-        self.query_one('#work-items-total-header', Static).update('')
         self.query_one('#work-items-page-footer', Static).update('')
 
     def watch_pagination(self, response: dict) -> None:
@@ -470,8 +474,6 @@ class WorkItemsContainer(Container):
             if (total_results := response.get('total', 0)) is not None:
                 if total_results == 0:
                     self.result_subtitle = None
-                    if header := self.query_one('#work-items-total-header', Static):
-                        header.update('No items found')
                     if footer := self.query_one('#work-items-page-footer', Static):
                         footer.update('')
                 else:
@@ -481,13 +483,9 @@ class WorkItemsContainer(Container):
                     self.result_subtitle = (
                         f'Page {current_page_number} of {total_pages} (total: {total_results})'
                     )
-                    if header := self.query_one('#work-items-total-header', Static):
-                        header.update(f'{total_results} Work Items')
                     if footer := self.query_one('#work-items-page-footer', Static):
-                        footer.update(f'Page {current_page_number} of {total_pages}')
+                        footer.update(f'{current_page_number}/{total_pages} ({total_results})')
             else:
                 self.result_subtitle = f'Page {current_page_number}'
-                if header := self.query_one('#work-items-total-header', Static):
-                    header.update('')
                 if footer := self.query_one('#work-items-page-footer', Static):
-                    footer.update(f'Page {current_page_number}')
+                    footer.update(f'{current_page_number}/{current_page_number}')

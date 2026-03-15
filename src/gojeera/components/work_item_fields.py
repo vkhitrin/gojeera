@@ -9,7 +9,8 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalGroup, VerticalScroll
 from textual.message import Message
 from textual.reactive import Reactive, reactive
-from textual.widgets import Input, Label, ProgressBar, Select
+from textual.widget import Widget
+from textual.widgets import Input, Label, Select, Static
 from textual.widgets._select import SelectOverlay
 from textual_tags import Tag, TagAutoComplete, Tags
 
@@ -23,7 +24,7 @@ from gojeera.constants import (
     WorkItemUnsupportedUpdateFieldKeys,
 )
 from gojeera.exceptions import UpdateWorkItemException, ValidationError
-from gojeera.models import JiraUser, JiraWorkItem, TimeTracking, WorkItemPriority
+from gojeera.models import JiraUser, JiraWorkItem, WorkItemPriority
 from gojeera.utils.fields import (
     FieldMode,
     get_sprint_field_id_from_editmeta,
@@ -68,6 +69,23 @@ class WorkItemUpdated(Message):
         self.work_item = work_item
 
 
+class FieldRowSlot(VerticalGroup):
+    """Row wrapper that applies spacing above visible rows."""
+
+    def __init__(self, *, include_top_spacer: bool = False, **kwargs: Any) -> None:
+        classes = kwargs.pop('classes', '')
+        combined_classes = 'field-row-slot'
+        if classes:
+            combined_classes = f'{combined_classes} {classes}'
+        super().__init__(classes=combined_classes, **kwargs)
+        self.include_top_spacer = include_top_spacer
+        self.set_spacer_visible(include_top_spacer)
+
+    def set_spacer_visible(self, visible: bool) -> None:
+        self.include_top_spacer = visible
+        self.set_styles(f'margin: {1 if visible else 0} 0 0 0;')
+
+
 class DateMetadata(VerticalGroup):
     """Container for date/metadata field widgets."""
 
@@ -81,23 +99,10 @@ class DateMetadata(VerticalGroup):
         width: 100%;
     }
 
-    DateMetadata > Horizontal {
+    DateMetadata > .field-row-slot > Horizontal {
         width: 100%;
         height: auto;
         align: center middle;
-    }
-
-    DateMetadata > Horizontal > Label {
-        width: 20%;
-        min-width: 15;
-        max-width: 30;
-        padding-right: 2;
-        text-style: bold;
-    }
-
-    DateMetadata > Horizontal > DateInput,
-    DateMetadata > Horizontal > ReadOnlyInputField {
-        width: 1fr;
     }
     """
 
@@ -113,21 +118,8 @@ class WorkItemFields(Container, can_focus=False):
         layout: vertical;
     }
 
-    #pending-changes-notification-label {
-        width: 100%;
-        height: 1;
-        margin: 0;
-        padding: 0 0 0 5;
-        color: $warning;
-        text-style: bold;
-        background: $warning 20%;
-        text-align: center;
-        dock: bottom;
-        visibility: hidden;
-    }
-
-    #pending-changes-notification-label.visible {
-        visibility: visible;
+    WorkItemFields.-loading > #work-item-fields-form {
+        opacity: 0;
     }
 
     /* Vertical layout for narrow screens */
@@ -145,23 +137,16 @@ class WorkItemFields(Container, can_focus=False):
         width: 100%;
     }
 
-    /* Dynamic field containers for read-only custom fields */
+    #work-item-fields-form.narrow Horizontal > .field_control {
+        width: 100%;
+        min-width: 0;
+        margin-right: 0;
+    }
+
     .dynamic-field-container {
         width: 100%;
         height: auto;
         align: center middle;
-    }
-
-    .dynamic-field-container > Label {
-        width: 20%;
-        min-width: 15;
-        max-width: 30;
-        padding-right: 2;
-        text-style: bold;
-    }
-
-    .dynamic-field-container > ReadOnlyInputField {
-        width: 1fr;
     }
     """
 
@@ -180,6 +165,7 @@ class WorkItemFields(Container, can_focus=False):
         self.available_users: list[tuple[str, str]] | None = None
         self.can_focus = False
         self._current_loading_worker = None
+        self._show_time_tracking_after_load = False
 
     @property
     def help_anchor(self) -> str:
@@ -210,10 +196,6 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#resolution', ReadOnlyInputField)
 
     @property
-    def work_item_time_tracking(self) -> ProgressBar:
-        return self.query_one(ProgressBar)
-
-    @property
     def work_item_created_date_field(self) -> ReadOnlyInputField:
         return self.query_one('#created', ReadOnlyInputField)
 
@@ -226,76 +208,96 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#due-date', DateInput)
 
     @property
-    def time_tracking_widget(self) -> TimeTrackingWidget:
-        return self.query_one(TimeTrackingWidget)
-
-    @property
     def work_item_labels_widget(self) -> WorkItemLabels:
         return self.query_one(WorkItemLabels)
 
     @property
-    def labels_field_container(self) -> Horizontal:
-        return self.query_one('#labels-field-container', expect_type=Horizontal)
+    def labels_field_container(self) -> FieldRowSlot:
+        return self.query_one('#labels-field-container', expect_type=FieldRowSlot)
+
+    @property
+    def status_field_container(self) -> FieldRowSlot:
+        return self.query_one('#status-field-container', expect_type=FieldRowSlot)
+
+    @property
+    def priority_field_container(self) -> FieldRowSlot:
+        return self.query_one('#priority-field-container', expect_type=FieldRowSlot)
+
+    @property
+    def assignee_field_container(self) -> FieldRowSlot:
+        return self.query_one('#assignee-field-container', expect_type=FieldRowSlot)
+
+    @property
+    def reporter_field_container(self) -> FieldRowSlot:
+        return self.query_one('#reporter-field-container', expect_type=FieldRowSlot)
 
     @property
     def work_item_components_widget(self) -> MultiSelect:
         return self.query_one('#components', MultiSelect)
 
     @property
-    def components_field_container(self) -> Horizontal:
-        return self.query_one('#components-field-container', expect_type=Horizontal)
+    def components_field_container(self) -> FieldRowSlot:
+        return self.query_one('#components-field-container', expect_type=FieldRowSlot)
 
     @property
     def work_item_affects_version_widget(self) -> MultiSelect:
         return self.query_one('#versions', MultiSelect)
 
     @property
-    def affects_version_field_container(self) -> Horizontal:
-        return self.query_one('#affects-version-field-container', expect_type=Horizontal)
+    def affects_version_field_container(self) -> FieldRowSlot:
+        return self.query_one('#affects-version-field-container', expect_type=FieldRowSlot)
 
     @property
     def work_item_fix_version_widget(self) -> MultiSelect:
         return self.query_one('#fixVersions', MultiSelect)
 
     @property
-    def fix_version_field_container(self) -> Horizontal:
-        return self.query_one('#fix-version-field-container', expect_type=Horizontal)
+    def fix_version_field_container(self) -> FieldRowSlot:
+        return self.query_one('#fix-version-field-container', expect_type=FieldRowSlot)
 
     @property
     def work_item_story_points_widget(self) -> NumericInput:
         return self.query_one('#story-points', NumericInput)
 
     @property
-    def story_points_field_container(self) -> Horizontal:
-        return self.query_one('#story-points-field-container', expect_type=Horizontal)
+    def story_points_field_container(self) -> FieldRowSlot:
+        return self.query_one('#story-points-field-container', expect_type=FieldRowSlot)
 
     @property
     def sprint_picker_widget(self) -> SprintPicker:
         return self.query_one('#sprint', SprintPicker)
 
     @property
-    def sprint_field_container(self) -> Horizontal:
-        return self.query_one('#sprint-field-container', expect_type=Horizontal)
+    def sprint_field_container(self) -> FieldRowSlot:
+        return self.query_one('#sprint-field-container', expect_type=FieldRowSlot)
 
     @property
     def work_item_resolution_date_field(self) -> ReadOnlyInputField:
         return self.query_one('#resolution-date', ReadOnlyInputField)
 
     @property
-    def resolution_field_container(self) -> Horizontal:
-        return self.query_one('#resolution-field-container', expect_type=Horizontal)
+    def pending_changes_label(self) -> Static:
+        return self.query_one('#work-item-fields-pending-changes-label', expect_type=Static)
 
     @property
-    def resolution_date_container(self) -> Horizontal:
-        return self.query_one('#resolution-date-container', expect_type=Horizontal)
+    def resolution_field_container(self) -> FieldRowSlot:
+        return self.query_one('#resolution-field-container', expect_type=FieldRowSlot)
 
     @property
-    def pending_changes_notification_label(self) -> Label:
-        try:
-            return self.query_one('#pending-changes-notification-label', expect_type=Label)
-        except Exception:
-            pass
-        raise ValueError('Notification label not found')
+    def resolution_date_container(self) -> FieldRowSlot:
+        return self.query_one('#resolution-date-container', expect_type=FieldRowSlot)
+
+    @property
+    def due_date_container(self) -> FieldRowSlot:
+        return self.query_one('#due-date-container', expect_type=FieldRowSlot)
+
+    @property
+    def updated_container(self) -> FieldRowSlot:
+        return self.query_one('#updated-container', expect_type=FieldRowSlot)
+
+    @property
+    def created_container(self) -> FieldRowSlot:
+        return self.query_one('#created-container', expect_type=FieldRowSlot)
 
     @property
     def time_tracking_container(self) -> Vertical:
@@ -309,104 +311,155 @@ class WorkItemFields(Container, can_focus=False):
     def dynamic_fields_widgets_container(self) -> DynamicFieldsWidgets:
         return self.query_one(DynamicFieldsWidgets)
 
+    @staticmethod
+    def _field_label(text: str) -> Label:
+        return Label(text, classes='field_label')
+
+    @staticmethod
+    def _field_control(widget: Widget) -> Widget:
+        widget.add_class('field_control')
+        widget.styles.width = '1fr'
+        return widget
+
     def compose(self) -> ComposeResult:
-        yield Vertical(id='time-tracking-container')
         with VerticalScroll(id='work-item-fields-form') as fields_form:
             fields_form.can_focus = False
+            with Vertical(id='time-tracking-container') as time_tracking_container:
+                time_tracking_container.display = False
+                yield TimeTrackingWidget()
 
             with StaticFieldsWidgets():
-                with Horizontal(id='status-field-container'):
-                    yield Label('Status')
-                    yield WorkItemStatusSelectionInput([])
-                with Horizontal(id='resolution-field-container') as resolution_container:
+                with FieldRowSlot(id='status-field-container'):
+                    with Horizontal(id='status-field-row'):
+                        yield self._field_label('Status')
+                        yield self._field_control(WorkItemStatusSelectionInput([]))
+                with FieldRowSlot(
+                    id='resolution-field-container', include_top_spacer=True
+                ) as resolution_container:
                     resolution_container.display = False
-                    yield Label('Resolution')
-                    yield ReadOnlyInputField(id='resolution')
-                with Horizontal(id='priority-field-container'):
-                    yield Label('Priority')
-                    yield SelectionWidget(
-                        mode=FieldMode.UPDATE,
-                        field_id='priority',
-                        options=[],
-                    )
-                with Horizontal(id='assignee-field-container'):
-                    yield Label('Assignee')
-                    yield UserSelectionInput(users=[])
-                with Horizontal():
-                    yield Label('Reporter')
-                    yield ReadOnlyInputField(id='reporter')
-                with Horizontal(id='labels-field-container'):
-                    yield Label('Labels')
-                    yield WorkItemLabels(
-                        mode=FieldMode.UPDATE,
-                        field_id='labels',
-                        title='Labels',
-                    )
-                with Horizontal(id='components-field-container'):
-                    yield Label('Components')
-                    yield MultiSelect(
-                        mode=FieldMode.UPDATE,
-                        field_id='components',
-                        options=[],
-                        title='Components',
-                        required=False,
-                    )
-                with Horizontal(id='affects-version-field-container'):
-                    yield Label('Affects Versions')
-                    yield MultiSelect(
-                        mode=FieldMode.UPDATE,
-                        field_id='versions',
-                        options=[],
-                        title='Affects Versions',
-                        required=False,
-                    )
-                with Horizontal(id='fix-version-field-container'):
-                    yield Label('Fix Versions')
-                    yield MultiSelect(
-                        mode=FieldMode.UPDATE,
-                        field_id='fixVersions',
-                        options=[],
-                        title='Fix Versions',
-                        required=False,
-                    )
-                with Horizontal(id='story-points-field-container'):
-                    yield Label('Story Points')
-                    yield NumericInput(
-                        mode=FieldMode.UPDATE,
-                        field_id='story-points',
-                        title='Story Points',
-                    )
-                with Horizontal(id='sprint-field-container') as sprint_container:
+                    with Horizontal(id='resolution-field-row'):
+                        yield self._field_label('Resolution')
+                        yield self._field_control(ReadOnlyInputField(id='resolution'))
+                with FieldRowSlot(id='priority-field-container', include_top_spacer=True):
+                    with Horizontal(id='priority-field-row'):
+                        yield self._field_label('Priority')
+                        yield self._field_control(
+                            SelectionWidget(
+                                mode=FieldMode.UPDATE,
+                                field_id='priority',
+                                options=[],
+                            )
+                        )
+                with FieldRowSlot(id='assignee-field-container', include_top_spacer=True):
+                    with Horizontal(id='assignee-field-row'):
+                        yield self._field_label('Assignee')
+                        yield self._field_control(UserSelectionInput(users=[]))
+                with FieldRowSlot(id='reporter-field-container', include_top_spacer=True):
+                    with Horizontal(id='reporter-field-row'):
+                        yield self._field_label('Reporter')
+                        yield self._field_control(ReadOnlyInputField(id='reporter'))
+                with FieldRowSlot(id='labels-field-container', include_top_spacer=True):
+                    with Horizontal(id='labels-field-row'):
+                        yield self._field_label('Labels')
+                        yield self._field_control(
+                            WorkItemLabels(
+                                mode=FieldMode.UPDATE,
+                                field_id='labels',
+                                title='Labels',
+                            )
+                        )
+                with FieldRowSlot(id='components-field-container', include_top_spacer=True):
+                    with Horizontal(id='components-field-row'):
+                        yield self._field_label('Components')
+                        yield self._field_control(
+                            MultiSelect(
+                                mode=FieldMode.UPDATE,
+                                field_id='components',
+                                options=[],
+                                title='Components',
+                                required=False,
+                            )
+                        )
+                with FieldRowSlot(id='affects-version-field-container', include_top_spacer=True):
+                    with Horizontal(id='affects-version-field-row'):
+                        yield self._field_label('Affects Versions')
+                        yield self._field_control(
+                            MultiSelect(
+                                mode=FieldMode.UPDATE,
+                                field_id='versions',
+                                options=[],
+                                title='Affects Versions',
+                                required=False,
+                            )
+                        )
+                with FieldRowSlot(id='fix-version-field-container', include_top_spacer=True):
+                    with Horizontal(id='fix-version-field-row'):
+                        yield self._field_label('Fix Versions')
+                        yield self._field_control(
+                            MultiSelect(
+                                mode=FieldMode.UPDATE,
+                                field_id='fixVersions',
+                                options=[],
+                                title='Fix Versions',
+                                required=False,
+                            )
+                        )
+                with FieldRowSlot(id='story-points-field-container', include_top_spacer=True):
+                    with Horizontal(id='story-points-field-row'):
+                        yield self._field_label('Story Points')
+                        yield self._field_control(
+                            NumericInput(
+                                mode=FieldMode.UPDATE,
+                                field_id='story-points',
+                                title='Story Points',
+                            )
+                        )
+                with FieldRowSlot(
+                    id='sprint-field-container', include_top_spacer=True
+                ) as sprint_container:
                     sprint_container.display = False
-                    yield Label('Sprint')
-                    yield SprintPicker(
-                        mode=FieldMode.UPDATE,
-                        field_id='sprint',
-                        title='Sprint',
-                    )
+                    with Horizontal(id='sprint-field-row'):
+                        yield self._field_label('Sprint')
+                        yield self._field_control(
+                            SprintPicker(
+                                mode=FieldMode.UPDATE,
+                                field_id='sprint',
+                                title='Sprint',
+                            )
+                        )
 
             yield DynamicFieldsWidgets()
 
             with DateMetadata():
-                with Horizontal():
-                    yield Label('Due Date')
-                    yield DateInput(
-                        mode=FieldMode.UPDATE,
-                        field_id='due-date',
-                        title='Due Date',
-                    )
-                with Horizontal():
-                    yield Label('Updated')
-                    yield ReadOnlyInputField(id='updated')
-                with Horizontal():
-                    yield Label('Created')
-                    yield ReadOnlyInputField(id='created')
-                with Horizontal(id='resolution-date-container') as resolution_date_container:
+                with FieldRowSlot(id='due-date-container'):
+                    with Horizontal(id='due-date-row'):
+                        yield self._field_label('Due Date')
+                        yield self._field_control(
+                            DateInput(
+                                mode=FieldMode.UPDATE,
+                                field_id='due-date',
+                                title='Due Date',
+                            )
+                        )
+                with FieldRowSlot(id='updated-container', include_top_spacer=True):
+                    with Horizontal(id='updated-row'):
+                        yield self._field_label('Updated')
+                        yield self._field_control(ReadOnlyInputField(id='updated'))
+                with FieldRowSlot(id='created-container', include_top_spacer=True):
+                    with Horizontal(id='created-row'):
+                        yield self._field_label('Created')
+                        yield self._field_control(ReadOnlyInputField(id='created'))
+                with FieldRowSlot(
+                    id='resolution-date-container', include_top_spacer=True
+                ) as resolution_date_container:
                     resolution_date_container.display = False
-                    yield Label('Resolution Date')
-                    yield ReadOnlyInputField(id='resolution-date')
-
-        yield Label('⚠ Pending changes', id='pending-changes-notification-label')
+                    with Horizontal(id='resolution-date-row'):
+                        yield self._field_label('Resolution Date')
+                        yield self._field_control(ReadOnlyInputField(id='resolution-date'))
+        with Horizontal(id='work-item-fields-pending-changes-container'):
+            label = Static('⚠ Pending changes', id='work-item-fields-pending-changes-label')
+            label.display = False
+            yield label
 
     def _setup_jump_mode(self) -> None:
         content = self.content_container
@@ -444,6 +497,68 @@ class WorkItemFields(Container, can_focus=False):
 
     def on_resize(self) -> None:
         self._update_layout_mode()
+
+    def _schedule_field_spacing_refresh(self) -> None:
+        if not self.is_mounted:
+            return
+        self.call_after_refresh(self._refresh_field_spacing)
+
+    def _refresh_field_spacing(self) -> None:
+        previous_visible_row_exists = False
+        ordered_items: list[Widget] = []
+        if self.time_tracking_container.display:
+            ordered_items.append(self.time_tracking_container)
+
+        ordered_items.extend(
+            slot
+            for slot in [
+                self.status_field_container,
+                self.resolution_field_container,
+                self.priority_field_container,
+                self.assignee_field_container,
+                self.reporter_field_container,
+                self.labels_field_container,
+                self.components_field_container,
+                self.affects_version_field_container,
+                self.fix_version_field_container,
+                self.story_points_field_container,
+                self.sprint_field_container,
+            ]
+            if slot.display
+        )
+
+        dynamic_rows = [
+            child
+            for child in self.dynamic_fields_widgets_container.children
+            if isinstance(child, FieldRowSlot) and child.display
+        ]
+        if dynamic_rows:
+            ordered_items.extend(dynamic_rows)
+
+        ordered_items.extend(
+            slot
+            for slot in [
+                self.due_date_container,
+                self.updated_container,
+                self.created_container,
+                self.resolution_date_container,
+            ]
+            if slot.display
+        )
+
+        self.time_tracking_container.set_styles('margin: 0 0 0 0;')
+        self.dynamic_fields_widgets_container.set_styles('margin: 0 0 0 0;')
+
+        for child in self.dynamic_fields_widgets_container.children:
+            if isinstance(child, FieldRowSlot):
+                child.set_spacer_visible(False)
+
+        for item in ordered_items:
+            if isinstance(item, FieldRowSlot):
+                item.set_spacer_visible(previous_visible_row_exists)
+            else:
+                item.set_styles(f'margin: {1 if previous_visible_row_exists else 0} 0 0 0;')
+            previous_visible_row_exists = True
 
     async def on_mount(self) -> None:
         self.content_container.display = False
@@ -521,18 +636,11 @@ class WorkItemFields(Container, can_focus=False):
         self._update_pending_changes_indicator()
 
     def watch_has_pending_changes(self, has_changes: bool) -> None:
+        self.pending_changes_label.display = has_changes
         self._update_notification_label_visibility(has_changes)
 
     def _update_notification_label_visibility(self, has_changes: bool) -> None:
-        try:
-            notification_label = self.pending_changes_notification_label
-        except Exception:
-            return
-
-        if has_changes:
-            notification_label.add_class('visible')
-        else:
-            notification_label.remove_class('visible')
+        self.refresh(layout=True)
 
     def action_view_worklog(self) -> None:
         if self.work_item:
@@ -598,6 +706,9 @@ class WorkItemFields(Container, can_focus=False):
 
         return current_values
 
+    def _iter_dynamic_field_wrappers(self) -> list[DynamicFieldWrapper]:
+        return list(self.dynamic_fields_widgets_container.query(DynamicFieldWrapper))
+
     async def _update_dynamic_widgets_values(
         self, updated_work_item: JiraWorkItem, editable_fields: dict[str, bool]
     ) -> None:
@@ -606,13 +717,9 @@ class WorkItemFields(Container, can_focus=False):
 
         current_values = self._extract_dynamic_current_values(updated_work_item)
 
-        for child in self.dynamic_fields_widgets_container.children:
-            if isinstance(child, DynamicFieldWrapper):
-                dynamic_widget = child.widget
-                field_key = child.jira_field_key
-            else:
-                dynamic_widget = child
-                field_key = getattr(dynamic_widget, 'jira_field_key', '')
+        for wrapper in self._iter_dynamic_field_wrappers():
+            dynamic_widget = wrapper.widget
+            field_key = wrapper.jira_field_key
 
             if not dynamic_widget or not field_key:
                 continue
@@ -733,7 +840,7 @@ class WorkItemFields(Container, can_focus=False):
                     self.work_item_due_date_field.jira_field_key, True
                 )
 
-                self._setup_time_tracking(updated_work_item.time_tracking)
+                self._setup_time_tracking(updated_work_item)
 
             setup_tasks = [
                 self._retrieve_applicable_status_codes(
@@ -766,6 +873,7 @@ class WorkItemFields(Container, can_focus=False):
 
             self.has_pending_changes = False
             self._update_all_field_labels_styling()
+            self._schedule_field_spacing_refresh()
         finally:
             self._loading_form = False
 
@@ -934,43 +1042,74 @@ class WorkItemFields(Container, can_focus=False):
             self.sprint_picker_widget._original_value = None
             self.sprint_picker_widget.update_enabled = False
             self.sprint_field_container.display = False
+            self._schedule_field_spacing_refresh()
 
     def watch_is_loading(self, loading: bool) -> None:
         with self.app.batch_update():
-            self.content_container.display = not loading
+            self.content_container.display = loading or self.work_item is not None
+            self.set_class(loading, '-loading')
+            self.time_tracking_container.display = (
+                not loading and self._show_time_tracking_after_load
+            )
 
-    def _setup_time_tracking(self, time_tracking_data: TimeTracking | None) -> None:
-        self.time_tracking_container.display = True
+    @staticmethod
+    def _format_duration(seconds: int | None) -> str | None:
+        if seconds is None:
+            return None
+        if seconds <= 0:
+            return '0m'
 
-        try:
-            widget = self.time_tracking_container.query_one(TimeTrackingWidget)
+        hours, remainder = divmod(seconds, 3600)
+        minutes = remainder // 60
 
-            if not time_tracking_data:
-                widget.update_time_tracking(
-                    original_estimate=None,
-                    time_spent=None,
-                    remaining_estimate=None,
-                    original_estimate_seconds=None,
-                    time_spent_seconds=None,
-                    remaining_estimate_seconds=None,
-                )
-            else:
-                widget.update_time_tracking(
-                    time_tracking_data.original_estimate,
-                    time_tracking_data.time_spent,
-                    time_tracking_data.remaining_estimate,
-                    time_tracking_data.original_estimate_seconds,
-                    time_tracking_data.time_spent_seconds,
-                    time_tracking_data.remaining_estimate_seconds,
-                )
-            return
-        except Exception:
-            pass
+        parts: list[str] = []
+        if hours:
+            parts.append(f'{hours}h')
+        if minutes:
+            parts.append(f'{minutes}m')
 
-        self.time_tracking_container.remove_children()
+        return ' '.join(parts) if parts else '0m'
 
-        if not time_tracking_data:
-            time_tracking_widget = TimeTrackingWidget(
+    def _setup_time_tracking(self, work_item: JiraWorkItem | None) -> None:
+        widget = self.time_tracking_container.query_one(TimeTrackingWidget)
+        time_tracking_data = work_item.time_tracking if work_item else None
+        additional_fields = work_item.additional_fields or {} if work_item else {}
+        aggregate_time_spent = additional_fields.get('aggregatetimespent')
+        remaining_estimate_seconds = (
+            time_tracking_data.remaining_estimate_seconds
+            if time_tracking_data and time_tracking_data.remaining_estimate_seconds is not None
+            else additional_fields.get('timeestimate')
+        )
+        remaining_estimate = (
+            time_tracking_data.remaining_estimate
+            if time_tracking_data and time_tracking_data.remaining_estimate
+            else self._format_duration(remaining_estimate_seconds)
+        )
+        time_spent_seconds = (
+            time_tracking_data.time_spent_seconds
+            if time_tracking_data and time_tracking_data.time_spent_seconds is not None
+            else aggregate_time_spent
+        )
+        time_spent = (
+            time_tracking_data.time_spent
+            if time_tracking_data and time_tracking_data.time_spent
+            else self._format_duration(time_spent_seconds)
+        )
+        original_estimate_seconds = (
+            time_tracking_data.original_estimate_seconds
+            if time_tracking_data and time_tracking_data.original_estimate_seconds is not None
+            else additional_fields.get('timeoriginalestimate')
+        )
+        original_estimate = (
+            time_tracking_data.original_estimate
+            if time_tracking_data and time_tracking_data.original_estimate
+            else self._format_duration(original_estimate_seconds)
+        )
+
+        if aggregate_time_spent is None:
+            self._show_time_tracking_after_load = False
+            self.time_tracking_container.display = False
+            widget.update_time_tracking(
                 original_estimate=None,
                 time_spent=None,
                 remaining_estimate=None,
@@ -978,17 +1117,20 @@ class WorkItemFields(Container, can_focus=False):
                 time_spent_seconds=None,
                 remaining_estimate_seconds=None,
             )
-        else:
-            time_tracking_widget = TimeTrackingWidget(
-                time_tracking_data.original_estimate,
-                time_tracking_data.time_spent,
-                time_tracking_data.remaining_estimate,
-                time_tracking_data.original_estimate_seconds,
-                time_tracking_data.time_spent_seconds,
-                time_tracking_data.remaining_estimate_seconds,
-            )
+            self._schedule_field_spacing_refresh()
+            return
 
-        self.time_tracking_container.mount(time_tracking_widget)
+        self._show_time_tracking_after_load = True
+        self.time_tracking_container.display = not self.is_loading
+        widget.update_time_tracking(
+            original_estimate,
+            time_spent,
+            remaining_estimate,
+            original_estimate_seconds,
+            time_spent_seconds,
+            remaining_estimate_seconds,
+        )
+        self._schedule_field_spacing_refresh()
 
     def _build_payload_for_update(self) -> dict:
         payload: dict[str, Any] = {}
@@ -1050,39 +1192,24 @@ class WorkItemFields(Container, can_focus=False):
                 )
 
         if CONFIGURATION.get().enable_updating_additional_fields:
-            for wrapper in self.dynamic_fields_widgets_container.children:
-                if isinstance(wrapper, DynamicFieldWrapper):
-                    dynamic_widget = wrapper.widget
-                    if not dynamic_widget:
-                        continue
-                else:
-                    dynamic_widget = wrapper
+            for wrapper in self._iter_dynamic_field_wrappers():
+                dynamic_widget = wrapper.widget
+                if not dynamic_widget:
+                    continue
 
-                if (
-                    not isinstance(dynamic_widget, NumericInput)
-                    and not isinstance(dynamic_widget, DateInput)
-                    and not isinstance(dynamic_widget, DateTimeInput)
-                    and not isinstance(dynamic_widget, SelectionWidget)
-                    and not isinstance(dynamic_widget, URL)
-                    and not isinstance(dynamic_widget, MultiSelect)
-                    and not isinstance(dynamic_widget, TextInput)
-                    and not isinstance(dynamic_widget, WorkItemLabels)
-                    and not isinstance(dynamic_widget, UserPicker)
+                if not hasattr(dynamic_widget, 'value_has_changed') or not hasattr(
+                    dynamic_widget, 'get_value_for_update'
                 ):
                     continue
 
-                if isinstance(wrapper, DynamicFieldWrapper):
-                    if not wrapper.value_has_changed:
-                        continue
-                    value_for_update = wrapper.get_value_for_update()
-                    field_key = wrapper.jira_field_key
-                else:
-                    if not dynamic_widget.value_has_changed:
-                        continue
-                    value_for_update = dynamic_widget.get_value_for_update()
-                    field_key = dynamic_widget.jira_field_key
+                if not wrapper.value_has_changed:
+                    continue
 
-                payload[field_key] = value_for_update
+                field_key = wrapper.jira_field_key
+                if not field_key:
+                    continue
+
+                payload[field_key] = wrapper.get_value_for_update()
         return payload
 
     def _check_for_pending_changes(self) -> bool:
@@ -1470,7 +1597,7 @@ class WorkItemFields(Container, can_focus=False):
             if work_item.priority:
                 self._setup_priority_selector(work_item.edit_meta, work_item.priority)
 
-            self._setup_time_tracking(work_item.time_tracking)
+            self._setup_time_tracking(work_item)
 
         setup_tasks = [
             self._setup_labels_field(work_item, editable_fields),
@@ -1487,14 +1614,6 @@ class WorkItemFields(Container, can_focus=False):
         await asyncio.gather(*setup_tasks)
 
         self.refresh(layout=True)
-
-        self.is_loading = False
-
-        try:
-            info_container = self.screen.query_one(WorkItemInfoContainer)
-            info_container.signal_fields_widget_ready()
-        except Exception as e:
-            self.app.log.error(f'Failed to signal info container ready: {e}')
 
         if not self.work_item or self.work_item.key != work_item_key:
             return
@@ -1516,6 +1635,14 @@ class WorkItemFields(Container, can_focus=False):
 
             self.has_pending_changes = False
             self._loading_form = False
+            self._refresh_field_spacing()
+            self.is_loading = False
+
+            try:
+                info_container = self.screen.query_one(WorkItemInfoContainer)
+                info_container.signal_fields_widget_ready()
+            except Exception as e:
+                self.app.log.error(f'Failed to signal info container ready: {e}')
 
         self.call_after_refresh(finalize_form_load)
 
@@ -1642,20 +1769,28 @@ class WorkItemFields(Container, can_focus=False):
 
             if containers:
                 with self.app.batch_update():
-                    # Mount all containers first
-                    await self.dynamic_fields_widgets_container.mount(
-                        *(container for container, _, _ in containers)
+                    slots = await self._mount_field_rows_with_spacers(
+                        self.dynamic_fields_widgets_container,
+                        [container for container, _, _ in containers],
                     )
                     # Then mount children to each container
-                    for field_container, field_label, display_value in containers:
+                    for slot, (_, field_label, display_value) in zip(
+                        slots, containers, strict=True
+                    ):
+                        field_container = slot.query_one(
+                            '.dynamic-field-container', expect_type=Horizontal
+                        )
                         label = Label(field_label, classes='field_label')
                         readonly_field = ReadOnlyInputField()
+                        readonly_field.add_class('field_control')
+                        readonly_field.styles.width = '1fr'
                         readonly_field.value = display_value
                         await field_container.mount(label, readonly_field)
 
                     self.dynamic_fields_widgets_container.display = True
             else:
                 self.dynamic_fields_widgets_container.display = False
+            self._schedule_field_spacing_refresh()
             return
 
         # Normal path: editmeta is available, build editable widgets
@@ -1705,7 +1840,10 @@ class WorkItemFields(Container, can_focus=False):
             sorted_widgets = other_widgets + adf_textarea_widgets
 
             with self.app.batch_update():
-                await self.dynamic_fields_widgets_container.mount(*sorted_widgets)
+                await self._mount_field_rows_with_spacers(
+                    self.dynamic_fields_widgets_container, sorted_widgets
+                )
+                self._apply_fields_panel_layout_to_dynamic_widgets()
 
                 self.dynamic_fields_widgets_container.display = True
 
@@ -1717,6 +1855,24 @@ class WorkItemFields(Container, can_focus=False):
             self._setup_jump_mode()
         else:
             self.dynamic_fields_widgets_container.display = False
+        self._schedule_field_spacing_refresh()
+
+    async def _mount_field_rows_with_spacers(
+        self, container: VerticalGroup, rows: list[Widget]
+    ) -> list[FieldRowSlot]:
+        slots = [FieldRowSlot(include_top_spacer=index > 0) for index, _ in enumerate(rows)]
+        await container.mount(*slots)
+        for slot, row in zip(slots, rows, strict=True):
+            await slot.mount(row)
+        return slots
+
+    def _apply_fields_panel_layout_to_dynamic_widgets(self) -> None:
+        for wrapper in self.dynamic_fields_widgets_container.query(DynamicFieldWrapper):
+            if wrapper.widget is None:
+                continue
+
+            wrapper.widget.add_class('field_control')
+            wrapper.widget.styles.width = '1fr'
 
     async def _populate_user_picker_widgets(
         self, work_item: JiraWorkItem, editable_fields: dict

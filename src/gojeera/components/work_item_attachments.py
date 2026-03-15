@@ -28,6 +28,18 @@ class AttachmentsContainer(Container):
 class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
     """A container for displaying the files attached to a work item."""
 
+    DEFAULT_CSS = """
+    WorkItemAttachmentsWidget {
+        width: 100%;
+        height: 1fr;
+    }
+
+    WorkItemAttachmentsWidget > .tab-content-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
+
     attachments: Reactive[list[Attachment] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
     is_loading: Reactive[bool] = reactive(False, always_update=True)

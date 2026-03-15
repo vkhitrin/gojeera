@@ -5,8 +5,6 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from gojeera.utils.adf_helpers import convert_adf_to_markdown
-
 
 def custom_as_dict_factory(data) -> dict:
     def convert_value(obj):
@@ -26,6 +24,12 @@ def custom_as_json_dict_factory(data) -> dict:
         return obj
 
     return {k: convert_value(v) for k, v in data}
+
+
+def _convert_adf_to_markdown(value: dict, base_url: str | None = None) -> str:
+    from gojeera.utils.adf_helpers import convert_adf_to_markdown
+
+    return convert_adf_to_markdown(value, base_url)
 
 
 class JiraWorkItemGenericFields(Enum):
@@ -152,7 +156,7 @@ class WorkItemComment(BaseModel):
             return ''
         if isinstance(self.body, str):
             return self.body
-        return convert_adf_to_markdown(self.body, base_url)
+        return _convert_adf_to_markdown(self.body, base_url)
 
 
 @dataclass
@@ -379,7 +383,7 @@ class JiraWorkItem(JiraBaseWorkItem):
             return ''
         if isinstance(self.description, str):
             return self.description
-        return convert_adf_to_markdown(self.description, base_url)
+        return _convert_adf_to_markdown(self.description, base_url)
 
     def __repr__(self) -> str:
         return f'id:{self.id} - key:{self.key}'
@@ -610,7 +614,7 @@ class JiraWorklog(BaseModel):
             return ''
         if isinstance(self.comment, str):
             return self.comment
-        return convert_adf_to_markdown(self.comment, base_url)
+        return _convert_adf_to_markdown(self.comment, base_url)
 
 
 @dataclass

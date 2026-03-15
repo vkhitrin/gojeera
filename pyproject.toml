@@ -114,6 +114,7 @@ ignore_names = [
     "_align_to_target",
     "_handle_account_id_ready",
     "_on_*",
+    "_overlays",
     "_selected_work_item_type_id",
     "_stored_title",
     "_token_to_content",

@@ -35,32 +35,14 @@ class StaticFieldsWidgets(VerticalGroup):
         width: 100%;
     }
 
-    StaticFieldsWidgets > Horizontal {
+    StaticFieldsWidgets > .field-row-slot > Horizontal {
         width: 100%;
         height: auto;
         align: center middle;
     }
     
-    StaticFieldsWidgets > Horizontal > Label {
-        width: 20%;
-        min-width: 15;
-        max-width: 30;
-        padding-right: 2;
-        text-style: bold;
-    }
-    
-    StaticFieldsWidgets > Horizontal > Label.pending_field_label {
+    StaticFieldsWidgets > .field-row-slot > Horizontal > Label.pending_field_label {
         color: $warning;
-    }
-    
-    StaticFieldsWidgets > Horizontal > WorkItemStatusSelectionInput,
-    StaticFieldsWidgets > Horizontal > ReadOnlyInputField,
-    StaticFieldsWidgets > Horizontal > SelectionWidget,
-    StaticFieldsWidgets > Horizontal > UserSelectionInput,
-    StaticFieldsWidgets > Horizontal > WorkItemLabels,
-    StaticFieldsWidgets > Horizontal > MultiSelect,
-    StaticFieldsWidgets > Horizontal > NumericInput {
-        width: 1fr;
     }
     """
 
@@ -78,7 +60,7 @@ class DynamicFieldsWidgets(VerticalGroup):
         width: 100%;
     }
 
-    DynamicFieldsWidgets > Horizontal {
+    DynamicFieldsWidgets > .field-row-slot > Horizontal {
         width: 100%;
         height: auto;
     }
@@ -97,30 +79,8 @@ class DynamicFieldWrapper(Horizontal):
         align: center middle;
     }
     
-    DynamicFieldWrapper > Label {
-        width: 20%;
-        min-width: 15;
-        max-width: 30;
-        padding-right: 2;
-        text-style: bold;
-    }
-    
     DynamicFieldWrapper > Label.pending_field_label {
         color: $warning;
-    }
-    
-    DynamicFieldWrapper > NumericInput,
-    DynamicFieldWrapper > DateInput,
-    DynamicFieldWrapper > DateTimeInput,
-    DynamicFieldWrapper > SelectionWidget,
-    DynamicFieldWrapper > URL,
-    DynamicFieldWrapper > MultiSelect,
-    DynamicFieldWrapper > TextInput,
-    DynamicFieldWrapper > WorkItemLabels,
-    DynamicFieldWrapper > UserPicker,
-    DynamicFieldWrapper > SprintPicker,
-    DynamicFieldWrapper > ADFTextAreaWidget {
-        width: 1fr;
     }
     """
 

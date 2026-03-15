@@ -1,43 +1,41 @@
+from __future__ import annotations
+
 import asyncio
 from datetime import date
 import logging
 import os
 from pathlib import Path
 import sys
-from typing import cast
+from typing import TYPE_CHECKING
 
 from pythonjsonlogger.json import JsonFormatter
-from rich.console import Console
-from textual import on
+from textual import events, on
 from textual.app import App, ComposeResult, InvalidThemeError
 from textual.binding import Binding
 from textual.command import CommandPalette
-from textual.containers import Center, Horizontal, Vertical
+from textual.containers import Horizontal, Vertical
 from textual.reactive import Reactive, reactive
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Input, Select
+from textual.widgets import Button, Input, Select, Static, TabPane
+from textual.widgets._tabbed_content import ContentTab
 from textual.worker import Worker
 
-from gojeera.api_controller.controller import APIController, APIControllerResponse
-from gojeera.commands.decision_provider import DecisionCommandProvider
-from gojeera.commands.panel_provider import PanelCommandProvider
-from gojeera.commands.user_mention_provider import UserMentionCommandProvider
-from gojeera.components.debug_screen import DebugInfoScreen
-from gojeera.components.new_work_item_screen import AddWorkItemScreen
-from gojeera.components.quit_screen import QuitScreen
+from gojeera.api_controller.controller import APIController
 from gojeera.components.unified_search import UnifiedSearchBar
 from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 from gojeera.components.work_item_comments import WorkItemCommentsWidget
-from gojeera.components.work_item_fields import WorkItemFields, WorkItemUpdated
-from gojeera.components.work_item_information import WorkItemInformation
+from gojeera.components.work_item_fields import WorkItemFields
+from gojeera.components.work_item_information import (
+    WorkItemBreadcrumb,
+    WorkItemInformation,
+)
 from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
 from gojeera.components.work_item_result import (
-    WorkItemContainer,
     WorkItemsContainer,
     WorkItemSearchResultsScroll,
 )
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
-from gojeera.components.work_item_summary import WorkItemInfoContainer
+from gojeera.components.work_item_summary import WorkItemInfoContainer, WorkItemSummary
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.constants import (
@@ -48,17 +46,48 @@ from gojeera.constants import (
 )
 from gojeera.files import get_log_file, get_themes_directory
 from gojeera.models import (
-    JiraMyselfInfo,
-    JiraServerInfo,
-    JiraWorkItem,
-    JiraWorkItemSearchResponse,
     WorkItemSearchResult,
 )
 from gojeera.themes import load_themes_from_directory
-from gojeera.utils.obfuscation import obfuscate_account_id
-from gojeera.widgets.app_header import AppHeader
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
+
+if TYPE_CHECKING:
+    from textual.command import Provider
+
+    from gojeera.api_controller.controller import APIControllerResponse
+    from gojeera.components.work_item_fields import WorkItemUpdated
+    from gojeera.models import (
+        JiraMyselfInfo,
+        JiraServerInfo,
+        JiraWorkItem,
+        JiraWorkItemSearchResponse,
+    )
+
+
+def get_panel_command_provider() -> type[Provider]:
+    from gojeera.commands.panel_provider import PanelCommandProvider
+
+    return PanelCommandProvider
+
+
+def get_decision_command_provider() -> type[Provider]:
+    from gojeera.commands.decision_provider import DecisionCommandProvider
+
+    return DecisionCommandProvider
+
+
+def get_footer_command_provider() -> type[Provider]:
+    from gojeera.commands.footer_provider import FooterCommandProvider
+
+    return FooterCommandProvider
+
+
+def get_user_mention_command_provider() -> type[Provider]:
+    from gojeera.commands.user_mention_provider import UserMentionCommandProvider
+
+    return UserMentionCommandProvider
 
 
 class MainScreen(Screen):
@@ -121,6 +150,61 @@ class MainScreen(Screen):
         self.current_loaded_work_item_key: str | None = None
         self._active_search_data: dict | None = None
         self._active_search_term: str | None = None
+
+    def set_focus(
+        self,
+        widget,
+        scroll_visible: bool = True,
+        from_app_focus: bool = False,
+    ) -> None:
+        if widget is self.focused:
+            return
+
+        blurred = None
+        focused = None
+
+        if widget is None:
+            if self.focused is not None:
+                self.focused.post_message(events.Blur())
+                blurred = self.focused
+                self.focused = None
+            self.log.debug('focus was removed')
+        elif widget.focusable:
+            if self.focused != widget:
+                if self.focused is not None:
+                    self.focused.post_message(events.Blur())
+                    blurred = self.focused
+
+                self.focused = widget
+
+                widget.post_message(events.Focus(from_app_focus=from_app_focus))
+                focused = widget
+
+                if scroll_visible:
+
+                    def scroll_to_center(widget) -> None:
+                        if self.focused is widget and not self.can_view_entire(widget):
+                            self.scroll_to_center(widget, origin_visible=True)
+
+                    self.call_later(scroll_to_center, widget)
+
+                self.log.debug(widget, 'was focused')
+
+        self._update_focus_styles(focused, blurred)
+        self.call_after_refresh(self.refresh_bindings)
+
+    def _update_focus_styles(self, focused=None, blurred=None) -> None:
+        """Update focus-related styles without restyling whole subtrees."""
+        widgets = set()
+
+        if focused is not None:
+            widgets.update(focused.ancestors_with_self)
+
+        if blurred is not None:
+            widgets.update(blurred.ancestors_with_self)
+
+        if widgets:
+            self.app.stylesheet.update_nodes(widgets, animate=False)
 
     @property
     def tabs(self) -> ExtendedTabbedContent:
@@ -187,60 +271,76 @@ class MainScreen(Screen):
         return self.query_one('#unified-search-button', expect_type=Button)
 
     @property
-    def work_item_loading_container(self) -> Center:
-        return self.query_one('#work-item-loading-container', expect_type=Center)
+    def details_container(self) -> Vertical:
+        return self.query_one('#details-container', expect_type=Vertical)
+
+    @property
+    def pending_changes_label(self) -> Static:
+        return self.query_one('#details-pending-changes-label', expect_type=Static)
 
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
-        yield AppHeader(id='app-header')
         with Vertical(id='main-container'):
             yield UnifiedSearchBar(api=self.api, id='unified-search-bar')
             with Horizontal(id='three-split-layout'):
                 yield WorkItemsContainer(id='search-results-container')
+                with Vertical(id='details-container'):
+                    with Vertical(id='details-breadcrumb-row') as breadcrumb_row:
+                        breadcrumb_row.display = False
+                        yield WorkItemBreadcrumb()
+                        header_summary = WorkItemSummary(widget_id='details-work-item-summary')
+                        header_summary.display = False
+                        yield header_summary
+                    with Horizontal(id='details-tabs-row') as tabs_row:
+                        tabs_row.display = False
+                        with ExtendedTabbedContent(
+                            id='tabs-information',
+                            external_content=True,
+                        ):
+                            with TabPane('Description', id='tab-description'):
+                                pass
+                            with TabPane('Attachments', id='tab-attachments'):
+                                pass
+                            with TabPane('Subtasks', id='tab-subtasks'):
+                                pass
+                            with TabPane('Related Items', id='tab-related'):
+                                pass
+                            with TabPane('Web Links', id='tab-links'):
+                                pass
+                            with TabPane('Comments', id='tab-comments'):
+                                pass
 
-                with Center(id='work-item-loading-container'):
-                    pass
-
-                yield WorkItemInformation()
-
-                yield WorkItemFields()
-        yield Footer(show_command_palette=False)
+                    with Horizontal(id='details-content-row'):
+                        yield WorkItemInformation()
+                        yield WorkItemFields()
+                    with Horizontal(id='details-footer-row') as footer_row:
+                        footer_row.display = False
+                        footer_label = Static(
+                            '⚠ Pending changes', id='details-pending-changes-label'
+                        )
+                        footer_label.display = False
+                        yield footer_label
+        yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
         if self.user_info:
             account_id = self.user_info.account_id
-            self.logger.info(
-                f'Using pre-authenticated account ID: {obfuscate_account_id(account_id)}'
-            )
+            self.logger.info(f'Using pre-authenticated account ID: {account_id}')
             search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
             search_bar.post_message(search_bar.AccountIdReady(account_id))
-        else:
-            self.run_worker(self.fetch_and_cache_account_id(), name='fetch_account_id')
 
         if CONFIGURATION.get().jumper.enabled:
             self.query_one('#unified-search-bar', UnifiedSearchBar).jump_mode = 'focus'  # type: ignore[attr-defined]
             self.query_one('#search-results-container', WorkItemsContainer).jump_mode = 'focus'  # type: ignore[attr-defined]
 
-        from textual.widgets import TabPane
-        from textual.widgets._content_switcher import ContentSwitcher
-        from textual.widgets._tabbed_content import ContentTab
-
         tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-
-        tab_panes = list(tabs.query(TabPane))
-        for tab_pane in tab_panes:
-            tab_pane.can_focus = False
-
-        switchers = list(tabs.query(ContentSwitcher))
-        for switcher in switchers:
-            switcher.can_focus = False
-
-        content_tabs = list(tabs.query(ContentTab))
-        for content_tab in content_tabs:
-            content_tab.can_focus = False
+        tabs.can_focus = True
+        tabs.tabs_widget.can_focus = True
+        for tab in tabs.query(ContentTab):
+            tab.can_focus = False
             if CONFIGURATION.get().jumper.enabled:
-                setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
+                setattr(tab, 'jump_mode', 'click')  # noqa: B010
 
         work_item_container = self.query_one(
             '#work-item-fields-container', expect_type=WorkItemFields
@@ -248,12 +348,11 @@ class MainScreen(Screen):
         work_item_container.can_focus = False
 
         work_item_middle_container = self.query_one(
-            '#work-item-information-container', expect_type=Vertical
+            '#work-item-information-container', expect_type=WorkItemInformation
         )
         work_item_middle_container.can_focus = False
 
         self.tabs.disabled = True
-        self.tabs.display = False
         self.fields_panel.disabled = True
         self.fields_panel.display = False
 
@@ -294,34 +393,11 @@ class MainScreen(Screen):
             self.work_item_comments_widget, 'displayed_count', self._update_comments_tab_title
         )
 
-    async def fetch_and_cache_account_id(self) -> None:
-        try:
-            response = await self.api.myself()
-            if response.success and response.result:
-                from gojeera.models import JiraMyselfInfo
-
-                myself_info: JiraMyselfInfo = response.result
-                account_id = myself_info.account_id
-
-                app = cast('JiraApp', self.app)  # noqa: F821
-                app.user_info = myself_info
-
-                self.logger.info(
-                    f'Auto-detected and cached Jira account ID: {obfuscate_account_id(account_id)}'
-                )
-
-                search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
-                search_bar.post_message(search_bar.AccountIdReady(account_id))
-            else:
-                self.logger.warning(
-                    f'Failed to auto-detect Jira account ID: {response.error}. '
-                    'Comment edit/delete features may not work correctly.'
-                )
-        except Exception as e:
-            self.logger.error(
-                f'Error fetching current user account ID: {e}. '
-                'Comment edit/delete features may not work correctly.'
-            )
+    def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
+        self.user_info = user_info
+        self.logger.info(f'Using authenticated account ID: {user_info.account_id}')
+        search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
+        search_bar.post_message(search_bar.AccountIdReady(user_info.account_id))
 
     def _update_attachments_tab_title(self, count: int) -> None:
         tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
@@ -643,11 +719,15 @@ class MainScreen(Screen):
                 return
 
         self.information_panel.work_item = None
+        self.information_panel.breadcrumb_widget.display = False
+        self.query_one('#details-breadcrumb-row', Vertical).display = False
+        self.query_one('#details-tabs-row', Horizontal).display = False
 
         self.tabs.disabled = True
-        self.tabs.display = False
         self.fields_panel.disabled = True
         self.fields_panel.display = False
+        self.tabs.active = 'tab-description'
+        self.information_panel.set_active_tab('tab-description')
 
         self.work_item_info_container.clear_information = True
 
@@ -691,6 +771,8 @@ class MainScreen(Screen):
         )
 
     async def action_new_work_item(self) -> None:
+        from gojeera.components.new_work_item_screen import AddWorkItemScreen
+
         await self.app.push_screen(
             AddWorkItemScreen(
                 project_key=None,
@@ -789,14 +871,6 @@ class MainScreen(Screen):
 
         self.is_loading = True
 
-        self.work_item_info_container.show_loading()
-        self.work_item_comments_widget.show_loading()
-        self.related_work_items_widget.show_loading()
-        self.work_item_attachments_widget.show_loading()
-        self.work_item_child_work_items_widget.show_loading()
-        if CONFIGURATION.get().show_work_item_web_links:
-            self.work_item_remote_links_widget.show_loading()
-
         self.work_item_fields_widget.work_item = None
 
         self.work_item_fields_widget.content_container.display = False
@@ -821,14 +895,6 @@ class MainScreen(Screen):
 
         if not main_success or not main_response.result:
             self.is_loading = False
-
-            self.work_item_info_container.hide_loading()
-            self.work_item_comments_widget.hide_loading()
-            self.related_work_items_widget.hide_loading()
-            self.work_item_attachments_widget.hide_loading()
-            self.work_item_child_work_items_widget.hide_loading()
-            if CONFIGURATION.get().show_work_item_web_links:
-                self.work_item_remote_links_widget.hide_loading()
             self.notify(
                 'Unable to find the selected work item', title='Find Work Item', severity='error'
             )
@@ -849,6 +915,8 @@ class MainScreen(Screen):
         else:
             self.tabs.show_tab('tab-subtasks')
 
+        self.information_panel.set_active_tab(self.tabs.active)
+
         self.work_item_info_container.work_item = work_item
         self.work_item_fields_widget.available_users = self.available_users
         self.work_item_fields_widget.work_item = work_item
@@ -857,15 +925,12 @@ class MainScreen(Screen):
 
         self.related_work_items_widget.work_item_key = work_item.key
         self.related_work_items_widget.work_items = work_item.related_work_items
-        self.related_work_items_widget.hide_loading()
 
         self.work_item_comments_widget.work_item_key = work_item.key
         self.work_item_comments_widget.comments = work_item.comments
-        self.work_item_comments_widget.hide_loading()
 
         self.work_item_attachments_widget.work_item_key = work_item.key
         self.work_item_attachments_widget.attachments = work_item.attachments
-        self.work_item_attachments_widget.hide_loading()
 
         self.work_item_child_work_items_widget.work_item_key = work_item.key
         if subtasks_success and subtasks_response.result:
@@ -877,7 +942,6 @@ class MainScreen(Screen):
                     extra={'error': subtasks_response.error, 'work_item_key': work_item.key},
                 )
             self.work_item_child_work_items_widget.work_items = None
-        self.work_item_child_work_items_widget.hide_loading()
 
         if CONFIGURATION.get().show_work_item_web_links:
             self.work_item_remote_links_widget.work_item_key = work_item.key
@@ -896,25 +960,25 @@ class MainScreen(Screen):
 
                 if work_item_info.work_item is not None:
                     work_item_info.breadcrumb_widget.display = True
+                    self.query_one('#details-breadcrumb-row', Vertical).display = True
+                    self.query_one('#details-tabs-row', Horizontal).display = True
                     tabs_widget = self.tabs
-                    tabs_widget.display = True
                     tabs_widget.disabled = False
 
                     self.is_loading = False
 
-                    self.information_panel.display = True
-                    self.fields_panel.display = True
+                    self.information_panel.refresh(layout=True)
+                    self.fields_panel.refresh(layout=True)
             except Exception as e:
                 self.logger.error(f'Failed to signal WorkItemInformation: {e}')
 
                 self.is_loading = False
 
     def watch_is_loading(self, loading: bool) -> None:
-        self.work_item_loading_container.display = loading
-        self.work_item_loading_container.loading = loading
+        self.details_container.loading = loading
         if loading:
-            self.information_panel.display = False
-            self.fields_panel.display = False
+            self.query_one('#details-breadcrumb-row', Vertical).display = False
+            self.query_one('#details-tabs-row', Horizontal).display = False
 
     async def clone_work_item(self, work_item_key: str) -> None:
         if not work_item_key:
@@ -978,25 +1042,8 @@ class MainScreen(Screen):
 
     def action_focus_next(self) -> None:
         if not self.tabs.disabled and self.tabs.tab_count > 0:
-            from textual.widgets._tabbed_content import ContentTab
-
-            tab_panes = list(self.tabs.query('TabPane'))
-            if not tab_panes:
-                return
-
+            tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
-
-            content_tabs = {
-                tab.id.removeprefix('--content-tab-'): tab
-                for tab in self.tabs.query(ContentTab)
-                if tab.id
-            }
-
-            tab_ids = [
-                pane.id
-                for pane in tab_panes
-                if pane.id and content_tabs.get(pane.id) and content_tabs[pane.id].display
-            ]
 
             if current_active in tab_ids:
                 current_index = tab_ids.index(current_active)
@@ -1006,25 +1053,8 @@ class MainScreen(Screen):
 
     def action_focus_previous(self) -> None:
         if not self.tabs.disabled and self.tabs.tab_count > 0:
-            from textual.widgets._tabbed_content import ContentTab
-
-            tab_panes = list(self.tabs.query('TabPane'))
-            if not tab_panes:
-                return
-
+            tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
-
-            content_tabs = {
-                tab.id.removeprefix('--content-tab-'): tab
-                for tab in self.tabs.query(ContentTab)
-                if tab.id
-            }
-
-            tab_ids = [
-                pane.id
-                for pane in tab_panes
-                if pane.id and content_tabs.get(pane.id) and content_tabs[pane.id].display
-            ]
 
             if current_active in tab_ids:
                 current_index = tab_ids.index(current_active)
@@ -1070,6 +1100,8 @@ class MainScreen(Screen):
             return
 
         work_item_container = containers[item_index]
+        from gojeera.components.work_item_result import WorkItemContainer
+
         if not isinstance(work_item_container, WorkItemContainer):
             return
 
@@ -1104,6 +1136,12 @@ class JiraApp(App):
         Binding(key='ctrl+q', action='', description=''),
         Binding(key='question_mark', action='help', description='Help'),
         Binding(
+            key='f11',
+            action='toggle_footer_visibility',
+            description='Toggle Footer',
+            tooltip='Show or hide the footer',
+        ),
+        Binding(
             key='f12',
             action='debug_info',
             description='Debug',
@@ -1113,9 +1151,10 @@ class JiraApp(App):
     DEFAULT_THEME = DEFAULT_THEME
 
     COMMANDS = App.COMMANDS | {
-        PanelCommandProvider,
-        DecisionCommandProvider,
-        UserMentionCommandProvider,
+        get_panel_command_provider,
+        get_decision_command_provider,
+        get_footer_command_provider,
+        get_user_mention_command_provider,
     }
 
     def __init__(
@@ -1176,17 +1215,6 @@ class JiraApp(App):
             self.theme = self.DEFAULT_THEME
 
     async def on_mount(self) -> None:
-        try:
-            response = await self.api.server_info()
-            if response.success and response.result:
-                server_info = response.result
-                self.server_info = server_info
-                self.logger.info(f'Fetched server info: {server_info.base_url}')
-            else:
-                self.logger.warning(f'Failed to fetch server info: {response.error}')
-        except Exception as e:
-            self.logger.warning(f'Failed to fetch server info: {e}')
-
         await self.push_screen(
             MainScreen(
                 self.api,
@@ -1198,6 +1226,49 @@ class JiraApp(App):
                 self.user_info,
             )
         )
+        self.run_worker(self._initialize_startup_context(), name='startup_context')
+
+    async def _initialize_startup_context(self) -> None:
+        server_info_task = asyncio.create_task(self.api.server_info())
+        user_info_task = asyncio.create_task(self.api.myself()) if self.user_info is None else None
+
+        if user_info_task is not None:
+            server_info_result, user_info_result = await asyncio.gather(
+                server_info_task, user_info_task, return_exceptions=True
+            )
+        else:
+            server_info_result = await server_info_task
+            user_info_result = None
+
+        if isinstance(server_info_result, Exception):
+            self.logger.warning(f'Failed to fetch server info: {server_info_result}')
+        elif server_info_result.success and server_info_result.result:
+            server_info = server_info_result.result
+            self.server_info = server_info
+            self.logger.info(f'Fetched server info: {server_info.base_url}')
+        else:
+            self.logger.warning(f'Failed to fetch server info: {server_info_result.error}')
+
+        if user_info_result is None:
+            return
+
+        if isinstance(user_info_result, Exception):
+            self._handle_startup_auth_failure(str(user_info_result))
+            return
+
+        if user_info_result.success and user_info_result.result:
+            user_info = user_info_result.result
+            self.user_info = user_info
+            if isinstance(self.screen, MainScreen):
+                self.screen.set_authenticated_user(user_info)
+            return
+
+        self._handle_startup_auth_failure(user_info_result.error)
+
+    def _handle_startup_auth_failure(self, error_message: str | None) -> None:
+        message = error_message or 'Please check your credentials.'
+        self.logger.warning(f'Authentication failed during startup: {message}')
+        self.exit(message=f'Authentication failed: {message}')
 
     async def action_help(self) -> None:
         from gojeera.components.help_screen import HelpScreen
@@ -1215,10 +1286,14 @@ class JiraApp(App):
         await self.push_screen(HelpScreen(anchor), restore_focus)
 
     async def action_debug_info(self) -> None:
+        from gojeera.components.debug_screen import DebugInfoScreen
+
         await self.push_screen(DebugInfoScreen())
 
     async def action_quit(self) -> None:
         if CONFIGURATION.get().confirm_before_quit:
+            from gojeera.components.quit_screen import QuitScreen
+
             await self.push_screen(QuitScreen())
         else:
             await self.api.api.client.close_async_client()
@@ -1230,6 +1305,9 @@ class JiraApp(App):
             self.pop_screen()
         else:
             super().action_command_palette()
+
+    def action_toggle_footer_visibility(self) -> None:
+        self.toggle_footer_visibility()
 
     def _setup_logging(self) -> None:
         self.logger = logging.getLogger(LOGGER_NAME)
@@ -1255,8 +1333,21 @@ class JiraApp(App):
             )
             self.logger.addHandler(fh)
 
+    def toggle_footer_visibility(self) -> None:
+        config = CONFIGURATION.get()
+        new_value = not config.show_footer
+        config.show_footer = new_value
+        self._apply_footer_visibility(new_value)
+
+    def _apply_footer_visibility(self, visible: bool) -> None:
+        for screen in self.screen_stack:
+            for footer in screen.query(ExtendedFooter):
+                footer.display = visible
+
 
 if __name__ == '__main__':
+    from rich.console import Console
+
     console = Console()
 
     try:

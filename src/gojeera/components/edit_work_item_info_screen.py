@@ -4,7 +4,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Label, Static, TextArea
+from textual.widgets import Button, Input, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.panel_picker_screen import PanelPickerScreen
@@ -12,6 +12,7 @@ from gojeera.config import CONFIGURATION
 from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields
 from gojeera.utils.adf_helpers import convert_adf_to_markdown
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -83,7 +84,7 @@ class EditWorkItemInfoScreen(ModalScreen):
                 yield Button(
                     'Cancel', variant='error', id='edit-work-item-button-quit', compact=True
                 )
-        yield Footer()
+        yield ExtendedFooter()
 
     def on_mount(self) -> None:
         if self.work_item and self.work_item.description:

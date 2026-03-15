@@ -157,9 +157,8 @@ class ApplicationConfiguration(BaseSettings):
     enable_images_support: bool = True
     """When this is set to `True` gojeera will attempt to display images attached to a work item in the Attachments
     tab."""
-    obfuscate_personal_info: bool = False
-    """When this is set to `True` the app header will obfuscate the username and instance URL for privacy. Default is
-    False."""
+    show_footer: bool = True
+    """When this is `True` (default), footer key bindings are shown. When `False`, footer widgets are hidden."""
 
     model_config = SettingsConfigDict(
         extra='allow',

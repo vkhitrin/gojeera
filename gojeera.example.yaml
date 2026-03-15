@@ -46,3 +46,6 @@ jumper:
     - "a"
     - "s"
     - "d"
+
+# Footer - key binding help shown at the bottom of the screen
+show_footer: true

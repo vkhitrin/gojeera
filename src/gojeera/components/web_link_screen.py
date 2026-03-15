@@ -2,9 +2,10 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Label, Static
+from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -89,7 +90,7 @@ class RemoteLinkScreen(ModalScreen[dict]):
                 yield Button(
                     'Cancel', variant='error', id='add-remote-link-button-quit', compact=True
                 )
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:

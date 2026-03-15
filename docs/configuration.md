@@ -69,7 +69,6 @@ show_work_item_web_links: true
 search_results_per_page: 20
 search_results_truncate_work_item_summary: null
 theme: null
-obfuscate_personal_info: false
 enable_images_support: true
 ```
 
@@ -82,8 +81,6 @@ enable_images_support: true
   truncation if not set)
 - **`theme`** (optional): Name of the Textual theme to use for
   the UI
-- **`obfuscate_personal_info`** (default: `false`): Obfuscate
-  username and instance URL in the app header for privacy
 - **`enable_images_support`** (default: `true`): Display images
   attached to work items in the Attachments tab
 
@@ -255,10 +252,17 @@ ssl:
 
 ```yaml
 confirm_before_quit: true
+show_footer: true
 ```
 
 - **`confirm_before_quit`** (bool, default: `true`): Show a
   confirmation dialog before quitting the application
+- **`show_footer`** (bool, default: `true`): Show the footer with
+  key bindings at the bottom of the screen
+
+You can also toggle the footer from the command palette with
+`Show Footer` / `Hide Footer`, or by pressing `F11`. These controls are
+session-only and do not modify your config file.
 
 ## Complete Example Configuration
 
@@ -278,11 +282,7 @@ jira:
 
 ## Configuration Tips
 
-1. **Privacy**: If sharing screenshots or demos, enable
-   `obfuscate_personal_info: true` to hide your username and instance
-   URL.
-
-2. **Sprint selection**: To enable the sprint dropdown when creating or
+1. **Sprint selection**: To enable the sprint dropdown when creating or
    updating work items, set `enable_sprint_selection: true`.
    The dropdown will show only active and future
    sprints from all boards in the project.

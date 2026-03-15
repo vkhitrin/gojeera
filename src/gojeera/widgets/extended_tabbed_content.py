@@ -1,11 +1,10 @@
 import logging
 from typing import TYPE_CHECKING
 
-from textual import on
 from textual.binding import Binding
 from textual.containers import Center, Container, VerticalGroup, VerticalScroll
-from textual.widgets import TabbedContent
-from textual.widgets._tabbed_content import ContentTab, ContentTabs
+from textual.widgets import TabbedContent, TabPane
+from textual.widgets._tabbed_content import ContentTab, ContentTabs, Tab
 
 if TYPE_CHECKING:
     from gojeera.app import MainScreen
@@ -16,6 +15,14 @@ logger = logging.getLogger('gojeera')
 
 class ExtendedTabbedContent(TabbedContent):
     """Custom TabbedContent that handles Tab navigation in a custom manner."""
+
+    can_focus = True
+
+    DEFAULT_CSS = """
+    ExtendedTabbedContent > ContentTabs:focus .underline--bar {
+        background: $foreground 10%;
+    }
+    """
 
     BINDINGS = [
         Binding(
@@ -76,13 +83,69 @@ class ExtendedTabbedContent(TabbedContent):
         ),
     ]
 
-    @on(TabbedContent.TabActivated)
-    def on_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+    def __init__(self, *titles: str, external_content: bool = False, **kwargs) -> None:
+        super().__init__(*titles, **kwargs)
+        self.external_content = external_content
+        self._external_information_panel = None
+
+    @property
+    def tabs_widget(self) -> ContentTabs:
+        return self.query_one(ContentTabs)
+
+    @property
+    def tab_count(self) -> int:
+        return self.tabs_widget.tab_count
+
+    def get_tab(self, pane_id: str | TabPane) -> Tab:
+        target_id = pane_id.id if isinstance(pane_id, TabPane) else pane_id
+        return self.tabs_widget.get_content_tab(target_id)
+
+    def hide_tab(self, tab_id: str) -> None:
+        self.tabs_widget.hide(tab_id)
+        if self.active == tab_id:
+            visible_tabs = self.visible_tab_ids()
+            if visible_tabs:
+                self.active = visible_tabs[0]
+
+    def show_tab(self, tab_id: str) -> None:
+        self.tabs_widget.show(tab_id)
+
+    def visible_tab_ids(self) -> list[str]:
+        return [
+            pane.id
+            for pane in self.query(TabPane)
+            if pane.id and self.get_tab(pane.id) is not None and self.get_tab(pane.id).display
+        ]
+
+    def _sync_external_content(self, active: str) -> None:
+        if not self.external_content:
+            return
+
+        try:
+            from gojeera.components.work_item_information import WorkItemInformation
+
+            if self._external_information_panel is None:
+                self._external_information_panel = self.screen.query_one(WorkItemInformation)
+
+            active_pane_id = self._external_information_panel.pane_id_for_tab(active)
+            if self._external_information_panel.content_switcher.current != active_pane_id:
+                self._external_information_panel.set_active_tab(active)
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+
+    def _watch_active(self, active: str) -> None:
+        super()._watch_active(active)
+        self._sync_external_content(active)
+
+    def on_focus(self) -> None:
+        self.screen.refresh_bindings()
+
+    def on_descendant_focus(self) -> None:
         self.screen.refresh_bindings()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == 'edit_work_item_info':
-            return self.active == 'tab-summary'
+            return self.active == 'tab-description'
         if action == 'add_attachment':
             return self.active == 'tab-attachments'
         if action == 'new_work_item_subtask':
@@ -96,17 +159,17 @@ class ExtendedTabbedContent(TabbedContent):
         return True
 
     async def action_edit_work_item_info(self) -> None:
-        if self.active == 'tab-summary':
+        if self.active == 'tab-description':
             from gojeera.components.work_item_summary import WorkItemInfoContainer
 
-            info_container = self.query_one(WorkItemInfoContainer)
+            info_container = self.screen.query_one(WorkItemInfoContainer)
             await info_container.action_edit_work_item_info()
 
     async def action_add_attachment(self) -> None:
         if self.active == 'tab-attachments':
             from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 
-            attachments_widget = self.query_one(WorkItemAttachmentsWidget)
+            attachments_widget = self.screen.query_one(WorkItemAttachmentsWidget)
             await attachments_widget.action_add_attachment()
 
     async def action_new_work_item_subtask(self) -> None:
@@ -142,21 +205,21 @@ class ExtendedTabbedContent(TabbedContent):
         if self.active == 'tab-related':
             from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
 
-            links_widget = self.query_one(RelatedWorkItemsWidget)
+            links_widget = self.screen.query_one(RelatedWorkItemsWidget)
             await links_widget.action_link_work_item()
 
     async def action_add_remote_link(self) -> None:
         if self.active == 'tab-links':
             from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 
-            remote_links_widget = self.query_one(WorkItemRemoteLinksWidget)
+            remote_links_widget = self.screen.query_one(WorkItemRemoteLinksWidget)
             await remote_links_widget.action_add_remote_link()
 
     def action_add_comment(self) -> None:
         if self.active == 'tab-comments':
             from gojeera.components.work_item_comments import WorkItemCommentsWidget
 
-            comments_widget = self.query_one(WorkItemCommentsWidget)
+            comments_widget = self.screen.query_one(WorkItemCommentsWidget)
             comments_widget.action_add_comment()
 
     def action_view_worklog(self) -> None:
@@ -180,8 +243,15 @@ class ExtendedTabbedContent(TabbedContent):
     def action_focus_content(self) -> None:
         focused = self.screen.focused
 
-        if focused and isinstance(focused, (ContentTab, ContentTabs)):
+        if focused is self or (focused and isinstance(focused, (ContentTab, ContentTabs))):
             active_pane = self.get_pane(self.active)
+            if self.external_content:
+                try:
+                    from gojeera.components.work_item_information import WorkItemInformation
+
+                    active_pane = self.screen.query_one(WorkItemInformation).get_active_pane()
+                except Exception as e:
+                    logger.debug(f'Exception occurred: {e}')
             if active_pane:
                 for child in active_pane.walk_children():
                     if isinstance(child, (Container, VerticalScroll, VerticalGroup, Center)):
@@ -207,6 +277,13 @@ class ExtendedTabbedContent(TabbedContent):
 
         if focused:
             active_pane = self.get_pane(self.active)
+            if self.external_content:
+                try:
+                    from gojeera.components.work_item_information import WorkItemInformation
+
+                    active_pane = self.screen.query_one(WorkItemInformation).get_active_pane()
+                except Exception as e:
+                    logger.debug(f'Exception occurred: {e}')
             if active_pane and focused in active_pane.walk_children():
                 first_focusable = None
                 for child in active_pane.walk_children():

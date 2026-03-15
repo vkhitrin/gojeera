@@ -6,13 +6,14 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Footer, ListItem, ListView, Static
+from textual.widgets import ListItem, ListView, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.work_log_screen import LogWorkScreen
 from gojeera.config import CONFIGURATION
 from gojeera.utils.urls import build_external_url_for_work_log
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -214,7 +215,7 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
             yield Static(f'{self.TITLE} - {self._work_item_key}', id='modal_title')
             with VerticalScroll(id='worklog-scroll-container'):
                 yield WorkLogListView(id='worklogs-list-view', initial_index=0)
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
         if self._work_item_key:

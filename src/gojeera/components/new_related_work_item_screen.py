@@ -2,11 +2,12 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, Select, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.models import LinkWorkItemType
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
@@ -80,7 +81,7 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
                     compact=True,
                 )
                 yield Button('Cancel', variant='error', id='add-link-button-quit', compact=True)
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.run_worker(self.fetch_work_item_link_types())

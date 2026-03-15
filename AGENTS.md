@@ -58,9 +58,6 @@ supported features, and implementation details.
 
 ## Crucial Notes
 
-- When using personal info, be aware of a user preference
-  `obfuscate_personal_info` that ensures that personal information
-  (such as the current username, user ID, instance URLs) **are never printed**.
 - Ensure proper error handling for API failures
 - Respect rate limits when making API calls
 - Use environment variables for sensitive data (API tokens, etc.)

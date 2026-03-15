@@ -11,7 +11,7 @@ from textual.containers import Center, Horizontal, VerticalScroll
 from textual.reactive import Reactive, reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Footer, Static, TextArea
+from textual.widgets import Button, Static, TextArea
 from textual_image.widget import Image
 
 from gojeera.api_controller.controller import APIControllerResponse
@@ -21,6 +21,7 @@ from gojeera.utils.mime import (
     SupportedAttachmentVisualizationMimeTypes,
     is_image,
 )
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -78,7 +79,7 @@ class ViewAttachmentScreen(ModalScreen):
                     'Download', variant='success', id='attachment-button-download', compact=True
                 )
                 yield Button('Close', variant='error', id='attachment-button-close', compact=True)
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     async def _download_attachment(self, attachment_id: str) -> None:
         app = cast('JiraApp', self.screen.app)  # noqa: F821

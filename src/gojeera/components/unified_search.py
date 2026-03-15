@@ -134,8 +134,19 @@ class UnifiedSearchBar(Container):
         assignee_selector.disabled = True
         type_selector.disabled = True
         status_selector.disabled = True
+        self._sync_basic_filter_jump_modes()
 
         self._init_jql_autocomplete()
+
+    def _sync_basic_filter_jump_modes(self) -> None:
+        for selector_id in (
+            '#basic-project-selector',
+            '#basic-assignee-selector',
+            '#basic-type-selector',
+            '#basic-status-selector',
+        ):
+            selector = self.query_one(selector_id, LazySelect)
+            selector.jump_mode = None if selector.disabled else 'focus'  # type: ignore[attr-defined]
 
     def _init_jql_autocomplete(self) -> None:
         from gojeera.config import CONFIGURATION
@@ -414,6 +425,7 @@ class UnifiedSearchBar(Container):
             assignee_sel.disabled = False
             type_sel.disabled = False
             status_sel.disabled = False
+            self._sync_basic_filter_jump_modes()
         else:
             self._selected_project_key = None
             assignee_sel = self.query_one('#basic-assignee-selector', LazySelect)
@@ -422,6 +434,7 @@ class UnifiedSearchBar(Container):
             assignee_sel.disabled = True
             type_sel.disabled = True
             status_sel.disabled = True
+            self._sync_basic_filter_jump_modes()
 
     def _update_mode_display(self, mode: str) -> None:
         with self.app.batch_update():

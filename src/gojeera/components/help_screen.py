@@ -4,8 +4,9 @@ import os
 from textual.app import ComposeResult
 from textual.reactive import Reactive, reactive
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Markdown, Static
+from textual.widgets import Markdown, Static
 
+from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.gojeera_markdown_viewer import GojeeraMarkdownViewer
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -34,7 +35,7 @@ class HelpScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('gojeera Help', id='modal_title')
-        yield Footer(show_command_palette=False)
+        yield ExtendedFooter(show_command_palette=False)
 
     @staticmethod
     def _get_in_app_help_filename() -> str:

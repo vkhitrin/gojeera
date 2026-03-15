@@ -182,14 +182,20 @@ def find_used_selectors(
 
     python_files = list(src_dir.rglob('*.py'))
 
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {
-            executor.submit(_search_file_worker, (py_file, classes, ids)): py_file
-            for py_file in python_files
-        }
+    try:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_file = {
+                executor.submit(_search_file_worker, (py_file, classes, ids)): py_file
+                for py_file in python_files
+            }
 
-        for future in as_completed(future_to_file):
-            found_classes, found_ids = future.result()
+            for future in as_completed(future_to_file):
+                found_classes, found_ids = future.result()
+                used_classes.update(found_classes)
+                used_ids.update(found_ids)
+    except (OSError, PermissionError):
+        for py_file in python_files:
+            found_classes, found_ids = _search_file_worker((py_file, classes, ids))
             used_classes.update(found_classes)
             used_ids.update(found_ids)
 

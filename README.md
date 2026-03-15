@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > This project is under active development!
 
-![gojeera interface](./static/gojeera.svg)
+![gojeera interface](./tests/__snapshots__/test_app_appearance/TestAppAppearance.test_app_with_theme_dracula.svg)
 
 A **Text User Interface (TUI)** for interacting with Atlassian Jira directly
 from terminal.

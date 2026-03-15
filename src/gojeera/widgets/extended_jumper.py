@@ -1,17 +1,37 @@
 """Custom Jumper widget for gojeera application."""
 
+from typing import Literal, cast
+
+from textual.errors import NoWidget
+from textual.geometry import Offset
+from textual.widget import Widget
+from textual.widgets import ListView
+from textual.widgets._tabbed_content import ContentTab
 from textual_jumper import Jumper
+from textual_jumper.jump_overlay import JumpOverlay
+from textual_jumper.jumper import JumpInfo
 
 
 class ExtendedJumper(Jumper):
     """Custom Jumper."""
 
-    def get_overlays(self):
-        """Override to temporarily enable ContentTab focus and filter hidden widgets."""
-        from textual.widgets._tabbed_content import ContentTab
+    def focus_returned_widget(self, widget: Widget | None) -> None:
+        """Focus a jump target without deferred animated scrolling."""
+        if widget is None:
+            return
+        self.app.set_focus(widget, scroll_visible=False)
 
+        if not self.screen.can_view_entire(widget):
+            widget.scroll_visible(animate=False, immediate=True)
+
+    def show(self) -> None:
+        self.app.push_screen(JumpOverlay(self.overlays), self.focus_returned_widget)
+
+    def get_overlays(self):
+        """Build jump targets in a single filtered pass."""
+        screen = self.screen
         content_tabs = [
-            widget for widget in self.screen.walk_children() if isinstance(widget, ContentTab)
+            widget for widget in screen.walk_children() if isinstance(widget, ContentTab)
         ]
 
         original_states = {}
@@ -20,43 +40,87 @@ class ExtendedJumper(Jumper):
             tab.can_focus = True
 
         try:
-            overlays = super().get_overlays()
+            ids_to_keys = self.ids_to_keys
+            jumpable_widgets: list[tuple[Offset, Widget, Literal['focus', 'click']]] = []
+            custom_key_count = 0
+            seen_widgets: set[Widget] = set()
+            focused_widget = screen.focused
 
-            filtered_overlays = {
-                offset: jump_info
-                for offset, jump_info in overlays.items()
-                if self._is_widget_visible(jump_info.widget)
-            }
-            return filtered_overlays
+            candidate_widgets: list[Widget] = list(screen.focus_chain)
+            candidate_widgets.extend(content_tabs)
+
+            for child in candidate_widgets:
+                if child in seen_widgets:
+                    continue
+                seen_widgets.add(child)
+                if child is focused_widget:
+                    continue
+                if isinstance(child, ContentTab) and child.has_class('-active'):
+                    continue
+
+                jump_mode = getattr(child, 'jump_mode', None)
+                if jump_mode not in ('focus', 'click') or not child.can_focus:
+                    continue
+                if not self._is_widget_jumpable(child):
+                    continue
+
+                try:
+                    widget_x, widget_y = screen.get_offset(child)
+                except NoWidget:
+                    continue
+
+                jumpable_widgets.append(
+                    (
+                        Offset(widget_x, widget_y),
+                        child,
+                        cast(Literal['focus', 'click'], jump_mode),
+                    )
+                )
+                if child.id and child.id in ids_to_keys:
+                    custom_key_count += 1
+
+            available_keys = iter(
+                self._generate_available_keys(len(jumpable_widgets) - custom_key_count)
+            )
+            overlays: dict[Offset, JumpInfo] = {}
+
+            for widget_offset, child, jump_mode in jumpable_widgets:
+                if child.id and child.id in ids_to_keys:
+                    jump_key = ids_to_keys[child.id]
+                else:
+                    jump_key = next(available_keys, None)
+                    if jump_key is None:
+                        continue
+
+                overlays[widget_offset] = JumpInfo(jump_key, child, jump_mode)
+
+            self._overlays = overlays
+            return overlays
         finally:
             for tab, original_state in original_states.items():
                 tab.can_focus = original_state
 
-    def _is_widget_visible(self, widget_ref):
-        from textual.widget import Widget
-        from textual.widgets import ListView
-
-        if isinstance(widget_ref, str):
-            try:
-                widget = self.screen.query_one(f'#{widget_ref}', Widget)
-            except Exception:
-                return False
-        elif isinstance(widget_ref, Widget):
-            widget = widget_ref
-        else:
+    def _is_widget_jumpable(self, widget: Widget) -> bool:
+        if not widget.display or not widget.visible or not widget.is_on_screen:
             return False
 
-        if not widget.display:
+        if not widget.region:
             return False
 
         if isinstance(widget, ListView):
             if len(widget) == 0:
                 return False
 
-        current = widget.parent
-        while current is not None and hasattr(current, 'display'):
-            if not current.display:
+        current = widget
+        while current is not None:
+            if hasattr(current, 'display') and not current.display:
                 return False
-            current = getattr(current, 'parent', None)
+            if hasattr(current, 'visible') and not current.visible:
+                return False
+            if getattr(current, 'disabled', False):
+                return False
+            if getattr(current, 'read_only', False):
+                return False
+            current = current.parent
 
         return True

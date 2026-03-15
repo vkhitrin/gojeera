@@ -2,7 +2,7 @@ import traceback
 from typing import TYPE_CHECKING, cast
 
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, VerticalGroup, VerticalScroll
+from textual.containers import Container, VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
 from textual.widgets import Static
 
@@ -36,30 +36,39 @@ class WorkItemSummary(Static, can_focus=False):
         border: none;
         text-style: bold;
         color: $accent;
-        padding: 1 2;
+        padding: 0 2 1 2;
         width: 100%;
         content-align: left middle;
-        background: $background-lighten-1;
+        background: transparent;
     }
     """
 
-    def __init__(self):
-        super().__init__('', id='work_item_summary', markup=False)
+    def __init__(self, widget_id: str = 'work_item_summary'):
+        super().__init__('', id=widget_id, markup=False)
         self.can_focus = False
 
 
-class WorkItemSummaryContainer(Container, can_focus=False):
-    """The container that holds the read-only summary of the work item."""
-
-    def __init__(self):
-        super().__init__()
-        self.visible = False
-        self.can_focus = False
-
-
-class WorkItemInfoContainer(Vertical, can_focus=False):
+class WorkItemInfoContainer(Container, can_focus=False):
     """The container for all the widgets that store/show information (description and other text-based fields) of a
     work item."""
+
+    DEFAULT_CSS = """
+    WorkItemInfoContainer {
+        width: 100%;
+        height: 1fr;
+        layout: vertical;
+    }
+
+    #work-item-info-content {
+        width: 100%;
+        height: 1fr;
+    }
+
+    #work-item-info-description-scroll-container {
+        width: 100%;
+        height: 1fr;
+    }
+    """
 
     work_item: Reactive[JiraWorkItem | None] = reactive(None, always_update=True)
     clear_information: Reactive[bool] = reactive(False, always_update=True)
@@ -75,16 +84,12 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
         return '#work-item-info'
 
     @property
-    def work_item_summary_widget(self) -> WorkItemSummary:
-        return self.query_one(WorkItemSummary)
-
-    @property
     def work_item_description_widget(self) -> WorkItemDescription:
         return self.query_one(WorkItemDescription)
 
     @property
-    def summary_container_widget(self) -> WorkItemSummaryContainer:
-        return self.query_one(WorkItemSummaryContainer)
+    def header_summary_widget(self) -> WorkItemSummary:
+        return self.screen.query_one('#details-work-item-summary', WorkItemSummary)
 
     @property
     def description_container(self) -> VerticalScroll:
@@ -98,10 +103,9 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
 
     def compose(self) -> ComposeResult:
         with VerticalGroup(id='work-item-info-content'):
-            with WorkItemSummaryContainer():
-                yield WorkItemSummary()
             with VerticalScroll(id='work-item-info-description-scroll-container', can_focus=True):
                 yield WorkItemDescription()
+        yield Static(classes='work-item-info-bottom-reserve')
 
     async def _setup_work_item_description(self, work_item: JiraWorkItem) -> None:
         if work_item.description:
@@ -142,7 +146,7 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
 
         self.show_loading()
 
-        self.work_item_summary_widget.update(work_item.summary)
+        self.header_summary_widget.update(work_item.summary)
 
         self.run_worker(self._setup_work_item_description(work_item))
         return None
@@ -152,9 +156,8 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
 
     def watch_clear_information(self, clear: bool = False) -> None:
         if clear:
-            self.work_item_summary_widget.update('')
-            self.work_item_summary_widget.visible = False
-            self.summary_container_widget.visible = False
+            self.header_summary_widget.update('')
+            self.header_summary_widget.display = False
 
             self.run_worker(self.reset_description())
             self.description_container.visible = False
@@ -166,8 +169,10 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
     def hide_loading(self) -> None:
         self.is_loading = False
 
-        self.work_item_summary_widget.visible = True
-        self.summary_container_widget.visible = True
+        self.header_summary_widget.display = self.work_item is not None
+        self.header_summary_widget.refresh(layout=True)
+        self.description_container.refresh(layout=True)
+        self.content_container.refresh(layout=True)
 
     def watch_is_loading(self, loading: bool) -> None:
         self.content_container.loading = loading
@@ -218,7 +223,7 @@ class WorkItemInfoContainer(Vertical, can_focus=False):
             description = updates.get('description')
             work_item.description = description if description else None
 
-        self.work_item_summary_widget.update(work_item.summary)
+        self.header_summary_widget.update(work_item.summary)
         await self._setup_work_item_description(work_item)
 
         await screen.search_results_list.update_work_item_in_list(work_item)

@@ -319,6 +319,14 @@ UnifiedSearchBar>Button:focus>Static {
   height: 1fr;
 }
 
+#pane-attachments,
+#pane-subtasks,
+#pane-related,
+#pane-links,
+#pane-comments {
+  padding-bottom: 2;
+}
+
 #work-item-information-switcher > * > * {
   width: 100%;
   height: 1fr;
@@ -696,15 +704,10 @@ WorkItemCommentsWidget {
   scrollbar-size-vertical: 1;
 }
 
-.summary-description-container {
-  height: 100;
-  margin: 0 0;
-}
-
 #work-item-fields-form {
   scrollbar-size-vertical: 1;
   height: 1fr;
-  padding: 0 0 0 1;
+  padding: 0 0 2 1;
   margin-bottom: 0;
   layout: vertical;
 }
@@ -715,6 +718,8 @@ WorkItemCommentsWidget {
   margin: 0;
   padding: 0;
   align: right bottom;
+  dock: bottom;
+  layer: above;
 }
 
 #work-item-fields-pending-changes-label {

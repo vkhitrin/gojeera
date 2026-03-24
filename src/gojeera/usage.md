@@ -136,7 +136,7 @@ The information panel contains multiple tabs:
 
 #### Summary Tab
 
-![Work item summary tab](/static/work_item_summary_tab.svg)
+![Work item summary tab](/static/work_item_description_tab.svg)
 
 Displays work item summary and description with Markdown rendering.
 

@@ -35,7 +35,7 @@ from gojeera.components.work_item_result import (
     WorkItemSearchResultsScroll,
 )
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
-from gojeera.components.work_item_summary import WorkItemInfoContainer, WorkItemSummary
+from gojeera.components.work_item_description import WorkItemInfoContainer, WorkItemSummary
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.constants import (

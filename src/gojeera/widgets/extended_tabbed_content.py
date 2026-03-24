@@ -160,7 +160,7 @@ class ExtendedTabbedContent(TabbedContent):
 
     async def action_edit_work_item_info(self) -> None:
         if self.active == 'tab-description':
-            from gojeera.components.work_item_summary import WorkItemInfoContainer
+            from gojeera.components.work_item_description import WorkItemInfoContainer
 
             info_container = self.screen.query_one(WorkItemInfoContainer)
             await info_container.action_edit_work_item_info()

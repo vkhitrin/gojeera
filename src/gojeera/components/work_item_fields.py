@@ -15,7 +15,7 @@ from textual.widgets._select import SelectOverlay
 from textual_tags import Tag, TagAutoComplete, Tags
 
 from gojeera.api_controller.controller import APIControllerResponse
-from gojeera.components.work_item_summary import WorkItemInfoContainer
+from gojeera.components.work_item_description import WorkItemInfoContainer
 from gojeera.components.work_item_work_log_screen import WorkItemWorkLogScreen
 from gojeera.components.work_log_screen import LogWorkScreen
 from gojeera.config import CONFIGURATION
@@ -116,6 +116,10 @@ class WorkItemFields(Container, can_focus=False):
         margin: 0;
         height: 100%;
         layout: vertical;
+    }
+
+    #work-item-fields-form {
+        padding-bottom: 2;
     }
 
     WorkItemFields.-loading > #work-item-fields-form {
@@ -278,6 +282,12 @@ class WorkItemFields(Container, can_focus=False):
     @property
     def pending_changes_label(self) -> Static:
         return self.query_one('#work-item-fields-pending-changes-label', expect_type=Static)
+
+    @property
+    def pending_changes_container(self) -> Horizontal:
+        return self.query_one(
+            '#work-item-fields-pending-changes-container', expect_type=Horizontal
+        )
 
     @property
     def resolution_field_container(self) -> FieldRowSlot:
@@ -456,7 +466,8 @@ class WorkItemFields(Container, can_focus=False):
                     with Horizontal(id='resolution-date-row'):
                         yield self._field_label('Resolution Date')
                         yield self._field_control(ReadOnlyInputField(id='resolution-date'))
-        with Horizontal(id='work-item-fields-pending-changes-container'):
+        with Horizontal(id='work-item-fields-pending-changes-container') as pending_changes_container:
+            pending_changes_container.display = False
             label = Static('⚠ Pending changes', id='work-item-fields-pending-changes-label')
             label.display = False
             yield label
@@ -636,6 +647,7 @@ class WorkItemFields(Container, can_focus=False):
         self._update_pending_changes_indicator()
 
     def watch_has_pending_changes(self, has_changes: bool) -> None:
+        self.pending_changes_container.display = has_changes
         self.pending_changes_label.display = has_changes
         self._update_notification_label_visibility(has_changes)
 

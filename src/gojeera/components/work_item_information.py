@@ -9,7 +9,10 @@ from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 from gojeera.components.work_item_comments import WorkItemCommentsWidget
 from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
-from gojeera.components.work_item_summary import WorkItemInfoContainer, WorkItemSummary
+from gojeera.components.work_item_description import (
+    WorkItemInfoContainer,
+    WorkItemSummary,
+)
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.models import JiraWorkItem
 

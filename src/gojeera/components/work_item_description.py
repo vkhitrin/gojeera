@@ -43,7 +43,7 @@ class WorkItemSummary(Static, can_focus=False):
     }
     """
 
-    def __init__(self, widget_id: str = 'work_item_summary'):
+    def __init__(self, widget_id: str = 'work_item_description_summary'):
         super().__init__('', id=widget_id, markup=False)
         self.can_focus = False
 
@@ -75,7 +75,7 @@ class WorkItemInfoContainer(Container, can_focus=False):
     is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
-        super().__init__(id='work_item_summary_container')
+        super().__init__(id='work_item_description_container')
         self._content_ready = False
         self._fields_widget_ready = False
 

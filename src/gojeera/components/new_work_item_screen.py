@@ -26,7 +26,7 @@ from gojeera.utils.widgets_factory_utils import (
 )
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.lazy_select import LazySelect
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.sprint_picker import SprintPicker
@@ -348,17 +348,17 @@ class AddWorkItemScreen(ModalScreen):
             self.modal_title.update('New Work Item')
 
         if CONFIGURATION.get().jumper.enabled:
-            self.project_selector.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.work_item_type_selector.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.reporter_selector.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.assignee_selector.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.project_selector, 'focus')
+            set_jump_mode(self.work_item_type_selector, 'focus')
+            set_jump_mode(self.reporter_selector, 'focus')
+            set_jump_mode(self.assignee_selector, 'focus')
 
-            self.summary_field.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.summary_field, 'focus')
 
             self.description_field.make_jumpable()
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#add-work-item-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
+            set_jump_mode(self.query_one('#add-work-item-button-quit', Button), 'click')
 
         self.query_one('#work-item-type-field-container').display = False
         self.query_one('#reporter-field-container').display = False
@@ -382,9 +382,9 @@ class AddWorkItemScreen(ModalScreen):
                 widget = wrapper.widget
 
                 if isinstance(widget, (Select, Input, TextArea)):
-                    widget.jump_mode = 'focus'  # type: ignore[attr-defined]
+                    set_jump_mode(widget, 'focus')
                 elif hasattr(widget, 'can_focus') and widget.can_focus:
-                    widget.jump_mode = 'focus'  # type: ignore[attr-defined]
+                    set_jump_mode(widget, 'focus')
 
     def fetch_projects(self) -> None:
         cached_projects = self._cache.get('projects')

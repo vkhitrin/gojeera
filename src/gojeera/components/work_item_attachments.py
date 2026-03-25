@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
@@ -16,6 +16,9 @@ from gojeera.models import Attachment
 from gojeera.utils.mime import can_view_attachment
 from gojeera.utils.urls import build_external_url_for_attachment
 from gojeera.widgets.extended_data_table import ExtendedDataTable
+
+if TYPE_CHECKING:
+    from gojeera.app import JiraApp, MainScreen
 
 
 class AttachmentsContainer(Container):
@@ -103,13 +106,18 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
             None
         """
         if content and (file_name := content.strip()):
+            work_item_key = self.work_item_key
+            if not work_item_key:
+                self.notify(
+                    'You need to select a work item before attempting to attach a file.',
+                    severity='error',
+                )
+                return
             self.notify(
                 'Uploading attachment...',
             )
             screen = cast('MainScreen', self.screen)  # noqa: F821  # type: ignore[arg-type]
-            response: APIControllerResponse = screen.api.add_attachment(
-                self.work_item_key, file_name
-            )
+            response: APIControllerResponse = screen.api.add_attachment(work_item_key, file_name)
             if not response.success:
                 self.notify(
                     f'Failed to attach the file: {response.error}',

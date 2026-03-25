@@ -14,6 +14,7 @@ from textual.worker import get_current_worker
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
+from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.jql_autocomplete import JQLAutoComplete
 from gojeera.widgets.lazy_select import LazySelect
 from gojeera.widgets.vim_select import VimSelect
@@ -119,14 +120,14 @@ class UnifiedSearchBar(Container):
     def on_mount(self) -> None:
         self._update_mode_display('basic')
 
-        self.query_one('#search-mode-selector', VimSelect).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#basic-work-item-key', Input).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#basic-project-selector', LazySelect).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#basic-assignee-selector', LazySelect).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#basic-type-selector', LazySelect).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#basic-status-selector', LazySelect).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#unified-search-input', Input).jump_mode = 'focus'  # type: ignore[attr-defined]
-        self.query_one('#unified-search-button', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+        set_jump_mode(self.query_one('#search-mode-selector', VimSelect), 'focus')
+        set_jump_mode(self.query_one('#basic-work-item-key', Input), 'focus')
+        set_jump_mode(self.query_one('#basic-project-selector', LazySelect), 'focus')
+        set_jump_mode(self.query_one('#basic-assignee-selector', LazySelect), 'focus')
+        set_jump_mode(self.query_one('#basic-type-selector', LazySelect), 'focus')
+        set_jump_mode(self.query_one('#basic-status-selector', LazySelect), 'focus')
+        set_jump_mode(self.query_one('#unified-search-input', Input), 'focus')
+        set_jump_mode(self.query_one('#unified-search-button', Button), 'click')
 
         assignee_selector = self.query_one('#basic-assignee-selector', LazySelect)
         type_selector = self.query_one('#basic-type-selector', LazySelect)
@@ -146,7 +147,7 @@ class UnifiedSearchBar(Container):
             '#basic-status-selector',
         ):
             selector = self.query_one(selector_id, LazySelect)
-            selector.jump_mode = None if selector.disabled else 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(selector, None if selector.disabled else 'focus')
 
     def _init_jql_autocomplete(self) -> None:
         from gojeera.config import CONFIGURATION

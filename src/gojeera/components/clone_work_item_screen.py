@@ -6,7 +6,7 @@ from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
@@ -76,10 +76,10 @@ class CloneWorkItemScreen(ModalScreen[dict | None]):
     def on_mount(self) -> None:
         """Configure jumper after mount and set up initial state."""
         if CONFIGURATION.get().jumper.enabled:
-            self.summary_input.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.clone_button.jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.summary_input, 'focus')
+            set_jump_mode(self.clone_button, 'click')
             cancel_button = self.query_one('#clone-work-item-button-quit', Button)
-            cancel_button.jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(cancel_button, 'click')
 
         self.summary_input.focus()
 

@@ -45,3 +45,7 @@ test: ##Run tests
 .PHONY: test-update-snapshots
 test-update-snapshots: ##Run tests and update snapshots
 	uv run pytest -n auto tests --snapshot-update
+
+.PHONY: bump-dependencies
+bump-dependencies: ##Bump project dependencies
+	uvx uv-upx upgrade run

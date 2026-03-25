@@ -115,9 +115,9 @@ class ApplicationConfiguration(BaseSettings):
     jql_filter_label_for_work_items_search: str | None = None
     """If set to one of the filter labels defined in jql_filters then the app will use this expression
     to retrieve work items when no criteria and JQL query is provided by the user."""
-    fetch_remote_filters: RemoteFiltersConfig = Field(default_factory=RemoteFiltersConfig)  # type: ignore[assignment]
+    fetch_remote_filters: RemoteFiltersConfig = RemoteFiltersConfig()
     """Configuration for fetching remote JQL filters from Jira API."""
-    jumper: JumperConfig = Field(default_factory=JumperConfig)  # type: ignore[assignment]
+    jumper: JumperConfig = JumperConfig()
     """Configuration for the jumper overlay widget."""
     search_results_per_page: int = Field(default=20, ge=1, le=200)
     """Number of search results to retrieve and display per page. Must be between 1 and 200. Default is 20."""
@@ -138,7 +138,7 @@ class ApplicationConfiguration(BaseSettings):
     """When this is True gojeera will use Jira ability to do full-text search not only in summary and description
     fields but in any text-based field, including comments. This may be slower. If this is False gojeera will only
     search items by summary and description fields."""
-    ssl: SSLConfiguration | None = Field(default_factory=SSLConfiguration)  # type: ignore[assignment]
+    ssl: SSLConfiguration | None = SSLConfiguration()
     """SSL configuration for client-side certificates and CA bundle."""
     search_on_startup: bool = False
     """If True, triggers a search automatically when the UI starts. Can be set via CLI argument --search-on-startup."""

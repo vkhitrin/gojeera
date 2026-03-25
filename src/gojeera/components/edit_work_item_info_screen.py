@@ -13,7 +13,7 @@ from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields
 from gojeera.utils.adf_helpers import convert_adf_to_markdown
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 logger = logging.getLogger('gojeera')
@@ -96,12 +96,12 @@ class EditWorkItemInfoScreen(ModalScreen):
         self._update_button_state()
 
         if CONFIGURATION.get().jumper.enabled:
-            self.query_one('#edit-work-item-summary', Input).jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.query_one('#edit-work-item-summary', Input), 'focus')
 
             self.description_field.make_jumpable()
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#edit-work-item-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
+            set_jump_mode(self.query_one('#edit-work-item-button-quit', Button), 'click')
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

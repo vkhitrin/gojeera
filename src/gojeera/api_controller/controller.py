@@ -1706,17 +1706,13 @@ class APIController:
             if hasattr(work_item, 'components') and work_item.components:
                 fields_to_clone['components'] = [{'id': c.id} for c in work_item.components]
 
-            if hasattr(work_item, 'versions') and work_item.versions:
-                fields_to_clone['versions'] = [
-                    {'id': v.id}
-                    for v in work_item.versions  # type: ignore[attr-defined]
-                ]
+            versions = cast(list[Any] | None, getattr(work_item, 'versions', None))
+            if versions:
+                fields_to_clone['versions'] = [{'id': v.id} for v in versions]
 
-            if hasattr(work_item, 'fix_versions') and work_item.fix_versions:
-                fields_to_clone['fixVersions'] = [
-                    {'id': v.id}
-                    for v in work_item.fix_versions  # type: ignore[attr-defined]
-                ]
+            fix_versions = cast(list[Any] | None, getattr(work_item, 'fix_versions', None))
+            if fix_versions:
+                fields_to_clone['fixVersions'] = [{'id': v.id} for v in fix_versions]
 
             if work_item.assignee and work_item.assignee.account_id:
                 fields_to_clone['assignee'] = {'accountId': work_item.assignee.account_id}

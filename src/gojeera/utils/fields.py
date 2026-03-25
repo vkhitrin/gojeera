@@ -28,8 +28,9 @@ class BaseField:
         self._required = required
 
         if required:
-            if hasattr(self, 'add_class'):
-                self.add_class('required')  # type: ignore[call-non-callable]
+            add_class = getattr(self, 'add_class', None)
+            if callable(add_class):
+                add_class('required')
 
     @property
     def required(self) -> bool:
@@ -38,11 +39,13 @@ class BaseField:
     @required.setter
     def required(self, value: bool) -> None:
         self._required = value
-        if hasattr(self, 'add_class') and hasattr(self, 'remove_class'):
-            if value:
-                self.add_class('required')  # type: ignore[call-non-callable]
-            else:
-                self.remove_class('required')  # type: ignore[call-non-callable]
+        add_class = getattr(self, 'add_class', None)
+        remove_class = getattr(self, 'remove_class', None)
+        if value:
+            if callable(add_class):
+                add_class('required')
+        elif callable(remove_class):
+            remove_class('required')
 
     def mark_required(self) -> None:
         self.required = True

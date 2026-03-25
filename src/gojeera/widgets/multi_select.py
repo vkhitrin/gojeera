@@ -1,4 +1,5 @@
 import logging
+from typing import Sequence, cast
 
 from textual.reactive import reactive
 from textual.widgets import Input
@@ -9,12 +10,12 @@ from gojeera.utils.fields import BaseField, FieldMode
 logger = logging.getLogger('gojeera')
 
 
-class SafeSet(set):
+class SafeSet(set[str]):
     """
     A set that doesn't raise KeyError when removing nonexistent items.
     """
 
-    def remove(self, element):
+    def remove(self, element: str) -> None:
         self.discard(element)
 
 
@@ -29,7 +30,7 @@ class MultiSelect(Tags, BaseField):
 
     can_focus = True
 
-    selected_tags: reactive[set[str]] = reactive(SafeSet)  # type: ignore[invalid-assignment]
+    selected_tags: reactive[set[str]] = cast(reactive[set[str]], reactive(SafeSet))
 
     def __init__(
         self,
@@ -48,6 +49,7 @@ class MultiSelect(Tags, BaseField):
         self.jira_field_key = field_id
         self.title = title or field_id
         self._supports_update = field_supports_update if mode == FieldMode.UPDATE else True
+        self._suspend_tag_selection_messages = False
 
         self._id_to_name = {value_id: name for name, value_id in options}
         self._name_to_id = dict(options)
@@ -81,7 +83,7 @@ class MultiSelect(Tags, BaseField):
             disabled=mode == FieldMode.UPDATE and not field_supports_update,
         )
 
-        self.selected_tags = SafeSet()
+        self._ensure_safe_selected_tags()
 
         self.setup_base_field(
             mode=mode,
@@ -113,6 +115,13 @@ class MultiSelect(Tags, BaseField):
         )
         yield tag_autocomplete
 
+    def _ensure_safe_selected_tags(self) -> SafeSet:
+        """Keep selected_tags on the non-throwing set implementation."""
+
+        if not isinstance(self.selected_tags, SafeSet):
+            self.selected_tags = SafeSet(self.selected_tags)
+        return cast(SafeSet, self.selected_tags)
+
     async def add_new_tag(self, value: str) -> None:
         """
         Override add_new_tag to fix data_bind issue with inheritance.
@@ -128,20 +137,22 @@ class MultiSelect(Tags, BaseField):
         tag.show_x = self.show_x
         tag.tooltip = value
         await self.mount(tag, before=f'#{self.field_id}_input_tag')
-        self.selected_tags.add(value)
+        self._ensure_safe_selected_tags().add(value)
 
         self.mutate_reactive(Tags.selected_tags)
 
         if value not in self.tag_values:
             self.tag_values.add(value)
 
-        def trigger_validation():
-            try:
-                self.post_message(Tag.Selected(tag))
-            except Exception as e:
-                logger.debug(f'Exception occurred: {e}')
+        if not self._suspend_tag_selection_messages:
 
-        self.call_later(trigger_validation)
+            def trigger_validation():
+                try:
+                    self.post_message(Tag.Selected(tag))
+                except Exception as e:
+                    logger.debug(f'Exception occurred: {e}')
+
+            self.call_later(trigger_validation)
 
     def _on_tag_removed(self, event: Tag.Removed):
         """
@@ -156,7 +167,7 @@ class MultiSelect(Tags, BaseField):
         """
 
         tag_value = str(event.tag.value) if event.tag.value is not None else ''
-        self.selected_tags.discard(tag_value)
+        self._ensure_safe_selected_tags().discard(tag_value)
         self.mutate_reactive(Tags.selected_tags)
 
     async def watch_selected_tags(self):
@@ -195,9 +206,13 @@ class MultiSelect(Tags, BaseField):
             logger.debug(f'Exception occurred: {e}')
 
         if hasattr(self, '_initially_selected_tags'):
-            for tag_name in self._initially_selected_tags:
-                if tag_name in self._all_option_names:
-                    await self.add_new_tag(tag_name)
+            self._suspend_tag_selection_messages = True
+            try:
+                for tag_name in self._initially_selected_tags:
+                    if tag_name in self._all_option_names:
+                        await self.add_new_tag(tag_name)
+            finally:
+                self._suspend_tag_selection_messages = False
 
     async def reset_last_tag(self) -> None:
         """Safely reset the last tag when backspace is pressed on an empty TagInput.
@@ -279,7 +294,7 @@ class MultiSelect(Tags, BaseField):
             return ''
         return ','.join(sorted(self.selected_tags))
 
-    def get_value_for_create(self) -> list[dict] | None:
+    def get_value_for_create(self) -> Sequence[dict[str, str]] | Sequence[str] | None:
         """
         Returns the value formatted for Jira API creation (CREATE mode).
 
@@ -295,7 +310,7 @@ class MultiSelect(Tags, BaseField):
 
         return [{'id': self._name_to_id[name]} for name in selected if name in self._name_to_id]
 
-    def get_value_for_update(self) -> list[dict] | None:
+    def get_value_for_update(self) -> Sequence[dict[str, str]] | Sequence[str] | None:
         """
         Returns the value formatted for Jira API updates (UPDATE mode).
 
@@ -386,6 +401,10 @@ class MultiSelect(Tags, BaseField):
             selected_tag_names = [
                 self._id_to_name.get(value_id, value_id) for value_id in self._original_value
             ]
-            for tag_name in selected_tag_names:
-                if tag_name in self._all_option_names:
-                    await self.add_new_tag(tag_name)
+            self._suspend_tag_selection_messages = True
+            try:
+                for tag_name in selected_tag_names:
+                    if tag_name in self._all_option_names:
+                        await self.add_new_tag(tag_name)
+            finally:
+                self._suspend_tag_selection_messages = False

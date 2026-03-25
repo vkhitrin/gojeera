@@ -185,8 +185,9 @@ class WorkItemInfoContainer(Container, can_focus=False):
         try:
             main_screen = self.screen
 
-            if hasattr(main_screen, '_try_hide_loading_coordinated'):
-                main_screen._try_hide_loading_coordinated()  # type: ignore[call-non-callable]
+            hide_loading = getattr(main_screen, '_try_hide_loading_coordinated', None)
+            if callable(hide_loading):
+                hide_loading()
             else:
                 self.app.log.error(
                     f'Screen does not have _try_hide_loading_coordinated method. '

@@ -285,9 +285,7 @@ class WorkItemFields(Container, can_focus=False):
 
     @property
     def pending_changes_container(self) -> Horizontal:
-        return self.query_one(
-            '#work-item-fields-pending-changes-container', expect_type=Horizontal
-        )
+        return self.query_one('#work-item-fields-pending-changes-container', expect_type=Horizontal)
 
     @property
     def resolution_field_container(self) -> FieldRowSlot:
@@ -466,7 +464,9 @@ class WorkItemFields(Container, can_focus=False):
                     with Horizontal(id='resolution-date-row'):
                         yield self._field_label('Resolution Date')
                         yield self._field_control(ReadOnlyInputField(id='resolution-date'))
-        with Horizontal(id='work-item-fields-pending-changes-container') as pending_changes_container:
+        with Horizontal(
+            id='work-item-fields-pending-changes-container'
+        ) as pending_changes_container:
             pending_changes_container.display = False
             label = Static('⚠ Pending changes', id='work-item-fields-pending-changes-label')
             label.display = False
@@ -1859,10 +1859,7 @@ class WorkItemFields(Container, can_focus=False):
 
                 self.dynamic_fields_widgets_container.display = True
 
-            await asyncio.sleep(0)
-            self.run_worker(
-                self._populate_user_picker_widgets(work_item, editable_fields), exclusive=False
-            )
+            await self._populate_user_picker_widgets(work_item, editable_fields)
 
             self._setup_jump_mode()
         else:
@@ -1889,11 +1886,11 @@ class WorkItemFields(Container, can_focus=False):
     async def _populate_user_picker_widgets(
         self, work_item: JiraWorkItem, editable_fields: dict
     ) -> None:
-        # Small delay to ensure widgets are mounted
-        await asyncio.sleep(0.1)
+        # Yield once so newly mounted dynamic widgets can complete their compose cycle.
+        await asyncio.sleep(0)
 
         application = cast('JiraApp', self.app)  # noqa: F821
-        user_picker_widgets = self.query(UserPicker)
+        user_picker_widgets = self.dynamic_fields_widgets_container.query(UserPicker)
 
         if not user_picker_widgets:
             return

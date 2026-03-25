@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from rich.text import Text
 from textual.binding import Binding
@@ -107,6 +107,7 @@ class WorkItemContainer(Vertical, can_focus=False):
 class WorkItemSearchResultsScroll(VerticalScroll):
     """A VerticalScroll widget that displays work item search results."""
 
+    jump_mode: ClassVar[str | None] = 'focus'
     work_item_search_results: Reactive[JiraWorkItemSearchResponse | None] = reactive(
         None, always_update=True
     )
@@ -452,9 +453,6 @@ class WorkItemsContainer(Container):
     def on_mount(self) -> None:
         self.content_container.can_focus = False
         self.query_one('#work-items-page-footer', Static).can_focus = False
-
-        if CONFIGURATION.get().jumper.enabled:
-            self.query_one(WorkItemSearchResultsScroll).jump_mode = 'focus'  # type: ignore[attr-defined]
 
     def show_loading(self) -> None:
         self.is_loading = True

@@ -16,7 +16,7 @@ from gojeera.utils.mention_helpers import insert_user_mention
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 logger = logging.getLogger('gojeera')
@@ -150,14 +150,14 @@ class LogWorkScreen(ModalScreen[dict]):
             self.work_description_input.text = self._initial_description
 
         if CONFIGURATION.get().jumper.enabled:
-            self.time_spent_input.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.time_remaining_input.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.log_date_time_input.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.time_spent_input, 'focus')
+            set_jump_mode(self.time_remaining_input, 'focus')
+            set_jump_mode(self.log_date_time_input, 'focus')
 
             self.work_description_input.make_jumpable()
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#log-work-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
+            set_jump_mode(self.query_one('#log-work-button-quit', Button), 'click')
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

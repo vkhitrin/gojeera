@@ -12,6 +12,7 @@ from gojeera.utils.fields import (
     BaseField,
     FieldMode,
 )
+from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
@@ -187,10 +188,10 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
             content_tabs = list(tabbed_content.query(ContentTab))
             for content_tab in content_tabs:
                 content_tab.can_focus = False
-                setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
+                set_jump_mode(content_tab, 'click')
 
             textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-            textarea.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(textarea, 'focus')
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 

@@ -8,7 +8,7 @@ from textual.widgets import Button, Label, Select, Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
 
@@ -79,9 +79,9 @@ class DecisionPickerScreen(ModalScreen[tuple[str, str] | None]):
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:
-            self.decision_select.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.insert_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#decision-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.decision_select, 'focus')
+            set_jump_mode(self.insert_button, 'click')
+            set_jump_mode(self.query_one('#decision-button-quit', Button), 'click')
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

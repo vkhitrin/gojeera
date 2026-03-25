@@ -1,5 +1,7 @@
 """Common DataTable widgets with vim-style navigation."""
 
+from typing import ClassVar
+
 from textual.binding import Binding
 from textual.widgets import DataTable
 
@@ -8,11 +10,10 @@ class ExtendedDataTable(DataTable):
     """A DataTable with vim-style navigation keybindings and textual-jumper support."""
 
     can_focus = True
+    jump_mode: ClassVar[str | None] = 'focus'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.jump_mode = 'focus'
 
     BINDINGS = [
         Binding(

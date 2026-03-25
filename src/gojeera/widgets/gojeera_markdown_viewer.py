@@ -39,7 +39,7 @@ class GojeeraMarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=
 
     show_table_of_contents = reactive(True)
 
-    navigator: var[Navigator] = var(Navigator)  # type: ignore[invalid-assignment]
+    navigator: var[Navigator] = var(Navigator())
 
     def __init__(
         self,

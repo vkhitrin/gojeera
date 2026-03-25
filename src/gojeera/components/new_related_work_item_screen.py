@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, cast
+
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -8,9 +10,12 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.models import LinkWorkItemType
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
+
+if TYPE_CHECKING:
+    from gojeera.app import JiraApp
 
 
 class LinkedWorkItemInputWidget(Input):
@@ -87,11 +92,11 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
         self.run_worker(self.fetch_work_item_link_types())
 
         if CONFIGURATION.get().jumper.enabled:
-            self.relationship_type.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.linked_work_item_key.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.relationship_type, 'focus')
+            set_jump_mode(self.linked_work_item_key, 'focus')
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#add-link-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
+            set_jump_mode(self.query_one('#add-link-button-quit', Button), 'click')
 
     def validate_work_item_key(self):
         value = self.linked_work_item_key.value
@@ -123,7 +128,8 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
         jumper.show()
 
     async def fetch_work_item_link_types(self) -> None:
-        response: APIControllerResponse = await self.app.api.work_item_link_types()  # type: ignore[union-attr]
+        app = cast('JiraApp', self.app)
+        response: APIControllerResponse = await app.api.work_item_link_types()
         if not response.success:
             self.notify(
                 'Unable to fetch the types of supported links',

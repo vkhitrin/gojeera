@@ -11,7 +11,7 @@ from gojeera.components.panel_picker_screen import PanelPickerScreen
 from gojeera.config import CONFIGURATION
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 logger = logging.getLogger('gojeera')
@@ -102,11 +102,11 @@ class CommentScreen(ModalScreen[str]):
         if CONFIGURATION.get().jumper.enabled:
             self.comment_field.make_jumpable()
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
             cancel_button_id = (
                 '#edit-comment-button-quit' if self.mode == 'edit' else '#add-comment-button-quit'
             )
-            self.query_one(cancel_button_id, Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.query_one(cancel_button_id, Button), 'click')
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

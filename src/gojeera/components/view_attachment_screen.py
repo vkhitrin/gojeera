@@ -22,7 +22,7 @@ from gojeera.utils.mime import (
     is_image,
 )
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -115,8 +115,8 @@ class ViewAttachmentScreen(ModalScreen):
         self.run_worker(self._download_attachment(self._attachment_id))
 
         if CONFIGURATION.get().jumper.enabled:
-            self.download_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.close_button.jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.download_button, 'click')
+            set_jump_mode(self.close_button, 'click')
 
     def on_click(self) -> None:
         self.dismiss()

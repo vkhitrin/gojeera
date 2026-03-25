@@ -24,6 +24,7 @@ from gojeera.api_controller.controller import APIController
 from gojeera.components.unified_search import UnifiedSearchBar
 from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 from gojeera.components.work_item_comments import WorkItemCommentsWidget
+from gojeera.components.work_item_description import WorkItemInfoContainer, WorkItemSummary
 from gojeera.components.work_item_fields import WorkItemFields
 from gojeera.components.work_item_information import (
     WorkItemBreadcrumb,
@@ -35,7 +36,6 @@ from gojeera.components.work_item_result import (
     WorkItemSearchResultsScroll,
 )
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
-from gojeera.components.work_item_description import WorkItemInfoContainer, WorkItemSummary
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.constants import (
@@ -50,7 +50,7 @@ from gojeera.models import (
 )
 from gojeera.themes import load_themes_from_directory
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 
 if TYPE_CHECKING:
@@ -331,8 +331,8 @@ class MainScreen(Screen):
             search_bar.post_message(search_bar.AccountIdReady(account_id))
 
         if CONFIGURATION.get().jumper.enabled:
-            self.query_one('#unified-search-bar', UnifiedSearchBar).jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.query_one('#search-results-container', WorkItemsContainer).jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.query_one('#unified-search-bar', UnifiedSearchBar), 'focus')
+            set_jump_mode(self.query_one('#search-results-container', WorkItemsContainer), 'focus')
 
         tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
         tabs.can_focus = True

@@ -11,7 +11,7 @@ from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.extended_data_table import ExtendedDataTable
 
 if TYPE_CHECKING:
-    from gojeera.app import JiraApp
+    from gojeera.app import JiraApp, MainScreen
 
 
 class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):

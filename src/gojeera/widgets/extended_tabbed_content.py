@@ -261,13 +261,13 @@ class ExtendedTabbedContent(TabbedContent):
                     focusable = getattr(child, 'focusable', False)
 
                     if can_focus and focusable:
-                        if hasattr(child, 'focus') and callable(getattr(child, 'focus', None)):
-                            child.focus()  # type: ignore[call-non-callable]
+                        focus = getattr(child, 'focus', None)
+                        if callable(focus):
+                            focus()
 
-                        if hasattr(child, 'scroll_visible') and callable(
-                            getattr(child, 'scroll_visible', None)
-                        ):
-                            child.scroll_visible()  # type: ignore[call-non-callable]
+                        scroll_visible = getattr(child, 'scroll_visible', None)
+                        if callable(scroll_visible):
+                            scroll_visible()
                         return
 
         self.screen.focus_next()

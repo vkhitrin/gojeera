@@ -6,7 +6,7 @@ from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
@@ -94,11 +94,11 @@ class RemoteLinkScreen(ModalScreen[dict]):
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:
-            self.link_url.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.link_name.jump_mode = 'focus'  # type: ignore[attr-defined]
+            set_jump_mode(self.link_url, 'focus')
+            set_jump_mode(self.link_name, 'focus')
 
-            self.save_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#add-remote-link-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.save_button, 'click')
+            set_jump_mode(self.query_one('#add-remote-link-button-quit', Button), 'click')
 
         if self.is_edit_mode:
             if self.initial_url:

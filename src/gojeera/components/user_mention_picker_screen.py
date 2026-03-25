@@ -7,7 +7,7 @@ from textual.widgets import Button, Label, Select, Static
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraUser
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
 
@@ -101,9 +101,9 @@ class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:
-            self.user_select.jump_mode = 'focus'  # type: ignore[attr-defined]
-            self.insert_button.jump_mode = 'click'  # type: ignore[attr-defined]
-            self.query_one('#user-mention-button-quit', Button).jump_mode = 'click'  # type: ignore[attr-defined]
+            set_jump_mode(self.user_select, 'focus')
+            set_jump_mode(self.insert_button, 'click')
+            set_jump_mode(self.query_one('#user-mention-button-quit', Button), 'click')
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -121,9 +121,15 @@ class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
     @on(Button.Pressed, '#user-mention-button-insert')
     def handle_insert(self) -> None:
         selected_value = self.user_select.value
-        if selected_value and isinstance(selected_value, tuple):
-            result: tuple[str, str] = selected_value  # type: ignore[invalid-assignment]
-            self.dismiss(result)
+        if (
+            selected_value
+            and isinstance(selected_value, tuple)
+            and len(selected_value) == 2
+            and all(isinstance(value, str) for value in selected_value)
+        ):
+            account_id = str(selected_value[0])
+            display_name = str(selected_value[1])
+            self.dismiss((account_id, display_name))
         else:
             self.dismiss(None)
 

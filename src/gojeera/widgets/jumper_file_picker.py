@@ -7,7 +7,7 @@ from textual.widgets import Button, Input
 from textual_fspicker import FileOpen
 
 from gojeera.config import CONFIGURATION
-from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 
 logger = logging.getLogger('gojeera')
 
@@ -70,19 +70,19 @@ class ExtendedFileOpen(FileOpen):
         if jumper_enabled:
             try:
                 file_input = self.query_one(Input)
-                file_input.jump_mode = 'focus'  # type: ignore[attr-defined]
+                set_jump_mode(file_input, 'focus')
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
 
             try:
                 select_button = self.query_one('#select', Button)
-                select_button.jump_mode = 'click'  # type: ignore[attr-defined]
+                set_jump_mode(select_button, 'click')
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
 
             try:
                 cancel_button = self.query_one('#cancel', Button)
-                cancel_button.jump_mode = 'click'  # type: ignore[attr-defined]
+                set_jump_mode(cancel_button, 'click')
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
 

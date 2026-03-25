@@ -1,6 +1,6 @@
 """Custom Jumper widget for gojeera application."""
 
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from textual.errors import NoWidget
 from textual.geometry import Offset
@@ -10,6 +10,20 @@ from textual.widgets._tabbed_content import ContentTab
 from textual_jumper import Jumper
 from textual_jumper.jump_overlay import JumpOverlay
 from textual_jumper.jumper import JumpInfo
+
+JumpMode = Literal['focus', 'click']
+
+
+class SupportsJumpMode(Protocol):
+    """Protocol for widgets that support textual-jumper metadata."""
+
+    jump_mode: JumpMode | None
+
+
+def set_jump_mode(widget: object, jump_mode: JumpMode | None) -> None:
+    """Assign jump mode to a widget through a typed protocol."""
+
+    cast(SupportsJumpMode, widget).jump_mode = jump_mode
 
 
 class ExtendedJumper(Jumper):
@@ -41,7 +55,7 @@ class ExtendedJumper(Jumper):
 
         try:
             ids_to_keys = self.ids_to_keys
-            jumpable_widgets: list[tuple[Offset, Widget, Literal['focus', 'click']]] = []
+            jumpable_widgets: list[tuple[Offset, Widget, JumpMode]] = []
             custom_key_count = 0
             seen_widgets: set[Widget] = set()
             focused_widget = screen.focused
@@ -73,7 +87,7 @@ class ExtendedJumper(Jumper):
                     (
                         Offset(widget_x, widget_y),
                         child,
-                        cast(Literal['focus', 'click'], jump_mode),
+                        cast(JumpMode, jump_mode),
                     )
                 )
                 if child.id and child.id in ids_to_keys:

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -26,6 +26,7 @@ class WorkLogListView(ListView):
     """Custom ListView for worklogs with vim-style j/k navigation."""
 
     can_focus = True
+    jump_mode: ClassVar[str | None] = 'focus'
 
     BINDINGS = [
         Binding('j', 'cursor_down', 'Next worklog', show=False),
@@ -220,9 +221,6 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
     async def on_mount(self) -> None:
         if self._work_item_key:
             await self.fetch_work_log()
-
-        if CONFIGURATION.get().jumper.enabled:
-            self.worklog_list_view.jump_mode = 'focus'  # type: ignore[attr-defined]
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

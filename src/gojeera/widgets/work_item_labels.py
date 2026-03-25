@@ -1,9 +1,13 @@
 import logging
+from typing import TYPE_CHECKING, cast
 
 from textual.widgets import Input
 
 from gojeera.utils.fields import FieldMode
 from gojeera.widgets.multi_select import MultiSelect
+
+if TYPE_CHECKING:
+    from gojeera.app import JiraApp
 
 logger = logging.getLogger('gojeera')
 
@@ -80,7 +84,8 @@ class WorkItemLabels(MultiSelect):
             if not hasattr(app, 'api'):
                 return
 
-            response = await app.api.get_label_suggestions(query=query)  # type: ignore[union-attr]
+            jira_app = cast('JiraApp', app)
+            response = await jira_app.api.get_label_suggestions(query=query)
 
             if response.success and response.result:
                 suggestions = response.result

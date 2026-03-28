@@ -33,10 +33,18 @@ class ExtendedJumper(Jumper):
         """Focus a jump target without deferred animated scrolling."""
         if widget is None:
             return
-        self.app.set_focus(widget, scroll_visible=False)
 
-        if not self.screen.can_view_entire(widget):
-            widget.scroll_visible(animate=False, immediate=True)
+        focus_target = widget
+        get_focus_target = getattr(widget, 'get_jumper_focus_target', None)
+        if callable(get_focus_target):
+            resolved_target = get_focus_target()
+            if isinstance(resolved_target, Widget):
+                focus_target = resolved_target
+
+        self.app.set_focus(focus_target, scroll_visible=False)
+
+        if not self.screen.can_view_entire(focus_target):
+            focus_target.scroll_visible(animate=False, immediate=True)
 
     def show(self) -> None:
         self.app.push_screen(JumpOverlay(self.overlays), self.focus_returned_widget)
@@ -60,7 +68,7 @@ class ExtendedJumper(Jumper):
             seen_widgets: set[Widget] = set()
             focused_widget = screen.focused
 
-            candidate_widgets: list[Widget] = list(screen.focus_chain)
+            candidate_widgets: list[Widget] = list(screen.walk_children(Widget))
             candidate_widgets.extend(content_tabs)
 
             for child in candidate_widgets:

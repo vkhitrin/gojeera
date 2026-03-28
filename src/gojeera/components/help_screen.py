@@ -3,18 +3,18 @@ import os
 
 from textual.app import ComposeResult
 from textual.reactive import Reactive, reactive
-from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static
 
 from gojeera.widgets.extended_footer import ExtendedFooter
-from gojeera.widgets.gojeera_markdown_viewer import GojeeraMarkdownViewer
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
+from gojeera.widgets.gojeera_markdown_viewer import ExtendedMarkdownViewer
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
-class HelpScreen(ModalScreen):
+class HelpScreen(ExtendedModalScreen[None]):
     """The screen that displays help."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close Help'),
         ('question_mark', 'app.pop_screen', 'Close Help'),
     ]
@@ -50,11 +50,13 @@ class HelpScreen(ModalScreen):
         self.call_after_refresh(self._load_content)
 
     async def _load_content(self) -> None:
-        viewer = GojeeraMarkdownViewer(
+        viewer = ExtendedMarkdownViewer(
             self._content, show_table_of_contents=True, id='help_viewer', open_links=False
         )
         self.is_loading = False
         await self.query_one('#modal_outer').mount(viewer)
+        if viewer.can_focus:
+            viewer.focus()
 
         if self._anchor:
             await viewer.go(self._anchor.strip())
@@ -64,6 +66,3 @@ class HelpScreen(ModalScreen):
 
     def watch_is_loading(self, loading: bool) -> None:
         self.query_one('#modal_outer').loading = loading
-
-    def on_click(self) -> None:
-        self.app.pop_screen()

@@ -70,6 +70,7 @@ class UnifiedSearchBar(Container):
         yield Input(
             placeholder='KEY',
             id='basic-work-item-key',
+            classes='work-item-key-input',
             compact=True,
         )
         yield LazySelect(

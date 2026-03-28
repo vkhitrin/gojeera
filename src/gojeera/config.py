@@ -52,8 +52,11 @@ class JumperConfig(BaseModel):
 
     enabled: bool = True
     """If True (default), the jumper overlay is enabled and allows quick navigation between widgets."""
-    keys: list[str] = ['1', '2', '3', 'q', 'w', 'e', 'a', 's', 'd']
-    """List of keys to use for the jumper overlay. Default is ['1', '2', '3', 'q', 'w', 'e', 'a', 's', 'd']."""
+    keys: list[str] = ['q', 'w', 'e', 'a', 's', 'd', 'z', 'x', 'c']
+    """List of keys to use for the jumper overlay.
+
+    Default is ['q', 'w', 'e', 'a', 's', 'd', 'z', 'x', 'c'].
+    """
 
 
 class JiraConfig(BaseSettings):

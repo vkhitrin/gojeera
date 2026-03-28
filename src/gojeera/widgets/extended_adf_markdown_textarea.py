@@ -26,35 +26,37 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
 
     DEFAULT_CSS = """
     ExtendedADFMarkdownTextArea {
-        height: auto;
-        min-height: 8;
-        max-height: 40;
+        height: 12;
+        min-height: 12;
+        max-height: 12;
         padding: 0;
-        margin-bottom: 1;
+        margin-bottom: 0;
     }
 
     ExtendedADFMarkdownTextArea TabbedContent {
-        height: auto;
-        min-height: 8;
-        max-height: 40;
+        height: 12;
+        min-height: 12;
+        max-height: 12;
     }
 
     ExtendedADFMarkdownTextArea TabPane {
         padding: 0;
-        height: auto;
+        height: 12;
     }
 
     ExtendedADFMarkdownTextArea TextArea {
-        height: auto;
-        min-height: 8;
-        max-height: 38;
+        height: 10;
+        min-height: 10;
+        max-height: 10;
         padding: 0;
+        scrollbar-size-vertical: 1;
+        scrollbar-size-horizontal: 1;
     }
 
     ExtendedADFMarkdownTextArea VerticalScroll {
-        height: auto;
-        min-height: 8;
-        max-height: 38;
+        height: 10;
+        min-height: 10;
+        max-height: 10;
         scrollbar-size-vertical: 1;
     }
 
@@ -194,6 +196,15 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
             set_jump_mode(textarea, 'focus')
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
+
+    def get_jumper_focus_target(self) -> TextArea | None:
+        """Return the underlying textarea used for keyboard input."""
+
+        try:
+            return self.query_one(f'#{self.id}-textarea', TextArea)
+        except Exception as e:
+            logger.debug(f'Exception occurred: {e}')
+            return None
 
     def insert_mention(self, account_id: str, display_name: str, base_url: str) -> None:
         """Insert a user mention at the current cursor position."""

@@ -3,21 +3,22 @@ import logging
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.panel_picker_screen import PanelPickerScreen
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 logger = logging.getLogger('gojeera')
 
 
-class CommentScreen(ModalScreen[str]):
+class CommentScreen(ExtendedModalScreen[str]):
     """Unified screen for creating and editing comments.
 
     Args:
@@ -27,7 +28,7 @@ class CommentScreen(ModalScreen[str]):
         initial_text: Initial text for the comment (only used in edit mode).
     """
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -64,7 +65,6 @@ class CommentScreen(ModalScreen[str]):
         return self.query_one(button_id, expect_type=Button)
 
     def compose(self) -> ComposeResult:
-        form_id = 'edit-comment-form' if self.mode == 'edit' else 'add-comment-form'
         save_button_id = (
             'edit-comment-button-save' if self.mode == 'edit' else 'add-comment-button-save'
         )
@@ -78,7 +78,7 @@ class CommentScreen(ModalScreen[str]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id=form_id):
+            with VerticalScroll(id='modal-form-scroll'):
                 with Vertical(id='comment-field-container'):
                     yield Label('Comment').add_class('field_label')
 
@@ -107,6 +107,7 @@ class CommentScreen(ModalScreen[str]):
                 '#edit-comment-button-quit' if self.mode == 'edit' else '#add-comment-button-quit'
             )
             set_jump_mode(self.query_one(cancel_button_id, Button), 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.comment_field))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -183,7 +184,4 @@ class CommentScreen(ModalScreen[str]):
 
     @on(Button.Pressed, '#edit-comment-button-quit')
     def handle_cancel_edit(self) -> None:
-        self.app.pop_screen()
-
-    def on_click(self) -> None:
         self.app.pop_screen()

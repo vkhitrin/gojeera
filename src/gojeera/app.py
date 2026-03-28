@@ -6,13 +6,12 @@ import logging
 import os
 from pathlib import Path
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pythonjsonlogger.json import JsonFormatter
 from textual import events, on
 from textual.app import App, ComposeResult, InvalidThemeError
 from textual.binding import Binding
-from textual.command import CommandPalette
 from textual.containers import Horizontal, Vertical
 from textual.reactive import Reactive, reactive
 from textual.screen import Screen
@@ -21,6 +20,7 @@ from textual.widgets._tabbed_content import ContentTab
 from textual.worker import Worker
 
 from gojeera.api_controller.controller import APIController
+from gojeera.commands.binding_provider import register_binding_in_command_palette
 from gojeera.components.unified_search import UnifiedSearchBar
 from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 from gojeera.components.work_item_comments import WorkItemCommentsWidget
@@ -49,8 +49,10 @@ from gojeera.models import (
     WorkItemSearchResult,
 )
 from gojeera.themes import load_themes_from_directory
+from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_palette import ExtendedPalette
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 
 if TYPE_CHECKING:
@@ -78,10 +80,16 @@ def get_decision_command_provider() -> type[Provider]:
     return DecisionCommandProvider
 
 
-def get_footer_command_provider() -> type[Provider]:
-    from gojeera.commands.footer_provider import FooterCommandProvider
+def get_registered_binding_command_provider() -> type[Provider]:
+    from gojeera.commands.binding_provider import RegisteredBindingCommandProvider
 
-    return FooterCommandProvider
+    return RegisteredBindingCommandProvider
+
+
+def get_work_item_command_provider() -> type[Provider]:
+    from gojeera.commands.work_item_command_provider import WorkItemCommandProvider
+
+    return WorkItemCommandProvider
 
 
 def get_user_mention_command_provider() -> type[Provider]:
@@ -103,16 +111,45 @@ class MainScreen(Screen):
             tooltip='Search items by search criteria',
         ),
         Binding(
-            key='ctrl+backslash',
-            action='show_overlay',
-            description='Jump',
-            tooltip='Jump between widgets',
+            key='ctrl+e',
+            action='edit_work_item_info',
+            description='Edit Info',
+            tooltip='Edit summary and description',
+            show=True,
         ),
         Binding(
-            key='ctrl+n',
-            action='new_work_item',
-            description='New Work Item',
+            key='ctrl+g',
+            action='go_to_parent_work_item',
+            description='Go To Parent',
+            tooltip='Load the parent work item',
             show=True,
+        ),
+        register_binding_in_command_palette(
+            Binding(
+                key='ctrl+backslash',
+                action='show_overlay',
+                description='Jump',
+                tooltip='Jump between widgets',
+            )
+        ),
+        register_binding_in_command_palette(
+            Binding(
+                key='f10',
+                action='quick_navigation',
+                description='Quick Navigation',
+                tooltip='Open a work item directly by key',
+                show=True,
+            )
+        ),
+        register_binding_in_command_palette(
+            Binding(
+                key='ctrl+n',
+                action='new_work_item',
+                description='New Work Item',
+                show=True,
+                id='new_work_item',
+                tooltip='Create a new work item',
+            )
         ),
         Binding(
             key='[',
@@ -322,6 +359,14 @@ class MainScreen(Screen):
                         footer_label.display = False
                         yield footer_label
         yield ExtendedFooter(show_command_palette=False)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == 'edit_work_item_info':
+            return self.current_loaded_work_item_key is not None
+        if action == 'go_to_parent_work_item':
+            work_item = self.information_panel.work_item
+            return bool(work_item and work_item.parent_key.strip())
+        return super().check_action(action, parameters)
 
     async def on_mount(self) -> None:
         if self.user_info:
@@ -734,6 +779,7 @@ class MainScreen(Screen):
         self.work_item_fields_widget.work_item = None
 
         self.current_loaded_work_item_key = None
+        self.call_after_refresh(self.refresh_bindings)
 
         self.work_item_comments_widget.comments = None
         self.work_item_comments_widget.work_item_key = None
@@ -780,6 +826,111 @@ class MainScreen(Screen):
             ),
             callback=self.new_work_item,
         )
+
+    async def action_edit_work_item_info(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        await self.work_item_info_container.action_edit_work_item_info()
+
+    def action_open_loaded_work_item_in_browser(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        app = cast('JiraApp', self.app)
+        if url := build_external_url_for_work_item(self.current_loaded_work_item_key, app):
+            app.open_url(url)
+
+    def action_copy_loaded_work_item_key(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        self.app.copy_to_clipboard(self.current_loaded_work_item_key)
+        self.notify('Key copied to clipboard', title=self.current_loaded_work_item_key)
+
+    def action_copy_loaded_work_item_url(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        app = cast('JiraApp', self.app)
+        if url := build_external_url_for_work_item(self.current_loaded_work_item_key, app):
+            app.copy_to_clipboard(url)
+            self.notify('URL copied to clipboard', title=self.current_loaded_work_item_key)
+
+    def action_clone_loaded_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        self.run_worker(self.clone_work_item(self.current_loaded_work_item_key))
+
+    async def action_add_attachment(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        await self.work_item_attachments_widget.action_add_attachment()
+
+    async def action_new_work_item_subtask(self) -> None:
+        work_item = self.work_item_info_container.work_item
+        if not work_item or (work_item.work_item_type and work_item.work_item_type.subtask):
+            return
+
+        from gojeera.components.new_work_item_screen import AddWorkItemScreen
+
+        reporter_account_id = self.user_info.account_id if self.user_info else None
+
+        await self.app.push_screen(
+            AddWorkItemScreen(
+                project_key=work_item.project.key if work_item.project else None,
+                reporter_account_id=reporter_account_id,
+                parent_work_item=work_item,
+            ),
+            callback=self.new_work_item,
+        )
+
+    async def action_new_related_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        await self.related_work_items_widget.action_link_work_item()
+
+    async def action_new_web_link(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        await self.work_item_remote_links_widget.action_add_remote_link()
+
+    def action_new_comment(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        self.work_item_comments_widget.action_add_comment()
+
+    def action_view_worklog(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        self.work_item_fields_widget.action_view_worklog()
+
+    def action_log_work(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        self.work_item_fields_widget.action_log_work()
+
+    async def action_go_to_parent_work_item(self) -> None:
+        work_item = self.information_panel.work_item
+        if not work_item or not work_item.parent_key.strip():
+            return
+
+        await self.fetch_work_items(work_item.parent_key.strip())
+
+    async def action_quick_navigation(self) -> None:
+        from gojeera.components.quick_navigation_screen import QuickNavigationScreen
+
+        await self.app.push_screen(QuickNavigationScreen(), callback=self.quick_navigation)
+
+    async def quick_navigation(self, data: dict[str, str] | None) -> None:
+        if not data:
+            return
+
+        work_item_key = data.get('work_item_key')
+        if not work_item_key:
+            return
+
+        await self.fetch_work_items(work_item_key)
 
     async def new_work_item(self, data: dict | None) -> None:
         if data:
@@ -922,6 +1073,7 @@ class MainScreen(Screen):
         self.work_item_fields_widget.work_item = work_item
 
         self.current_loaded_work_item_key = selected_work_item_key
+        self.call_after_refresh(self.refresh_bindings)
 
         self.related_work_items_widget.work_item_key = work_item.key
         self.related_work_items_widget.work_items = work_item.related_work_items
@@ -1134,26 +1286,40 @@ class JiraApp(App):
             show=True,
         ),
         Binding(key='ctrl+q', action='', description=''),
-        Binding(key='question_mark', action='help', description='Help'),
-        Binding(
-            key='f11',
-            action='toggle_footer_visibility',
-            description='Toggle Footer',
-            tooltip='Show or hide the footer',
+        register_binding_in_command_palette(
+            Binding(
+                key='question_mark',
+                action='help',
+                description='Help',
+                tooltip='Open help',
+            )
         ),
-        Binding(
-            key='f12',
-            action='debug_info',
-            description='Debug',
-            tooltip='Show debug information (config, server, user)',
+        register_binding_in_command_palette(
+            Binding(
+                key='f11',
+                action='toggle_footer_visibility',
+                description='Toggle Footer',
+                tooltip='Show or hide the footer',
+                show=False,
+            )
+        ),
+        register_binding_in_command_palette(
+            Binding(
+                key='f12',
+                action='debug_info',
+                description='Debug',
+                tooltip='Show debug information (config, server, user)',
+                show=False,
+            )
         ),
     ]
     DEFAULT_THEME = DEFAULT_THEME
 
     COMMANDS = App.COMMANDS | {
+        get_work_item_command_provider,
         get_panel_command_provider,
         get_decision_command_provider,
-        get_footer_command_provider,
+        get_registered_binding_command_provider,
         get_user_mention_command_provider,
     }
 
@@ -1186,11 +1352,21 @@ class JiraApp(App):
         self.initial_jql_filter_label: str | None = jql_filter
 
         self.focus_item_on_startup: int | None = focus_item_on_startup
-
         self.server_info: JiraServerInfo | None = None
         self._setup_logging()
         self._register_custom_themes()
         self._setup_theme(user_theme)
+
+    def search_themes(self) -> None:
+        """Show the theme picker with the extended command palette."""
+        from textual.theme import ThemeProvider
+
+        self.push_screen(
+            ExtendedPalette(
+                providers=[ThemeProvider],
+                placeholder='Search for themes…',
+            ),
+        )
 
     def _register_custom_themes(self) -> None:
         try:
@@ -1301,10 +1477,11 @@ class JiraApp(App):
             self.app.exit()
 
     def action_command_palette(self) -> None:
-        if isinstance(self.screen, CommandPalette):
+        if isinstance(self.screen, ExtendedPalette):
             self.pop_screen()
         else:
-            super().action_command_palette()
+            if self.use_command_palette and not ExtendedPalette.is_open(self):
+                self.push_screen(ExtendedPalette(id='--command-palette'))
 
     def action_toggle_footer_visibility(self) -> None:
         self.toggle_footer_visibility()

@@ -45,7 +45,7 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
             show=True,
         ),
         Binding(
-            key='o',
+            key='ctrl+o',
             action='open_work_item_browser',
             description='Open in Browser',
             show=True,

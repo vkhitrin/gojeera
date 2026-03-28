@@ -3,12 +3,13 @@ from typing import cast
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Select, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
 
@@ -27,10 +28,10 @@ class DecisionSelector(VimSelect):
         self.valid_empty = False
 
 
-class DecisionPickerScreen(ModalScreen[tuple[str, str] | None]):
+class DecisionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
     """Modal screen for selecting a decision marker type."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+c', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
@@ -82,6 +83,7 @@ class DecisionPickerScreen(ModalScreen[tuple[str, str] | None]):
             set_jump_mode(self.decision_select, 'focus')
             set_jump_mode(self.insert_button, 'click')
             set_jump_mode(self.query_one('#decision-button-quit', Button), 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.decision_select))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -103,11 +105,8 @@ class DecisionPickerScreen(ModalScreen[tuple[str, str] | None]):
             result = cast(tuple[str, str], selected_value)
             self.dismiss(result)
         else:
-            self.dismiss(None)
+            self.dismiss()
 
     @on(Button.Pressed, '#decision-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss(None)
-
-    def on_click(self) -> None:
-        self.dismiss(None)
+        self.dismiss()

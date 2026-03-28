@@ -88,8 +88,15 @@ UnifiedSearchBar>Select>SelectOverlay>OptionList>.option-list--option-highlighte
 }
 
 
+Input.work-item-key-input {
+  width: 100%;
+}
+
 UnifiedSearchBar.mode-basic>Input#basic-work-item-key {
   column-span: 1;
+}
+
+UnifiedSearchBar.mode-basic>Input#basic-work-item-key.work-item-key-input {
   width: 100%;
 }
 
@@ -923,7 +930,7 @@ HelpScreen #modal_title {
 }
 
 HelpScreen MarkdownViewer,
-HelpScreen GojeeraMarkdownViewer {
+HelpScreen ExtendedMarkdownViewer {
   height: 1fr;
   background: $surface;
   padding: 0 2;
@@ -1087,18 +1094,25 @@ CommentScreen #modal_title {
   text-style: bold;
 }
 
-#add-comment-form,
-#edit-comment-form {
+CommentScreen #modal-form-scroll,
+EditWorkItemInfoScreen #modal-form-scroll,
+AddWorkItemScreen #modal-form-scroll,
+LogWorkScreen #modal-form-scroll {
   width: 100%;
   height: 1fr;
   background: $surface;
-  padding: 0 2 1 2;
   scrollbar-size-vertical: 1;
 }
 
-#add-comment-form>*,
-#edit-comment-form>* {
+CommentScreen #modal-form-scroll>*,
+EditWorkItemInfoScreen #modal-form-scroll>*,
+AddWorkItemScreen #modal-form-scroll>*,
+LogWorkScreen #modal-form-scroll>* {
   margin-bottom: 0;
+}
+
+CommentScreen #modal-form-scroll {
+  padding: 0 2 1 2;
 }
 
 CommentScreen #comment-field-container {
@@ -1280,6 +1294,136 @@ RemoteLinkScreen #modal_footer {
   margin-right: 1;
   background: $success-darken-2;
   color: $text;
+}
+
+QuickNavigationScreen {
+  align: center middle;
+}
+
+QuickNavigationScreen #modal_outer {
+  width: 30%;
+  max-width: 42;
+  height: auto;
+  max-height: 9;
+  background: $surface;
+  padding: 0;
+}
+
+QuickNavigationScreen #modal_title {
+  width: 100%;
+  height: auto;
+  padding: 1;
+  background: $surface;
+  color: $text;
+  text-align: center;
+  text-style: bold;
+}
+
+#quick-navigation-form {
+  width: 100%;
+  height: auto;
+  background: $surface;
+  padding: 0 2 0 2;
+  scrollbar-size-vertical: 1;
+}
+
+#quick-navigation-form Vertical {
+  width: 100%;
+  height: auto;
+}
+
+#quick-navigation-form Label {
+  margin: 0;
+}
+
+#quick-navigation-form Input {
+  margin-bottom: 1;
+}
+
+QuickNavigationScreen #modal_footer {
+  width: 100%;
+  height: auto;
+  align: center middle;
+  padding: 0 2;
+  margin-bottom: 1;
+  background: $surface;
+}
+
+#quick-navigation-button-open {
+  width: auto;
+  margin-right: 1;
+  background: $success-darken-2;
+  color: $text;
+}
+
+#quick-navigation-button-open>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#quick-navigation-button-open:hover {
+  background: $success;
+  color: $text;
+}
+
+#quick-navigation-button-open:hover>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#quick-navigation-button-open:focus {
+  background: $success;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+#quick-navigation-button-open:focus>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#quick-navigation-button-cancel {
+  width: auto;
+  background: $error-darken-1;
+  color: $text;
+}
+
+#quick-navigation-button-cancel>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#quick-navigation-button-cancel:hover {
+  background: $error-lighten-1;
+  color: $text;
+}
+
+#quick-navigation-button-cancel:hover>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#quick-navigation-button-cancel:focus {
+  background: $error-lighten-1;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+#quick-navigation-button-cancel:focus>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
 }
 
 #add-remote-link-button-save>Static {
@@ -1543,16 +1687,8 @@ EditWorkItemInfoScreen #modal_title {
   text-style: bold;
 }
 
-#edit-work-item-form {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
+EditWorkItemInfoScreen #modal-form-scroll {
   padding: 0 2 1 2;
-  scrollbar-size-vertical: 1;
-}
-
-#edit-work-item-form>* {
-  margin-bottom: 0;
 }
 
 EditWorkItemInfoScreen #summary-field-container {
@@ -1686,57 +1822,45 @@ AddWorkItemScreen #modal_outer {
 AddWorkItemScreen #modal_title {
   width: 100%;
   height: auto;
-  padding: 1;
+  padding: 1 1 0 1;
   background: $surface;
   color: $text;
   text-align: center;
   text-style: bold;
 }
 
-#add-work-item-form {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
+AddWorkItemScreen #modal-form-scroll {
   padding: 0 3 1 2;
-  scrollbar-size-vertical: 1;
-}
-
-#add-work-item-form>* {
-  margin-bottom: 0;
 }
 
 
 AddWorkItemScreen StaticFieldsWidgets {
   margin: 0;
-  margin-bottom: 1;
   padding: 0;
   height: auto;
 }
 
 AddWorkItemScreen StaticFieldsWidgets>Vertical {
   height: auto;
-  margin-bottom: 1;
+  margin: 0;
 }
 
-AddWorkItemScreen #summary-field-container {
+AddWorkItemScreen #work-item-type-field-container,
+AddWorkItemScreen #reporter-field-container,
+AddWorkItemScreen #assignee-field-container,
+AddWorkItemScreen #sprint-field-container,
+AddWorkItemScreen #summary-field-container,
+AddWorkItemScreen #description-field-container,
+AddWorkItemScreen DynamicFieldsWidgets>* {
   height: auto;
-  margin-bottom: 1;
-}
-
-AddWorkItemScreen #description-field-container {
-  height: auto;
-  margin-bottom: 0;
+  margin: 1 0 0 0;
 }
 
 AddWorkItemScreen DynamicFieldsWidgets {
   height: auto;
-  min-height: 3;
+  min-height: 0;
   margin: 0;
   padding: 0;
-}
-
-AddWorkItemScreen DynamicFieldsWidgets>* {
-  margin-bottom: 1;
 }
 
 AddWorkItemScreen DynamicFieldsWidgets > DynamicFieldWrapper {
@@ -2913,16 +3037,8 @@ LogWorkScreen #modal_title {
   text-style: bold;
 }
 
-#log-work-form {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
+LogWorkScreen #modal-form-scroll {
   padding: 0 2 1 2;
-  scrollbar-size-vertical: 1;
-}
-
-#log-work-form>* {
-  margin-bottom: 0;
 }
 
 LogWorkScreen #time-fields-grid {

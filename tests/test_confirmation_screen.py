@@ -24,7 +24,7 @@ async def open_confirmation_screen_via_delete_attachment(pilot):
     table.focus()
     await asyncio.sleep(0.3)
 
-    await pilot.press('d')
+    await pilot.press('ctrl+d')
     await asyncio.sleep(0.5)
 
     screen = pilot.app.screen

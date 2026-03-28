@@ -9,7 +9,6 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Center, Horizontal, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Button, Static, TextArea
 from textual_image.widget import Image
@@ -23,6 +22,7 @@ from gojeera.utils.mime import (
 )
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -32,10 +32,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger('gojeera')
 
 
-class ViewAttachmentScreen(ModalScreen):
+class ViewAttachmentScreen(ExtendedModalScreen[None]):
     """A modal screen to display files attached to a work item."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'dismiss_screen', 'Close'),
         ('ctrl+s', 'download_attachment', 'Download'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
@@ -117,9 +117,6 @@ class ViewAttachmentScreen(ModalScreen):
         if CONFIGURATION.get().jumper.enabled:
             set_jump_mode(self.download_button, 'click')
             set_jump_mode(self.close_button, 'click')
-
-    def on_click(self) -> None:
-        self.dismiss()
 
     def action_dismiss_screen(self) -> None:
         self.dismiss()

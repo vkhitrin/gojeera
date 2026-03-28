@@ -113,8 +113,12 @@ ignore_names = [
     "VERSIONS",
     "_align_to_target",
     "_handle_account_id_ready",
+    "_hit_count",
+    "_list_visible",
     "_on_*",
     "_overlays",
+    "_parent_work_item",
+    "_refresh_command_list",
     "_selected_work_item_type_id",
     "_stored_title",
     "_token_to_content",
@@ -132,6 +136,7 @@ ignore_names = [
     "as_json",
     "boardId",
     "check_action",
+    "clear_current",
     "clear_form",
     "clear_information",
     "cls",
@@ -188,4 +193,5 @@ ignore_names = [
     "work_item_search_results",
     "work_item_time_tracking",
     "work_log_items_container",
+    "search_themes"
 ]

@@ -108,7 +108,7 @@ async def delete_comment_and_verify(pilot):
     comments_scroll.focus()
     await asyncio.sleep(0.2)
 
-    await pilot.press('d')
+    await pilot.press('ctrl+d')
     await asyncio.sleep(0.5)
 
     screen = pilot.app.screen

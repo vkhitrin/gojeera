@@ -35,7 +35,7 @@ async def create_worklog_and_verify(pilot):
     list_view = pilot.app.screen.worklog_list_view
     initial_count = len(list_view.children)
 
-    await pilot.press('n')
+    await pilot.press('ctrl+n')
     await asyncio.sleep(0.5)
 
     assert isinstance(pilot.app.screen, LogWorkScreen)
@@ -79,7 +79,7 @@ async def delete_worklog_and_verify(pilot):
     list_view.focus()
     await asyncio.sleep(0.2)
 
-    await pilot.press('d')
+    await pilot.press('ctrl+d')
     await asyncio.sleep(0.5)
 
     screen_after_delete = pilot.app.screen

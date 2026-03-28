@@ -12,37 +12,11 @@ Atlassian Jira with a focus on cloud instances using API v3.
 - **Type Checking:**: ty (<https://docs.astral.sh/ty/>)
 - **Deadcode Analysis**: vulture (<https://github.com/jendrikseipp/vulture>)
 
-## Key Features
-
-- Browse and search Jira work items
-- View and manage work item details and comments
-- Create, update, and delete work items
-- Navigate between work items and projects
-- Filter and sort work items
-- Display work item metadata (status, priority, assignee, etc.)
-- View and manage attachments
-- Markdown-to-ADF conversion
-
 ## Development Workflow
 
 1. Make changes to the codebase.
 2. Analyze codebase using `make analyze-codebase` and attempt to fix all issues.
 3. Run tests using `make test`.
-
-## Code Style Conventions
-
-- Follow PEP 8 style guidelines
-- Use type hints for function signatures
-- Write clear, descriptive variable names
-- Include docstrings for public functions and classes
-- Keep functions focused and small
-
-## Common Patterns
-
-- UI components inherit from Textual widgets
-- Services handle Jira API communication
-- Models use Pydantic for data validation
-- Async operations for API calls
 
 ## Markdown ↔ ADF Conversion
 
@@ -58,6 +32,10 @@ supported features, and implementation details.
 
 ## Crucial Notes
 
+- UI components inherit from Textual widgets
+- Services handle Jira API communication
+- Models use Pydantic for data validation
+- Async operations for API calls
 - Ensure proper error handling for API failures
 - Respect rate limits when making API calls
 - Use environment variables for sensitive data (API tokens, etc.)

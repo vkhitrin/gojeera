@@ -5,16 +5,17 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import ListItem, ListView, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.work_log_screen import LogWorkScreen
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.utils.urls import build_external_url_for_work_log
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -32,8 +33,8 @@ class WorkLogListView(ListView):
         Binding('j', 'cursor_down', 'Next worklog', show=False),
         Binding('k', 'cursor_up', 'Previous worklog', show=False),
         Binding('ctrl+o', 'open_worklog_in_browser', 'Open in browser'),
-        Binding('e', 'edit_worklog', 'Edit worklog'),
-        Binding('d', 'delete_worklog', 'Delete worklog'),
+        Binding('ctrl+e', 'edit_worklog', 'Edit worklog'),
+        Binding('ctrl+d', 'delete_worklog', 'Delete worklog'),
     ]
 
     def action_open_worklog_in_browser(self) -> None:
@@ -182,12 +183,12 @@ class WorkLogListItem(ListItem):
             )
 
 
-class WorkItemWorkLogScreen(ModalScreen[dict]):
+class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     """A modal screen that displays the work logs of a work item using ListView with pagination."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'close_screen', 'Close'),
-        ('n', 'add_worklog', 'New worklog'),
+        ('ctrl+n', 'add_worklog', 'New worklog'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
     TITLE = 'Worklog'
@@ -198,8 +199,6 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
         self._work_item_key = work_item_key
         self._current_remaining_estimate = current_remaining_estimate
         self._is_loading = False
-        self._work_logs_deleted = False
-        self._work_logs_updated = False
 
     @property
     def help_anchor(self) -> str:
@@ -221,6 +220,7 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
     async def on_mount(self) -> None:
         if self._work_item_key:
             await self.fetch_work_log()
+        self.call_after_refresh(lambda: focus_first_available(self.worklog_list_view))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -277,8 +277,6 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
         if response.success:
             self.notify('Worklog added', title='Worklog')
 
-            self._work_logs_updated = True
-
             await self.reload_worklogs()
         else:
             self.notify(
@@ -314,8 +312,6 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
         if response.success:
             self.notify('Worklog updated', title='Worklog')
 
-            self._work_logs_updated = True
-
             await self.reload_worklogs()
         else:
             self.notify(
@@ -333,8 +329,6 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
         if response.success:
             self.notify('Worklog deleted', title='Worklog')
 
-            self._work_logs_deleted = True
-
             await self.reload_worklogs()
         else:
             self.notify(
@@ -343,21 +337,11 @@ class WorkItemWorkLogScreen(ModalScreen[dict]):
                 severity='error',
             )
 
-    def on_click(self) -> None:
-        self.dismiss(
-            {
-                'work_logs_deleted': self._work_logs_deleted,
-                'work_logs_updated': self._work_logs_updated,
-            }
-        )
+    def dismiss_on_backdrop_click(self) -> None:
+        self.dismiss()
 
     def action_close_screen(self) -> None:
-        self.dismiss(
-            {
-                'work_logs_deleted': self._work_logs_deleted,
-                'work_logs_updated': self._work_logs_updated,
-            }
-        )
+        self.dismiss()
 
     async def reload_worklogs(self) -> None:
         list_view = self.worklog_list_view

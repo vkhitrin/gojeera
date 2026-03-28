@@ -22,7 +22,14 @@ class RemoteLinksDataTable(ExtendedDataTable):
 
     BINDINGS = [
         Binding(
-            key='d',
+            key='ctrl+n',
+            action='new_remote_link',
+            description='New web link',
+            tooltip='Add a web link to the loaded work item',
+            priority=True,
+        ),
+        Binding(
+            key='ctrl+d',
             action='delete_remote_link',
             description='Delete',
             tooltip='Deletes the remote link',
@@ -102,6 +109,11 @@ class RemoteLinksDataTable(ExtendedDataTable):
             if self._work_item_key:
                 self.notify('Opening link in the browser...', title=self._work_item_key)
             self.app.open_url(self._selected_link_url)
+
+    async def action_new_remote_link(self) -> None:
+        widget = self._get_remote_links_widget()
+        if widget is not None:
+            await widget.action_add_remote_link()
 
     async def action_edit_remote_link(self) -> None:
         if not self._selected_link_id:

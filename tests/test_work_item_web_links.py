@@ -136,7 +136,7 @@ async def delete_web_link_and_verify(pilot):
             table.move_cursor(row=0)
             await asyncio.sleep(0.2)
 
-        await pilot.press('d')
+        await pilot.press('ctrl+d')
         await asyncio.sleep(0.5)
 
         from gojeera.components.confirmation_screen import ConfirmationScreen

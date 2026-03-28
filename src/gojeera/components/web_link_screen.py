@@ -1,12 +1,13 @@
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
@@ -32,10 +33,10 @@ class RemoteLinkNameInputWidget(Input):
         self.compact = True
 
 
-class RemoteLinkScreen(ModalScreen[dict]):
+class RemoteLinkScreen(ExtendedModalScreen[dict]):
     """A screen to add or edit a remote link for a work item."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -109,14 +110,13 @@ class RemoteLinkScreen(ModalScreen[dict]):
             if self.initial_url and self.initial_title:
                 self.save_button.disabled = False
 
+        self.call_after_refresh(lambda: focus_first_available(self.link_url, self.link_name))
+
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
             return
         jumper = self.query_one(ExtendedJumper)
         jumper.show()
-
-    def on_click(self) -> None:
-        self.dismiss({})
 
     @on(Input.Blurred, 'RemoteLinkURLInputWidget')
     def validate_url(self):
@@ -164,4 +164,4 @@ class RemoteLinkScreen(ModalScreen[dict]):
 
     @on(Button.Pressed, '#add-remote-link-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss({})
+        self.dismiss()

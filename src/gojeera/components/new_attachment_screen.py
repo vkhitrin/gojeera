@@ -3,12 +3,13 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.jumper_file_picker import ExtendedFileOpen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -24,10 +25,10 @@ class FilePathInput(Input):
         self.disabled = True
 
 
-class AddAttachmentScreen(ModalScreen[str]):
+class AddAttachmentScreen(ExtendedModalScreen[str]):
     """A modal screen to add an attachment to a work item."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -91,6 +92,7 @@ class AddAttachmentScreen(ModalScreen[str]):
             set_jump_mode(self.browse_button, 'click')
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.query_one('#add-attachment-button-quit', Button), 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.browse_button))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -125,16 +127,13 @@ class AddAttachmentScreen(ModalScreen[str]):
             self._selected_file = None
             self.save_button.disabled = True
 
-    def on_click(self) -> None:
-        self.dismiss('')
-
     @on(Button.Pressed, '#add-attachment-button-save')
     def handle_save(self) -> None:
         if self._selected_file:
             self.dismiss(str(self._selected_file))
         else:
-            self.dismiss('')
+            self.dismiss()
 
     @on(Button.Pressed, '#add-attachment-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss('')
+        self.dismiss()

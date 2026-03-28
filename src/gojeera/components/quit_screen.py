@@ -6,18 +6,19 @@ if TYPE_CHECKING:
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.screen import ModalScreen
 from textual.widgets import Button, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
-class QuitScreen(ModalScreen[str]):
+class QuitScreen(ExtendedModalScreen[str]):
     """Screen with a dialog to quit."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -36,6 +37,12 @@ class QuitScreen(ModalScreen[str]):
         if CONFIGURATION.get().jumper.enabled:
             set_jump_mode(self.query_one('#button-cancel', Button), 'click')
             set_jump_mode(self.query_one('#button-quit', Button), 'click')
+        self.call_after_refresh(
+            lambda: focus_first_available(
+                self.query_one('#button-cancel', Button),
+                self.query_one('#button-quit', Button),
+            )
+        )
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -55,7 +62,4 @@ class QuitScreen(ModalScreen[str]):
 
     @on(Button.Pressed, '#button-cancel')
     def handle_cancel(self) -> None:
-        self.app.pop_screen()
-
-    def on_click(self) -> None:
         self.app.pop_screen()

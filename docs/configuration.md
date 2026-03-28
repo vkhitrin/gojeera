@@ -195,21 +195,21 @@ The jumper overlay allows quick keyboard navigation between widgets
 jumper:
   enabled: true
   keys:
-    - "1"
-    - "2"
-    - "3"
     - "q"
     - "w"
     - "e"
     - "a"
     - "s"
     - "d"
+    - "z"
+    - "x"
+    - "c"
 ```
 
 - **`jumper.enabled`** (default: `true`): Enable the jumper
   overlay for quick navigation
-- **`jumper.keys`** (default: `['1', '2', '3', 'q', 'w',
-'e', 'a', 's', 'd']`): Keys to use for jumper targets
+- **`jumper.keys`** (default: `['q', 'w', 'e', 'a', 's', 'd', 'z', 'x', 'c']`):
+  Keys to use for jumper targets
 
 ### Logging
 

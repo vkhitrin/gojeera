@@ -9,7 +9,6 @@ from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Static, TabbedContent, TabPane
 import yaml
 
@@ -17,8 +16,10 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraGlobalSettings, JiraMyselfInfo, JiraServerInfo
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -26,10 +27,10 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class DebugInfoScreen(ModalScreen):
+class DebugInfoScreen(ExtendedModalScreen[None]):
     """Modal screen for displaying debug information about gojeera configuration and Jira server."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('f12', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
@@ -68,17 +69,17 @@ class DebugInfoScreen(ModalScreen):
             with TabbedContent(initial='tab-config', id='debug_tabs'):
                 with TabPane('Configuration', id='tab-config'):
                     with VerticalScroll():
-                        yield GojeeraMarkdown(id='config-markdown')
+                        yield GojeeraMarkdown(open_links=False, id='config-markdown')
                 with TabPane('Server Info', id='tab-server'):
                     with VerticalScroll():
-                        yield GojeeraMarkdown(id='server-markdown')
-                        yield GojeeraMarkdown(id='global-markdown')
+                        yield GojeeraMarkdown(open_links=False, id='server-markdown')
+                        yield GojeeraMarkdown(open_links=False, id='global-markdown')
                 with TabPane('User Info', id='tab-user'):
                     with VerticalScroll():
-                        yield GojeeraMarkdown(id='user-markdown')
+                        yield GojeeraMarkdown(open_links=False, id='user-markdown')
                 with TabPane('Cache', id='tab-cache'):
                     with VerticalScroll():
-                        yield GojeeraMarkdown(id='cache-markdown')
+                        yield GojeeraMarkdown(open_links=False, id='cache-markdown')
 
         yield ExtendedFooter(show_command_palette=False)
 
@@ -105,6 +106,7 @@ class DebugInfoScreen(ModalScreen):
         self._fetch_global_settings()
 
         await self._populate_cache_section()
+        self.call_after_refresh(lambda: focus_first_available(self.tabs))
 
     async def action_show_overlay(self) -> None:
         """Show the Jumper overlay to jump between widgets."""
@@ -336,9 +338,6 @@ class DebugInfoScreen(ModalScreen):
             container = self.query_one('#modal_outer')
             container.scroll_page_down()
             event.stop()
-
-    def on_click(self) -> None:
-        self.app.pop_screen()
 
     def action_focus_next(self) -> None:
         if self.tabs.tab_count > 0:

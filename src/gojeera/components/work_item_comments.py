@@ -257,6 +257,13 @@ class CommentsScrollView(VerticalScroll):
     """
 
     BINDINGS = [
+        Binding(
+            'ctrl+n',
+            'new_comment',
+            'New comment',
+            tooltip='Add a comment to the loaded work item',
+            priority=True,
+        ),
         Binding('j', 'cursor_down', 'Next comment', show=False),
         Binding('k', 'cursor_up', 'Previous comment', show=False),
         Binding('down', 'cursor_down', 'Next comment', show=False),
@@ -267,12 +274,20 @@ class CommentsScrollView(VerticalScroll):
             'Open in browser',
         ),
         Binding('e', 'edit_comment', 'Edit comment'),
-        Binding('d', 'delete_comment', 'Delete comment'),
+        Binding('ctrl+d', 'delete_comment', 'Delete comment'),
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._selected_index: int = 0
+
+    def _get_comments_widget(self) -> 'WorkItemCommentsWidget | None':
+        current = self.parent
+        while current is not None:
+            if isinstance(current, WorkItemCommentsWidget):
+                return current
+            current = current.parent
+        return None
 
     @property
     def comment_containers(self) -> list[CommentContainer]:
@@ -322,6 +337,11 @@ class CommentsScrollView(VerticalScroll):
     async def action_delete_comment(self) -> None:
         if selected := self.selected_comment:
             await selected.action_delete_comment()
+
+    def action_new_comment(self) -> None:
+        widget = self._get_comments_widget()
+        if widget is not None:
+            widget.action_add_comment()
 
     def reset_selection(self) -> None:
         self._selected_index = 0

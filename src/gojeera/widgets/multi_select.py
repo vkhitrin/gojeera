@@ -1,6 +1,7 @@
 import logging
 from typing import Sequence, cast
 
+from textual import events
 from textual.reactive import reactive
 from textual.widgets import Input
 from textual_tags import Tag, TagAutoComplete, TagInput, Tags
@@ -8,6 +9,24 @@ from textual_tags import Tag, TagAutoComplete, TagInput, Tags
 from gojeera.utils.fields import BaseField, FieldMode
 
 logger = logging.getLogger('gojeera')
+
+
+class MultiSelectTagAutoComplete(TagAutoComplete):
+    """Keep autocomplete open long enough for mouse option selection."""
+
+    def _handle_focus_change(self, has_focus: bool) -> None:
+        if has_focus:
+            super()._handle_focus_change(has_focus)
+
+
+class MultiSelectTagInput(TagInput):
+    """Reopen autocomplete suggestions on mouse click."""
+
+    def on_click(self, event: events.Click) -> None:
+        self.focus()
+        parent = self.parent
+        if parent is not None:
+            parent.query_one(TagAutoComplete).action_show()
 
 
 class SafeSet(set[str]):
@@ -106,10 +125,10 @@ class MultiSelect(Tags, BaseField):
     def compose(self):
         """Override compose."""
 
-        tag_input = TagInput(id=f'{self.field_id}_input_tag')
+        tag_input = MultiSelectTagInput(id=f'{self.field_id}_input_tag')
         yield tag_input
 
-        tag_autocomplete = TagAutoComplete(
+        tag_autocomplete = MultiSelectTagAutoComplete(
             target=tag_input,
             candidates=self.update_autocomplete_candidates,
         )

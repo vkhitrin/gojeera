@@ -3,7 +3,6 @@ import logging
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
@@ -11,16 +10,18 @@ from gojeera.components.panel_picker_screen import PanelPickerScreen
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields
 from gojeera.utils.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 logger = logging.getLogger('gojeera')
 
 
-class EditWorkItemInfoScreen(ModalScreen):
-    BINDINGS = [
+class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -56,7 +57,7 @@ class EditWorkItemInfoScreen(ModalScreen):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='edit-work-item-form'):
+            with VerticalScroll(id='modal-form-scroll'):
                 with Vertical(id='summary-field-container'):
                     yield Label('Summary').add_class('field_label')
                     summary_widget = Input(
@@ -102,6 +103,9 @@ class EditWorkItemInfoScreen(ModalScreen):
 
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.query_one('#edit-work-item-button-quit', Button), 'click')
+        self.call_after_refresh(
+            lambda: focus_first_available(self.summary_input, self.description_field)
+        )
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -162,7 +166,7 @@ class EditWorkItemInfoScreen(ModalScreen):
 
     @on(Button.Pressed, '#edit-work-item-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss({})
+        self.dismiss()
 
     async def action_insert_mention(self) -> None:
         from gojeera.utils.mention_helpers import insert_user_mention
@@ -224,6 +228,3 @@ class EditWorkItemInfoScreen(ModalScreen):
             textarea.move_cursor(cursor_position)
 
             textarea.insert(insertion_text)
-
-    def on_click(self) -> None:
-        self.dismiss({})

@@ -1,13 +1,14 @@
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Select, Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraUser
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
 
@@ -26,7 +27,7 @@ class UserMentionSelector(VimSelect):
         self.valid_empty = False
 
 
-class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
+class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
     """Modal screen for selecting a user to mention.
 
     Args:
@@ -34,7 +35,7 @@ class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
         users: Optional list of users to display initially
     """
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+c', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
@@ -104,6 +105,7 @@ class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
             set_jump_mode(self.user_select, 'focus')
             set_jump_mode(self.insert_button, 'click')
             set_jump_mode(self.query_one('#user-mention-button-quit', Button), 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.user_select))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -131,11 +133,8 @@ class UserMentionPickerScreen(ModalScreen[tuple[str, str] | None]):
             display_name = str(selected_value[1])
             self.dismiss((account_id, display_name))
         else:
-            self.dismiss(None)
+            self.dismiss()
 
     @on(Button.Pressed, '#user-mention-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss(None)
-
-    def on_click(self) -> None:
-        self.dismiss(None)
+        self.dismiss()

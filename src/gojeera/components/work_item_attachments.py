@@ -168,7 +168,14 @@ class AttachmentsDataTable(ExtendedDataTable):
 
     BINDINGS = [
         Binding(
-            key='d',
+            key='ctrl+n',
+            action='new_attachment',
+            description='New attachment',
+            tooltip='Attach a file to the loaded work item',
+            priority=True,
+        ),
+        Binding(
+            key='ctrl+d',
             action='delete_attachment',
             description='Delete',
             tooltip='Deletes the attachment',
@@ -194,6 +201,19 @@ class AttachmentsDataTable(ExtendedDataTable):
         self._selected_attachment_id: str | None = None
         self._selected_attachment_file_name: str | None = None
         self._work_item_key: str | None = work_item_key
+
+    def _get_attachments_widget(self) -> 'WorkItemAttachmentsWidget | None':
+        current = self.parent
+        while current is not None:
+            if isinstance(current, WorkItemAttachmentsWidget):
+                return current
+            current = current.parent
+        return None
+
+    async def action_new_attachment(self) -> None:
+        widget = self._get_attachments_widget()
+        if widget is not None:
+            await widget.action_add_attachment()
 
     @on(ExtendedDataTable.RowHighlighted)
     def highlighted(self, event: ExtendedDataTable.RowHighlighted) -> None:

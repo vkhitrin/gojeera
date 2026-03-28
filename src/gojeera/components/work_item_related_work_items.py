@@ -18,6 +18,27 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp, MainScreen
 
 
+class RelatedWorkItemsDataTable(ExtendedDataTable):
+    BINDINGS = [
+        Binding(
+            key='ctrl+n',
+            action='new_related_work_item',
+            description='New related item',
+            tooltip='Create a new relationship from the loaded work item',
+            priority=True,
+        ),
+        *ExtendedDataTable.BINDINGS,
+    ]
+
+    def action_new_related_work_item(self) -> None:
+        current = self.parent
+        while current is not None:
+            if isinstance(current, RelatedWorkItemsWidget):
+                current.run_worker(current.action_link_work_item())
+                return
+            current = current.parent
+
+
 class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
     """A container for displaying the work items related to a work item."""
 
@@ -47,7 +68,7 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
             show=True,
         ),
         Binding(
-            key='d',
+            key='ctrl+d',
             action='unlink_work_item',
             description='Unlink',
         ),
@@ -84,13 +105,13 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         return self.query_one('.tab-content-container', expect_type=VerticalGroup)
 
     @property
-    def data_table(self) -> ExtendedDataTable:
-        return self.query_one(ExtendedDataTable)
+    def data_table(self) -> RelatedWorkItemsDataTable:
+        return self.query_one(RelatedWorkItemsDataTable)
 
     def compose(self) -> ComposeResult:
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
-            table = ExtendedDataTable(id='related-work-items-table', cursor_type='row')
+            table = RelatedWorkItemsDataTable(id='related-work-items-table', cursor_type='row')
             yield table
 
     def on_mount(self) -> None:

@@ -12,7 +12,7 @@ from textual.reactive import Reactive, reactive
 from textual.widget import Widget
 from textual.widgets import Input, Label, Select, Static
 from textual.widgets._select import SelectOverlay
-from textual_tags import Tag, TagAutoComplete, Tags
+from textual_tags import Tag, TagAutoComplete
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.work_item_description import WorkItemInfoContainer
@@ -42,6 +42,7 @@ from gojeera.utils.work_item_updates import (
 )
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.date_time_input import DateTimeInput
+from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.numeric_input import NumericInput
 from gojeera.widgets.read_only_input_field import ReadOnlyInputField
@@ -475,17 +476,20 @@ class WorkItemFields(Container, can_focus=False):
     def _setup_jump_mode(self) -> None:
         content = self.content_container
 
-        for input_widget in content.query(Input):
-            if input_widget.can_focus and not input_widget.disabled:
-                setattr(input_widget, 'jump_mode', 'focus')  # noqa: B010
+        for widget in content.walk_children(Widget):
+            if hasattr(widget, 'jump_mode'):
+                set_jump_mode(widget, None)
 
-        for select_widget in content.query(Select):
-            if select_widget.can_focus and not select_widget.disabled:
-                setattr(select_widget, 'jump_mode', 'focus')  # noqa: B010
-
-        for tags_widget in content.query(Tags):
-            if tags_widget.can_focus and not tags_widget.disabled:
-                setattr(tags_widget, 'jump_mode', 'focus')  # noqa: B010
+        for widget in content.query('.field_control'):
+            if not isinstance(widget, Widget):
+                continue
+            if not widget.can_focus:
+                continue
+            if widget.disabled:
+                continue
+            if getattr(widget, 'read_only', False):
+                continue
+            set_jump_mode(widget, 'focus')
 
     def _update_layout_mode(self) -> None:
         try:
@@ -1647,6 +1651,7 @@ class WorkItemFields(Container, can_focus=False):
 
             self.has_pending_changes = False
             self._loading_form = False
+            self._setup_jump_mode()
             self._refresh_field_spacing()
             self.is_loading = False
 

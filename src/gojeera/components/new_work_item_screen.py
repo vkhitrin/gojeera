@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Select, Static, TextArea
 from textual.worker import get_current_worker
@@ -19,6 +18,7 @@ from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.constants import PROCESS_OPTIONAL_FIELDS, SKIP_FIELDS, CustomFieldType
 from gojeera.utils.fields import FieldMode, get_sprint_field_id_from_fields_data
+from gojeera.utils.focus import focus_first_available
 from gojeera.utils.widgets_factory_utils import (
     DynamicFieldsWidgets,
     StaticFieldsWidgets,
@@ -27,6 +27,7 @@ from gojeera.utils.widgets_factory_utils import (
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.lazy_select import LazySelect
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.sprint_picker import SprintPicker
@@ -37,8 +38,8 @@ from gojeera.widgets.work_item_labels import WorkItemLabels
 logger = logging.getLogger('gojeera')
 
 
-class AddWorkItemScreen(ModalScreen):
-    BINDINGS = [
+class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
     TITLE = 'New Work Item'
@@ -63,9 +64,6 @@ class AddWorkItemScreen(ModalScreen):
         self._users_fetched_for_project: str | None = None
         self._metadata_fetched_for: tuple[str, str] | None = None
         self._sprint_field_id: str | None = None
-        self._parent_sprint_id: int | None = None
-        self._parent_sprint_name: str | None = None
-        self._parent_sprint_loaded = False
 
         self._cache = get_cache()
 
@@ -242,7 +240,7 @@ class AddWorkItemScreen(ModalScreen):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('New Work Item', id='modal_title')
-            with VerticalScroll(id='add-work-item-form'):
+            with VerticalScroll(id='modal-form-scroll'):
                 with StaticFieldsWidgets():
                     with Vertical(id='project-field-container'):
                         label = Label('Project').add_class('field_label')
@@ -352,6 +350,7 @@ class AddWorkItemScreen(ModalScreen):
             set_jump_mode(self.work_item_type_selector, 'focus')
             set_jump_mode(self.reporter_selector, 'focus')
             set_jump_mode(self.assignee_selector, 'focus')
+            set_jump_mode(self.sprint_picker_widget, 'focus')
 
             set_jump_mode(self.summary_field, 'focus')
 
@@ -366,13 +365,35 @@ class AddWorkItemScreen(ModalScreen):
         self.query_one('#summary-field-container').display = False
         self.query_one('#description-field-container').display = False
         self.dynamic_fields_container.display = False
-
-        if self._parent_work_item_key:
-            if self._parent_work_item is not None:
-                self._set_inherited_sprint_from_parent_work_item(self._parent_work_item)
-
         if self._project_key:
-            self.fetch_projects()
+            self.call_after_refresh(self._initialize_prefilled_form)
+        else:
+            self.call_after_refresh(lambda: focus_first_available(self.project_selector))
+
+    def _initialize_prefilled_form(self) -> None:
+        """Preload project-dependent fields when the screen opens with a predefined project."""
+
+        self.fetch_projects()
+
+    def _apply_prefilled_subtask_type(self, project_key: str, work_item_type_id: str) -> None:
+        """Apply the derived subtask type after the selector options have rendered."""
+
+        type_selector = self.query_one('#create-work-item-select-type', LazySelect)
+        with self.prevent(Select.Changed):
+            type_selector.value = work_item_type_id
+        type_selector.disabled = True
+
+        self._selected_work_item_type_id = work_item_type_id
+        self.dynamic_fields_container.display = True
+
+        if self._metadata_fetched_for != (project_key, work_item_type_id):
+            self.run_worker(
+                self.fetch_work_item_create_metadata(project_key, work_item_type_id),
+                exclusive=False,
+            )
+
+        self.save_button.disabled = not self._validate_required_fields()
+        self.call_after_refresh(lambda: focus_first_available(self.summary_field))
 
     def _make_dynamic_widgets_jumpable(self) -> None:
         from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
@@ -392,10 +413,12 @@ class AddWorkItemScreen(ModalScreen):
             try:
                 project_selector = self.query_one('#create-work-item-select-project', LazySelect)
                 projects_list = [(f'{p.name} ({p.key})', p.key) for p in cached_projects]
-                project_selector.set_options(projects_list)
+                with self.prevent(Select.Changed):
+                    project_selector.set_options(projects_list)
 
                 if self._project_key:
-                    project_selector.value = self._project_key
+                    with self.prevent(Select.Changed):
+                        project_selector.value = self._project_key
 
                     if self._parent_work_item_key:
                         project_selector.disabled = True
@@ -437,10 +460,12 @@ class AddWorkItemScreen(ModalScreen):
                     project_selector = self.query_one(
                         '#create-work-item-select-project', LazySelect
                     )
-                    project_selector.set_options(projects_list)
+                    with self.prevent(Select.Changed):
+                        project_selector.set_options(projects_list)
 
                     if self._project_key:
-                        project_selector.value = self._project_key
+                        with self.prevent(Select.Changed):
+                            project_selector.value = self._project_key
 
                         if self._parent_work_item_key:
                             project_selector.disabled = True
@@ -502,21 +527,14 @@ class AddWorkItemScreen(ModalScreen):
             self._types_fetched_for_project = cache_key
             try:
                 type_selector = self.query_one('#create-work-item-select-type', LazySelect)
-                type_selector.set_options(types_list)
+                with self.prevent(Select.Changed):
+                    type_selector.set_options(types_list)
 
                 if self._parent_work_item_key and types_list:
-                    type_selector.value = types_list[0][1]
-                    type_selector.disabled = True
-
-                    self._selected_work_item_type_id = types_list[0][1]
-                    self.dynamic_fields_container.display = True
-
-                    if self._metadata_fetched_for != (cache_key, types_list[0][1]):
-                        self.run_worker(
-                            self.fetch_work_item_create_metadata(cache_key, types_list[0][1]),
-                        )
-
-                    self.save_button.disabled = not self._validate_required_fields()
+                    work_item_type_id = types_list[0][1]
+                    self.call_after_refresh(
+                        lambda: self._apply_prefilled_subtask_type(cache_key, work_item_type_id)
+                    )
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
             return
@@ -549,22 +567,17 @@ class AddWorkItemScreen(ModalScreen):
                     types.sort(key=lambda x: x.name)
                     types_list = [(t.name, t.id) for t in types]
 
-                    type_selector.set_options(types_list)
+                    with self.prevent(Select.Changed):
+                        type_selector.set_options(types_list)
                     self._types_fetched_for_project = project_key
 
                     if self._parent_work_item_key and types_list:
-                        type_selector.value = types_list[0][1]
-                        type_selector.disabled = True
-
-                        self._selected_work_item_type_id = types_list[0][1]
-                        self.dynamic_fields_container.display = True
-
-                        if self._metadata_fetched_for != (project_key, types_list[0][1]):
-                            await self.fetch_work_item_create_metadata(
-                                project_key, types_list[0][1]
+                        work_item_type_id = types_list[0][1]
+                        self.call_after_refresh(
+                            lambda: self._apply_prefilled_subtask_type(
+                                project_key, work_item_type_id
                             )
-
-                        self.save_button.disabled = not self._validate_required_fields()
+                        )
                 else:
                     self.notify(
                         f'Failed to fetch work item types: {response.error}',
@@ -601,10 +614,19 @@ class AddWorkItemScreen(ModalScreen):
         cache_key = self._selected_project_key
         cached_users = self._cache.get('project_users_tuples', cache_key)
         if cached_users is not None:
+            users_options = list(cached_users)
+            app = cast('JiraApp', self.app)
+            if (
+                self._reporter_account_id
+                and app.user_info
+                and all(account_id != self._reporter_account_id for _, account_id in users_options)
+            ):
+                users_options.insert(0, (app.user_info.display_name, app.user_info.account_id))
+
             self._users_fetched_for_project = cache_key
             try:
                 reporter_selector = self.query_one('#create-work-item-select-reporter', LazySelect)
-                reporter_selector.set_options(cached_users)
+                reporter_selector.set_options(users_options)
 
                 if self._reporter_account_id:
                     reporter_selector.value = self._reporter_account_id
@@ -612,7 +634,7 @@ class AddWorkItemScreen(ModalScreen):
                     self.save_button.disabled = not self._validate_required_fields()
 
                 assignee_selector = self.query_one('#create-work-item-select-assignee', LazySelect)
-                assignee_selector.set_options(cached_users)
+                assignee_selector.set_options(users_options)
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
             return
@@ -636,6 +658,20 @@ class AddWorkItemScreen(ModalScreen):
 
                 if response.success and response.result:
                     users_list = [(user.display_name, user.account_id) for user in response.result]
+                    if (
+                        self._reporter_account_id
+                        and application.user_info
+                        and all(
+                            account_id != self._reporter_account_id for _, account_id in users_list
+                        )
+                    ):
+                        users_list.insert(
+                            0,
+                            (
+                                application.user_info.display_name,
+                                application.user_info.account_id,
+                            ),
+                        )
 
                     self._cache.set('project_users_tuples', users_list, project_key)
 
@@ -881,12 +917,6 @@ class AddWorkItemScreen(ModalScreen):
                     )
                 except Exception:
                     pass
-            elif self._parent_work_item_key:
-                if self._parent_sprint_loaded:
-                    self._apply_subtask_sprint_read_only()
-                elif self._parent_work_item is not None:
-                    self._set_inherited_sprint_from_parent_work_item(self._parent_work_item)
-
             user_picker_widgets = self.dynamic_fields_container.query(UserPicker)
             if user_picker_widgets:
                 users_response = await application.api.search_users_assignable_to_projects(
@@ -1011,32 +1041,6 @@ class AddWorkItemScreen(ModalScreen):
             except Exception:
                 pass
 
-    def _apply_subtask_sprint_read_only(self) -> None:
-        if not self._parent_work_item_key:
-            return
-
-        self.sprint_picker_widget.disabled = True
-        self.query_one('#sprint-field-container').display = True
-
-        if self._parent_sprint_id is not None and self._parent_sprint_name:
-            self.sprint_picker_widget.sprints = {
-                'sprints': [(self._parent_sprint_name, self._parent_sprint_id)],
-                'selection': self._parent_sprint_id,
-            }
-        else:
-            self.sprint_picker_widget.sprints = {'sprints': [], 'selection': None}
-
-    def _set_inherited_sprint_from_parent_work_item(self, parent_work_item: 'JiraWorkItem') -> None:
-        if parent_work_item.sprint:
-            self._parent_sprint_id = parent_work_item.sprint.id
-            self._parent_sprint_name = parent_work_item.sprint.name
-        else:
-            self._parent_sprint_id = None
-            self._parent_sprint_name = None
-
-        self._parent_sprint_loaded = True
-        self._apply_subtask_sprint_read_only()
-
     @on(Button.Pressed, '#add-work-item-button-save')
     def handle_save(self) -> None:
         if not self._validate_required_fields():
@@ -1111,7 +1115,7 @@ class AddWorkItemScreen(ModalScreen):
 
     @on(Button.Pressed, '#add-work-item-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss({})
+        self.dismiss()
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -1188,6 +1192,3 @@ class AddWorkItemScreen(ModalScreen):
             textarea.move_cursor(cursor_position)
 
             textarea.insert(insertion_text)
-
-    def on_click(self) -> None:
-        self.dismiss({})

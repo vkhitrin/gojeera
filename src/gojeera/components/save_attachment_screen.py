@@ -3,12 +3,13 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from gojeera.config import CONFIGURATION
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.jumper_file_picker import ExtendedFileOpen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -25,10 +26,10 @@ class FilePathInput(Input):
         self.disabled = True
 
 
-class SaveAttachmentScreen(ModalScreen[str]):
+class SaveAttachmentScreen(ExtendedModalScreen[str]):
     """A modal screen to save an attachment to a file."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'dismiss_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -97,6 +98,7 @@ class SaveAttachmentScreen(ModalScreen[str]):
             set_jump_mode(self.browse_button, 'click')
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.query_one('#save-attachment-button-quit', Button), 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.browse_button))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -105,7 +107,7 @@ class SaveAttachmentScreen(ModalScreen[str]):
         jumper.show()
 
     def action_dismiss_screen(self) -> None:
-        self.dismiss('')
+        self.dismiss()
 
     @on(Button.Pressed, '#browse-save-location-button')
     async def open_file_picker(self) -> None:
@@ -127,16 +129,13 @@ class SaveAttachmentScreen(ModalScreen[str]):
             self.file_path_input.value = str(file_path)
             self.save_button.disabled = False
 
-    def on_click(self) -> None:
-        self.dismiss('')
-
     @on(Button.Pressed, '#save-attachment-button-save')
     def handle_save(self) -> None:
         if self._selected_file:
             self.dismiss(str(self._selected_file))
         else:
-            self.dismiss('')
+            self.dismiss()
 
     @on(Button.Pressed, '#save-attachment-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss('')
+        self.dismiss()

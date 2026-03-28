@@ -23,13 +23,12 @@ async def open_new_work_item_screen(pilot):
 async def open_and_select_project(pilot):
     """Open new work item screen and select a project."""
     await open_new_work_item_screen(pilot)
-    # Focus on project selector and open it
-    await pilot.press('tab')  # Tab to project selector
-    await asyncio.sleep(0.2)
+    # Project selector is focused on mount.
     await pilot.press('enter')  # Open dropdown
     await asyncio.sleep(0.3)
     await pilot.press('down', 'enter')  # Select first project
     await asyncio.sleep(0.5)
+    await pilot.app.workers.wait_for_complete()
 
 
 async def fill_required_fields(pilot):

@@ -38,16 +38,17 @@ gojeera --work-item-key "PROJ-123"
 
 ## Global Keybindings
 
-| Key      | Action          | Description                                     |
-| -------- | --------------- | ----------------------------------------------- |
-| `Ctrl+C` | Quit            | Exit the application                            |
-| `Ctrl+\` | Jump Mode       | Activate jumper overlay for quick navigation    |
-| `Ctrl+P` | Command Palette | Open command palette                            |
-| `?`      | Help            | Open in-app help documentation                  |
-| `F11`    | Toggle Footer   | Show or hide the footer for the current session |
-| `F12`    | Debug Info      | Show debug information (config, server, user)   |
-| `[`      | Previous Tab    | Navigate to previous tab in work item details   |
-| `]`      | Next Tab        | Navigate to next tab in work item details       |
+| Key      | Action           | Description                                     |
+| -------- | ---------------- | ----------------------------------------------- |
+| `Ctrl+C` | Quit             | Exit the application                            |
+| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation    |
+| `Ctrl+P` | Command Palette  | Open command palette                            |
+| `?`      | Help             | Open help                                       |
+| `F10`    | Quick Navigation | Open a work item directly by key                |
+| `F11`    | Toggle Footer    | Show or hide the footer for the current session |
+| `F12`    | Debug Info       | Show debug information (config, server, user)   |
+| `[`      | Previous Tab     | Navigate to previous tab in work item details   |
+| `]`      | Next Tab         | Navigate to next tab in work item details       |
 
 ## Unified Search
 
@@ -119,16 +120,55 @@ Remote filters appear in the JQL autocomplete dropdown with a ☁ symbol.
 After executing a search, work items are displayed in the information panel.
 Navigate using:
 
-- `j` / `↓` - Move down
-- `k` / `↑` - Move up
-- `l` - Next page
-- `h` - Previous page
-- `CTRL+O` - Open in browser
+- `n` / `↓` - Move down
+- `p` / `↑` - Move up
+- `n` - Next page
+- `p` - Previous page
+- `CTRL+O` - Open in browser for the currently highlighted result
 - `CTRL+B` - Clone work item
-- `CTRL+K` - Copy key to clipboard
-- `CTRL+L` - Copy URL to clipboard
-- `CTRL+N` - New work item
+- `CTRL+Y` - Copy key to clipboard
+- `CTRL+U` - Copy URL to clipboard
+- `CTRL+N` - New work item from the main search/results view
 - `Enter` - Load full details of selected work item
+
+`CTRL+N`, `CTRL+O`, `CTRL+D`, `CTRL+S` and `CTRL+G` are contextual shortcuts.
+They trigger different actions depending on the currently focused widget or
+active tab.
+
+`CTRL+N` shortcuts:
+
+- Main search/results view: create a new work item
+- Subtasks tab: create a subtask
+- Attachments tab: add an attachment
+- Related Work Items tab: link another work item
+- Web Links tab: add a remote link
+- Comments tab: add a comment
+- Worklog list: add a worklog
+
+`CTRL+D` shortcuts:
+
+- Attachments tab: delete the selected attachment
+- Related Work Items tab: unlink the selected work item
+- Web Links tab: delete the selected web link
+- Comments tab: delete the selected comment
+- Worklog list: delete the selected worklog
+
+`CTRL+G` shortcuts:
+
+- In the main loaded-work-item view, it loads the parent work item.
+- In the Subtasks tab, it loads the selected subtask.
+- In the Related Work Items tab, it loads the selected related work item.
+
+`CTRL+O` shortcuts:
+
+- In the results pane, browse the selected work item.
+- In the Subtasks tab, browse selected subtask.
+- In the Related Work Items tab, brows the selected related work item.
+
+`CTRL+S` shortcuts:
+
+- In the main view, save updated fields.
+- In the attachments tab, download attachment locally.
 
 ### Work Item Tabs
 
@@ -143,6 +183,7 @@ Displays work item summary and description with Markdown rendering.
 **Keybindings**:
 
 - `CTRL+E` - Edit work item summary and description
+- `CTRL+G` - Load the parent work item when one exists
 - `CTRL+L` - Open worklog
 - `CTRL+T` - Log work
 
@@ -154,10 +195,10 @@ Manage files attached to work items.
 
 **Keybindings**:
 
-- `CTRL+N` - Add new attachment
-- `d` - Delete the selected attachment
+- `CTRL+N` - Add new attachment when the Attachments tab is active
+- `CTRL+D` - Delete the selected attachment
 - `Enter` - View attachment (if supported format)
-- `CTLR+S` - Save/download attachment
+- `CTRL+S` - Download attachment
 - `CTRL+O` - Open attachment in browser
 
 **Supported preview formats**:
@@ -175,7 +216,7 @@ Manage subtasks for the current work item.
 
 **Keybindings**:
 
-- `CTRL+N` - New subtask
+- `CTRL+N` - New subtask when the Subtasks tab is active
 - `Ctrl+G` - Load selected subtask
 - `CTRL+O` - Open subtask in browser
 
@@ -187,8 +228,8 @@ Manage work item relationships (blocks, is blocked by, relates to, etc.).
 
 **Keybindings**:
 
-- `CTRL+N` - Link to another work item
-- `d` - Unlink selected work item
+- `CTRL+N` - Link to another work item when the Related Work Items tab is active
+- `CTRL+D` - Unlink selected work item
 - `Ctrl+G` - Load selected work item
 - `CTRL+O` - Open work item in browser
 
@@ -200,8 +241,8 @@ Manage remote links associated with work items.
 
 **Keybindings**:
 
-- `CTRL+N` - Add new web link
-- `d` - Delete selected web link
+- `CTRL+N` - Add new web link when the Web Links tab is active
+- `CTRL+D` - Delete selected web link
 - `e` - Edit web link
 - `CTRL+O` - Open link in browser
 
@@ -213,8 +254,8 @@ Manage work item comments.
 
 **Keybindings**:
 
-- `CTRL+N` - Add new comment
-- `d` - Delete selected comment
+- `CTRL+N` - Add new comment when the Comments tab is active
+- `CTRL+D` - Delete selected comment
 - `e` - Edit comment
 - `CTRL+O` - Open comment in browser
 
@@ -236,6 +277,13 @@ gojeera supports Jira's time tracking features:
 - Update remaining estimate when logging work
 - View and edit existing work log entries
 
+When the worklog list is open:
+
+- `CTRL+N` - Add a worklog
+- `CTRL+D` - Delete the selected worklog
+- `CTRL+E` - Edit the selected worklog
+- `CTRL+O` - Open the selected worklog in browser
+
 ### Fields Panel
 
 ![Fields panel](/static/fields_panel.svg)
@@ -253,6 +301,7 @@ Shows and allows editing of work item fields:
 ![New work item screen](/static/new_work_item_screen.svg)
 
 Press `Ctrl+N` from the main screen to open the new work item dialog.
+This shortcut is contextual and applies from the main search/results view.
 
 **Required fields**:
 
@@ -336,7 +385,11 @@ For complete conversion reference, see [markdown_to_adf_conversion.md](markdown_
 
 ## Command Palette
 
-Press `Ctrl+P` to access commands:
+Press `Ctrl+P` to access commands.
+
+The command palette is contextual: it includes commands registered for the
+currently focused screen, widget, or loaded work item. Commands hidden from the
+footer can still appear here when they are intentionally registered.
 
 ### Available Commands
 
@@ -349,6 +402,9 @@ Press `Ctrl+P` to access commands:
 **UI Commands**:
 
 - **Show Footer / Hide Footer**: Toggle footer visibility for the current session
+- **Debug Information**: Open the debug information screen
+- **Quick Navigation**: Jump directly to a work item by key
+- **Contextual Work Item Commands** when a work item is loaded
 
 ## Jumper Mode
 

@@ -26,13 +26,6 @@ class ExtendedTabbedContent(TabbedContent):
 
     BINDINGS = [
         Binding(
-            key='ctrl+e',
-            action='edit_work_item_info',
-            description='Edit Info',
-            tooltip='Edit summary and description',
-            show=True,
-        ),
-        Binding(
             key='ctrl+l',
             action='view_worklog',
             description='Worklog',

@@ -3,14 +3,15 @@ from typing import TYPE_CHECKING, cast
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.models import LinkWorkItemType
+from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
+from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
 
@@ -41,10 +42,10 @@ class WorkItemLinkTypeSelector(VimSelect):
         self.valid_empty = False
 
 
-class AddWorkItemRelationshipScreen(ModalScreen[dict]):
+class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
     """A modal screen to allow the user to link work items."""
 
-    BINDINGS = [
+    BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
@@ -97,6 +98,9 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
 
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.query_one('#add-link-button-quit', Button), 'click')
+        self.call_after_refresh(
+            lambda: focus_first_available(self.relationship_type, self.linked_work_item_key)
+        )
 
     def validate_work_item_key(self):
         value = self.linked_work_item_key.value
@@ -117,9 +121,6 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
         self.save_button.disabled = (
             False if (value and value.strip()) and self.relationship_type.selection else True
         )
-
-    def on_click(self) -> None:
-        self.dismiss({})
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -165,4 +166,4 @@ class AddWorkItemRelationshipScreen(ModalScreen[dict]):
 
     @on(Button.Pressed, '#add-link-button-quit')
     def handle_cancel(self) -> None:
-        self.dismiss({})
+        self.dismiss()

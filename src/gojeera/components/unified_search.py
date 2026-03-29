@@ -14,6 +14,7 @@ from textual.worker import get_current_worker
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.jql_autocomplete import JQLAutoComplete
 from gojeera.widgets.lazy_select import LazySelect
@@ -67,7 +68,7 @@ class UnifiedSearchBar(Container):
             compact=True,
         )
 
-        yield Input(
+        yield ExtendedInput(
             placeholder='KEY',
             id='basic-work-item-key',
             classes='work-item-key-input',
@@ -106,7 +107,7 @@ class UnifiedSearchBar(Container):
             compact=True,
         )
 
-        yield Input(
+        yield ExtendedInput(
             placeholder='Enter search term...',
             id='unified-search-input',
             compact=True,

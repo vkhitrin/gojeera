@@ -6,6 +6,7 @@ from textual.widgets import Button, Input, Label, Static
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -42,7 +43,7 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
             with VerticalScroll(id='clone-work-item-form'):
                 with Vertical(id='summary-field-container'):
                     yield Label('Summary').add_class('field_label')
-                    summary_widget = Input(
+                    summary_widget = ExtendedInput(
                         id='clone-work-item-summary',
                         placeholder='',
                         value=self.default_summary,

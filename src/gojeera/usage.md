@@ -50,6 +50,11 @@ gojeera --work-item-key "PROJ-123"
 | `[`      | Previous Tab     | Navigate to previous tab in work item details   |
 | `]`      | Next Tab         | Navigate to next tab in work item details       |
 
+## External Editing
+
+When focus is on an editable text widget, press `F2` to open its contents in
+your external editor from `$EDITOR`.
+
 ## Unified Search
 
 gojeera features a unified search widget that supports three modes:

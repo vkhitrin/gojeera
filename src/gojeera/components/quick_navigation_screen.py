@@ -12,6 +12,7 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -50,7 +51,7 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             yield Static(self._modal_title, id='modal_title')
             with Vertical(id='quick-navigation-form'):
                 yield Label('Work Item Key').add_class('field_label')
-                yield Input(
+                yield ExtendedInput(
                     placeholder='KEY',
                     id='quick-navigation-work-item-key',
                     classes='work-item-key-input',

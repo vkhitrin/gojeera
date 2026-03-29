@@ -1,14 +1,13 @@
-from textual.widgets import Input
-
 from gojeera.utils.fields import (
     BaseField,
     BaseUpdateField,
     FieldMode,
     ValidationUtils,
 )
+from gojeera.widgets.extended_input import ExtendedInput
 
 
-class TextInput(Input, BaseField, BaseUpdateField):
+class TextInput(ExtendedInput, BaseField, BaseUpdateField):
     """
     Text input widget.
     """

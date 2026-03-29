@@ -26,6 +26,7 @@ from gojeera.utils.widgets_factory_utils import (
 )
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.lazy_select import LazySelect
@@ -309,7 +310,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     label = Label('Summary').add_class('field_label')
                     label.add_class('required_field_label')
                     yield label
-                    summary_widget = Input(
+                    summary_widget = ExtendedInput(
                         id='create-work-item-summary',
                         placeholder='',
                         compact=True,

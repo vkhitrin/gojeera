@@ -14,6 +14,7 @@ from gojeera.utils.fields import (
 )
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
+from gojeera.widgets.extended_textarea import ExtendedTextArea
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
 logger = logging.getLogger('gojeera')
@@ -101,7 +102,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
     def compose(self) -> ComposeResult:
         with ExtendedTabbedContent(id=f'{self.id}-tabs'):
             with TabPane('Edit', id=f'{self.id}-edit-tab'):
-                textarea = TextArea(
+                textarea = ExtendedTextArea(
                     id=f'{self.id}-textarea',
                     language='markdown',
                     compact=True,

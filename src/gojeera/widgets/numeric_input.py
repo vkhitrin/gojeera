@@ -1,6 +1,5 @@
 from textual.events import Key
 from textual.validation import Number
-from textual.widgets import Input
 
 from gojeera.utils.fields import (
     BaseField,
@@ -8,9 +7,10 @@ from gojeera.utils.fields import (
     FieldMode,
     ValidationUtils,
 )
+from gojeera.widgets.extended_input import ExtendedInput
 
 
-class NumericInput(Input, BaseField, BaseUpdateField):
+class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
     """
     Numeric/float input widget.
     """

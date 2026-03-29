@@ -3,18 +3,19 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Label, Static
 
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.jumper_file_picker import ExtendedFileOpen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 
-class FilePathInput(Input):
+class FilePathInput(ExtendedInput):
     def __init__(self):
         super().__init__(
             placeholder='Click "Browse..." to select a file',

@@ -10,6 +10,7 @@ from gojeera.config import CONFIGURATION
 from gojeera.models import LinkWorkItemType
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class LinkedWorkItemInputWidget(Input):
+class LinkedWorkItemInputWidget(ExtendedInput):
     def __init__(self):
         super().__init__(
             classes='required',

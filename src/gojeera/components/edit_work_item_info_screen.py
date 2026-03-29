@@ -13,6 +13,7 @@ from gojeera.utils.adf_helpers import convert_adf_to_markdown
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -60,7 +61,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
             with VerticalScroll(id='modal-form-scroll'):
                 with Vertical(id='summary-field-container'):
                     yield Label('Summary').add_class('field_label')
-                    summary_widget = Input(
+                    summary_widget = ExtendedInput(
                         id='edit-work-item-summary',
                         placeholder='Enter a summary',
                         compact=True,

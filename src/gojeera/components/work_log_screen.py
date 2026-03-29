@@ -16,6 +16,7 @@ from gojeera.utils.mention_helpers import insert_user_mention
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
+from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
@@ -23,14 +24,14 @@ from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 logger = logging.getLogger('gojeera')
 
 
-class TimeSpentInput(Input):
+class TimeSpentInput(ExtendedInput):
     def __init__(self, initial_value: str | None = None):
         super().__init__(value=initial_value or '', placeholder='E.g. 1w 1d', valid_empty=False)
         self.tooltip = 'Enter the amount of time you work on this task'
         self.compact = True
 
 
-class TimeRemainingInput(Input):
+class TimeRemainingInput(ExtendedInput):
     def __init__(self, initial_value: str | None = None):
         super().__init__(value=initial_value, placeholder='E.g. 1d 1h 30m')
         self.tooltip = 'Optionally, enter the time remaining in the task'

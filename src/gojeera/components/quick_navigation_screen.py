@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, cast
 
 from textual import on
@@ -11,6 +10,7 @@ from textual.widgets import Button, Input, Label, Static
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
+from gojeera.utils.urls import extract_work_item_key
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
@@ -19,9 +19,6 @@ from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp, MainScreen
-
-
-WORK_ITEM_KEY_PATTERN = r'^[A-Z][A-Z0-9]+-\d+$'
 
 
 class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
@@ -50,9 +47,9 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with Vertical(id='quick-navigation-form'):
-                yield Label('Work Item Key').add_class('field_label')
+                yield Label('Work Item').add_class('field_label')
                 yield ExtendedInput(
-                    placeholder='KEY',
+                    placeholder='KEY or Browse URL',
                     id='quick-navigation-work-item-key',
                     classes='work-item-key-input',
                     compact=True,
@@ -88,7 +85,10 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         jumper.show()
 
     def _is_work_item_key_valid(self, value: str) -> bool:
-        return bool(re.match(WORK_ITEM_KEY_PATTERN, value))
+        return self._extract_work_item_key(value) is not None
+
+    def _extract_work_item_key(self, value: str) -> str | None:
+        return extract_work_item_key(value)
 
     @on(Input.Changed, '#quick-navigation-work-item-key')
     def handle_work_item_key_changed(self, event: Input.Changed) -> None:
@@ -109,15 +109,16 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
 
     @on(Input.Submitted, '#quick-navigation-work-item-key')
     def handle_submit(self) -> None:
-        work_item_key = self.work_item_key_input.value.strip()
-        if not work_item_key:
+        raw_value = self.work_item_key_input.value.strip()
+        if not raw_value:
             self.work_item_key_input.remove_class('-invalid')
             return
 
-        if not self._is_work_item_key_valid(work_item_key):
+        work_item_key = self._extract_work_item_key(raw_value)
+        if work_item_key is None:
             self.work_item_key_input.add_class('-invalid')
             self.notify(
-                'Invalid work item key format. Expected format: PROJECT-123',
+                'Invalid work item key format. Expected PROJECT-123 or a Jira browse URL.',
                 severity='warning',
                 title='Validation Error',
             )
@@ -147,12 +148,12 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
 
     @on(Button.Pressed, '#quick-navigation-button-open')
     def handle_open(self) -> None:
-        work_item_key = self.work_item_key_input.value.strip()
+        work_item_key = self._extract_work_item_key(self.work_item_key_input.value)
 
-        if not self._is_work_item_key_valid(work_item_key):
+        if work_item_key is None:
             self.work_item_key_input.add_class('-invalid')
             self.notify(
-                'Invalid work item key format. Expected format: PROJECT-123',
+                'Invalid work item key format. Expected PROJECT-123 or a Jira browse URL.',
                 severity='warning',
                 title='Quick Navigation',
             )

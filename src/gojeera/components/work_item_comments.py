@@ -20,7 +20,7 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.models import WorkItemComment
-from gojeera.utils.urls import build_external_url_for_comment
+from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
 if TYPE_CHECKING:
@@ -142,10 +142,10 @@ class CommentContainer(Vertical, can_focus=False):
             return
 
         if self._comment_id:
-            url = build_external_url_for_comment(
+            url = build_external_url_for_work_item(
                 self._work_item_key,
-                self._comment_id,
                 cast('JiraApp', self.app),  # noqa: F821
+                focused_comment_id=self._comment_id,
             )
             if url:
                 webbrowser.open(url)
@@ -521,7 +521,11 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 inner_container.compose_add_child(Static(subtitle_text, classes='comment-metadata'))
 
                 if content := comment.get_body(base_url=base_url):
-                    markdown_widget = GojeeraMarkdown(content, classes='comment-body')
+                    markdown_widget = GojeeraMarkdown(
+                        content,
+                        classes='comment-body',
+                        jira_base_url=base_url,
+                    )
                     markdown_widget.can_focus = False
                     inner_container.compose_add_child(markdown_widget)
                 else:

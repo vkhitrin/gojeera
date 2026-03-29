@@ -1,24 +1,197 @@
+from inspect import isawaitable
 import logging
 import re
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, cast
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
+from rich.segment import Segment
+from rich.style import Style as RichStyle
+from rich.text import Text
+from textual import events
 from textual.app import App
 from textual.await_complete import AwaitComplete
 from textual.content import Content, Span
 from textual.markup import parse_style
+from textual.strip import Strip
 from textual.style import Style
 from textual.widgets import Markdown
 from textual.widgets._markdown import MarkdownBlockQuote, MarkdownParagraph
 
 from gojeera.utils.mdit_adf_decision import decision_plugin
 from gojeera.utils.mdit_adf_panels import panels_plugin
+from gojeera.utils.urls import WORK_ITEM_BROWSE_TOOLTIP, extract_work_item_key
 
 logger = logging.getLogger('gojeera')
 
+if TYPE_CHECKING:
+    from gojeera.app import MainScreen
 
-class CheckboxStyledParagraph(MarkdownParagraph):
+WORK_ITEM_BROWSE_TOOLTIP_META_KEY = 'gojeera_work_item_browse_tooltip'
+WORK_ITEM_BROWSE_KEY_META_KEY = 'gojeera_work_item_key'
+MARKDOWN_LINK_HREF_META_KEY = 'gojeera_link_href'
+WORK_ITEM_OPEN_HINT = 'CTRL+Left Mouse Click to open in gojeera'
+WORK_ITEM_TOOLTIP_FIELDS = ['summary', 'status', 'issuetype']
+
+
+def build_work_item_tooltip(
+    work_item_type: str,
+    summary: str,
+    status: str,
+) -> Text:
+    """Build a rich tooltip for a Jira work item browse link."""
+    tooltip = Text()
+    title = summary.strip() or 'Unknown work item'
+    issue_type = work_item_type.strip() or 'Work Item'
+    tooltip.append(f'[{issue_type}] {title}', style='bold')
+    tooltip.append('\n')
+    tooltip.append(status.strip() or 'Unknown', style='dim')
+    tooltip.append('\n\n')
+    tooltip.append(WORK_ITEM_OPEN_HINT, style='dim')
+    return tooltip
+
+
+def build_loading_work_item_tooltip() -> Text:
+    """Build a temporary tooltip shown while work item details are loading."""
+    tooltip = Text()
+    tooltip.append('Loading work item...', style='bold blue')
+    tooltip.append('\n')
+    tooltip.append(WORK_ITEM_OPEN_HINT)
+    return tooltip
+
+
+def build_markdown_link_style(href: str, jira_base_url: str | None = None) -> Style:
+    """Build style metadata for markdown links, including gojeera-specific tooltips."""
+    meta: dict[str, str] = {
+        '@click': f'link({href!r})',
+        MARKDOWN_LINK_HREF_META_KEY: href,
+    }
+    work_item_key = extract_work_item_key(href, jira_base_url)
+    if work_item_key is not None:
+        meta[WORK_ITEM_BROWSE_TOOLTIP_META_KEY] = WORK_ITEM_BROWSE_TOOLTIP
+        meta[WORK_ITEM_BROWSE_KEY_META_KEY] = work_item_key
+    return Style.from_meta(meta)
+
+
+def get_markdown_link_tooltip(style: RichStyle | Style) -> str | None:
+    """Extract a gojeera-specific tooltip from a rendered link style."""
+    meta = style.meta or {}
+    tooltip = meta.get(WORK_ITEM_BROWSE_TOOLTIP_META_KEY)
+    return tooltip if isinstance(tooltip, str) else None
+
+
+def get_markdown_link_work_item_key(style: RichStyle | Style) -> str | None:
+    """Extract a gojeera work item key from rendered link style metadata."""
+    meta = style.meta or {}
+    work_item_key = meta.get(WORK_ITEM_BROWSE_KEY_META_KEY)
+    return work_item_key if isinstance(work_item_key, str) else None
+
+
+def get_markdown_link_href(style: RichStyle | Style) -> str | None:
+    """Extract a rendered markdown link href from style metadata."""
+    meta = style.meta or {}
+    href = meta.get(MARKDOWN_LINK_HREF_META_KEY)
+    return href if isinstance(href, str) else None
+
+
+def trim_interactive_span_whitespace(content: Content) -> Content:
+    """Trim leading and trailing whitespace from interactive spans."""
+    if not content.spans:
+        return content
+
+    new_spans: list[Span] = []
+    for span in content.spans:
+        style = span.style
+        meta = style.meta if isinstance(style, Style) else None
+        if not isinstance(meta, dict) or '@click' not in meta:
+            new_spans.append(span)
+            continue
+
+        span_text = content.plain[span.start : span.end]
+        leading_trim = len(span_text) - len(span_text.lstrip())
+        trailing_trim = len(span_text.rstrip())
+        trimmed_start = span.start + leading_trim
+        trimmed_end = span.start + trailing_trim
+
+        if trimmed_start < trimmed_end:
+            new_spans.append(Span(trimmed_start, trimmed_end, style))
+
+    return Content(content.plain, spans=new_spans)
+
+
+def apply_focused_link_style_to_strip(
+    strip: Strip,
+    focused_link_href: str | None,
+    link_hover_style: RichStyle,
+) -> Strip:
+    """Apply the active hover style to all rendered segments of the focused link."""
+    if not focused_link_href:
+        return strip
+
+    segments = [
+        Segment(
+            text,
+            (
+                style + link_hover_style
+                if style is not None
+                and style.meta is not None
+                and style.meta.get(MARKDOWN_LINK_HREF_META_KEY) == focused_link_href
+                else style
+            ),
+            control,
+        )
+        for text, style, control in strip
+    ]
+    return Strip(segments, strip.cell_length)
+
+
+class WorkItemLinkTooltipProvider:
+    """Fetch, cache, and compose tooltip content for internal Jira links."""
+
+    def __init__(self, markdown: 'GojeeraMarkdown') -> None:
+        self.markdown = markdown
+        self._cache: dict[str, tuple[str, str, str]] = {}
+        self._loading: set[str] = set()
+
+    def get_cached(self, work_item_key: str) -> Text | None:
+        tooltip_data = self._cache.get(work_item_key)
+        if tooltip_data is None:
+            return None
+
+        work_item_type, summary, status = tooltip_data
+        return build_work_item_tooltip(work_item_type, summary, status)
+
+    def mark_loading(self, work_item_key: str) -> bool:
+        if work_item_key in self._loading:
+            return False
+
+        self._loading.add(work_item_key)
+        return True
+
+    async def load(self, work_item_key: str) -> Text | None:
+        try:
+            api = getattr(self.markdown.app, 'api', None)
+            if api is None:
+                return None
+
+            response = await api.get_work_item(
+                work_item_id_or_key=work_item_key,
+                fields=WORK_ITEM_TOOLTIP_FIELDS,
+            )
+            if not response.success or not response.result or not response.result.work_items:
+                return None
+
+            work_item = response.result.work_items[0]
+            summary = getattr(work_item, 'summary', '') or work_item_key
+            work_item_type = getattr(work_item, 'work_item_type_name', '') or 'Work Item'
+            status = getattr(getattr(work_item, 'status', None), 'name', '') or 'Unknown'
+            self._cache[work_item_key] = (work_item_type, summary, status)
+            return build_work_item_tooltip(work_item_type, summary, status)
+        finally:
+            self._loading.discard(work_item_key)
+
+
+class ExtendedMarkdownParagraph(MarkdownParagraph):
     """Markdown paragraph with checkbox, date, status, and decision styling."""
 
     _style_cache: dict[str, Style] = {}
@@ -30,6 +203,10 @@ class CheckboxStyledParagraph(MarkdownParagraph):
 
     _global_css_cache: dict[str, str] | None = None
     _global_css_cache_id: int | None = None
+
+    def __init__(self, markdown: Markdown, token: Token) -> None:
+        super().__init__(markdown, token)
+        self._focused_link_href: str | None = None
 
     def _token_to_content(self, token: Token) -> Content:
         """Convert token to content with styling."""
@@ -163,9 +340,12 @@ class CheckboxStyledParagraph(MarkdownParagraph):
                 add_style('.s')
 
             elif child_type == 'link_open':
-                href = child.attrs.get('href', '')
-                action = f'link({href!r})'
-                add_style(Style.from_meta({'@click': action}))
+                href_attr = child.attrs.get('href', '') if child.attrs else ''
+                href = href_attr if isinstance(href_attr, str) else str(href_attr)
+                jira_base_url = (
+                    markdown.jira_base_url if isinstance(markdown, GojeeraMarkdown) else None
+                )
+                add_style(build_markdown_link_style(href, jira_base_url=jira_base_url))
 
             elif child_type == 'image':
                 href = child.attrs.get('src', '')
@@ -207,7 +387,79 @@ class CheckboxStyledParagraph(MarkdownParagraph):
                     elif has_checked and char == '☑':
                         content = content.stylize(checked_style, i, i + 1)
 
-        return content
+        return trim_interactive_span_whitespace(content)
+
+    def set_content(self, content: Content) -> None:
+        super().set_content(content)
+
+    def render_line(self, y: int) -> Strip:
+        line = super().render_line(y)
+        return apply_focused_link_style_to_strip(
+            line,
+            self._focused_link_href,
+            self.link_style_hover,
+        )
+
+    def watch_hover_style(self, previous_hover_style: RichStyle, hover_style: RichStyle) -> None:
+        self.highlight_link_id = ''
+        focused_link_href = get_markdown_link_href(hover_style)
+        if self._focused_link_href != focused_link_href:
+            self._focused_link_href = focused_link_href
+            self.refresh()
+
+        work_item_key = get_markdown_link_work_item_key(hover_style)
+        cast('MainScreen', self.screen).focused_work_item_link_key = work_item_key
+        if work_item_key is None:
+            self.tooltip = get_markdown_link_tooltip(hover_style)
+            return
+
+        markdown = self._markdown
+        if not isinstance(markdown, GojeeraMarkdown):
+            self.tooltip = get_markdown_link_tooltip(hover_style)
+            return
+
+        cached_tooltip = markdown.work_item_tooltip_provider.get_cached(work_item_key)
+        if cached_tooltip is not None:
+            self.tooltip = cached_tooltip
+            return
+
+        self.tooltip = build_loading_work_item_tooltip()
+
+        if markdown.work_item_tooltip_provider.mark_loading(work_item_key):
+            self.run_worker(
+                self._load_work_item_tooltip_data(work_item_key),
+                exclusive=False,
+                thread=False,
+            )
+
+    async def _on_click(self, event: events.Click) -> None:
+        if event.ctrl:
+            style_at_pointer = self.get_style_at(event.x, event.y)
+            work_item_key = get_markdown_link_work_item_key(style_at_pointer)
+            if work_item_key is not None:
+                fetch_work_items = getattr(self.screen, 'fetch_work_items', None)
+                if callable(fetch_work_items):
+                    result = fetch_work_items(work_item_key)
+                    if isawaitable(result):
+                        event.prevent_default()
+                        event.stop()
+                        self.screen.run_worker(result, exclusive=True)
+                        return
+
+        await super()._on_click(event)
+
+    async def _load_work_item_tooltip_data(self, work_item_key: str) -> None:
+        """Fetch work item details for tooltips and update the active hover tooltip if needed."""
+        markdown = self._markdown
+        if not isinstance(markdown, GojeeraMarkdown):
+            return
+
+        tooltip = await markdown.work_item_tooltip_provider.load(work_item_key)
+        if (
+            tooltip is not None
+            and get_markdown_link_work_item_key(self.hover_style) == work_item_key
+        ):
+            self.tooltip = tooltip
 
 
 class GojeeraBlockQuote(MarkdownBlockQuote):
@@ -413,7 +665,7 @@ class GojeeraMarkdown(Markdown):
 
     BLOCKS = {
         **Markdown.BLOCKS,
-        'paragraph_open': CheckboxStyledParagraph,
+        'paragraph_open': ExtendedMarkdownParagraph,
         'blockquote_open': GojeeraBlockQuote,
     }
 
@@ -438,9 +690,12 @@ class GojeeraMarkdown(Markdown):
         classes: str | None = None,
         parser_factory: Callable[[], MarkdownIt] | None = None,
         open_links: bool = True,
+        jira_base_url: str | None = None,
     ) -> None:
         self._last_markdown_content: str | None = None
         self._cached_app: App | None = None
+        self.jira_base_url = jira_base_url
+        self.work_item_tooltip_provider = WorkItemLinkTooltipProvider(self)
 
         super().__init__(
             markdown=markdown,

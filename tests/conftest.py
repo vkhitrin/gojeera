@@ -423,6 +423,101 @@ def mock_jira_search_with_results():
 
 
 @pytest.fixture
+def mock_jira_search_with_description_links(mock_jira_search_with_results):
+    search_results = copy.deepcopy(mock_jira_search_with_results)
+    for issue in search_results['issues']:
+        if issue['key'] == 'EXAMPLE-19538':
+            issue['fields']['priority']['id'] = '10001'
+            break
+
+    work_item_with_description = copy.deepcopy(search_results['issues'][0])
+    work_item_with_description['id'] = '99999'
+    work_item_with_description['key'] = 'EXAMPLE-20000'
+    work_item_with_description['self'] = 'https://example.atlassian.net/rest/api/3/issue/99999'
+    work_item_with_description['fields']['summary'] = (
+        'Coordinate repository approval rollout dependencies'
+    )
+    work_item_with_description['fields']['description'] = {
+        'type': 'doc',
+        'version': 1,
+        'content': [
+            {
+                'type': 'paragraph',
+                'content': [
+                    {'type': 'text', 'text': 'Depends on automated validation in '},
+                    {
+                        'type': 'text',
+                        'text': 'EXAMPLE-19538',
+                        'marks': [
+                            {
+                                'type': 'link',
+                                'attrs': {
+                                    'href': 'https://example.atlassian.net/browse/EXAMPLE-19538'
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+            {
+                'type': 'paragraph',
+                'content': [
+                    {'type': 'text', 'text': 'Related platform tracking item: '},
+                    {
+                        'type': 'text',
+                        'text': 'OTHER-123',
+                        'marks': [
+                            {
+                                'type': 'link',
+                                'attrs': {'href': 'https://other.atlassian.net/browse/OTHER-123'},
+                            }
+                        ],
+                    },
+                ],
+            },
+            {
+                'type': 'paragraph',
+                'content': [
+                    {'type': 'text', 'text': 'Reference documentation: '},
+                    {
+                        'type': 'text',
+                        'text': 'Repository policy guide',
+                        'marks': [
+                            {
+                                'type': 'link',
+                                'attrs': {
+                                    'href': 'https://docs.example.com/repository-policy-guide'
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+            {
+                'type': 'paragraph',
+                'content': [
+                    {'type': 'text', 'text': 'Rollout checklist URL: '},
+                    {
+                        'type': 'text',
+                        'text': 'https://docs.example.com/repository-policy-guide/approvals/rollout/dependencies/checklist',
+                        'marks': [
+                            {
+                                'type': 'link',
+                                'attrs': {
+                                    'href': 'https://docs.example.com/repository-policy-guide/approvals/rollout/dependencies/checklist'
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    search_results['issues'].insert(0, work_item_with_description)
+    return search_results
+
+
+@pytest.fixture
 def mock_jira_projects():
     return load_fixture('jira_projects.json')
 

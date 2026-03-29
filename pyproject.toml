@@ -156,6 +156,7 @@ ignore_names = [
     "goal",
     "handle_*",
     "has_pending_changes",
+    "highlight_link_id",
     "is_loading",
     "jump_mode",
     "markup",
@@ -165,12 +166,14 @@ ignore_names = [
     "padding",
     "pagination",
     "parameters",
+    "previous_hover_style",
     "progress",
     "projectKey",
     "raw",
     "relation_type",
     "reset_last_tag",
     "result_subtitle",
+    "search_themes",
     "selected_user",
     "settings_customise_sources",
     "should_show_dropdown",
@@ -193,5 +196,4 @@ ignore_names = [
     "work_item_search_results",
     "work_item_time_tracking",
     "work_log_items_container",
-    "search_themes"
 ]

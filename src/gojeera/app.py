@@ -185,6 +185,7 @@ class MainScreen(Screen):
         self.focus_item_on_startup = focus_item_on_startup
         self.logger = logging.getLogger(LOGGER_NAME)
         self.current_loaded_work_item_key: str | None = None
+        self.focused_work_item_link_key: str | None = None
         self._active_search_data: dict | None = None
         self._active_search_term: str | None = None
 
@@ -242,6 +243,16 @@ class MainScreen(Screen):
 
         if widgets:
             self.app.stylesheet.update_nodes(widgets, animate=False)
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == 'ctrl+g' and self.focused_work_item_link_key:
+            event.prevent_default()
+            event.stop()
+            self.run_worker(
+                self.fetch_work_items(self.focused_work_item_link_key),
+                exclusive=True,
+            )
+            return
 
     @property
     def tabs(self) -> ExtendedTabbedContent:
@@ -911,6 +922,13 @@ class MainScreen(Screen):
         self.work_item_fields_widget.action_log_work()
 
     async def action_go_to_parent_work_item(self) -> None:
+        if self.focused_work_item_link_key:
+            self.run_worker(
+                self.fetch_work_items(self.focused_work_item_link_key),
+                exclusive=True,
+            )
+            return
+
         work_item = self.information_panel.work_item
         if not work_item or not work_item.parent_key.strip():
             return

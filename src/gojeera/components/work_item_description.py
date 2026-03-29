@@ -111,6 +111,7 @@ class WorkItemInfoContainer(Container, can_focus=False):
         if work_item.description:
             base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
             content: str = work_item.get_description(base_url=base_url)
+            self.work_item_description_widget.jira_base_url = base_url
             if content:
                 await self.work_item_description_widget.update(content)
             else:

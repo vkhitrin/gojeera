@@ -151,3 +151,35 @@ class TestAdfToMarkdownConversion:
         markdown = convert_adf_to_markdown(adf)
 
         assert '| A |\n|-|\n\nFollow-up details go here' in markdown
+
+    def test_jira_browse_link_markdown_is_preserved(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'paragraph',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': 'EXAMPLE-19539',
+                            'marks': [
+                                {
+                                    'type': 'link',
+                                    'attrs': {
+                                        'href': 'https://example.atlassian.net/browse/EXAMPLE-19539'
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(adf, base_url='https://example.atlassian.net')
+
+        assert (
+            markdown.strip()
+            == '[EXAMPLE-19539](https://example.atlassian.net/browse/EXAMPLE-19539)'
+        )

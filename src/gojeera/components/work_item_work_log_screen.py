@@ -12,7 +12,7 @@ from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.work_log_screen import LogWorkScreen
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
-from gojeera.utils.urls import build_external_url_for_work_log
+from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
@@ -402,10 +402,10 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
                             )
                         )
 
-                url = build_external_url_for_work_log(
+                url = build_external_url_for_work_item(
                     self._work_item_key,
-                    worklog.id,
                     cast('JiraApp', self.app),  # noqa: F821
+                    focused_work_log_id=worklog.id,
                 )
 
                 started_formatted = None

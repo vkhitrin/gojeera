@@ -160,7 +160,7 @@ active tab.
 
 `CTRL+G` shortcuts:
 
-- In the main loaded-work-item view, it loads the parent work item.
+- In the main loaded-work-item view, it loads the focused internal Jira link when one is active; otherwise it loads the parent work item.
 - In the Subtasks tab, it loads the selected subtask.
 - In the Related Work Items tab, it loads the selected related work item.
 
@@ -188,7 +188,7 @@ Displays work item summary and description with Markdown rendering.
 **Keybindings**:
 
 - `CTRL+E` - Edit work item summary and description
-- `CTRL+G` - Load the parent work item when one exists
+- `CTRL+G` - Load the focused internal Jira link, or the parent work item when no internal link is focused
 - `CTRL+L` - Open worklog
 - `CTRL+T` - Log work
 

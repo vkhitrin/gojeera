@@ -1,0 +1,20 @@
+{
+  "isLast": true,
+  "maxResults": 100,
+  "startAt": 0,
+  "total": 1,
+  "values": [
+    {
+      "id": "customfield_10727",
+      "key": "customfield_10727",
+      "name": "Organization",
+      "description": "New Organization Multi Select field",
+      "schema": {
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+        "customId": 10727,
+        "items": "option",
+        "type": "array"
+      }
+    }
+  ]
+}

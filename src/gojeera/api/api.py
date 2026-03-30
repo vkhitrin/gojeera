@@ -1309,6 +1309,33 @@ class JiraAPI:
             list[dict], await self._client.make_request(method=httpx.AsyncClient.get, url='field')
         )
 
+    async def get_fields_paginated(
+        self,
+        start_at: int = 0,
+        max_results: int = 100,
+        query: str | None = None,
+        field_ids: list[str] | None = None,
+    ) -> dict:
+        """Retrieves paginated work item fields with extended metadata."""
+
+        params: dict[str, Any] = {
+            'startAt': start_at,
+            'maxResults': max_results,
+        }
+        if query:
+            params['query'] = query
+        if field_ids:
+            params['id'] = field_ids
+
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='field/search',
+                params=params,
+            ),
+        )
+
     async def get_label_suggestions(self, query: str = '') -> Any | None:
         """Get label suggestions from Jira.
 

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "summary",
+    "key": "summary",
+    "name": "Summary",
+    "schema": {
+      "system": "summary",
+      "type": "string"
+    }
+  },
+  {
+    "id": "description",
+    "key": "description",
+    "name": "Description",
+    "schema": {
+      "system": "description",
+      "type": "string"
+    }
+  },
+  {
+    "id": "priority",
+    "key": "priority",
+    "name": "Priority",
+    "schema": {
+      "system": "priority",
+      "type": "priority"
+    }
+  },
+  {
+    "id": "assignee",
+    "key": "assignee",
+    "name": "Assignee",
+    "schema": {
+      "system": "assignee",
+      "type": "user"
+    }
+  },
+  {
+    "id": "duedate",
+    "key": "duedate",
+    "name": "Due date",
+    "schema": {
+      "system": "duedate",
+      "type": "date"
+    }
+  },
+  {
+    "id": "customfield_10727",
+    "key": "customfield_10727",
+    "name": "Organization",
+    "schema": {
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+      "customId": 10727,
+      "items": "option",
+      "type": "array"
+    }
+  }
+]

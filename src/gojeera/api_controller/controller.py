@@ -2413,15 +2413,42 @@ class APIController:
             exception_details: dict = self._extract_exception_details(e)
             self.logger.error('Unable to fetch fields', extra=exception_details.get('extra'))
             return APIControllerResponse(success=False, error=exception_details.get('message'))
+
+        descriptions_by_id: dict[str, str] = {}
+        start_at = 0
+        max_results = 100
+        while True:
+            try:
+                paginated_response = await self.api.get_fields_paginated(
+                    start_at=start_at,
+                    max_results=max_results,
+                )
+            except Exception:
+                break
+
+            values = paginated_response.get('values', [])
+            for field in values:
+                field_id = field.get('id')
+                description = field.get('description')
+                if field_id and description:
+                    descriptions_by_id[str(field_id)] = str(description)
+
+            if paginated_response.get('isLast', True):
+                break
+
+            start_at += int(paginated_response.get('maxResults', max_results) or max_results)
+
         fields: list[JiraField] = []
         for field in response:
             if field_name and str(field.get('name', '')).lower() != field_name.lower():
                 continue
+            field_id = field.get('id', '')
             fields.append(
                 JiraField(
-                    id=field.get('id', ''),
+                    id=field_id,
                     key=field.get('key', ''),
                     name=str(field.get('name', '')),
+                    description=descriptions_by_id.get(str(field_id)),
                     schema=field.get('schema', {}),
                 )
             )

@@ -14,9 +14,9 @@ Atlassian Jira with a focus on cloud instances using API v3.
 
 ## Development Workflow
 
-1. Make changes to the codebase.
-2. Analyze codebase using `make analyze-codebase` and attempt to fix all issues.
-3. Run tests using `make test`, do not generate snapshots!
+1. After each change, analyze codebase using `make analyze-codebase` and attempt
+   to fix all issues.
+2. Run scoped testing on changed classes using `uv run pytest -n auto $AFFECTED_CLASSES`.
 
 ## Markdown ↔ ADF Conversion
 

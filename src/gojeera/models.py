@@ -633,6 +633,7 @@ class JiraField(BaseModel):
     key: str
     name: str
     schema: dict
+    description: str | None = None
 
 
 @dataclass

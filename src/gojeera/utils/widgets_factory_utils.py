@@ -91,6 +91,7 @@ class DynamicFieldWrapper(Horizontal):
         title: str,
         required: bool = False,
         widget_class: type[Widget] | None = None,
+        tooltip: str | None = None,
     ):
         super().__init__()
         self._widget_factory = widget_factory
@@ -98,13 +99,16 @@ class DynamicFieldWrapper(Horizontal):
         self._title = title
         self._required = required
         self._widget_class = widget_class
+        self.tooltip = tooltip
 
     def compose(self) -> ComposeResult:
         label = Label(self._title).add_class('field_label')
+        label.tooltip = self.tooltip
 
         yield label
 
         self._widget = self._widget_factory()
+        self._widget.tooltip = self.tooltip
         yield self._widget
 
     @property
@@ -183,6 +187,7 @@ class FieldMetadata:
         self.raw = raw_metadata
         self.field_id: str = raw_metadata.get('fieldId', '')
         self.name: str = raw_metadata.get('name', '')
+        self.description: str | None = raw_metadata.get('description')
         self.key: str = raw_metadata.get('key', '')
         self.required: bool = raw_metadata.get('required', False)
         self.schema: dict = raw_metadata.get('schema', {})
@@ -203,6 +208,32 @@ class FieldMetadata:
 
     def __repr__(self) -> str:
         return f'FieldMetadata(field_id={self.field_id!r}, name={self.name!r}, custom_type={self.custom_type!r})'
+
+
+def build_field_tooltip(field_metadata: dict[str, Any] | FieldMetadata) -> str | None:
+    """Build tooltip text from Jira field metadata."""
+
+    if isinstance(field_metadata, FieldMetadata):
+        field_id = field_metadata.field_id
+        description = field_metadata.description
+        is_custom_field = field_metadata.is_custom_field
+    else:
+        field_id = str(field_metadata.get('fieldId') or field_metadata.get('id') or '')
+        description = field_metadata.get('description')
+        is_custom_field = field_id.startswith('customfield_') or bool(
+            get_nested(field_metadata, 'schema', 'custom')
+        )
+
+    parts: list[str] = []
+    if isinstance(description, str):
+        normalized_description = description.strip()
+        if normalized_description:
+            parts.append(normalized_description)
+
+    if is_custom_field and field_id:
+        parts.append(f'({field_id})')
+
+    return '\n\n'.join(parts) if parts else None
 
 
 class AllowedValuesParser:
@@ -276,7 +307,12 @@ class WidgetBuilder:
                     field_supports_update=metadata.supports_update,
                 )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_numeric(
@@ -294,7 +330,12 @@ class WidgetBuilder:
                 field_supports_update=metadata.supports_update,
             )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_selection(
@@ -341,7 +382,12 @@ class WidgetBuilder:
                     prompt='',
                 )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_date(
@@ -366,7 +412,12 @@ class WidgetBuilder:
 
             return widget
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_datetime(
@@ -391,7 +442,12 @@ class WidgetBuilder:
 
             return widget
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_text(
@@ -425,7 +481,12 @@ class WidgetBuilder:
                     field_supports_update=metadata.supports_update,
                 )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_url(
@@ -445,7 +506,12 @@ class WidgetBuilder:
                 else True,
             )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_labels(
@@ -463,7 +529,12 @@ class WidgetBuilder:
                 supports_update=metadata.supports_update,
             )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_multicheckboxes(
@@ -493,7 +564,12 @@ class WidgetBuilder:
                 else True,
             )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
     @staticmethod
     def build_adf_textarea(
@@ -512,7 +588,11 @@ class WidgetBuilder:
             )
 
         return DynamicFieldWrapper(
-            create_widget, metadata.name, metadata.required, widget_class=ADFTextAreaWidget
+            create_widget,
+            metadata.name,
+            metadata.required,
+            widget_class=ADFTextAreaWidget,
+            tooltip=build_field_tooltip(metadata),
         )
 
     @staticmethod
@@ -553,7 +633,12 @@ class WidgetBuilder:
                     field_supports_update=metadata.supports_update,
                 )
 
-        return DynamicFieldWrapper(create_widget, metadata.name, metadata.required)
+        return DynamicFieldWrapper(
+            create_widget,
+            metadata.name,
+            metadata.required,
+            tooltip=build_field_tooltip(metadata),
+        )
 
 
 def map_field_to_widget(
@@ -768,8 +853,7 @@ def build_dynamic_widgets(
             )
 
         if widget:
-            if field_id and field_id.startswith('customfield'):
-                widget.tooltip = f'{field_name} (Tip: to ignore use id: {field_id})'
+            widget.tooltip = build_field_tooltip(metadata)
             widgets.append(widget)
         else:
             logger.warning(f'Failed to build widget for field: {field_name} ({field_id})')

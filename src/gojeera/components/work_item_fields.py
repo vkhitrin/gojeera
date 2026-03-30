@@ -5,12 +5,13 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from dateutil import parser
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalGroup, VerticalScroll
 from textual.message import Message
 from textual.reactive import Reactive, reactive
 from textual.widget import Widget
-from textual.widgets import Input, Label, Select, Static
+from textual.widgets import Input, Label, Select
 from textual.widgets._select import SelectOverlay
 from textual_tags import Tag, TagAutoComplete
 
@@ -36,6 +37,7 @@ from gojeera.utils.widgets_factory_utils import (
     DynamicFieldWrapper,
     StaticFieldsWidgets,
     build_dynamic_widgets,
+    build_field_tooltip,
 )
 from gojeera.utils.work_item_updates import (
     work_item_assignee_has_changed,
@@ -43,6 +45,7 @@ from gojeera.utils.work_item_updates import (
 )
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.date_time_input import DateTimeInput
+from gojeera.widgets.extended_button import ExtendedButton
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.numeric_input import NumericInput
@@ -121,7 +124,7 @@ class WorkItemFields(Container, can_focus=False):
     }
 
     #work-item-fields-form {
-        padding-bottom: 2;
+        padding-bottom: 0;
     }
 
     WorkItemFields.-loading > #work-item-fields-form {
@@ -171,7 +174,10 @@ class WorkItemFields(Container, can_focus=False):
         self.available_users: list[tuple[str, str]] | None = None
         self.can_focus = False
         self._current_loading_worker = None
+        self._save_in_progress = False
         self._show_time_tracking_after_load = False
+        self._field_descriptions_by_id: dict[str, str] = {}
+        self._field_descriptions_loading = False
 
     @property
     def help_anchor(self) -> str:
@@ -282,8 +288,11 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#resolution-date', ReadOnlyInputField)
 
     @property
-    def pending_changes_label(self) -> Static:
-        return self.query_one('#work-item-fields-pending-changes-label', expect_type=Static)
+    def pending_changes_button(self) -> ExtendedButton:
+        return self.query_one(
+            '#work-item-fields-pending-changes-button',
+            expect_type=ExtendedButton,
+        )
 
     @property
     def pending_changes_container(self) -> Horizontal:
@@ -330,6 +339,185 @@ class WorkItemFields(Container, can_focus=False):
         widget.add_class('field_control')
         widget.styles.width = '1fr'
         return widget
+
+    @staticmethod
+    def _apply_field_tooltip(
+        container: FieldRowSlot,
+        widget: Widget,
+        field_metadata: dict[str, Any] | None,
+    ) -> None:
+        tooltip = build_field_tooltip(field_metadata or {})
+        container.tooltip = tooltip
+        label = container.query_one(Label)
+        label.tooltip = tooltip
+        widget.tooltip = tooltip
+
+    @staticmethod
+    def _field_metadata_with_id(
+        field_id: str,
+        field_metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        metadata = dict(field_metadata or {})
+        metadata.setdefault('fieldId', field_id)
+        return metadata
+
+    def _get_field_tooltip_metadata(
+        self,
+        field_id: str,
+        field_metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        metadata = self._field_metadata_with_id(field_id, field_metadata)
+        if not metadata.get('description') and field_id:
+            description = self._field_descriptions_by_id.get(field_id)
+            if description:
+                metadata['description'] = description
+        return metadata
+
+    async def _ensure_field_descriptions_loaded(self) -> None:
+        if self._field_descriptions_by_id:
+            return
+
+        self._field_descriptions_loading = True
+        application = cast('JiraApp', self.app)  # noqa: F821
+        try:
+            response = await application.api.get_fields()
+            if not response.success or not response.result:
+                return
+
+            self._field_descriptions_by_id = {
+                field.id: field.description
+                for field in response.result
+                if field.id and field.description
+            }
+        finally:
+            self._field_descriptions_loading = False
+
+    def _start_field_descriptions_loading(self) -> None:
+        if self._field_descriptions_by_id or self._field_descriptions_loading:
+            return
+        self._field_descriptions_loading = True
+        self.run_worker(self._load_field_descriptions_in_background(), exclusive=False)
+
+    async def _load_field_descriptions_in_background(self) -> None:
+        await self._ensure_field_descriptions_loaded()
+        if not self.is_mounted or not self.work_item:
+            return
+
+        def apply_tooltip_refresh() -> None:
+            if not self.work_item:
+                return
+            self._update_static_field_tooltips(self.work_item)
+            self._update_dynamic_field_tooltips(self.work_item)
+
+        self.call_after_refresh(apply_tooltip_refresh)
+
+    def _update_static_field_tooltips(self, work_item: JiraWorkItem) -> None:
+        fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
+
+        field_bindings: list[tuple[FieldRowSlot, Widget, dict[str, Any] | None]] = [
+            (
+                self.status_field_container,
+                self.work_item_status_selector,
+                self._get_field_tooltip_metadata(
+                    'status',
+                    fields.get('status'),
+                ),
+            ),
+            (
+                self.priority_field_container,
+                self.priority_selector,
+                self._get_field_tooltip_metadata(
+                    self.priority_selector.jira_field_key,
+                    fields.get(self.priority_selector.jira_field_key),
+                ),
+            ),
+            (
+                self.assignee_field_container,
+                self.assignee_selector,
+                self._get_field_tooltip_metadata(
+                    self.assignee_selector.jira_field_key,
+                    fields.get(self.assignee_selector.jira_field_key),
+                ),
+            ),
+            (
+                self.labels_field_container,
+                self.work_item_labels_widget,
+                self._get_field_tooltip_metadata(
+                    self.work_item_labels_widget.jira_field_key,
+                    fields.get(self.work_item_labels_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.components_field_container,
+                self.work_item_components_widget,
+                self._get_field_tooltip_metadata(
+                    self.work_item_components_widget.jira_field_key,
+                    fields.get(self.work_item_components_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.affects_version_field_container,
+                self.work_item_affects_version_widget,
+                self._get_field_tooltip_metadata(
+                    self.work_item_affects_version_widget.jira_field_key,
+                    fields.get(self.work_item_affects_version_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.fix_version_field_container,
+                self.work_item_fix_version_widget,
+                self._get_field_tooltip_metadata(
+                    self.work_item_fix_version_widget.jira_field_key,
+                    fields.get(self.work_item_fix_version_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.story_points_field_container,
+                self.work_item_story_points_widget,
+                self._get_field_tooltip_metadata(
+                    self.work_item_story_points_widget.jira_field_key,
+                    fields.get(self.work_item_story_points_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.sprint_field_container,
+                self.sprint_picker_widget,
+                self._get_field_tooltip_metadata(
+                    self.sprint_picker_widget.jira_field_key,
+                    fields.get(self.sprint_picker_widget.jira_field_key),
+                ),
+            ),
+            (
+                self.due_date_container,
+                self.work_item_due_date_field,
+                self._get_field_tooltip_metadata(
+                    self.work_item_due_date_field.jira_field_key,
+                    fields.get(self.work_item_due_date_field.jira_field_key),
+                ),
+            ),
+        ]
+
+        for container, widget, field_metadata in field_bindings:
+            self._apply_field_tooltip(container, widget, field_metadata)
+
+    def _update_dynamic_field_tooltips(self, work_item: JiraWorkItem) -> None:
+        fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
+
+        for wrapper in self._iter_dynamic_field_wrappers():
+            widget = wrapper.widget
+            field_id = wrapper.jira_field_key
+            if widget is None or not field_id:
+                continue
+
+            tooltip = build_field_tooltip(
+                self._get_field_tooltip_metadata(field_id, fields.get(field_id))
+            )
+            wrapper.tooltip = tooltip
+            try:
+                wrapper.query_one(Label).tooltip = tooltip
+            except Exception:
+                pass
+            widget.tooltip = tooltip
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id='work-item-fields-form') as fields_form:
@@ -470,9 +658,14 @@ class WorkItemFields(Container, can_focus=False):
             id='work-item-fields-pending-changes-container'
         ) as pending_changes_container:
             pending_changes_container.display = False
-            label = Static('⚠ Pending changes', id='work-item-fields-pending-changes-label')
-            label.display = False
-            yield label
+            button = ExtendedButton(
+                'Pending changes [dim](^s)[/]',
+                id='work-item-fields-pending-changes-button',
+                variant='warning',
+                compact=True,
+            )
+            button.display = False
+            yield button
 
     def _setup_jump_mode(self) -> None:
         content = self.content_container
@@ -652,12 +845,27 @@ class WorkItemFields(Container, can_focus=False):
         self._update_pending_changes_indicator()
 
     def watch_has_pending_changes(self, has_changes: bool) -> None:
-        self.pending_changes_container.display = has_changes
-        self.pending_changes_label.display = has_changes
+        self._update_pending_changes_footer()
         self._update_notification_label_visibility(has_changes)
 
     def _update_notification_label_visibility(self, has_changes: bool) -> None:
         self.refresh(layout=True)
+
+    def _update_pending_changes_footer(self) -> None:
+        self.pending_changes_container.display = True
+        self.pending_changes_button.display = True
+        if self._save_in_progress:
+            self.pending_changes_button.is_loading = True
+            self.pending_changes_button.disabled = True
+            return
+
+        self.pending_changes_button.is_loading = False
+        self.pending_changes_button.disabled = not self.has_pending_changes
+
+        if self.has_pending_changes:
+            self.pending_changes_button.label = 'Pending changes [dim](^s)[/]'
+        else:
+            self.pending_changes_button.label = '[dim]No pending changes[/]'
 
     def action_view_worklog(self) -> None:
         if self.work_item:
@@ -727,7 +935,10 @@ class WorkItemFields(Container, can_focus=False):
         return list(self.dynamic_fields_widgets_container.query(DynamicFieldWrapper))
 
     async def _update_dynamic_widgets_values(
-        self, updated_work_item: JiraWorkItem, editable_fields: dict[str, bool]
+        self,
+        updated_work_item: JiraWorkItem,
+        editable_fields: dict[str, bool],
+        changed_fields: set[str] | None = None,
     ) -> None:
         if not CONFIGURATION.get().enable_updating_additional_fields:
             return
@@ -739,6 +950,9 @@ class WorkItemFields(Container, can_focus=False):
             field_key = wrapper.jira_field_key
 
             if not dynamic_widget or not field_key:
+                continue
+
+            if changed_fields is not None and field_key not in changed_fields:
                 continue
 
             current_value = current_values.get(field_key)
@@ -802,7 +1016,30 @@ class WorkItemFields(Container, can_focus=False):
                 widget_with_update_enabled = cast(Any, dynamic_widget)
                 widget_with_update_enabled.update_enabled = bool(field_is_editable)
 
-    async def _update_work_item_field_values(self, updated_work_item: JiraWorkItem) -> None:
+    def _field_changed(self, changed_fields: set[str] | None, *field_keys: str | None) -> bool:
+        if changed_fields is None:
+            return True
+
+        normalized_keys = {field_key for field_key in field_keys if field_key}
+        return bool(normalized_keys & changed_fields)
+
+    @staticmethod
+    def _normalize_changed_fields(payload: dict[str, Any], status_changed: bool) -> set[str] | None:
+        changed_fields = {
+            ('assignee' if field_key == 'assignee_account_id' else field_key)
+            for field_key in payload
+        }
+
+        if status_changed:
+            changed_fields.add('status')
+
+        return changed_fields or None
+
+    async def _update_work_item_field_values(
+        self,
+        updated_work_item: JiraWorkItem,
+        changed_fields: set[str] | None = None,
+    ) -> None:
         if not self.work_item:
             return
 
@@ -810,84 +1047,152 @@ class WorkItemFields(Container, can_focus=False):
         try:
             self.work_item.__dict__.update(updated_work_item.__dict__)
             editable_fields = self._determine_editable_fields(updated_work_item)
+            refresh_all = changed_fields is None or 'status' in changed_fields
 
             with self.app.batch_update():
-                if updated_work_item.resolution_date:
-                    self.work_item_resolution_date_field.value = datetime.strftime(
-                        updated_work_item.resolution_date, '%Y-%m-%d %H:%M'
-                    )
-                    self.resolution_date_container.display = True
-                else:
-                    self.work_item_resolution_date_field.value = ''
-                    self.resolution_date_container.display = False
+                if refresh_all or self._field_changed(changed_fields, 'status'):
+                    if updated_work_item.resolution_date:
+                        self.work_item_resolution_date_field.value = datetime.strftime(
+                            updated_work_item.resolution_date, '%Y-%m-%d %H:%M'
+                        )
+                        self.resolution_date_container.display = True
+                    else:
+                        self.work_item_resolution_date_field.value = ''
+                        self.resolution_date_container.display = False
 
-                if updated_work_item.resolution:
-                    self.work_item_resolution_field.value = updated_work_item.resolution
-                    self.resolution_field_container.display = True
-                else:
-                    self.work_item_resolution_field.value = ''
-                    self.resolution_field_container.display = False
+                    if updated_work_item.resolution:
+                        self.work_item_resolution_field.value = updated_work_item.resolution
+                        self.resolution_field_container.display = True
+                    else:
+                        self.work_item_resolution_field.value = ''
+                        self.resolution_field_container.display = False
 
                 if updated_work_item.updated:
                     self.work_item_last_update_date_field.value = datetime.strftime(
                         updated_work_item.updated, '%Y-%m-%d %H:%M'
                     )
 
-                if updated_work_item.assignee:
-                    self.assignee_selector.original_value = updated_work_item.assignee.account_id
-                    self.assignee_selector.value = updated_work_item.assignee.account_id
-                else:
-                    self.assignee_selector.original_value = None
-                    self.assignee_selector.value = Select.NULL
+                if refresh_all or self._field_changed(
+                    changed_fields, self.assignee_selector.jira_field_key
+                ):
+                    if updated_work_item.assignee:
+                        self.assignee_selector.original_value = (
+                            updated_work_item.assignee.account_id
+                        )
+                        self.assignee_selector.value = updated_work_item.assignee.account_id
+                    else:
+                        self.assignee_selector.original_value = None
+                        self.assignee_selector.value = Select.NULL
 
-                if updated_work_item.priority:
-                    self.priority_selector._original_value = updated_work_item.priority.id
-                    self.priority_selector.value = updated_work_item.priority.id
-                else:
-                    self.priority_selector._original_value = None
-                    self.priority_selector.value = Select.NULL
+                if refresh_all or self._field_changed(
+                    changed_fields, self.priority_selector.jira_field_key
+                ):
+                    if updated_work_item.priority:
+                        self.priority_selector._original_value = updated_work_item.priority.id
+                        self.priority_selector.value = updated_work_item.priority.id
+                    else:
+                        self.priority_selector._original_value = None
+                        self.priority_selector.value = Select.NULL
 
-                if updated_work_item.status:
-                    self.work_item_status_selector.prompt = updated_work_item.status.name
-                    self.work_item_status_selector.original_value = updated_work_item.status.id
-                    self.work_item_status_selector.value = Select.NULL
+                if refresh_all or self._field_changed(changed_fields, 'status'):
+                    if updated_work_item.status:
+                        self.work_item_status_selector.prompt = updated_work_item.status.name
+                        self.work_item_status_selector.original_value = updated_work_item.status.id
+                        self.work_item_status_selector.value = Select.NULL
 
-                self.work_item_due_date_field.set_original_value(updated_work_item.display_due_date)
-                self.work_item_due_date_field.update_enabled = editable_fields.get(
-                    self.work_item_due_date_field.jira_field_key, True
+                if refresh_all or self._field_changed(
+                    changed_fields, self.work_item_due_date_field.jira_field_key
+                ):
+                    self.work_item_due_date_field.set_original_value(
+                        updated_work_item.display_due_date
+                    )
+                    self.work_item_due_date_field.update_enabled = editable_fields.get(
+                        self.work_item_due_date_field.jira_field_key, True
+                    )
+
+                if refresh_all or self._field_changed(changed_fields, 'timetracking', 'status'):
+                    self._setup_time_tracking(updated_work_item)
+
+            setup_tasks = []
+
+            if refresh_all or self._field_changed(changed_fields, 'status'):
+                setup_tasks.append(
+                    self._retrieve_applicable_status_codes(
+                        updated_work_item.key,
+                        updated_work_item.status.name if updated_work_item.status else None,
+                        updated_work_item.status.status_category_color
+                        if updated_work_item.status
+                        else None,
+                    )
                 )
 
-                self._setup_time_tracking(updated_work_item)
+            if refresh_all or self._field_changed(
+                changed_fields, self.assignee_selector.jira_field_key, 'status'
+            ):
+                setup_tasks.append(
+                    self._retrieve_users_assignable_to_work_item(
+                        updated_work_item.key,
+                        updated_work_item.assignee,
+                        editable_fields.get(self.assignee_selector.jira_field_key),
+                    )
+                )
 
-            setup_tasks = [
-                self._retrieve_applicable_status_codes(
-                    updated_work_item.key,
-                    updated_work_item.status.name if updated_work_item.status else None,
-                    updated_work_item.status.status_category_color
-                    if updated_work_item.status
-                    else None,
-                ),
-                self._retrieve_users_assignable_to_work_item(
-                    updated_work_item.key,
-                    updated_work_item.assignee,
-                    editable_fields.get(self.assignee_selector.jira_field_key),
-                ),
-                self._setup_labels_field(updated_work_item, editable_fields),
-                self._setup_components_field(updated_work_item, editable_fields),
-                self._setup_affects_version_field(updated_work_item, editable_fields),
-                self._setup_fix_version_field(updated_work_item, editable_fields),
-                self._setup_story_points_field(updated_work_item, editable_fields),
-                self._setup_sprint_field(updated_work_item, editable_fields),
-                self._update_dynamic_widgets_values(updated_work_item, editable_fields),
-            ]
-            await asyncio.gather(*setup_tasks)
+            if refresh_all or self._field_changed(
+                changed_fields, self.work_item_labels_widget.jira_field_key
+            ):
+                setup_tasks.append(self._setup_labels_field(updated_work_item, editable_fields))
+
+            if refresh_all or self._field_changed(
+                changed_fields, self.work_item_components_widget.jira_field_key
+            ):
+                setup_tasks.append(self._setup_components_field(updated_work_item, editable_fields))
+
+            if refresh_all or self._field_changed(
+                changed_fields, self.work_item_affects_version_widget.jira_field_key
+            ):
+                setup_tasks.append(
+                    self._setup_affects_version_field(updated_work_item, editable_fields)
+                )
+
+            if refresh_all or self._field_changed(
+                changed_fields, self.work_item_fix_version_widget.jira_field_key
+            ):
+                setup_tasks.append(
+                    self._setup_fix_version_field(updated_work_item, editable_fields)
+                )
+
+            if refresh_all or self._field_changed(
+                changed_fields, self.work_item_story_points_widget.jira_field_key
+            ):
+                setup_tasks.append(
+                    self._setup_story_points_field(updated_work_item, editable_fields)
+                )
+
+            if refresh_all or self._field_changed(
+                changed_fields, self.sprint_picker_widget.jira_field_key
+            ):
+                setup_tasks.append(self._setup_sprint_field(updated_work_item, editable_fields))
 
             if CONFIGURATION.get().enable_updating_additional_fields:
+                setup_tasks.append(
+                    self._update_dynamic_widgets_values(
+                        updated_work_item,
+                        editable_fields,
+                        None if refresh_all else changed_fields,
+                    )
+                )
+
+            await asyncio.gather(*setup_tasks)
+
+            if CONFIGURATION.get().enable_updating_additional_fields and refresh_all:
                 self.run_worker(
                     self._populate_user_picker_widgets(updated_work_item, editable_fields),
                     exclusive=False,
                 )
 
+            self._update_static_field_tooltips(updated_work_item)
+            self._update_dynamic_field_tooltips(updated_work_item)
+            self._start_field_descriptions_loading()
             self.has_pending_changes = False
             self._update_all_field_labels_styling()
             self._schedule_field_spacing_refresh()
@@ -1243,126 +1548,177 @@ class WorkItemFields(Container, can_focus=False):
 
         return has_field_changes or has_status_change
 
-    async def action_save_work_item(self) -> None:
+    def action_save_work_item(self) -> None:
+        if self._save_in_progress:
+            if self.work_item and self.work_item.key:
+                self.notify('Work item update already in progress.', title=self.work_item.key)
+            return
+
+        self._save_in_progress = True
+        self._update_pending_changes_footer()
+        self._save_work_item()
+
+    @on(ExtendedButton.Pressed, '#work-item-fields-pending-changes-button')
+    def handle_pending_changes_button_pressed(self) -> None:
+        self.action_save_work_item()
+
+    @work(exclusive=False, group='save-work-item')
+    async def _save_work_item(self) -> None:
         if not self.work_item:
+            self._save_in_progress = False
             return
 
         work_item_key = self.work_item.key if self.work_item else None
         if not work_item_key:
+            self._save_in_progress = False
             return
 
-        if (
-            self.priority_selector.update_enabled
-            and self.work_item.priority
-            and work_item_priority_has_changed(
-                self.work_item.priority, self.priority_selector.selection
-            )
-            and self.priority_selector.selection is None
-        ):
-            self.notify(
-                'Unsetting the priority of this work item is not possible',
-                severity='warning',
-                title=work_item_key,
-            )
-            return
-
-        work_item_was_updated: bool = False
-
-        payload: dict = self._build_payload_for_update()
-
-        work_item_requires_transition = (
-            self.work_item_status_selector.selection is not None
-            and self.work_item_status_selector.selection != self.work_item.status.id
-        )
-
-        if not payload and not work_item_requires_transition:
-            self.notify('Nothing to update.', title=work_item_key)
-            return
-
-        application = cast('JiraApp', self.app)  # noqa: F821
-        if payload:
-            try:
-                response: APIControllerResponse = await application.api.update_work_item(
-                    self.work_item, payload
+        try:
+            if (
+                self.priority_selector.update_enabled
+                and self.work_item.priority
+                and work_item_priority_has_changed(
+                    self.work_item.priority, self.priority_selector.selection
                 )
-            except UpdateWorkItemException as e:
+                and self.priority_selector.selection is None
+            ):
                 self.notify(
-                    f'An error occurred while trying to update the item: {e}',
-                    severity='error',
-                    title=work_item_key,
-                )
-            except ValidationError as e:
-                self.notify(
-                    f'Data validation error: {e}',
-                    severity='error',
-                    title=work_item_key,
-                )
-            except Exception as e:
-                self.notify(
-                    f'An unknown error occurred while trying to update the item: {e}',
-                    severity='error',
-                    title=work_item_key,
-                )
-            else:
-                if response.success:
-                    self.notify('Work item updated successfully.', title=work_item_key)
-                    work_item_was_updated = True
-                else:
-                    error_msg = response.error if response.error else 'Unknown error'
-                    self.notify(
-                        'The work item was not updated.',
-                        severity='error',
-                        title=work_item_key,
-                    )
-                    self.notify(
-                        error_msg,
-                        severity='error',
-                        title=work_item_key,
-                    )
-
-        if work_item_requires_transition:
-            status_id = self.work_item_status_selector.selection
-            if status_id is None:
-                self.notify(
-                    'Invalid status selection',
-                    severity='error',
+                    'Unsetting the priority of this work item is not possible',
+                    severity='warning',
                     title=work_item_key,
                 )
                 return
 
-            response = await application.api.transition_work_item_status(
-                self.work_item.key, str(status_id)
-            )
-            if not response.success:
-                self.notify(
-                    f'Failed to transition the work item to a different status: {response.error}',
-                    severity='error',
-                    title=work_item_key,
-                )
-            else:
-                work_item_was_updated = True
-                self.notify(
-                    'Successfully transitioned the work item to a different status.',
-                    title=work_item_key,
-                )
+            work_item_was_updated: bool = False
 
-        if work_item_was_updated:
+            payload: dict = self._build_payload_for_update()
+
+            work_item_requires_transition = (
+                self.work_item_status_selector.selection is not None
+                and self.work_item_status_selector.selection != self.work_item.status.id
+            )
+
+            if not payload and not work_item_requires_transition:
+                self.notify('Nothing to update.', title=work_item_key)
+                return
+
+            application = cast('JiraApp', self.app)  # noqa: F821
+            work_item_updated_successfully = False
+            work_item_transitioned_successfully = False
+            if payload:
+                try:
+                    response: APIControllerResponse = await application.api.update_work_item(
+                        self.work_item, payload
+                    )
+                except UpdateWorkItemException as e:
+                    self.notify(
+                        f'An error occurred while trying to update the item: {e}',
+                        severity='error',
+                        title=work_item_key,
+                    )
+                except ValidationError as e:
+                    self.notify(
+                        f'Data validation error: {e}',
+                        severity='error',
+                        title=work_item_key,
+                    )
+                except Exception as e:
+                    self.notify(
+                        f'An unknown error occurred while trying to update the item: {e}',
+                        severity='error',
+                        title=work_item_key,
+                    )
+                else:
+                    if response.success:
+                        work_item_was_updated = True
+                        work_item_updated_successfully = True
+                    else:
+                        error_msg = response.error if response.error else 'Unknown error'
+                        self.notify(
+                            'The work item was not updated.',
+                            severity='error',
+                            title=work_item_key,
+                        )
+                        self.notify(
+                            error_msg,
+                            severity='error',
+                            title=work_item_key,
+                        )
+
+            if work_item_requires_transition:
+                status_id = self.work_item_status_selector.selection
+                if status_id is None:
+                    self.notify(
+                        'Invalid status selection',
+                        severity='error',
+                        title=work_item_key,
+                    )
+                    return
+
+                response = await application.api.transition_work_item_status(
+                    self.work_item.key, str(status_id)
+                )
+                if not response.success:
+                    self.notify(
+                        f'Failed to transition the work item to a different status: {response.error}',
+                        severity='error',
+                        title=work_item_key,
+                    )
+                else:
+                    work_item_was_updated = True
+                    work_item_transitioned_successfully = True
+
+            if not work_item_was_updated:
+                return
+
             self.has_pending_changes = False
 
             if not self.work_item or not self.work_item.key:
                 return
 
             work_item_key = self.work_item.key
-            application = cast('JiraApp', self.app)  # noqa: F821
             work_item_fields_response = await application.api.get_work_item(
                 work_item_id_or_key=work_item_key
             )
             if work_item_fields_response.success and work_item_fields_response.result:
                 updated_work_item = work_item_fields_response.result.work_items[0]
+                changed_fields = self._normalize_changed_fields(
+                    payload, work_item_requires_transition
+                )
 
-                await self._update_work_item_field_values(updated_work_item)
+                if work_item_updated_successfully and work_item_transitioned_successfully:
+                    self.notify(
+                        f'Work item updated successfully and transitioned to {updated_work_item.status.name}.',
+                        title=work_item_key,
+                    )
+                elif work_item_updated_successfully:
+                    self.notify('Work item updated successfully.', title=work_item_key)
+                elif work_item_transitioned_successfully:
+                    self.notify(
+                        f'Successfully transitioned the work item to {updated_work_item.status.name}.',
+                        title=work_item_key,
+                    )
+
+                await self._update_work_item_field_values(updated_work_item, changed_fields)
 
                 self.post_message(WorkItemUpdated(updated_work_item))
+            else:
+                if work_item_updated_successfully and work_item_transitioned_successfully:
+                    self.notify(
+                        'Work item updated successfully and transitioned status successfully.',
+                        title=work_item_key,
+                    )
+                elif work_item_updated_successfully:
+                    self.notify('Work item updated successfully.', title=work_item_key)
+                elif work_item_transitioned_successfully:
+                    self.notify(
+                        'Successfully transitioned the work item status.', title=work_item_key
+                    )
+        finally:
+            self._save_in_progress = False
+            self._update_pending_changes_footer()
+            if self.has_pending_changes:
+                self.pending_changes_button.disabled = False
 
     @staticmethod
     def _determine_editable_fields(work_item: JiraWorkItem) -> dict:
@@ -1629,6 +1985,9 @@ class WorkItemFields(Container, can_focus=False):
             setup_tasks.append(self._add_dynamic_fields_widgets(work_item, editable_fields))
 
         await asyncio.gather(*setup_tasks)
+        self._update_static_field_tooltips(work_item)
+        self._update_dynamic_field_tooltips(work_item)
+        self._start_field_descriptions_loading()
 
         self.refresh(layout=True)
 
@@ -1765,9 +2124,12 @@ class WorkItemFields(Container, can_focus=False):
 
             # Build a mapping of field_id -> field_name
             field_names_map = {}
+            field_descriptions_map = {}
             if fields_response.success and fields_response.result:
                 for field in fields_response.result:
                     field_names_map[field.id] = field.name
+                    if field.description:
+                        field_descriptions_map[field.id] = field.description
 
             containers = []
             for field_id, field_value in work_item.custom_fields.items():
@@ -1780,29 +2142,38 @@ class WorkItemFields(Container, can_focus=False):
 
                 # Use field name if available, otherwise fall back to field ID
                 field_label = field_names_map.get(field_id, field_id)
+                field_tooltip = build_field_tooltip(
+                    {
+                        'fieldId': field_id,
+                        'description': field_descriptions_map.get(field_id),
+                        'schema': {'custom': ''},
+                    }
+                )
 
                 # Create container
                 field_container = Horizontal(classes='dynamic-field-container')
-                containers.append((field_container, field_label, display_value))
+                containers.append((field_container, field_label, display_value, field_tooltip))
 
             if containers:
                 with self.app.batch_update():
                     slots = await self._mount_field_rows_with_spacers(
                         self.dynamic_fields_widgets_container,
-                        [container for container, _, _ in containers],
+                        [container for container, _, _, _ in containers],
                     )
                     # Then mount children to each container
-                    for slot, (_, field_label, display_value) in zip(
+                    for slot, (_, field_label, display_value, field_tooltip) in zip(
                         slots, containers, strict=True
                     ):
                         field_container = slot.query_one(
                             '.dynamic-field-container', expect_type=Horizontal
                         )
                         label = Label(field_label, classes='field_label')
+                        label.tooltip = field_tooltip
                         readonly_field = ReadOnlyInputField()
                         readonly_field.add_class('field_control')
                         readonly_field.styles.width = '1fr'
                         readonly_field.value = display_value
+                        readonly_field.tooltip = field_tooltip
                         await field_container.mount(label, readonly_field)
 
                     self.dynamic_fields_widgets_container.display = True
@@ -1816,6 +2187,11 @@ class WorkItemFields(Container, can_focus=False):
         for field_id, field in edit_meta_fields.items():
             if not field.get('fieldId'):
                 field['fieldId'] = field_id
+            if not field.get('description'):
+                description = self._field_descriptions_by_id.get(field_id)
+                if description:
+                    field = dict(field)
+                    field['description'] = description
             fields_data.append(field)
 
         current_values = {}

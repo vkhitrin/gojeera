@@ -134,6 +134,7 @@ ignore_names = [
     "apply_completion",
     "as_dict",
     "as_json",
+    "auto_refresh",
     "boardId",
     "check_action",
     "clear_current",

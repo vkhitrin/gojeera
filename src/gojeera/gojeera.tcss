@@ -714,30 +714,52 @@ WorkItemCommentsWidget {
 #work-item-fields-form {
   scrollbar-size-vertical: 1;
   height: 1fr;
-  padding: 0 0 2 1;
+  padding: 0 0 1 1;
   margin-bottom: 0;
   layout: vertical;
 }
 
 #work-item-fields-pending-changes-container {
   width: 100%;
-  height: 2;
+  height: auto;
   margin: 0;
   padding: 0;
-  align: right bottom;
+  align: right middle;
   dock: bottom;
-  layer: above;
 }
 
-#work-item-fields-pending-changes-label {
+#work-item-fields-pending-changes-button {
   width: 100%;
   height: 1;
   margin: 0;
-  padding: 0 1;
+  padding: 0;
+  min-width: 0;
   color: $warning;
-  text-style: bold;
   background: $warning 20%;
-  text-align: center;
+  text-style: bold;
+  border: none;
+}
+
+#work-item-fields-pending-changes-button:hover {
+  color: $text;
+  background: $warning 40%;
+}
+
+#work-item-fields-pending-changes-button:hover>Static {
+  color: $text;
+}
+
+#work-item-fields-pending-changes-button:disabled {
+  background: $background;
+}
+
+#work-item-fields-pending-changes-button:disabled:hover {
+  color: $warning;
+  background: $background;
+}
+
+#work-item-fields-pending-changes-button:disabled:hover>Static {
+  color: $warning;
 }
 
 

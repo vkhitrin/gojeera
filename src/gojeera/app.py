@@ -322,10 +322,6 @@ class MainScreen(Screen):
     def details_container(self) -> Vertical:
         return self.query_one('#details-container', expect_type=Vertical)
 
-    @property
-    def pending_changes_label(self) -> Static:
-        return self.query_one('#details-pending-changes-label', expect_type=Static)
-
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)

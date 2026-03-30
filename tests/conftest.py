@@ -240,6 +240,15 @@ def mock_project_statuses(project_key, mock_jira_statuses):
     )
 
 
+def mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search):
+    respx.get('https://example.atlassian.net/rest/api/3/field').mock(
+        return_value=Response(200, json=mock_jira_fields)
+    )
+    respx.get('https://example.atlassian.net/rest/api/3/field/search').mock(
+        return_value=Response(200, json=mock_jira_fields_search)
+    )
+
+
 def mock_project_example_with_inline_issue_types(mock_jira_project_example_with_issue_types):
     respx.get('https://example.atlassian.net/rest/api/3/project/EXAMPLE').mock(
         return_value=Response(200, json=mock_jira_project_example_with_issue_types)
@@ -629,6 +638,16 @@ def mock_jira_new_comment():
 @pytest.fixture
 def mock_jira_transitions():
     return load_fixture('jira_transitions.json')
+
+
+@pytest.fixture
+def mock_jira_fields():
+    return load_fixture('jira_fields.json')
+
+
+@pytest.fixture
+def mock_jira_fields_search():
+    return load_fixture('jira_fields_search.json')
 
 
 @pytest.fixture
@@ -1550,10 +1569,13 @@ async def mock_jira_api_with_search_results(
     mock_jira_transitions,
     mock_jira_agile_boards,
     mock_jira_agile_sprints,
+    mock_jira_fields,
+    mock_jira_fields_search,
 ):
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_myself(mock_jira_myself)
+        mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
 
         # Mock Agile API endpoints for sprints (needed since sprint setup runs unconditionally
         # when enable_sprint_selection=True)

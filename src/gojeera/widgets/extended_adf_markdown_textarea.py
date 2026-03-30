@@ -233,8 +233,9 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         lines = text.split('\n')
         fixed_lines = []
         in_nested_context = False
+        previous_line = ''
 
-        for i, line in enumerate(lines):
+        for line in lines:
             is_unindented_bullet = re.match(r'^-\s+', line)
 
             is_root_ordered = re.match(r'^\d+\.\s+', line)
@@ -244,13 +245,13 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
             if is_unindented_bullet:
                 if in_nested_context:
                     fixed_lines.append('    ' + line)
+                    previous_line = line
                     continue
-                elif i > 0:
-                    prev_line = lines[i - 1]
-                    if re.match(r'^\d+\.\s+', prev_line):
-                        in_nested_context = True
-                        fixed_lines.append('    ' + line)
-                        continue
+                elif re.match(r'^\d+\.\s+', previous_line):
+                    in_nested_context = True
+                    fixed_lines.append('    ' + line)
+                    previous_line = line
+                    continue
             elif is_root_ordered:
                 in_nested_context = False
             elif not is_already_indented and line.strip() == '':
@@ -259,6 +260,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
                 in_nested_context = False
 
             fixed_lines.append(line)
+            previous_line = line
         text = '\n'.join(fixed_lines)
 
         lines = text.split('\n')

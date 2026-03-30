@@ -119,9 +119,10 @@ class TestWorkItemWorkLogScreen:
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         async with respx.mock:
-            respx.get('https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19540/worklog').mock(
-                return_value=Response(200, json=mock_jira_worklog_empty)
+            worklog_route = respx.get(
+                'https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19540/worklog'
             )
+            worklog_route.mock(return_value=Response(200, json=mock_jira_worklog_empty))
 
             async with app.run_test() as pilot:
                 await run_test(pilot)
@@ -133,9 +134,10 @@ class TestWorkItemWorkLogScreen:
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         with respx.mock:
-            respx.get('https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/worklog').mock(
-                return_value=Response(200, json=mock_jira_worklog)
+            worklog_route = respx.get(
+                'https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/worklog'
             )
+            worklog_route.mock(return_value=Response(200, json=mock_jira_worklog))
 
             assert snap_compare(app, terminal_size=(120, 40), run_before=open_worklog_screen)
 

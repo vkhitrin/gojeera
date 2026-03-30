@@ -7,11 +7,34 @@ from pydantic import SecretStr
 import pytest
 import pytest_textual_snapshot
 import respx
+from textual.widgets import Input
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
 
 pytest_textual_snapshot.SVGImageExtension.file_extension = 'svg'
+
+
+@pytest.fixture(autouse=True)
+def disable_input_cursor_blink(monkeypatch):
+    """Disable Textual input cursor rendering to stabilize snapshots."""
+
+    original_on_mount = Input._on_mount
+    original_restart_blink = Input._restart_blink
+
+    def patched_on_mount(self, event):
+        original_on_mount(self, event)
+        self.cursor_blink = False
+        self._pause_blink(visible=False)
+
+    def patched_restart_blink(self):
+        if not self.cursor_blink:
+            self._pause_blink(visible=False)
+            return
+        original_restart_blink(self)
+
+    monkeypatch.setattr(Input, '_on_mount', patched_on_mount)
+    monkeypatch.setattr(Input, '_restart_blink', patched_restart_blink)
 
 
 # NOTE: (vkhitrin) Clear the global application cache after each test

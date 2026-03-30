@@ -57,7 +57,7 @@ class DateTimeInput(MaskedInput, BaseField, BaseUpdateField):
             self.add_class('create-work-item-datetime-input')
 
     def validate(self, value: str) -> ValidationResult | None:
-        """Override validation to allow empty values when valid_empty is True.
+        """Override validation to allow empty values when `valid_empty` is enabled.
 
         Args:
             value: The value to validate

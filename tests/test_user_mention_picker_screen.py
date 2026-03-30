@@ -10,6 +10,8 @@ from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.user_mention_picker_screen import UserMentionPickerScreen
 from gojeera.models import JiraUser
 
+from .test_helpers import wait_until
+
 
 def convert_user_fixture_to_jira_user(user_data: dict) -> JiraUser:
     """Convert user fixture data to JiraUser object.
@@ -95,7 +97,7 @@ def create_open_user_mention_picker_via_full_flow_with_users(mock_jira_users):
 
         # Wait for screen to be pushed (but DON'T wait for worker to complete
         # because it's blocked on push_screen_wait waiting for modal dismiss)
-        await asyncio.sleep(1.0)
+        await wait_until(lambda: isinstance(pilot.app.screen, UserMentionPickerScreen), timeout=2.0)
 
         # Verify UserMentionPickerScreen is displayed
         assert isinstance(pilot.app.screen, UserMentionPickerScreen), (
@@ -110,7 +112,7 @@ def create_open_user_mention_picker_via_full_flow_with_users(mock_jira_users):
         )
 
         # Verify Insert button is disabled initially
-        assert screen.insert_button.disabled is True, 'Insert button should be disabled initially'
+        assert screen.insert_button.disabled, 'Insert button should be disabled initially'
 
         # Verify users are loaded
         assert len(screen._all_users) > 0, 'Users should be loaded'
@@ -133,15 +135,19 @@ def create_open_user_mention_picker_via_full_flow_with_selection(mock_jira_users
         # Use the first user from the fixture
         first_user = convert_user_fixture_to_jira_user(mock_jira_users[0])
         screen.user_select.value = (first_user.account_id, first_user.display_name)
-        await asyncio.sleep(0.1)
+        await wait_until(lambda: not screen.insert_button.disabled)
 
         # Verify Insert button is enabled after selection
-        assert screen.insert_button.disabled is False, (
+        assert not screen.insert_button.disabled, (
             'Insert button should be enabled after user selection'
         )
         assert screen.user_select.value == (first_user.account_id, first_user.display_name), (
             f'Expected selected value to be first user tuple, got {screen.user_select.value}'
         )
+
+        # Snapshot a stable post-selection state without the focused type-to-search cursor.
+        screen.set_focus(screen.insert_button)
+        await asyncio.sleep(0.1)
 
     return open_user_mention_picker_via_full_flow_with_selection
 
@@ -166,7 +172,7 @@ def create_insert_mention_and_return_to_comment_screen(mock_jira_users):
         comment_screen.action_insert_mention()
 
         # Wait for UserMentionPickerScreen to be displayed
-        await asyncio.sleep(1.0)
+        await wait_until(lambda: isinstance(pilot.app.screen, UserMentionPickerScreen), timeout=2.0)
 
         # Verify UserMentionPickerScreen is displayed
         assert isinstance(pilot.app.screen, UserMentionPickerScreen), (
@@ -177,19 +183,26 @@ def create_insert_mention_and_return_to_comment_screen(mock_jira_users):
         # Select the first user
         first_user = convert_user_fixture_to_jira_user(mock_jira_users[0])
         picker_screen.user_select.value = (first_user.account_id, first_user.display_name)
-        await asyncio.sleep(0.2)
+        await wait_until(lambda: not picker_screen.insert_button.disabled)
 
         # Click the Insert button to dismiss the screen and insert the mention
         await pilot.click('#user-mention-button-insert')
-        await asyncio.sleep(0.3)
 
         # Wait for worker to complete the insertion
         await pilot.app.workers.wait_for_complete()
-        await asyncio.sleep(0.2)
+        await wait_until(lambda: isinstance(pilot.app.screen, CommentScreen), timeout=2.0)
 
         # Verify we're back on the CommentScreen
         assert isinstance(pilot.app.screen, CommentScreen), (
             f'Expected CommentScreen after dismissal, got {type(pilot.app.screen)}'
+        )
+
+        inserted_mention = (
+            f'[@{first_user.display_name}]('
+            f'https://example.atlassian.net/jira/people/{first_user.account_id})'
+        )
+        await wait_until(
+            lambda: inserted_mention in pilot.app.screen.comment_field.text, timeout=2.0
         )
 
     return insert_mention_and_return_to_comment_screen

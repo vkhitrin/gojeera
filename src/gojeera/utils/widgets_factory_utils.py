@@ -9,6 +9,7 @@ from textual.widgets import Label, Select
 from gojeera.config import CONFIGURATION
 from gojeera.constants import LOGGER_NAME, CustomFieldType
 from gojeera.utils.fields import FieldMode
+from gojeera.utils.mappings import get_nested
 from gojeera.widgets.adf_textarea import ADFTextAreaWidget
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.date_time_input import DateTimeInput
@@ -714,7 +715,7 @@ def build_dynamic_widgets(
         field_key = field_data.get('key', '')
         field_name = field_data.get('name', '')
         required = field_data.get('required', False)
-        custom_type = field_data.get('schema', {}).get('custom')
+        custom_type = get_nested(field_data, 'schema', 'custom')
 
         if custom_type == CustomFieldType.GH_SPRINT.value:
             logger.debug(
@@ -727,7 +728,7 @@ def build_dynamic_widgets(
         field_key = field_data.get('key', '')
         field_name = field_data.get('name', '')
         required = field_data.get('required', False)
-        custom_type = field_data.get('schema', {}).get('custom')
+        custom_type = get_nested(field_data, 'schema', 'custom')
 
         if custom_type == CustomFieldType.GH_SPRINT.value:
             logger.debug(

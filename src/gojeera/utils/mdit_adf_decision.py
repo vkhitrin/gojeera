@@ -95,7 +95,8 @@ def decision_plugin(md: MarkdownIt) -> None:
                                     tokens, para_open_idx, i, para_close_idx, child_idx, state_code
                                 )
                                 # Replace original paragraph with split version
-                                tokens[para_open_idx : para_close_idx + 1] = new_tokens
+                                replace_end = para_close_idx + 1
+                                tokens[para_open_idx:replace_end] = new_tokens
                                 # Adjust indices: we added tokens (label para has 3 tokens)
                                 adjustment = len(new_tokens) - (para_close_idx - para_open_idx + 1)
                                 end_idx += adjustment

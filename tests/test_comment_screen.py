@@ -7,14 +7,16 @@ from gojeera.app import JiraApp
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.work_item_comments import CommentsScrollView
 
+from .test_helpers import wait_until
+
 
 async def open_comments_tab(pilot):
     await pilot.press('ctrl+j')
     await asyncio.sleep(0.3)
     await pilot.press('enter')
-    await asyncio.sleep(0.8)
 
     await pilot.app.workers.wait_for_complete()
+    await wait_until(lambda: pilot.app.screen is not None, timeout=2.0)
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -31,16 +33,15 @@ async def open_add_comment_screen(pilot):
     await open_comments_tab(pilot)
 
     await pilot.press('ctrl+n')
-    await asyncio.sleep(0.3)
-
     await pilot.app.workers.wait_for_complete()
+    await wait_until(lambda: isinstance(pilot.app.screen, CommentScreen), timeout=2.0)
 
     assert isinstance(pilot.app.screen, CommentScreen)
     assert pilot.app.screen.mode == 'new'
 
     textarea = pilot.app.screen.query_one(TextArea)
     textarea.focus()
-    await asyncio.sleep(0.3)
+    await wait_until(lambda: textarea.has_focus, timeout=1.0)
 
 
 async def fill_comment_and_verify_save_enabled(pilot):
@@ -63,16 +64,15 @@ async def open_edit_comment_screen(pilot):
     await asyncio.sleep(0.1)
 
     await pilot.press('e')
-    await asyncio.sleep(0.3)
-
     await pilot.app.workers.wait_for_complete()
+    await wait_until(lambda: isinstance(pilot.app.screen, CommentScreen), timeout=2.0)
 
     assert isinstance(pilot.app.screen, CommentScreen)
     assert pilot.app.screen.mode == 'edit'
 
     textarea = pilot.app.screen.query_one(TextArea)
     textarea.focus()
-    await asyncio.sleep(0.3)
+    await wait_until(lambda: textarea.has_focus, timeout=1.0)
 
 
 class TestCommentScreen:

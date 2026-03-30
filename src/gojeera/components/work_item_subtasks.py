@@ -146,7 +146,7 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
         if url := build_external_url_for_work_item(work_item_key, cast('JiraApp', self.app)):
             import webbrowser
 
-            webbrowser.open(url)
+            webbrowser.open_new_tab(url)
 
     def watch_work_items(self, items: list[JiraWorkItem] | None) -> None:
         table = self.data_table

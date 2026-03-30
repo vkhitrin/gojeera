@@ -181,13 +181,14 @@ class FileAttachmentWidget:
             return None
         if mime == SupportedAttachmentVisualizationMimeTypes.APPLICATION_JSON:
             try:
+                parsed_content = json.JSONDecoder().decode(content.decode())
                 return TextArea.code_editor(
-                    json.dumps(json.loads(content), indent=3),
+                    json.dumps(parsed_content, indent=3),
                     language='json',
                     read_only=True,
                     show_line_numbers=False,
                 )
-            except (json.JSONDecodeError, ValueError):
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
                 return None
         if mime == SupportedAttachmentVisualizationMimeTypes.APPLICATION_XML:
             return TextArea.code_editor(

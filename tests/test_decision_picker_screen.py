@@ -9,6 +9,8 @@ from gojeera.app import JiraApp
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 
+from .test_helpers import wait_until
+
 
 async def navigate_to_comments_tab(pilot):
     """Navigate to work item and open Comments tab."""
@@ -73,7 +75,11 @@ def create_open_decision_picker_via_full_flow():
             f'Expected no notifications, but found {len(notifications)} notification(s)'
         )
 
-        assert screen.insert_button.disabled is True, 'Insert button should be disabled initially'
+        assert screen.insert_button.disabled, 'Insert button should be disabled initially'
+
+        # Snapshot a stable initial state without the focused type-to-search cursor.
+        screen.set_focus(screen.query_one('#decision-button-quit'))
+        await asyncio.sleep(0.1)
 
     return open_decision_picker_via_full_flow
 
@@ -90,14 +96,18 @@ def create_open_decision_picker_via_full_flow_with_selection():
 
         first_decision = screen.DECISION_TYPES[0]
         screen.decision_select.value = first_decision[1]
-        await asyncio.sleep(0.1)
+        await wait_until(lambda: not screen.insert_button.disabled)
 
-        assert screen.insert_button.disabled is False, (
+        assert not screen.insert_button.disabled, (
             'Insert button should be enabled after decision selection'
         )
         assert screen.decision_select.value == first_decision[1], (
             f'Expected selected value to be first decision tuple, got {screen.decision_select.value}'
         )
+
+        # Snapshot a stable post-selection state without the focused type-to-search cursor.
+        screen.set_focus(screen.insert_button)
+        await asyncio.sleep(0.1)
 
     return open_decision_picker_via_full_flow_with_selection
 

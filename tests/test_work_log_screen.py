@@ -12,7 +12,7 @@ async def open_log_work_screen_empty(pilot):
     assert isinstance(pilot.app.screen, LogWorkScreen), (
         f'Expected LogWorkScreen, got {type(pilot.app.screen)}'
     )
-    assert screen.save_button.disabled is True, 'Save button should be disabled initially'
+    assert screen.save_button.disabled, 'Save button should be disabled initially'
     assert screen.time_spent_input.value == '', 'Time spent should be empty initially'
 
 
@@ -25,9 +25,7 @@ async def open_log_work_screen_with_valid_fields(pilot):
     screen.time_spent_input.value = '2h'
     await asyncio.sleep(0.1)
 
-    assert screen.save_button.disabled is False, (
-        'Save button should be enabled with valid time spent'
-    )
+    assert not screen.save_button.disabled, 'Save button should be enabled with valid time spent'
     assert screen.time_spent_input.value == '2h', (
         f'Time spent should be "2h", got {screen.time_spent_input.value}'
     )

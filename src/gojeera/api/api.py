@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from io import BufferedReader
+from io import BufferedReader, BytesIO
 import json
 import logging
+from pathlib import Path
 import sys
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, cast
 
 # https://darren.codes/posts/python-startup-time/
 sys.modules['httpx._main'] = cast(Any, None)
@@ -813,7 +814,7 @@ class JiraAPI:
         Args:
             work_item_id_or_key: the case-sensitive key of the work item whose comment we want to retrieve.
             offset: the index of the first item to return in a page of results (page offset).
-            limit: the maximum number of items to return per page. The default is 50.
+            limit: the maximum number of items to return per page. Default: 50.
 
         Returns:
             A dictionary with the details of the comments.
@@ -1087,28 +1088,30 @@ class JiraAPI:
             A list of dictionaries with the results.
         """
 
-        with open(filename, 'rb') as file_to_upload:
-            try:
-                detected_mime_type: str = self._detect_file_mime_type(file_to_upload)
-            except FileNotFoundError as e:
-                self.logger.warning(
-                    f'File not found. Unable to determine the MIME type of he file {filename}.'
-                )
-                raise FileUploadException(
-                    f'The file {filename} was not found. Unable to upload it as attachment.'
-                ) from e
-            return cast(
-                list[dict],
-                self._sync_client.make_request(
-                    method=httpx.post,
-                    url=f'issue/{work_item_id_or_key}/attachments',
-                    headers={'X-Atlassian-Token': 'no-check'},
-                    files={'file': (file_name, file_to_upload, detected_mime_type)},
-                ),
+        try:
+            file_to_upload = BufferedReader(BytesIO(Path(filename).read_bytes()))
+        except FileNotFoundError as e:
+            self.logger.warning(
+                f'File not found. Unable to determine the MIME type of he file {filename}.'
             )
+            raise FileUploadException(
+                f'The file {filename} was not found. Unable to upload it as attachment.'
+            ) from e
+
+        detected_mime_type = self._detect_file_mime_type(file_to_upload)
+        file_to_upload.seek(0)
+        return cast(
+            list[dict],
+            self._sync_client.make_request(
+                method=httpx.post,
+                url=f'issue/{work_item_id_or_key}/attachments',
+                headers={'X-Atlassian-Token': 'no-check'},
+                files={'file': (file_name, file_to_upload, detected_mime_type)},
+            ),
+        )
 
     @staticmethod
-    def _detect_file_mime_type(file_to_upload: BufferedReader) -> str:
+    def _detect_file_mime_type(file_to_upload: BinaryIO) -> str:
         return magic.from_buffer(file_to_upload.read(2028), mime=True)
 
     async def delete_attachment(self, attachment_id: str) -> None:
@@ -1152,7 +1155,7 @@ class JiraAPI:
         Args:
             work_item_id_or_key: the case-sensitive key of the work item.
             offset: the index of the first item to return in a page of results (page offset).
-            limit: the maximum number of items to return per page. The default is 5000.
+            limit: the maximum number of items to return per page. Default: 5000.
 
         Returns:
             A dictionary with the worklog of the work item.

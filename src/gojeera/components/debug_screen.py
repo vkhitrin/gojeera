@@ -348,11 +348,10 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
             current_active = self.tabs.active
             tab_ids = [pane.id for pane in tab_panes if pane.id]
 
-            if current_active in tab_ids:
-                current_index = tab_ids.index(current_active)
-                if current_index < len(tab_ids) - 1:
-                    next_id = tab_ids[current_index + 1]
+            for active_id, next_id in zip(tab_ids, tab_ids[1:], strict=False):
+                if active_id == current_active:
                     self.tabs.active = next_id
+                    break
 
     def action_focus_previous(self) -> None:
         """Focus previous tab (vim h key)."""
@@ -364,8 +363,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
             current_active = self.tabs.active
             tab_ids = [pane.id for pane in tab_panes if pane.id]
 
-            if current_active in tab_ids:
-                current_index = tab_ids.index(current_active)
-                if current_index > 0:
-                    prev_id = tab_ids[current_index - 1]
+            for prev_id, active_id in zip(tab_ids, tab_ids[1:], strict=False):
+                if active_id == current_active:
                     self.tabs.active = prev_id
+                    break

@@ -148,7 +148,7 @@ class CommentContainer(Vertical, can_focus=False):
                 focused_comment_id=self._comment_id,
             )
             if url:
-                webbrowser.open(url)
+                webbrowser.open_new_tab(url)
                 self.notify('Opening comment in browser', title=self._work_item_key)
             else:
                 self.notify(

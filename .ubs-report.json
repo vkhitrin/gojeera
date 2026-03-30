@@ -1,0 +1,127 @@
+{
+  "project": "/Users/vkhitrin/Projects/Personal/Tools/gojeera",
+  "timestamp": "2026-03-30 19:57:09",
+  "scanners": [
+    {
+      "project": "/Users/vkhitrin/Projects/Personal/Tools/gojeera",
+      "files": 134,
+      "critical": 0,
+      "warning": 158,
+      "info": 913,
+      "timestamp": "2026-03-30 19:57:07",
+      "format": "json",
+      "uv_tools": "ruff,bandit,pip-audit",
+      "categories": {
+        "1": 285,
+        "2": 34,
+        "3": 50,
+        "4": 24,
+        "5": 422,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 24,
+        "10": 0,
+        "11": 0,
+        "12": 0,
+        "13": 0,
+        "14": 4,
+        "15": 0,
+        "16": 13,
+        "17": 38,
+        "18": 1,
+        "19": 1,
+        "20": 1,
+        "21": 1,
+        "22": 0,
+        "23": 0
+      },
+      "ast_grep_rules": [
+        {
+          "id": "py.any-typing",
+          "count": 94
+        },
+        {
+          "id": "py.assert-used",
+          "count": 385
+        },
+        {
+          "id": "py.await-in-loop",
+          "count": 16
+        },
+        {
+          "id": "py.floating-task",
+          "count": 1
+        },
+        {
+          "id": "py.importlib-dynamic",
+          "count": 1
+        },
+        {
+          "id": "py.is-literal",
+          "count": 12
+        },
+        {
+          "id": "py.json-load-no-try",
+          "count": 2
+        },
+        {
+          "id": "py.json.loads-no-try",
+          "count": 7
+        },
+        {
+          "id": "py.logging-exception-no-exc-info",
+          "count": 32
+        },
+        {
+          "id": "py.open-no-encoding",
+          "count": 3
+        },
+        {
+          "id": "py.open-no-with",
+          "count": 3
+        },
+        {
+          "id": "py.subprocess-no-check",
+          "count": 1
+        }
+      ],
+      "language": "python",
+      "extras": {
+        "deep_guard": {
+          "unguarded": 208,
+          "guarded": 17,
+          "samples": [
+            {
+              "file": "/var/folders/8m/lmpdrkb56cn144p4v00_0xsr0000gr/T/tmp.6GyP6VxiXD/scan/src/gojeera/widgets/extended_tabbed_content.py",
+              "line": 124,
+              "code": "if self._external_information_panel.content_switcher.current != active_pane_id:"
+            },
+            {
+              "file": "/var/folders/8m/lmpdrkb56cn144p4v00_0xsr0000gr/T/tmp.6GyP6VxiXD/scan/src/gojeera/widgets/time_tracking.py",
+              "line": 166,
+              "code": "self.progress_bar.styles.width = '100%'"
+            },
+            {
+              "file": "/var/folders/8m/lmpdrkb56cn144p4v00_0xsr0000gr/T/tmp.6GyP6VxiXD/scan/tests/test_jumper.py",
+              "line": 17,
+              "code": "await pilot.app.workers.wait_for_complete()"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "totals": {
+    "critical": 0,
+    "warning": 158,
+    "info": 913,
+    "files": 134
+  },
+  "generated_at": "2026-03-30 19:57:09",
+  "git": {
+    "repository": "https://github.com/vkhitrin/gojeera",
+    "commit": "d12e74740e2b18f8fcf7d3ea26898bc71f300dd8",
+    "blob_base": "https://github.com/vkhitrin/gojeera/blob/d12e74740e2b18f8fcf7d3ea26898bc71f300dd8"
+  }
+}

@@ -398,12 +398,12 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
                 if not item.url:
                     continue
 
-                if item.status_resolved is True:
-                    status = 'Resolved'
-                elif item.status_resolved is False:
-                    status = 'Not Resolved'
-                else:
+                if item.status_resolved is None:
                     status = ''
+                elif item.status_resolved:
+                    status = 'Resolved'
+                else:
+                    status = 'Not Resolved'
 
                 table.add_row(
                     item.title or 'Untitled',

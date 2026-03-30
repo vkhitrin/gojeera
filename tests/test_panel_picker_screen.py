@@ -91,7 +91,7 @@ def create_open_panel_picker_via_full_flow():
         )
 
         # Verify Insert button is disabled initially
-        assert screen.insert_button.disabled is True, 'Insert button should be disabled initially'
+        assert screen.insert_button.disabled, 'Insert button should be disabled initially'
 
     return open_panel_picker_via_full_flow
 
@@ -114,7 +114,7 @@ def create_open_panel_picker_via_full_flow_with_selection():
         await asyncio.sleep(0.1)
 
         # Verify Insert button is enabled after selection
-        assert screen.insert_button.disabled is False, (
+        assert not screen.insert_button.disabled, (
             'Insert button should be enabled after panel selection'
         )
         assert screen.alert_select.value == first_alert[1], (
@@ -169,6 +169,10 @@ def create_insert_panel_and_return_to_comment_screen():
         assert isinstance(pilot.app.screen, CommentScreen), (
             f'Expected CommentScreen after dismissal, got {type(pilot.app.screen)}'
         )
+
+        # Snapshot a stable post-insert state without the focused textarea caret.
+        pilot.app.screen.set_focus(pilot.app.screen.save_button)
+        await asyncio.sleep(0.1)
 
     return insert_panel_and_return_to_comment_screen
 

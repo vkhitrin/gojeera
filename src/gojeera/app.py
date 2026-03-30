@@ -1215,22 +1215,20 @@ class MainScreen(Screen):
             tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
 
-            if current_active in tab_ids:
-                current_index = tab_ids.index(current_active)
-                if current_index < len(tab_ids) - 1:
-                    next_id = tab_ids[current_index + 1]
+            for active_id, next_id in zip(tab_ids, tab_ids[1:], strict=False):
+                if active_id == current_active:
                     self.tabs.active = next_id
+                    break
 
     def action_focus_previous(self) -> None:
         if not self.tabs.disabled and self.tabs.tab_count > 0:
             tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
 
-            if current_active in tab_ids:
-                current_index = tab_ids.index(current_active)
-                if current_index > 0:
-                    prev_id = tab_ids[current_index - 1]
+            for prev_id, active_id in zip(tab_ids, tab_ids[1:], strict=False):
+                if active_id == current_active:
                     self.tabs.active = prev_id
+                    break
 
     async def _focus_item_after_startup(self, position: int) -> None:
         scroll_view = self.search_results_list
@@ -1602,7 +1600,11 @@ if __name__ == '__main__':
                 else:
                     return False, error, None
 
-        success, error_message, user_info = asyncio.run(check_auth())
+        event_loop = asyncio.new_event_loop()
+        try:
+            success, error_message, user_info = event_loop.run_until_complete(check_auth())
+        finally:
+            event_loop.close()
 
         if not success:
             console.print(f'[bold red]Authentication failed:[/bold red] {error_message}')

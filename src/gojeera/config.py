@@ -33,18 +33,18 @@ class RemoteFiltersConfig(BaseModel):
     """Configuration for fetching remote JQL filters from Jira API."""
 
     enabled: bool = False
-    """If True, gojeera will fetch JQL filters from the Jira server and include them in the JQL autocomplete dropdown.
-    Default is False."""
+    """If enabled, gojeera fetches JQL filters from Jira for the autocomplete dropdown.
+    Default: disabled."""
     include_shared: bool = False
-    """If True, fetch both personal filters and filters shared with you (through groups/projects).
-    If False, only fetch filters owned by the current user.
-    Default is False (personal filters only)."""
+    """When enabled, fetch both personal filters and filters shared with you (through groups/projects).
+    Otherwise, fetch only filters owned by the current user.
+    Default: personal filters only."""
     starred_only: bool = False
-    """If True, only fetch filters that are starred (marked as favorite) by the user. If False, fetch all filters.
-    Default is False (fetch all)."""
+    """When enabled, fetch only filters starred by the user. Otherwise, fetch all filters.
+    Default: fetch all filters."""
     cache_ttl: int = 3600
-    """Time-to-live (in seconds) for cached remote filters. After this time, filters will be re-fetched from the server.
-    Default is 3600 seconds (1 hour)."""
+    """Time-to-live (in seconds) for cached remote filters. After this time, filters are re-fetched from the server.
+    Default: 3600 seconds (1 hour)."""
 
 
 class JumperConfig(BaseModel):
@@ -123,7 +123,7 @@ class ApplicationConfiguration(BaseSettings):
     jumper: JumperConfig = JumperConfig()
     """Configuration for the jumper overlay widget."""
     search_results_per_page: int = Field(default=20, ge=1, le=200)
-    """Number of search results to retrieve and display per page. Must be between 1 and 200. Default is 20."""
+    """Number of search results to retrieve and display per page. Must be between 1 and 200. Default: 20."""
     search_results_truncate_work_item_summary: int | None = None
     """When this is defined the summary of a work item will be truncated to the specified length when it is displayed in
     the search results."""
@@ -138,9 +138,8 @@ class ApplicationConfiguration(BaseSettings):
     theme: str | None = None
     """The name of the theme to use for the UI. Accept Textual themes."""
     enable_advanced_full_text_search: bool = True
-    """When this is True gojeera will use Jira ability to do full-text search not only in summary and description
-    fields but in any text-based field, including comments. This may be slower. If this is False gojeera will only
-    search items by summary and description fields."""
+    """When enabled, gojeera uses Jira full-text search across text-based fields, including comments.
+    This may be slower. When disabled, searching is limited to summary and description fields."""
     ssl: SSLConfiguration | None = SSLConfiguration()
     """SSL configuration for client-side certificates and CA bundle."""
     search_on_startup: bool = False

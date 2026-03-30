@@ -29,6 +29,7 @@ from gojeera.utils.fields import (
     FieldMode,
     get_sprint_field_id_from_editmeta,
 )
+from gojeera.utils.mappings import get_nested
 from gojeera.utils.styling import map_jira_status_color_to_textual
 from gojeera.utils.widgets_factory_utils import (
     DynamicFieldsWidgets,
@@ -1006,7 +1007,7 @@ class WorkItemFields(Container, can_focus=False):
         self, work_item_edit_meta: dict | None, work_item_priority: WorkItemPriority
     ) -> None:
         if work_item_edit_meta:
-            if not (priority_field := work_item_edit_meta.get('fields', {}).get('priority')):
+            if not (priority_field := get_nested(work_item_edit_meta, 'fields', 'priority')):
                 self.priority_selector.update_enabled = False
             else:
                 priorities: list[tuple[str, str]] = []
@@ -1958,7 +1959,7 @@ class WorkItemFields(Container, can_focus=False):
             self.labels_field_container.display = False
             return
 
-        labels_field_meta = work_item.edit_meta.get('fields', {}).get('labels')
+        labels_field_meta = get_nested(work_item.edit_meta, 'fields', 'labels')
         if not labels_field_meta:
             self.work_item_labels_widget.update_enabled = False
             self.labels_field_container.display = False
@@ -1986,7 +1987,7 @@ class WorkItemFields(Container, can_focus=False):
             self.components_field_container.display = False
             return
 
-        components_field_meta = work_item.edit_meta.get('fields', {}).get('components')
+        components_field_meta = get_nested(work_item.edit_meta, 'fields', 'components')
         if not components_field_meta:
             self.work_item_components_widget.update_enabled = False
             self.components_field_container.display = False
@@ -2044,7 +2045,7 @@ class WorkItemFields(Container, can_focus=False):
             self.affects_version_field_container.display = False
             return
 
-        versions_field_meta = work_item.edit_meta.get('fields', {}).get('versions')
+        versions_field_meta = get_nested(work_item.edit_meta, 'fields', 'versions')
         if not versions_field_meta:
             self.work_item_affects_version_widget.update_enabled = False
             self.affects_version_field_container.display = False
@@ -2123,7 +2124,7 @@ class WorkItemFields(Container, can_focus=False):
             self.fix_version_field_container.display = False
             return
 
-        fix_versions_field_meta = work_item.edit_meta.get('fields', {}).get('fixVersions')
+        fix_versions_field_meta = get_nested(work_item.edit_meta, 'fields', 'fixVersions')
         if not fix_versions_field_meta:
             self.work_item_fix_version_widget.update_enabled = False
             self.fix_version_field_container.display = False

@@ -236,7 +236,7 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
 
         application = cast('JiraApp', self.app)  # noqa: F821
         if url := build_external_url_for_work_item(work_item_key, application):
-            webbrowser.open(url)
+            webbrowser.open_new_tab(url)
 
     async def action_unlink_work_item(self) -> None:
         table = self.data_table

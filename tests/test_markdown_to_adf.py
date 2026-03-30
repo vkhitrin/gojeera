@@ -1,4 +1,5 @@
 from gojeera.utils.adf_helpers import text_to_adf
+from gojeera.utils.mappings import get_nested
 
 
 class TestMarkdownToAdfConversion:
@@ -29,7 +30,7 @@ class TestMarkdownToAdfConversion:
         assert 'Atlassian Document Format Test' in heading_texts
 
         panels = [node for node in content if node.get('type') == 'panel']
-        panel_types = [p.get('attrs', {}).get('panelType') for p in panels]
+        panel_types = [get_nested(panel, 'attrs', 'panelType') for panel in panels]
 
         assert 'info' in panel_types
         assert 'success' in panel_types
@@ -70,7 +71,7 @@ class TestMarkdownToAdfConversion:
         for task_list in task_lists:
             all_task_items.extend(task_list.get('content', []))
 
-        states = [item.get('attrs', {}).get('state') for item in all_task_items]
+        states = [get_nested(item, 'attrs', 'state') for item in all_task_items]
         assert 'DONE' in states
         assert 'TODO' in states
 
@@ -92,7 +93,7 @@ class TestMarkdownToAdfConversion:
         code_blocks = [node for node in content if node.get('type') == 'codeBlock']
         assert len(code_blocks) > 0
 
-        code_languages = [cb.get('attrs', {}).get('language') for cb in code_blocks]
+        code_languages = [get_nested(code_block, 'attrs', 'language') for code_block in code_blocks]
         assert 'javascript' in code_languages
         assert 'diff' in code_languages
 

@@ -52,7 +52,7 @@ class DateInput(MaskedInput, BaseField, BaseUpdateField):
                 self.value = original_value
 
     def validate(self, value: str) -> ValidationResult | None:
-        """Override validation to allow empty values when valid_empty is True.
+        """Override validation to allow empty values when `valid_empty` is enabled.
 
         MaskedInput validates against the template even when valid_empty=True,
         which causes empty fields with placeholder characters to be marked as invalid.

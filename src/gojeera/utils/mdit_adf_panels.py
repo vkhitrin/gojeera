@@ -129,14 +129,15 @@ def panels_plugin(md: MarkdownIt) -> None:
                                     continue
 
                                 if found_marker and child.type == 'strong_open':
+                                    next_children = token.children[idx + 1 : idx + 3]
                                     if (
-                                        idx + 2 < len(token.children)
-                                        and token.children[idx + 1].type == 'text'
+                                        len(next_children) == 2
+                                        and next_children[0].type == 'text'
                                         and re.match(
                                             r'^(Note|Tip|Important|Warning|Caution):$',
-                                            token.children[idx + 1].content,
+                                            next_children[0].content,
                                         )
-                                        and token.children[idx + 2].type == 'strong_close'
+                                        and next_children[1].type == 'strong_close'
                                     ):
                                         idx += 3
                                         found_marker = False
@@ -160,7 +161,8 @@ def panels_plugin(md: MarkdownIt) -> None:
 
                         content_para_close = Token('paragraph_close', 'p', -1)
 
-                        tokens[para_open_idx : para_close_idx + 1] = [
+                        replace_end = para_close_idx + 1
+                        tokens[para_open_idx:replace_end] = [
                             label_para_open,
                             label_inline,
                             label_para_close,

@@ -230,8 +230,9 @@ def _render_task_checkboxes(text: str) -> str:
     lines = text.split('\n')
     fixed_lines = []
     in_nested_context = False
+    previous_line = ''
 
-    for i, line in enumerate(lines):
+    for line in lines:
         is_unindented_bullet = re.match(r'^-\s+', line)
 
         is_root_ordered = re.match(r'^\d+\.\s+', line)
@@ -241,13 +242,13 @@ def _render_task_checkboxes(text: str) -> str:
         if is_unindented_bullet:
             if in_nested_context:
                 fixed_lines.append('    ' + line)
+                previous_line = line
                 continue
-            elif i > 0:
-                prev_line = lines[i - 1]
-                if re.match(r'^\d+\.\s+', prev_line):
-                    in_nested_context = True
-                    fixed_lines.append('    ' + line)
-                    continue
+            elif re.match(r'^\d+\.\s+', previous_line):
+                in_nested_context = True
+                fixed_lines.append('    ' + line)
+                previous_line = line
+                continue
         elif is_root_ordered:
             in_nested_context = False
         elif not is_already_indented and line.strip() == '':
@@ -256,6 +257,7 @@ def _render_task_checkboxes(text: str) -> str:
             in_nested_context = False
 
         fixed_lines.append(line)
+        previous_line = line
     text = '\n'.join(fixed_lines)
 
     lines = text.split('\n')
@@ -364,7 +366,8 @@ def _convert_panels_to_alerts(markdown: str) -> str:
 
             result_lines.append(f'> [!{alert_type}]')
 
-            if i + 1 < len(lines) and re.match(r'^>\s*$', lines[i + 1]):
+            next_lines = lines[i + 1 : i + 2]
+            if next_lines and re.match(r'^>\s*$', next_lines[0]):
                 i += 1
 
             i += 1
@@ -415,8 +418,10 @@ def _normalize_single_cell_tables(markdown: str) -> str:
             i += 1
             continue
 
-        previous_line = lines[i - 1] if i > 0 else ''
-        next_line = lines[i + 1] if i + 1 < len(lines) else ''
+        previous_lines = lines[i - 1 : i]
+        next_lines = lines[i + 1 : i + 2]
+        previous_line = previous_lines[0] if previous_lines else ''
+        next_line = next_lines[0] if next_lines else ''
 
         previous_is_table_like = bool(table_like_pattern.match(previous_line))
         next_is_table_like = bool(table_like_pattern.match(next_line))
@@ -426,7 +431,8 @@ def _normalize_single_cell_tables(markdown: str) -> str:
         cell_text = match.group('cell').strip()
 
         if next_is_separator and not previous_is_table_like:
-            next_after_separator = lines[i + 2] if i + 2 < len(lines) else ''
+            following_lines = lines[i + 2 : i + 3]
+            next_after_separator = following_lines[0] if following_lines else ''
             normalized_lines.append(f'{indent}| {cell_text} |')
             normalized_lines.append(f'{indent}|-|')
             if next_after_separator.strip() != '':
@@ -869,8 +875,9 @@ def _convert_blockquote_tokens(
         if token.type == 'blockquote_close':
             break
         if token.type == 'paragraph_open':
-            if temp_i + 1 < len(tokens) and tokens[temp_i + 1].type == 'inline':
-                inline_content = tokens[temp_i + 1].content.strip()
+            next_tokens = tokens[temp_i + 1 : temp_i + 2]
+            if next_tokens and next_tokens[0].type == 'inline':
+                inline_content = next_tokens[0].content.strip()
 
                 alert_match = re.match(r'\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]', inline_content)
                 if alert_match:
@@ -1157,8 +1164,9 @@ def _detect_malformed_markdown(text: str, tokens: list) -> list[str]:
 
         if token.type == 'paragraph_open':
             idx = tokens.index(token)
-            if idx + 1 < len(tokens) and tokens[idx + 1].type == 'inline':
-                inline_content = tokens[idx + 1].content.strip()
+            next_tokens = tokens[idx + 1 : idx + 2]
+            if next_tokens and next_tokens[0].type == 'inline':
+                inline_content = next_tokens[0].content.strip()
 
                 if re.match(r'^(-{3,}|_{3,}|\*{3,})[^\s\-_*]', inline_content):
                     line_num = token.map[0] + 1 if token.map else None

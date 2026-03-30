@@ -73,7 +73,7 @@ SKIP_FIELDS = [
 """List of field IDs to skip when creating work items (handled separately)."""
 
 PROCESS_OPTIONAL_FIELDS = ['duedate', 'priority']
-"""Optional fields to include when enable_creating_additional_fields is False."""
+"""Optional fields to include when `enable_creating_additional_fields` is disabled."""
 
 
 class CustomFieldType(Enum):

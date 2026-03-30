@@ -250,7 +250,8 @@ class WorkItemSearchResultsScroll(VerticalScroll):
             self.display = True
 
             if response.next_page_token:
-                self.token_by_page[self.page + 1] = response.next_page_token
+                next_page = self.page + 1
+                self.token_by_page[next_page] = response.next_page_token
 
             for index, work_item in enumerate(response.work_items):
                 if index > 0:

@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any
 
 from gojeera.constants import CustomFieldType
+from gojeera.utils.mappings import get_nested
 
 
 class FieldMode(Enum):
@@ -135,7 +136,7 @@ def get_additional_fields_values(
 def get_sprint_field_id_from_fields_data(fields_data: list[dict[str, Any]]) -> str | None:
     for field in fields_data:
         field_id = field.get('fieldId')
-        schema_custom = field.get('schema', {}).get('custom')
+        schema_custom = get_nested(field, 'schema', 'custom')
         if field_id and schema_custom == CustomFieldType.GH_SPRINT.value:
             return field_id
     return None
@@ -143,7 +144,7 @@ def get_sprint_field_id_from_fields_data(fields_data: list[dict[str, Any]]) -> s
 
 def get_sprint_field_id_from_editmeta(edit_metadata_fields: dict[str, Any]) -> str | None:
     for field_id, field_meta in edit_metadata_fields.items():
-        schema_custom = field_meta.get('schema', {}).get('custom')
+        schema_custom = get_nested(field_meta, 'schema', 'custom')
         if schema_custom == CustomFieldType.GH_SPRINT.value:
             return field_id
     return None

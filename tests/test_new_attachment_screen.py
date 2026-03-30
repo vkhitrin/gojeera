@@ -27,7 +27,7 @@ async def open_add_attachment_screen(pilot):
     assert isinstance(screen, AddAttachmentScreen), (
         f'Expected AddAttachmentScreen, got {type(screen)}'
     )
-    assert screen.save_button.disabled is True, 'Attach button should be disabled initially'
+    assert screen.save_button.disabled, 'Attach button should be disabled initially'
     assert screen.file_path_input.value == '', 'File path should be empty initially'
 
 
@@ -44,9 +44,7 @@ async def open_add_attachment_screen_with_file_selected(pilot):
     screen._handle_file_selection(test_file_path)
     await asyncio.sleep(0.3)
 
-    assert screen.save_button.disabled is False, (
-        'Attach button should be enabled after file selection'
-    )
+    assert not screen.save_button.disabled, 'Attach button should be enabled after file selection'
     assert screen.file_path_input.value == str(test_file_path), (
         f'File path should be {test_file_path}, got {screen.file_path_input.value}'
     )

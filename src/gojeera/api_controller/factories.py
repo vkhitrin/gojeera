@@ -25,6 +25,7 @@ from gojeera.utils.fields import (
     get_custom_fields_values,
     get_sprint_field_id_from_editmeta,
 )
+from gojeera.utils.mappings import get_nested
 
 logger = logging.getLogger(LOGGER_NAME)
 
@@ -161,11 +162,7 @@ class WorkItemFactory:
             status=WorkItemStatus(
                 id=str(status.get('id')),
                 name=status.get('name'),
-                status_category_color=(
-                    status.get('statusCategory', {}).get('colorName')
-                    if status.get('statusCategory')
-                    else None
-                ),
+                status_category_color=get_nested(status, 'statusCategory', 'colorName'),
             ),
             assignee=JiraUser(
                 account_id=assignee.get('accountId'),
@@ -184,17 +181,20 @@ class WorkItemFactory:
             if reporter
             else None,
             work_item_type=WorkItemType(
-                id=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get('id'),
-                name=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get('name'),
-                subtask=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get(
-                    'subtask', False
+                id=get_nested(fields, JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, 'id'),
+                name=get_nested(fields, JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, 'name'),
+                subtask=get_nested(
+                    fields,
+                    JiraWorkItemGenericFields.WORK_ITEM_TYPE.value,
+                    'subtask',
+                    default=False,
                 ),
-                hierarchy_level=fields.get(JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, {}).get(
-                    'hierarchyLevel'
+                hierarchy_level=get_nested(
+                    fields, JiraWorkItemGenericFields.WORK_ITEM_TYPE.value, 'hierarchyLevel'
                 ),
             ),
             comments=build_comments(
-                fields.get(JiraWorkItemGenericFields.COMMENT.value, {}).get('comments', [])
+                get_nested(fields, JiraWorkItemGenericFields.COMMENT.value, 'comments', default=[])
             ),
             related_work_items=build_related_work_items(
                 fields.get(JiraWorkItemGenericFields.WORK_ITEM_LINKS.value, [])
@@ -203,7 +203,7 @@ class WorkItemFactory:
             parent_work_item_type=parent_work_item_type,
             time_tracking=tracking,
             resolution=(
-                fields.get(JiraWorkItemGenericFields.RESOLUTION.value).get('name')
+                get_nested(fields, JiraWorkItemGenericFields.RESOLUTION.value, 'name')
                 if fields.get(JiraWorkItemGenericFields.RESOLUTION.value)
                 else None
             ),
@@ -296,62 +296,58 @@ def build_related_work_items(links: list[dict]) -> list[RelatedJiraWorkItem]:
 
 
 def _build_related_inward_work_item(item: dict, inward_work_item: dict) -> RelatedJiraWorkItem:
+    inward_fields = get_nested(inward_work_item, 'fields', default={})
     return RelatedJiraWorkItem(
         id=str(item.get('id', '')),
         key=str(inward_work_item.get('key', '')),
-        summary=inward_work_item.get('fields', {}).get('summary'),
+        summary=get_nested(inward_fields, 'summary'),
         priority=WorkItemPriority(
-            id=inward_work_item.get('fields', {}).get('priority').get('id'),
-            name=inward_work_item.get('fields', {}).get('priority').get('name'),
+            id=get_nested(inward_fields, 'priority', 'id'),
+            name=get_nested(inward_fields, 'priority', 'name'),
         )
-        if inward_work_item.get('fields', {}).get('priority')
+        if get_nested(inward_fields, 'priority')
         else None,
         status=WorkItemStatus(
-            id=str(inward_work_item.get('fields', {}).get('status', {}).get('id')),
-            name=inward_work_item.get('fields', {}).get('status', {}).get('name'),
-            status_category_color=(
-                inward_work_item.get('fields', {})
-                .get('status', {})
-                .get('statusCategory', {})
-                .get('colorName')
+            id=str(get_nested(inward_fields, 'status', 'id')),
+            name=get_nested(inward_fields, 'status', 'name'),
+            status_category_color=get_nested(
+                inward_fields, 'status', 'statusCategory', 'colorName'
             ),
         ),
         work_item_type=WorkItemType(
-            id=inward_work_item.get('fields', {}).get('issuetype', {}).get('id'),
-            name=inward_work_item.get('fields', {}).get('issuetype', {}).get('name'),
-            subtask=inward_work_item.get('fields', {}).get('issuetype', {}).get('subtask', False),
+            id=get_nested(inward_fields, 'issuetype', 'id'),
+            name=get_nested(inward_fields, 'issuetype', 'name'),
+            subtask=get_nested(inward_fields, 'issuetype', 'subtask', default=False),
         ),
-        link_type=item.get('type', {}).get('inward'),
+        link_type=get_nested(item, 'type', 'inward'),
         relation_type='inward',
     )
 
 
 def _build_related_outward_work_item(item: dict, outward_work_item: dict) -> RelatedJiraWorkItem:
+    outward_fields = get_nested(outward_work_item, 'fields', default={})
     return RelatedJiraWorkItem(
         id=str(item.get('id', '')),
         key=str(outward_work_item.get('key', '')),
-        summary=outward_work_item.get('fields', {}).get('summary'),
+        summary=get_nested(outward_fields, 'summary'),
         priority=WorkItemPriority(
-            id=outward_work_item.get('fields', {}).get('priority').get('id'),
-            name=outward_work_item.get('fields', {}).get('priority').get('name'),
+            id=get_nested(outward_fields, 'priority', 'id'),
+            name=get_nested(outward_fields, 'priority', 'name'),
         )
-        if outward_work_item.get('fields', {}).get('priority')
+        if get_nested(outward_fields, 'priority')
         else None,
         status=WorkItemStatus(
-            id=str(outward_work_item.get('fields', {}).get('status', {}).get('id')),
-            name=outward_work_item.get('fields', {}).get('status', {}).get('name'),
-            status_category_color=(
-                outward_work_item.get('fields', {})
-                .get('status', {})
-                .get('statusCategory', {})
-                .get('colorName')
+            id=str(get_nested(outward_fields, 'status', 'id')),
+            name=get_nested(outward_fields, 'status', 'name'),
+            status_category_color=get_nested(
+                outward_fields, 'status', 'statusCategory', 'colorName'
             ),
         ),
         work_item_type=WorkItemType(
-            id=outward_work_item.get('fields', {}).get('issuetype', {}).get('id'),
-            name=outward_work_item.get('fields', {}).get('issuetype', {}).get('name'),
-            subtask=outward_work_item.get('fields', {}).get('issuetype', {}).get('subtask', False),
+            id=get_nested(outward_fields, 'issuetype', 'id'),
+            name=get_nested(outward_fields, 'issuetype', 'name'),
+            subtask=get_nested(outward_fields, 'issuetype', 'subtask', default=False),
         ),
-        link_type=item.get('type', {}).get('outward'),
+        link_type=get_nested(item, 'type', 'outward'),
         relation_type='outward',
     )

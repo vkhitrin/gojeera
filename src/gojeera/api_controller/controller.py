@@ -55,6 +55,7 @@ from gojeera.models import (
     WorkItemTransitionState,
     WorkItemType,
 )
+from gojeera.utils.mappings import get_nested
 
 
 @dataclass
@@ -314,8 +315,14 @@ class APIController:
             result: list[WorkItemType] = []
             for item in response:
                 scope_project: Project | None = None
-                if (scope := item.get('scope', {})) and scope.get('type').lower() == 'project':
-                    scope_project = projects_by_id.get(str(scope.get('project').get('id')))
+                if (
+                    (scope := item.get('scope', {}))
+                    and (scope_type := scope.get('type'))
+                    and scope_type.lower() == 'project'
+                ):
+                    scope_project = projects_by_id.get(
+                        str(get_nested(scope, 'project', 'id', default=''))
+                    )
 
                 result.append(
                     WorkItemType(
@@ -855,10 +862,10 @@ class APIController:
                     id=str(item.get('id')),
                     global_id=str(item.get('globalId', '')),
                     relationship=str(item.get('relationship', '')),
-                    title=item.get('object', {}).get('title'),
-                    summary=item.get('object', {}).get('summary'),
-                    url=item.get('object', {}).get('url'),
-                    status_resolved=item.get('object', {}).get('status', {}).get('resolved'),
+                    title=get_nested(item, 'object', 'title'),
+                    summary=get_nested(item, 'object', 'summary'),
+                    url=get_nested(item, 'object', 'url'),
+                    status_resolved=get_nested(item, 'object', 'status', 'resolved'),
                 )
                 for item in response
             ]
@@ -1015,7 +1022,7 @@ class APIController:
                 build_date=str(response.get('buildDate', '')),
                 server_time=response.get('serverTime'),
                 server_title=str(response.get('serverTitle', '')),
-                default_locale=response.get('defaultLocale', {}).get('locale'),
+                default_locale=get_nested(response, 'defaultLocale', 'locale'),
                 server_time_zone=response.get('serverTimeZone'),
             )
         )
@@ -1041,7 +1048,7 @@ class APIController:
                 email=response.get('emailAddress'),
                 groups=[
                     JiraUserGroup(id=g.get('id'), name=g.get('name'))
-                    for g in response.get('groups', {}).get('items', [])
+                    for g in get_nested(response, 'groups', 'items', default=[])
                 ],
             )
         )
@@ -1963,10 +1970,10 @@ class APIController:
             error_message = exception_details.get('message', str(e))
 
             if 'cannot be set' in str(e).lower() or (
-                exception_details.get('extra', {}).get('errors')
+                get_nested(exception_details, 'extra', 'errors')
                 and any(
                     'cannot be set' in str(err).lower()
-                    for err in exception_details.get('extra', {}).get('errors', {}).values()
+                    for err in get_nested(exception_details, 'extra', 'errors', default={}).values()
                 )
             ):
                 error_message = (

@@ -7,8 +7,16 @@ if TYPE_CHECKING:
 
 from gojeera.config import CONFIGURATION
 
-WORK_ITEM_KEY_PATTERN = re.compile(r'^[A-Z][A-Z0-9]+-\d+$')
+WORK_ITEM_KEY_PATTERN = re.compile(r'^[A-Z][A-Z0-9]+-\d+$', re.IGNORECASE)
 WORK_ITEM_BROWSE_TOOLTIP = 'Can be loaded inside gojeera using CTRL+mouse click'
+
+
+def normalize_work_item_key(value: str) -> str | None:
+    """Return a canonical uppercase Jira work item key, or None if invalid."""
+    candidate = value.strip()
+    if not WORK_ITEM_KEY_PATTERN.fullmatch(candidate):
+        return None
+    return candidate.upper()
 
 
 def _get_base_url(app: 'JiraApp | None' = None) -> str:
@@ -42,11 +50,11 @@ def _parse_work_item_browse_url(value: str) -> tuple[ParseResult, list[str], str
     if len(path_parts) < 2 or path_parts[-2] != 'browse':
         return None
 
-    work_item_key = path_parts[-1]
-    if not WORK_ITEM_KEY_PATTERN.fullmatch(work_item_key):
+    normalized_work_item_key = normalize_work_item_key(path_parts[-1])
+    if normalized_work_item_key is None:
         return None
 
-    return parsed, path_parts, work_item_key
+    return parsed, path_parts, normalized_work_item_key
 
 
 def _is_current_jira_browse_url(
@@ -69,8 +77,9 @@ def extract_work_item_key(value: str, base_url: str | None = None) -> str | None
     if not candidate:
         return None
 
-    if WORK_ITEM_KEY_PATTERN.fullmatch(candidate):
-        return candidate
+    normalized_candidate = normalize_work_item_key(candidate)
+    if normalized_candidate is not None:
+        return normalized_candidate
 
     parsed_result = _parse_work_item_browse_url(candidate)
     if parsed_result is None:

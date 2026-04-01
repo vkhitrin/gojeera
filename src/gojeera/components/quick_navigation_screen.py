@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Input, Label, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
-from gojeera.utils.urls import extract_work_item_key
+from gojeera.utils.urls import extract_work_item_key, normalize_work_item_key
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
@@ -46,14 +46,15 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with Vertical(id='quick-navigation-form'):
-                yield Label('Work Item').add_class('field_label')
-                yield ExtendedInput(
-                    placeholder='KEY or Browse URL',
-                    id='quick-navigation-work-item-key',
-                    classes='work-item-key-input',
-                    compact=True,
-                )
+            with VerticalScroll(id='quick-navigation-form'):
+                with Vertical():
+                    yield Label('Work Item').add_class('field_label')
+                    yield ExtendedInput(
+                        placeholder='KEY or Browse URL',
+                        id='quick-navigation-work-item-key',
+                        classes='work-item-key-input',
+                        compact=True,
+                    )
             with Horizontal(id='modal_footer'):
                 yield Button(
                     'Open',
@@ -85,7 +86,11 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         jumper.show()
 
     def _is_work_item_key_valid(self, value: str) -> bool:
-        return self._extract_work_item_key(value) is not None
+        stripped_value = value.strip()
+        return (
+            normalize_work_item_key(stripped_value) is not None
+            or self._extract_work_item_key(stripped_value) is not None
+        )
 
     def _extract_work_item_key(self, value: str) -> str | None:
         return extract_work_item_key(value)

@@ -1324,9 +1324,10 @@ QuickNavigationScreen {
 
 QuickNavigationScreen #modal_outer {
   width: 30%;
+  min-width: 34;
   max-width: 42;
   height: auto;
-  max-height: 9;
+  max-height: 15;
   background: $surface;
   padding: 0;
 }

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
 from textual import on, work
@@ -14,6 +13,7 @@ from textual.worker import get_current_worker
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
+from gojeera.utils.urls import normalize_work_item_key
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.jql_autocomplete import JQLAutoComplete
@@ -262,21 +262,16 @@ class UnifiedSearchBar(Container):
         self._jql_autocomplete.update_filters(all_filters)
 
     def is_work_item_key_valid(self) -> bool:
-        import re
-
         work_item_input = self.query_one('#basic-work-item-key', Input)
         value = work_item_input.value.strip() if work_item_input.value else ''
 
         if not value:
             return True
 
-        work_item_pattern = r'^[A-Z][A-Z0-9]+-\d+$'
-        return bool(re.match(work_item_pattern, value))
+        return normalize_work_item_key(value) is not None
 
     @on(Input.Changed, '#basic-work-item-key')
     def handle_work_item_key_changed(self, event: Input.Changed) -> None:
-        import re
-
         work_item_input = self.query_one('#basic-work-item-key', Input)
         value = event.value.strip() if event.value else ''
 
@@ -284,8 +279,7 @@ class UnifiedSearchBar(Container):
             work_item_input.remove_class('-invalid')
             return
 
-        work_item_pattern = r'^[A-Z][A-Z0-9]+-\d+$'
-        if re.match(work_item_pattern, value):
+        if normalize_work_item_key(value) is not None:
             work_item_input.remove_class('-invalid')
         else:
             work_item_input.add_class('-invalid')
@@ -314,8 +308,7 @@ class UnifiedSearchBar(Container):
             work_item_input.remove_class('-invalid')
             return
 
-        work_item_pattern = r'^[A-Z][A-Z0-9]+-\d+$'
-        if re.match(work_item_pattern, value):
+        if normalize_work_item_key(value) is not None:
             work_item_input.remove_class('-invalid')
         else:
             work_item_input.add_class('-invalid')
@@ -745,9 +738,10 @@ class UnifiedSearchBar(Container):
         mode = self.search_mode
 
         if mode == 'basic':
+            work_item_key = self.query_one('#basic-work-item-key', Input).value
             return {
                 'mode': 'basic',
-                'work_item_key': self.query_one('#basic-work-item-key', Input).value,
+                'work_item_key': normalize_work_item_key(work_item_key or '') or work_item_key,
                 'project': self.query_one('#basic-project-selector', LazySelect).value,
                 'assignee': self.query_one('#basic-assignee-selector', LazySelect).value,
                 'type': self.query_one('#basic-type-selector', LazySelect).value,
@@ -769,8 +763,8 @@ class UnifiedSearchBar(Container):
         return {'mode': mode}
 
     def set_initial_work_item_key(self, work_item_key: str) -> None:
-        work_item_pattern = r'^[A-Z][A-Z0-9]+-\d+$'
-        if not re.match(work_item_pattern, work_item_key):
+        normalized_work_item_key = normalize_work_item_key(work_item_key)
+        if normalized_work_item_key is None:
             self.notify(
                 f'Invalid work item key format: "{work_item_key}". Expected format: PROJECT-123',
                 severity='error',
@@ -780,7 +774,7 @@ class UnifiedSearchBar(Container):
 
         try:
             work_item_input = self.query_one('#basic-work-item-key', Input)
-            work_item_input.value = work_item_key
+            work_item_input.value = normalized_work_item_key
         except Exception as e:
             self.notify(
                 f'Failed to set work item key: {str(e)}',

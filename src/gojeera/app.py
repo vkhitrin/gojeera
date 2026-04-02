@@ -661,82 +661,111 @@ class MainScreen(Screen):
         search_data: dict | None = None,
         use_active_search: bool = False,
     ) -> None:
-        self.search_results_container.show_loading()
+        self.begin_search_request(page_number=page, show_pagination=use_active_search)
         results: WorkItemSearchResult
-
-        effective_search_data = search_data
-        if use_active_search:
-            effective_search_data = self._active_search_data
-            if search_term is None:
-                search_term = self._active_search_term
-
-        if effective_search_data is None:
-            effective_search_data = self.unified_search_bar.get_search_data()
-
-        mode = effective_search_data.get('mode')
-        work_item_key = (
-            effective_search_data.get('work_item_key', '').strip() if mode == 'basic' else ''
-        )
-
-        if mode in ('text', 'jql'):
-            jql = effective_search_data.get('jql', '').strip()
-            if not jql:
-                self.search_results_container.hide_loading()
-                self.notify(
-                    'Please enter a search term or JQL query',
-                    severity='warning',
-                    title='Search Warning',
-                )
-                return
-
-            if mode == 'jql':
-                validation_result = await self.api.validate_jql_query(jql)
-                if not validation_result.success:
-                    self.search_results_container.hide_loading()
-
-                    self.search_results_list.work_item_search_results = None
-                    self.notify(
-                        validation_result.error or 'JQL validation failed',
-                        severity='warning',
-                        title='JQL Validation Error',
-                    )
-                    return
-
-        if work_item_key:
-            results = await self._search_single_work_item(work_item_key)
-        else:
-            results = await self._search_work_items(
-                next_page_token=next_page_token,
-                search_term=search_term,
-                page=page,
-                search_data=effective_search_data,
-            )
-
         list_view = self.search_results_list
 
-        list_view.work_item_search_results = results.response
-        list_view.focus()
+        try:
+            effective_search_data = search_data
+            if use_active_search:
+                effective_search_data = self._active_search_data
+                if search_term is None:
+                    search_term = self._active_search_term
 
-        self._active_search_data = effective_search_data
-        self._active_search_term = search_term
+            if effective_search_data is None:
+                effective_search_data = self.unified_search_bar.get_search_data()
 
-        total_pages = 1
-        if results.total > 0:
-            total_pages = results.total // CONFIGURATION.get().search_results_per_page
-            if (results.total % CONFIGURATION.get().search_results_per_page) > 0:
-                total_pages += 1
+            mode = effective_search_data.get('mode')
+            work_item_key = (
+                effective_search_data.get('work_item_key', '').strip() if mode == 'basic' else ''
+            )
 
-        list_view.total_pages = total_pages
+            if mode in ('text', 'jql'):
+                jql = effective_search_data.get('jql', '').strip()
+                if not jql:
+                    self.notify(
+                        'Please enter a search term or JQL query',
+                        severity='warning',
+                        title='Search Warning',
+                    )
+                    if use_active_search:
+                        list_view.pending_page = None
+                        self.search_results_container.pagination = {
+                            'total': (self.search_results_container.pagination or {}).get(
+                                'total', 0
+                            ),
+                            'current_page_number': list_view.page,
+                        }
+                    return
 
-        self.search_results_container.pagination = {
-            'total': results.total,
-            'current_page_number': self.search_results_list.page,
-        }
-        self.search_results_container.hide_loading()
+                if mode == 'jql':
+                    validation_result = await self.api.validate_jql_query(jql)
+                    if not validation_result.success:
+                        list_view.work_item_search_results = None
+                        self.notify(
+                            validation_result.error or 'JQL validation failed',
+                            severity='warning',
+                            title='JQL Validation Error',
+                        )
+                        if use_active_search:
+                            list_view.pending_page = None
+                            self.search_results_container.pagination = {
+                                'total': (self.search_results_container.pagination or {}).get(
+                                    'total', 0
+                                ),
+                                'current_page_number': list_view.page,
+                            }
+                        return
+
+            if work_item_key:
+                results = await self._search_single_work_item(work_item_key)
+            else:
+                results = await self._search_work_items(
+                    next_page_token=next_page_token,
+                    search_term=search_term,
+                    page=page,
+                    search_data=effective_search_data,
+                )
+
+            if results.response is None and use_active_search:
+                list_view.pending_page = None
+                self.search_results_container.pagination = {
+                    'total': (self.search_results_container.pagination or {}).get('total', 0),
+                    'current_page_number': list_view.page,
+                }
+
+            if use_active_search and page is not None and results.response is not None:
+                list_view.page = page
+                list_view.pending_page = None
+
+            list_view.work_item_search_results = results.response
+            if self.focused is not list_view:
+                list_view.focus()
+
+            self._active_search_data = effective_search_data
+            self._active_search_term = search_term
+
+            total_pages = 1
+            if results.total > 0:
+                total_pages = results.total // CONFIGURATION.get().search_results_per_page
+                if (results.total % CONFIGURATION.get().search_results_per_page) > 0:
+                    total_pages += 1
+
+            list_view.total_pages = total_pages
+
+            self.search_results_container.pagination = {
+                'total': results.total,
+                'current_page_number': self.search_results_list.page,
+            }
+        finally:
+            self.end_search_request()
 
     @on(Button.Pressed, '#unified-search-button')
     async def handle_unified_search_button(self) -> None:
-        self.run_worker(self.action_search())
+        if self.is_search_request_in_progress:
+            return
+
+        await self.action_search()
 
     def _is_any_select_expanded(self) -> bool:
         for select in self.query(Select):
@@ -755,7 +784,7 @@ class MainScreen(Screen):
         jumper.show()
 
     async def action_search(self, search_term: str | None = None) -> None:
-        if self._is_any_select_expanded():
+        if self._is_any_select_expanded() or self.is_search_request_in_progress:
             return
 
         search_data = self.unified_search_bar.get_search_data()
@@ -770,45 +799,16 @@ class MainScreen(Screen):
                 )
                 return
 
-        self.information_panel.work_item = None
-        self.information_panel.breadcrumb_widget.display = False
-        self.query_one('#details-breadcrumb-row', Vertical).display = False
-        self.query_one('#details-tabs-row', Horizontal).display = False
-
-        self.tabs.disabled = True
-        self.fields_panel.disabled = True
-        self.fields_panel.display = False
-        self.tabs.active = 'tab-description'
-        self.information_panel.set_active_tab('tab-description')
-
-        self.work_item_info_container.clear_information = True
-
-        self.work_item_fields_widget.work_item = None
-
-        self.current_loaded_work_item_key = None
-        self.call_after_refresh(self.refresh_bindings)
-
-        self.work_item_comments_widget.comments = None
-        self.work_item_comments_widget.work_item_key = None
-
-        self.related_work_items_widget.work_item_key = None
-        self.related_work_items_widget.work_items = None
-
-        self.work_item_remote_links_widget.work_item_key = None
-
-        self.work_item_attachments_widget.attachments = None
-        self.work_item_attachments_widget.work_item_key = None
-
-        self.work_item_child_work_items_widget.work_items = None
-        self.work_item_child_work_items_widget.work_item_key = None
-
         self.search_results_list.page = 1
 
         self.search_results_list.token_by_page = {}
 
         if self.search_results_list.work_item_search_results is not None:
             self.search_results_container.clear_search_metadata()
-        self.search_results_container.show_loading()
+        self.begin_search_request(
+            page_number=self.search_results_list.page,
+            show_pagination=False,
+        )
 
         next_page_token: str | None = self.search_results_list.token_by_page.get(
             self.search_results_list.page
@@ -822,6 +822,35 @@ class MainScreen(Screen):
             ),
             exclusive=True,
         )
+
+    @property
+    def is_search_request_in_progress(self) -> bool:
+        return self.search_results_container.is_loading
+
+    def begin_search_request(
+        self,
+        page_number: int | None = None,
+        show_pagination: bool = True,
+    ) -> None:
+        self.search_results_container.show_loading()
+        self.unified_search_bar.search_in_progress = True
+
+        if not show_pagination:
+            self.search_results_container.clear_search_metadata()
+            return
+
+        if page_number is None:
+            return
+
+        pagination = self.search_results_container.pagination or {}
+        self.search_results_container.pagination = {
+            'total': pagination.get('total', 0),
+            'current_page_number': page_number,
+        }
+
+    def end_search_request(self) -> None:
+        self.search_results_container.hide_loading()
+        self.unified_search_bar.search_in_progress = False
 
     async def action_new_work_item(self) -> None:
         from gojeera.components.new_work_item_screen import AddWorkItemScreen
@@ -1039,78 +1068,102 @@ class MainScreen(Screen):
         self.work_item_fields_widget.work_item = None
 
         self.work_item_fields_widget.content_container.display = False
+        completed = False
 
-        async def fetch_main_work_item() -> tuple[bool, APIControllerResponse]:
-            response = await self.api.get_work_item(
-                work_item_id_or_key=selected_work_item_key,
-            )
-            return response.success, response
+        try:
 
-        async def fetch_subtasks() -> tuple[bool, APIControllerResponse]:
-            response = await self.api.search_work_items(
-                jql_query=f'parent={selected_work_item_key}',
-                fields=['id', 'key', 'status', 'summary', 'issuetype', 'assignee'],
-            )
-            return response.success, response
-
-        (main_success, main_response), (subtasks_success, subtasks_response) = await asyncio.gather(
-            fetch_main_work_item(),
-            fetch_subtasks(),
-        )
-
-        if not main_success or not main_response.result:
-            self.is_loading = False
-            self.notify(
-                'Unable to find the selected work item', title='Find Work Item', severity='error'
-            )
-            return
-
-        result: JiraWorkItemSearchResponse = main_response.result
-        work_item: JiraWorkItem = result.work_items[0]
-
-        self.information_panel.work_item = work_item
-
-        self.tabs.disabled = False
-
-        self.fields_panel.disabled = False
-        self.fields_panel.display = True
-
-        if work_item.work_item_type and work_item.work_item_type.subtask:
-            self.tabs.hide_tab('tab-subtasks')
-        else:
-            self.tabs.show_tab('tab-subtasks')
-
-        self.information_panel.set_active_tab(self.tabs.active)
-
-        self.work_item_info_container.work_item = work_item
-        self.work_item_fields_widget.available_users = self.available_users
-        self.work_item_fields_widget.work_item = work_item
-
-        self.current_loaded_work_item_key = selected_work_item_key
-        self.call_after_refresh(self.refresh_bindings)
-
-        self.related_work_items_widget.work_item_key = work_item.key
-        self.related_work_items_widget.work_items = work_item.related_work_items
-
-        self.work_item_comments_widget.work_item_key = work_item.key
-        self.work_item_comments_widget.comments = work_item.comments
-
-        self.work_item_attachments_widget.work_item_key = work_item.key
-        self.work_item_attachments_widget.attachments = work_item.attachments
-
-        self.work_item_child_work_items_widget.work_item_key = work_item.key
-        if subtasks_success and subtasks_response.result:
-            self.work_item_child_work_items_widget.work_items = subtasks_response.result.work_items
-        else:
-            if not subtasks_success:
-                self.logger.error(
-                    'Unable to retrieve the sub tasks of the work item',
-                    extra={'error': subtasks_response.error, 'work_item_key': work_item.key},
+            async def fetch_main_work_item() -> tuple[bool, APIControllerResponse]:
+                response = await self.api.get_work_item(
+                    work_item_id_or_key=selected_work_item_key,
                 )
-            self.work_item_child_work_items_widget.work_items = None
+                return response.success, response
 
-        if CONFIGURATION.get().show_work_item_web_links:
-            self.work_item_remote_links_widget.work_item_key = work_item.key
+            async def fetch_subtasks() -> tuple[bool, APIControllerResponse]:
+                response = await self.api.search_work_items(
+                    jql_query=f'parent={selected_work_item_key}',
+                    fields=['id', 'key', 'status', 'summary', 'issuetype', 'assignee'],
+                )
+                return response.success, response
+
+            (
+                (
+                    main_success,
+                    main_response,
+                ),
+                (
+                    subtasks_success,
+                    subtasks_response,
+                ),
+            ) = await asyncio.gather(
+                fetch_main_work_item(),
+                fetch_subtasks(),
+            )
+
+            if not main_success or not main_response.result:
+                self.is_loading = False
+                self.notify(
+                    'Unable to find the selected work item',
+                    title='Find Work Item',
+                    severity='error',
+                )
+                return
+
+            result: JiraWorkItemSearchResponse = main_response.result
+            work_item: JiraWorkItem = result.work_items[0]
+
+            self.information_panel.work_item = work_item
+
+            self.tabs.disabled = False
+
+            self.fields_panel.disabled = False
+            self.fields_panel.display = True
+
+            if work_item.work_item_type and work_item.work_item_type.subtask:
+                self.tabs.hide_tab('tab-subtasks')
+            else:
+                self.tabs.show_tab('tab-subtasks')
+
+            self.information_panel.set_active_tab(self.tabs.active)
+
+            self.work_item_info_container.work_item = work_item
+            self.work_item_fields_widget.available_users = self.available_users
+            self.work_item_fields_widget.work_item = work_item
+
+            self.current_loaded_work_item_key = selected_work_item_key
+            self.call_after_refresh(self.refresh_bindings)
+
+            self.related_work_items_widget.work_item_key = work_item.key
+            self.related_work_items_widget.work_items = work_item.related_work_items
+
+            self.work_item_comments_widget.work_item_key = work_item.key
+            self.work_item_comments_widget.comments = work_item.comments
+
+            self.work_item_attachments_widget.work_item_key = work_item.key
+            self.work_item_attachments_widget.attachments = work_item.attachments
+
+            self.work_item_child_work_items_widget.work_item_key = work_item.key
+            if subtasks_success and subtasks_response.result:
+                self.work_item_child_work_items_widget.work_items = (
+                    subtasks_response.result.work_items
+                )
+            else:
+                if not subtasks_success:
+                    self.logger.error(
+                        'Unable to retrieve the sub tasks of the work item',
+                        extra={'error': subtasks_response.error, 'work_item_key': work_item.key},
+                    )
+                self.work_item_child_work_items_widget.work_items = None
+
+            if CONFIGURATION.get().show_work_item_web_links:
+                self.work_item_remote_links_widget.work_item_key = work_item.key
+
+            completed = True
+        except asyncio.CancelledError:
+            self.is_loading = False
+            raise
+        finally:
+            if not completed and self.is_loading:
+                self.is_loading = False
 
     def _try_hide_loading_coordinated(self) -> None:
         info_container = self.work_item_info_container

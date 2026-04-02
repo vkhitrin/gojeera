@@ -39,6 +39,7 @@ class UnifiedSearchBar(Container):
     users: reactive[dict | None] = reactive(None)
     statuses: reactive[list[tuple[str, str]] | None] = reactive(None)
     types: reactive[list[tuple[str, str]] | None] = reactive(None)
+    search_in_progress: reactive[bool] = reactive(False)
 
     def __init__(self, api: APIController, **kwargs):
         super().__init__(**kwargs)
@@ -150,6 +151,11 @@ class UnifiedSearchBar(Container):
         ):
             selector = self.query_one(selector_id, LazySelect)
             set_jump_mode(selector, None if selector.disabled else 'focus')
+
+    def watch_search_in_progress(self, search_in_progress: bool) -> None:
+        search_button = self.query_one('#unified-search-button', Button)
+        search_button.disabled = search_in_progress
+        set_jump_mode(search_button, None if search_in_progress else 'click')
 
     def _init_jql_autocomplete(self) -> None:
         from gojeera.config import CONFIGURATION
@@ -286,6 +292,9 @@ class UnifiedSearchBar(Container):
 
     @on(Input.Submitted, '#basic-work-item-key')
     def handle_work_item_key_submitted(self, event: Input.Submitted) -> None:
+        if self.search_in_progress:
+            return
+
         if not self.is_work_item_key_valid():
             work_item_input = self.query_one('#basic-work-item-key', Input)
             work_item_input.add_class('-invalid')
@@ -328,6 +337,9 @@ class UnifiedSearchBar(Container):
 
     @on(Input.Submitted, '#unified-search-input')
     def handle_unified_input_submitted(self, event: Input.Submitted) -> None:
+        if self.search_in_progress:
+            return
+
         if self.search_mode not in ('text', 'jql'):
             return
 

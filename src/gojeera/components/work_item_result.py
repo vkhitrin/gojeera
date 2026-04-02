@@ -165,6 +165,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 
         self.token_by_page: dict[int, str] = {}
         self.page = 1
+        self.pending_page: int | None = None
         self.total_pages = 1
         self.current_work_item_key: str | None = None
         self._selected_index: int = 0
@@ -253,15 +254,18 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                 next_page = self.page + 1
                 self.token_by_page[next_page] = response.next_page_token
 
+            items_to_mount: list[Static | WorkItemContainer] = []
             for index, work_item in enumerate(response.work_items):
                 if index > 0:
-                    await self.mount(WorkItemSpacer())
+                    items_to_mount.append(WorkItemSpacer())
 
                 container = WorkItemContainer(work_item)
 
                 if work_item.key == self.current_work_item_key:
                     container.add_class('-loaded')
-                await self.mount(container)
+                items_to_mount.append(container)
+
+            await self.mount(*items_to_mount)
 
             if self.parent and isinstance(self.parent.parent, WorkItemsContainer):
                 self.parent.parent.displayed_count = len(response.work_items)
@@ -344,7 +348,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 
         self.mark_loaded_work_item(work_item_key)
 
-        self.run_worker(screen.fetch_work_items(work_item_key), exclusive=True)
+        screen.run_worker(screen.fetch_work_items(work_item_key), exclusive=True)
 
     def action_open_work_item_in_browser(self) -> None:
         if self.current_work_item_key:
@@ -380,6 +384,14 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                 self.notify('URL copied to clipboard', title=self.current_work_item_key)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        work_items_container = self.parent.parent if self.parent else None
+        is_loading = isinstance(work_items_container, WorkItemsContainer) and (
+            work_items_container.is_loading
+        )
+
+        if is_loading and action in {'previous_work_items_page', 'next_work_items_page'}:
+            return False
+
         if action == 'previous_work_items_page':
             if self.page > 1:
                 return True
@@ -394,18 +406,20 @@ class WorkItemSearchResultsScroll(VerticalScroll):
 
     def action_previous_work_items_page(self):
         if self.page > 1:
-            next_page_token = self.token_by_page.get(self.page - 1)
-            self.page -= 1
+            requested_page = self.page - 1
+            next_page_token = self.token_by_page.get(requested_page)
+            self.pending_page = requested_page
 
             self.scroll_to_top(animate=False)
 
             from gojeera.app import MainScreen
 
             screen = cast(MainScreen, self.screen)
+            screen.begin_search_request(page_number=requested_page)
             self.run_worker(
                 screen.search_work_items(
                     next_page_token,
-                    page=self.page,
+                    page=requested_page,
                     use_active_search=True,
                 ),
                 exclusive=True,
@@ -413,16 +427,22 @@ class WorkItemSearchResultsScroll(VerticalScroll):
             self.refresh_bindings()
 
     def action_next_work_items_page(self):
-        next_page_token = self.token_by_page.get(self.page + 1)
-        self.page += 1
+        requested_page = self.page + 1
+        next_page_token = self.token_by_page.get(requested_page)
+        self.pending_page = requested_page
 
         self.scroll_to_top(animate=False)
 
         from gojeera.app import MainScreen
 
         screen = cast(MainScreen, self.screen)
+        screen.begin_search_request(page_number=requested_page)
         self.run_worker(
-            screen.search_work_items(next_page_token, page=self.page, use_active_search=True),
+            screen.search_work_items(
+                next_page_token,
+                page=requested_page,
+                use_active_search=True,
+            ),
             exclusive=True,
         )
         self.refresh_bindings()

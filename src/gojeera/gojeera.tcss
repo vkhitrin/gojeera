@@ -200,6 +200,28 @@ UnifiedSearchBar>Button:hover>Static {
   text-style: bold;
 }
 
+UnifiedSearchBar>Button:disabled {
+  background: $accent-darken-3;
+  color: $text-disabled;
+}
+
+UnifiedSearchBar>Button:disabled>Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar>Button:disabled:hover {
+  background: $accent-darken-3;
+  color: $text-disabled;
+}
+
+UnifiedSearchBar>Button:disabled:hover>Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
 UnifiedSearchBar>Button:focus {
   background: $primary;
   color: $text;

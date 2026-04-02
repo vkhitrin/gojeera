@@ -58,7 +58,7 @@ Issues = "https://github.com/vkhitrin/gojeera/issues"
 
 [dependency-groups]
 dev = ["textual-dev>=1.8.0"]
-lint = ["ruff>=0.15.8", "ty>=0.0.26", "vulture>=2.16"]
+lint = ["ruff>=0.15.8", "ty>=0.0.27", "vulture>=2.16"]
 test = [
     "pytest>8.4.1",
     "pytest-asyncio>=1.3.0",
@@ -167,6 +167,7 @@ ignore_names = [
     "padding",
     "pagination",
     "parameters",
+    "pending_page",
     "previous_hover_style",
     "progress",
     "projectKey",

@@ -5,7 +5,7 @@
 
 ![gojeera interface](./tests/__snapshots__/test_work_item_description/TestWorkItemDescription.test_internal_jira_link_tooltip_snapshot.svg)
 
-A **Text User Interface (TUI)** for interacting with Atlassian Jira directly
+A **Text User Interface (TUI)** for interacting with [Atlassian Jira](https://www.atlassian.com/software/jira) directly
 from terminal.
 
 ## Introduction
@@ -47,7 +47,7 @@ gojeera --help
 This will show you the available commands for the CLI tool
 
 ```bash
-uv run gojeera --help
+$ uv run gojeera --help
 Usage: gojeera [OPTIONS]
 
   Launches the gojeera TUI application.

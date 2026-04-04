@@ -1,0 +1,118 @@
+{
+  "fields": [
+    {
+      "fieldId": "summary",
+      "key": "summary",
+      "name": "Summary",
+      "required": true,
+      "operations": [
+        "set"
+      ],
+      "schema": {
+        "type": "string",
+        "system": "summary"
+      }
+    },
+    {
+      "fieldId": "description",
+      "key": "description",
+      "name": "Description",
+      "required": false,
+      "operations": [
+        "set"
+      ],
+      "schema": {
+        "type": "string",
+        "system": "description"
+      }
+    },
+    {
+      "fieldId": "priority",
+      "key": "priority",
+      "name": "Priority",
+      "required": false,
+      "operations": [
+        "set"
+      ],
+      "schema": {
+        "type": "priority",
+        "system": "priority"
+      },
+      "allowedValues": [
+        {
+          "id": "1",
+          "name": "Highest"
+        },
+        {
+          "id": "2",
+          "name": "High"
+        },
+        {
+          "id": "3",
+          "name": "Medium"
+        },
+        {
+          "id": "4",
+          "name": "Low"
+        },
+        {
+          "id": "5",
+          "name": "Lowest"
+        }
+      ]
+    },
+    {
+      "fieldId": "customfield_10402",
+      "key": "customfield_10402",
+      "name": "Request Type",
+      "required": true,
+      "operations": [
+        "set"
+      ],
+      "schema": {
+        "type": "option",
+        "custom": "com.atlassian.servicedesk:vp-origin",
+        "customId": 10402
+      },
+      "allowedValues": [
+        {
+          "id": "10100",
+          "value": "Get help"
+        },
+        {
+          "id": "10101",
+          "value": "Report incident"
+        }
+      ]
+    },
+    {
+      "fieldId": "customfield_10727",
+      "key": "customfield_10727",
+      "name": "Organizations",
+      "required": false,
+      "operations": [
+        "set"
+      ],
+      "schema": {
+        "type": "array",
+        "items": "option",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+        "customId": 10727
+      },
+      "allowedValues": [
+        {
+          "id": "10727",
+          "value": "Engineering"
+        },
+        {
+          "id": "10728",
+          "value": "Support"
+        }
+      ]
+    }
+  ],
+  "maxResults": 5,
+  "startAt": 0,
+  "total": 5,
+  "results": []
+}

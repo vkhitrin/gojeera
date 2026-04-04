@@ -64,7 +64,9 @@ class PanelPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='alert-form'):
                 with Vertical():
-                    yield Label('Panel Type').add_class('field_label')
+                    panel_type_label = Label('Panel Type')
+                    panel_type_label.add_class('field_label')
+                    yield panel_type_label
                     yield PanelSelector(self.ALERT_TYPES)
 
             with Horizontal(id='modal_footer'):
@@ -75,7 +77,12 @@ class PanelPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     disabled=True,
                     compact=True,
                 )
-                yield Button('Cancel', variant='error', id='alert-button-quit', compact=True)
+                yield Button(
+                    'Cancel',
+                    variant='error',
+                    id='alert-button-quit',
+                    compact=True,
+                )
 
         yield ExtendedFooter(show_command_palette=False)
 

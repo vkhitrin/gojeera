@@ -9,15 +9,12 @@ from gojeera.app import JiraApp
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 
-from .test_helpers import wait_until
+from .test_helpers import load_work_item_from_search, wait_until
 
 
 async def navigate_to_comments_tab(pilot):
     """Navigate to work item and open Comments tab."""
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
 

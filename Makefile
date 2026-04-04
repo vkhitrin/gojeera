@@ -14,6 +14,11 @@ lint: ##Lint using ruff
 	@uv run ruff format . --diff
 	@uv run ruff check .
 
+.PHONY: lint-fix
+lint-fix: ##Fix linting using ruff
+	@uv run ruff format
+	@uv run ruff check --fix
+
 .PHONY: type-check
 type-check: ##Typecheck using ty
 	@uv run ty check

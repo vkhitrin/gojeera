@@ -59,11 +59,16 @@ class AddAttachmentScreen(ExtendedModalScreen[str]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='add-attachment-form'):
                 with Vertical(id='file-path-container'):
-                    yield Label('File Path').add_class('field_label')
+                    file_path_label = Label('File Path')
+                    file_path_label.add_class('field_label')
+                    yield file_path_label
                     with Horizontal(id='file-path-input-row'):
                         yield FilePathInput()
                         yield Button(
-                            'Browse...', id='browse-file-button', variant='primary', compact=True
+                            'Browse...',
+                            id='browse-file-button',
+                            variant='primary',
+                            compact=True,
                         )
                     yield Label(
                         '• Click "Browse..." to open the file picker\n'
@@ -84,7 +89,10 @@ class AddAttachmentScreen(ExtendedModalScreen[str]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='add-attachment-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='add-attachment-button-quit',
+                    compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)
 

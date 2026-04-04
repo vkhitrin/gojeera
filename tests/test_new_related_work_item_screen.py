@@ -6,13 +6,11 @@ from gojeera.app import JiraApp
 from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
 from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def open_add_related_work_item_screen(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -56,7 +54,7 @@ async def fill_required_fields_and_verify_save_enabled(pilot):
     work_item_key_field.focus()
     await asyncio.sleep(0.1)
 
-    await pilot.press(*'EXAMPLE-100')
+    await pilot.press(*'ENG-8')
     await asyncio.sleep(0.3)
 
     link_type_selector = screen.relationship_type

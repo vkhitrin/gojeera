@@ -19,7 +19,6 @@ class URL(Input, BaseField, BaseUpdateField):
         mode: FieldMode,
         field_id: str,
         title: str | None = None,
-        required: bool = False,
         original_value: str | None = None,
         field_supports_update: bool = True,
         **kwargs: Any,

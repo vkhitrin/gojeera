@@ -17,7 +17,12 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.constants import PROCESS_OPTIONAL_FIELDS, SKIP_FIELDS, CustomFieldType
-from gojeera.utils.fields import FieldMode, get_sprint_field_id_from_fields_data
+from gojeera.utils.fields import (
+    FieldMode,
+    get_parent_relation_field_ids_from_fields_data,
+    get_sprint_field_id_from_fields_data,
+    is_epic_work_item_type,
+)
 from gojeera.utils.focus import focus_first_available
 from gojeera.utils.widgets_factory_utils import (
     DynamicFieldsWidgets,
@@ -67,6 +72,53 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         self._sprint_field_id: str | None = None
 
         self._cache = get_cache()
+
+    @property
+    def _parent_work_item_type_name(self) -> str | None:
+        parent_type = (
+            self._parent_work_item.parent_work_item_type if self._parent_work_item else None
+        )
+        if self._parent_work_item and self._parent_work_item.work_item_type:
+            parent_type = self._parent_work_item.work_item_type.name
+        return parent_type
+
+    @property
+    def _sprint_inherited_from_parent(self) -> bool:
+        return bool(self._parent_work_item_key) and not is_epic_work_item_type(
+            self._parent_work_item_type_name
+        )
+
+    @property
+    def _requires_subtask_issue_type(self) -> bool:
+        return bool(self._parent_work_item_key) and not is_epic_work_item_type(
+            self._parent_work_item_type_name
+        )
+
+    def _filter_work_item_types_for_parent(self, types: list[Any]) -> list[Any]:
+        if not self._parent_work_item:
+            return [t for t in types if not t.subtask]
+
+        parent_type = self._parent_work_item.work_item_type
+        if not parent_type:
+            if self._parent_work_item_key:
+                return [t for t in types if t.subtask]
+            return [t for t in types if not t.subtask]
+
+        if parent_type.subtask:
+            return []
+
+        parent_level = parent_type.hierarchy_level
+        if parent_level == 0:
+            return [t for t in types if t.subtask]
+
+        if parent_level is not None:
+            child_level = parent_level - 1
+            return [t for t in types if not t.subtask and t.hierarchy_level == child_level]
+
+        if self._parent_work_item_key:
+            return [t for t in types if t.subtask]
+
+        return [t for t in types if not t.subtask]
 
     @property
     def modal_title(self) -> Static:
@@ -244,7 +296,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             with VerticalScroll(id='modal-form-scroll'):
                 with StaticFieldsWidgets():
                     with Vertical(id='project-field-container'):
-                        label = Label('Project').add_class('field_label')
+                        label = Label('Project')
+                        label.add_class('field_label')
                         label.add_class('required_field_label')
                         yield label
                         project_widget = LazySelect(
@@ -258,7 +311,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         yield project_widget
 
                     with Vertical(id='work-item-type-field-container'):
-                        label = Label('Issue Type').add_class('field_label')
+                        label = Label('Issue Type')
+                        label.add_class('field_label')
                         label.add_class('required_field_label')
                         yield label
                         work_item_type_widget = LazySelect(
@@ -272,7 +326,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         yield work_item_type_widget
 
                     with Vertical(id='reporter-field-container'):
-                        label = Label('Reporter').add_class('field_label')
+                        label = Label('Reporter')
+                        label.add_class('field_label')
                         label.add_class('required_field_label')
                         yield label
                         reporter_widget = LazySelect(
@@ -286,7 +341,9 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         yield reporter_widget
 
                     with Vertical(id='assignee-field-container'):
-                        yield Label('Assignee').add_class('field_label')
+                        assignee_label = Label('Assignee')
+                        assignee_label.add_class('field_label')
+                        yield assignee_label
                         assignee_widget = LazySelect(
                             lazy_load_callback=lambda: self._lazy_load_users(),
                             options=[],
@@ -299,7 +356,9 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
                     with Vertical(id='sprint-field-container') as sprint_container:
                         sprint_container.display = False
-                        yield Label('Sprint').add_class('field_label')
+                        sprint_label = Label('Sprint')
+                        sprint_label.add_class('field_label')
+                        yield sprint_label
                         yield SprintPicker(
                             mode=FieldMode.CREATE,
                             field_id='sprint',
@@ -307,7 +366,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         )
 
                 with Vertical(id='summary-field-container'):
-                    label = Label('Summary').add_class('field_label')
+                    label = Label('Summary')
+                    label.add_class('field_label')
                     label.add_class('required_field_label')
                     yield label
                     summary_widget = ExtendedInput(
@@ -319,7 +379,9 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     yield summary_widget
 
                 with Vertical(id='description-field-container'):
-                    yield (Label('Description').add_class('field_label'))
+                    description_label = Label('Description')
+                    description_label.add_class('field_label')
+                    yield description_label
 
                     yield ExtendedADFMarkdownTextArea(field_id='description', required=False)
 
@@ -334,7 +396,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='add-work-item-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='add-work-item-button-quit',
+                    compact=True,
                 )
 
             yield Static('Required: 0 pending', id='required-fields-tracker')
@@ -342,7 +407,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
     def on_mount(self):
         if self._parent_work_item_key:
-            self.modal_title.update(f'New Subtask For {self._parent_work_item_key}')
+            if self._requires_subtask_issue_type:
+                self.modal_title.update(f'New Subtask For {self._parent_work_item_key}')
+            else:
+                self.modal_title.update(f'New Work Item For {self._parent_work_item_key}')
         else:
             self.modal_title.update('New Work Item')
 
@@ -516,11 +584,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         cache_key = self._selected_project_key
         cached_types = self._cache.get('project_types_raw', cache_key)
         if cached_types is not None:
-            types = cached_types
-            if self._parent_work_item_key:
-                types = [t for t in types if t.subtask]
-            else:
-                types = [t for t in types if not t.subtask]
+            types = self._filter_work_item_types_for_parent(cached_types)
 
             types.sort(key=lambda x: x.name)
             types_list = [(t.name, t.id) for t in types]
@@ -531,7 +595,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                 with self.prevent(Select.Changed):
                     type_selector.set_options(types_list)
 
-                if self._parent_work_item_key and types_list:
+                if self._requires_subtask_issue_type and types_list:
                     work_item_type_id = types_list[0][1]
                     self.call_after_refresh(
                         lambda: self._apply_prefilled_subtask_type(cache_key, work_item_type_id)
@@ -559,11 +623,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     types = response.result or []
 
                     self._cache.set('project_types_raw', types, project_key)
-
-                    if self._parent_work_item_key:
-                        types = [t for t in types if t.subtask]
-                    else:
-                        types = [t for t in types if not t.subtask]
+                    types = self._filter_work_item_types_for_parent(types)
 
                     types.sort(key=lambda x: x.name)
                     types_list = [(t.name, t.id) for t in types]
@@ -572,7 +632,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         type_selector.set_options(types_list)
                     self._types_fetched_for_project = project_key
 
-                    if self._parent_work_item_key and types_list:
+                    if self._requires_subtask_issue_type and types_list:
                         work_item_type_id = types_list[0][1]
                         self.call_after_refresh(
                             lambda: self._apply_prefilled_subtask_type(
@@ -884,6 +944,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             enable_additional = config.enable_creating_additional_fields
 
             skip_fields = set(SKIP_FIELDS) | set(ignore_list)
+            skip_fields.update(get_parent_relation_field_ids_from_fields_data(fields_data))
 
             sprint_field_id = get_sprint_field_id_from_fields_data(fields_data)
             if sprint_field_id:
@@ -906,7 +967,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             if (
                 sprint_field_id
                 and config.enable_sprint_selection
-                and not self._parent_work_item_key
+                and not self._sprint_inherited_from_parent
             ):
                 try:
                     self._sprint_field_id = sprint_field_id
@@ -1014,7 +1075,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         application = cast('JiraApp', self.app)
 
         config = CONFIGURATION.get()
-        if not config.enable_sprint_selection or self._parent_work_item_key:
+        if not config.enable_sprint_selection or self._sprint_inherited_from_parent:
             return
 
         try:
@@ -1105,7 +1166,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             if (
                 self._sprint_field_id
                 and sprint_picker.is_mounted
-                and not self._parent_work_item_key
+                and not self._sprint_inherited_from_parent
             ):
                 sprint_value = sprint_picker.get_value_for_create()
                 if sprint_value is not None:
@@ -1159,7 +1220,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         result = await self.app.push_screen_wait(DecisionPickerScreen())
 
         if result:
-            marker, label = result
+            marker, _ = result
 
             insertion_text = f'> `{marker}` '
 
@@ -1185,7 +1246,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         result = await self.app.push_screen_wait(PanelPickerScreen())
 
         if result:
-            marker, alert_type = result
+            marker, _ = result
 
             insertion_text = f'> {marker}\n> '
 

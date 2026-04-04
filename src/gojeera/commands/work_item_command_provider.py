@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
+from gojeera.utils.fields import supports_parent_work_item
+
 
 class WorkItemCommandProvider(Provider):
     """Expose loaded work-item actions in the command palette."""
@@ -88,6 +90,15 @@ class WorkItemCommandProvider(Provider):
                 'Log work against the loaded work item',
             ),
         ]
+
+        if supports_parent_work_item(work_item):
+            commands.append(
+                (
+                    f'{work_item_key} > Set Parent Work Item',
+                    'set_parent_work_item',
+                    'Set or clear the parent work item',
+                )
+            )
 
         if not (work_item.work_item_type and work_item.work_item_type.subtask):
             commands.insert(

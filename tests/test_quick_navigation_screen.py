@@ -23,7 +23,7 @@ async def open_quick_navigation_screen(pilot):
 async def quick_navigation_load_valid_work_item(pilot):
     await open_quick_navigation_screen(pilot)
 
-    await pilot.press(*'EXAMPLE-19539')
+    await pilot.press(*'ENG-1')
     await asyncio.sleep(0.2)
 
     await pilot.press('enter')
@@ -33,15 +33,15 @@ async def quick_navigation_load_valid_work_item(pilot):
     await asyncio.sleep(0.5)
 
     main_screen = pilot.app.screen
-    assert main_screen.current_loaded_work_item_key == 'EXAMPLE-19539'
+    assert main_screen.current_loaded_work_item_key == 'ENG-1'
     assert main_screen.information_panel.work_item is not None
-    assert main_screen.information_panel.work_item.key == 'EXAMPLE-19539'
+    assert main_screen.information_panel.work_item.key == 'ENG-1'
 
 
 async def quick_navigation_loads_work_item_from_url(pilot):
     await open_quick_navigation_screen(pilot)
 
-    await pilot.press(*'https://example.atlassian.net/browse/EXAMPLE-19539')
+    await pilot.press(*'https://example.atlassian.acme.net/browse/ENG-1')
     await asyncio.sleep(0.2)
 
     await pilot.press('enter')
@@ -51,32 +51,27 @@ async def quick_navigation_loads_work_item_from_url(pilot):
     await asyncio.sleep(0.5)
 
     main_screen = pilot.app.screen
-    assert main_screen.current_loaded_work_item_key == 'EXAMPLE-19539'
+    assert main_screen.current_loaded_work_item_key == 'ENG-1'
     assert main_screen.information_panel.work_item is not None
-    assert main_screen.information_panel.work_item.key == 'EXAMPLE-19539'
+    assert main_screen.information_panel.work_item.key == 'ENG-1'
 
 
 class TestQuickNavigationScreen:
     def test_extract_work_item_key_accepts_browse_url(self, mock_configuration):
         base_url = mock_configuration.jira.api_base_url
 
-        assert extract_work_item_key(f'{base_url}/browse/EXAMPLE-19539') == 'EXAMPLE-19539'
-        assert extract_work_item_key(f'{base_url}/browse/EXAMPLE-19539?foo=bar') == 'EXAMPLE-19539'
-        assert extract_work_item_key('EXAMPLE-19539') == 'EXAMPLE-19539'
-        assert extract_work_item_key(f'{base_url}/jira/software/projects/EXAMPLE') is None
-        assert (
-            extract_work_item_key(f'{base_url}/browse/EXAMPLE-19539', base_url) == 'EXAMPLE-19539'
-        )
-        assert (
-            extract_work_item_key('https://other.atlassian.net/browse/EXAMPLE-19539', base_url)
-            is None
-        )
+        assert extract_work_item_key(f'{base_url}/browse/ENG-1') == 'ENG-1'
+        assert extract_work_item_key(f'{base_url}/browse/ENG-1?foo=bar') == 'ENG-1'
+        assert extract_work_item_key('ENG-1') == 'ENG-1'
+        assert extract_work_item_key(f'{base_url}/jira/software/projects/ENG') is None
+        assert extract_work_item_key(f'{base_url}/browse/ENG-1', base_url) == 'ENG-1'
+        assert extract_work_item_key('https://other.atlassian.net/browse/ENG-1', base_url) is None
 
     def test_browse_url_markdown_link_gets_gojeera_tooltip(self, mock_configuration):
         base_url = mock_configuration.jira.api_base_url
 
         browse_style = build_markdown_link_style(
-            f'{base_url}/browse/EXAMPLE-19539',
+            f'{base_url}/browse/ENG-1',
             jira_base_url=base_url,
         )
         regular_style = build_markdown_link_style('https://github.com')
@@ -85,7 +80,7 @@ class TestQuickNavigationScreen:
             get_markdown_link_tooltip(browse_style)
             == 'Can be loaded inside gojeera using CTRL+mouse click'
         )
-        assert get_markdown_link_work_item_key(browse_style) == 'EXAMPLE-19539'
+        assert get_markdown_link_work_item_key(browse_style) == 'ENG-1'
         assert get_markdown_link_tooltip(regular_style) is None
 
     def test_quick_navigation_screen_initial_state(

@@ -1,12 +1,171 @@
 [
   {
-    "id": "summary",
-    "key": "summary",
-    "name": "Summary",
+    "id": "assignee",
+    "key": "assignee",
+    "name": "Assignee",
     "schema": {
-      "system": "summary",
-      "type": "string"
-    }
+      "system": "assignee",
+      "type": "user"
+    },
+    "clauseNames": [
+      "assignee"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "attachment",
+    "key": "attachment",
+    "name": "Attachment",
+    "schema": {
+      "system": "attachment",
+      "type": "array",
+      "items": "attachment"
+    },
+    "clauseNames": [
+      "attachment"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "comment",
+    "key": "comment",
+    "name": "Comment",
+    "schema": {
+      "system": "comment",
+      "type": "comments-page"
+    },
+    "clauseNames": [
+      "comment"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "components",
+    "key": "components",
+    "name": "Components",
+    "schema": {
+      "type": "array",
+      "items": "component",
+      "system": "components"
+    },
+    "clauseNames": [
+      "components"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "created",
+    "key": "created",
+    "name": "Created",
+    "schema": {
+      "system": "created",
+      "type": "datetime"
+    },
+    "clauseNames": [
+      "created"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "creator",
+    "key": "creator",
+    "name": "Creator",
+    "schema": {
+      "system": "creator",
+      "type": "user"
+    },
+    "clauseNames": [
+      "creator"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "customfield_10016",
+    "key": "customfield_10016",
+    "name": "Story Points",
+    "schema": {
+      "type": "number",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+      "customId": 10016
+    },
+    "clauseNames": [
+      "customfield_10016"
+    ],
+    "custom": true,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "customfield_10020",
+    "key": "customfield_10020",
+    "name": "Sprint",
+    "schema": {
+      "type": "array",
+      "items": "json",
+      "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+      "customId": 10020
+    },
+    "clauseNames": [
+      "customfield_10020"
+    ],
+    "custom": true,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "customfield_10402",
+    "key": "customfield_10402",
+    "name": "Request Type",
+    "schema": {
+      "type": "option",
+      "custom": "com.atlassian.servicedesk:vp-origin",
+      "customId": 10402
+    },
+    "clauseNames": [
+      "customfield_10402"
+    ],
+    "custom": true,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "customfield_10727",
+    "key": "customfield_10727",
+    "name": "Organizations",
+    "schema": {
+      "type": "array",
+      "items": "option",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+      "customId": 10727
+    },
+    "clauseNames": [
+      "customfield_10727"
+    ],
+    "custom": true,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
   },
   {
     "id": "description",
@@ -15,25 +174,14 @@
     "schema": {
       "system": "description",
       "type": "string"
-    }
-  },
-  {
-    "id": "priority",
-    "key": "priority",
-    "name": "Priority",
-    "schema": {
-      "system": "priority",
-      "type": "priority"
-    }
-  },
-  {
-    "id": "assignee",
-    "key": "assignee",
-    "name": "Assignee",
-    "schema": {
-      "system": "assignee",
-      "type": "user"
-    }
+    },
+    "clauseNames": [
+      "description"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
   },
   {
     "id": "duedate",
@@ -42,17 +190,403 @@
     "schema": {
       "system": "duedate",
       "type": "date"
-    }
+    },
+    "clauseNames": [
+      "duedate"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
   },
   {
-    "id": "customfield_10727",
-    "key": "customfield_10727",
-    "name": "Organization",
+    "id": "fixVersions",
+    "key": "fixVersions",
+    "name": "Fix Version/s",
     "schema": {
-      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
-      "customId": 10727,
-      "items": "option",
-      "type": "array"
-    }
+      "type": "array",
+      "items": "version",
+      "system": "fixVersions"
+    },
+    "clauseNames": [
+      "fixVersions"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "issuelinks",
+    "key": "issuelinks",
+    "name": "Linked Issues",
+    "schema": {
+      "system": "issuelinks",
+      "type": "array",
+      "items": "issuelinks"
+    },
+    "clauseNames": [
+      "issuelinks"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "issuetype",
+    "key": "issuetype",
+    "name": "Issue Type",
+    "schema": {
+      "system": "issuetype",
+      "type": "issuetype"
+    },
+    "clauseNames": [
+      "issuetype"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "labels",
+    "key": "labels",
+    "name": "Labels",
+    "schema": {
+      "type": "array",
+      "items": "string",
+      "system": "labels"
+    },
+    "clauseNames": [
+      "labels"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "parent",
+    "key": "parent",
+    "name": "Parent",
+    "schema": {
+      "type": "issuelink",
+      "system": "parent"
+    },
+    "clauseNames": [
+      "parent"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "priority",
+    "key": "priority",
+    "name": "Priority",
+    "schema": {
+      "system": "priority",
+      "type": "priority"
+    },
+    "clauseNames": [
+      "priority"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "progress",
+    "key": "progress",
+    "name": "Progress",
+    "schema": {
+      "system": "progress",
+      "type": "progress"
+    },
+    "clauseNames": [
+      "progress"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "project",
+    "key": "project",
+    "name": "Project",
+    "schema": {
+      "system": "project",
+      "type": "project"
+    },
+    "clauseNames": [
+      "project"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "remotelink",
+    "key": "remotelink",
+    "name": "Web Links",
+    "schema": {
+      "system": "remotelink",
+      "type": "array",
+      "items": "remotelink"
+    },
+    "clauseNames": [
+      "remotelink"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "reporter",
+    "key": "reporter",
+    "name": "Reporter",
+    "schema": {
+      "system": "reporter",
+      "type": "user"
+    },
+    "clauseNames": [
+      "reporter"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "resolution",
+    "key": "resolution",
+    "name": "Resolution",
+    "schema": {
+      "system": "resolution",
+      "type": "resolution"
+    },
+    "clauseNames": [
+      "resolution"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "resolutiondate",
+    "key": "resolutiondate",
+    "name": "Resolved",
+    "schema": {
+      "system": "resolutiondate",
+      "type": "datetime"
+    },
+    "clauseNames": [
+      "resolutiondate"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "status",
+    "key": "status",
+    "name": "Status",
+    "schema": {
+      "system": "status",
+      "type": "status"
+    },
+    "clauseNames": [
+      "status"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "statusCategory",
+    "key": "statusCategory",
+    "name": "Status Category",
+    "schema": {
+      "system": "statusCategory",
+      "type": "statusCategory"
+    },
+    "clauseNames": [
+      "statusCategory"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "subtasks",
+    "key": "subtasks",
+    "name": "Sub-tasks",
+    "schema": {
+      "system": "subtasks",
+      "type": "array",
+      "items": "issuelink"
+    },
+    "clauseNames": [
+      "subtasks"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "summary",
+    "key": "summary",
+    "name": "Summary",
+    "schema": {
+      "system": "summary",
+      "type": "string"
+    },
+    "clauseNames": [
+      "summary"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "timeestimate",
+    "key": "timeestimate",
+    "name": "Remaining Estimate",
+    "schema": {
+      "system": "timeestimate",
+      "type": "number"
+    },
+    "clauseNames": [
+      "timeestimate"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "timeoriginalestimate",
+    "key": "timeoriginalestimate",
+    "name": "Original Estimate",
+    "schema": {
+      "system": "timeoriginalestimate",
+      "type": "number"
+    },
+    "clauseNames": [
+      "timeoriginalestimate"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "timespent",
+    "key": "timespent",
+    "name": "Time Spent",
+    "schema": {
+      "system": "timespent",
+      "type": "number"
+    },
+    "clauseNames": [
+      "timespent"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "timetracking",
+    "key": "timetracking",
+    "name": "Time Tracking",
+    "schema": {
+      "system": "timetracking",
+      "type": "timetracking"
+    },
+    "clauseNames": [
+      "timetracking"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "updated",
+    "key": "updated",
+    "name": "Updated",
+    "schema": {
+      "system": "updated",
+      "type": "datetime"
+    },
+    "clauseNames": [
+      "updated"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "versions",
+    "key": "versions",
+    "name": "Affects Version/s",
+    "schema": {
+      "type": "array",
+      "items": "version",
+      "system": "versions"
+    },
+    "clauseNames": [
+      "versions"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "worklog",
+    "key": "worklog",
+    "name": "Log Work",
+    "schema": {
+      "system": "worklog",
+      "type": "worklog"
+    },
+    "clauseNames": [
+      "worklog"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
+  },
+  {
+    "id": "workratio",
+    "key": "workratio",
+    "name": "Work Ratio",
+    "schema": {
+      "system": "workratio",
+      "type": "number"
+    },
+    "clauseNames": [
+      "workratio"
+    ],
+    "custom": false,
+    "navigable": true,
+    "orderable": true,
+    "searchable": true
   }
 ]

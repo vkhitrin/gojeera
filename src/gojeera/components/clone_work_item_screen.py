@@ -42,7 +42,9 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='clone-work-item-form'):
                 with Vertical(id='summary-field-container'):
-                    yield Label('Summary').add_class('field_label')
+                    summary_label = Label('Summary')
+                    summary_label.add_class('field_label')
+                    yield summary_label
                     summary_widget = ExtendedInput(
                         id='clone-work-item-summary',
                         placeholder='',
@@ -71,7 +73,10 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='clone-work-item-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='clone-work-item-button-quit',
+                    compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)
 

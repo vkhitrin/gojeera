@@ -1,9 +1,7 @@
-"""Middle panel component for work item details (Summary, Attachments, etc.)."""
-
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.reactive import Reactive, reactive
-from textual.widgets import ContentSwitcher, Static
+from textual.widgets import ContentSwitcher
 
 from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
 from gojeera.components.work_item_comments import WorkItemCommentsWidget
@@ -15,25 +13,7 @@ from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidg
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.models import JiraWorkItem
-
-
-class WorkItemBreadcrumb(Static, can_focus=False):
-    """A label widget to display work item breadcrumb (Parent / Work Item)."""
-
-    DEFAULT_CSS = """
-    WorkItemBreadcrumb {
-        height: auto;
-        padding: 0;
-        color: $text-muted;
-        text-style: bold;
-        background: $background;
-    }
-    """
-
-    def __init__(self):
-        super().__init__('', id='work-item-breadcrumb', markup=False)
-        self.can_focus = False
-        self.display = False
+from gojeera.widgets.work_item_breadcrumb import WorkItemBreadcrumb
 
 
 class WorkItemInformation(Container):
@@ -91,30 +71,12 @@ class WorkItemInformation(Container):
         return self.query_one(f'#{self.content_switcher.current}')
 
     def watch_work_item(self, work_item: JiraWorkItem | None) -> None:
+        self.breadcrumb_widget.set_work_item(work_item)
+
         if work_item is None:
-            self.breadcrumb_widget.update('')
             self.header_summary_widget.update('')
             self.header_summary_widget.display = False
             return
 
-        parts = []
-
-        if work_item.project and work_item.project.name:
-            parts.append(work_item.project.name)
-
-        if work_item.parent_key and work_item.parent_key.strip():
-            parent_text = work_item.parent_key.strip()
-            if work_item.parent_work_item_type:
-                parent_text = f'[{work_item.parent_work_item_type}] {parent_text}'
-            parts.append(parent_text)
-
-        work_item_text = work_item.key
-        if work_item.work_item_type and work_item.work_item_type.name:
-            work_item_text = f'[{work_item.work_item_type.name}] {work_item.key}'
-        parts.append(work_item_text)
-
-        breadcrumb_text = ' / '.join(parts)
-
-        self.breadcrumb_widget.update(breadcrumb_text)
         self.header_summary_widget.update(work_item.summary)
         self.header_summary_widget.display = True

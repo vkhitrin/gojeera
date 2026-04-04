@@ -1,0 +1,793 @@
+{
+  "id": "94269",
+  "self": "https://example.atlassian.acme.net/rest/api/3/issue/94269",
+  "key": "ENG-6",
+  "fields": {
+    "assignee": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
+      "accountId": "555000:22222222-2222-2222-2222-222222222222",
+      "accountType": "atlassian",
+      "avatarUrls": {
+        "48x48": "https://avatar.example.com/avatar-2.png",
+        "24x24": "https://avatar.example.com/avatar-2.png",
+        "16x16": "https://avatar.example.com/avatar-2.png",
+        "32x32": "https://avatar.example.com/avatar-2.png"
+      },
+      "displayName": "Nyx Basilisk",
+      "emailAddress": "nyx.basilisk@acme.example.com",
+      "active": true,
+      "timeZone": "America/New_York",
+      "locale": "en_US"
+    },
+    "attachment": [],
+    "comment": {
+      "comments": [],
+      "self": "https://example.atlassian.acme.net/rest/api/3/issue/ENG-6/comment",
+      "maxResults": 0,
+      "total": 0,
+      "startAt": 0
+    },
+    "components": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/component/10001",
+        "id": "10001",
+        "name": "Backend"
+      }
+    ],
+    "created": "2026-02-08T09:00:00.000+0200",
+    "creator": null,
+    "customfield_10016": 2.0,
+    "customfield_10020": [
+      {
+        "id": 2,
+        "self": "https://example.atlassian.acme.net/rest/agile/1.0/sprint/2",
+        "state": "active",
+        "name": "Sprint 2",
+        "startDate": "2026-02-01T09:00:00.000Z",
+        "endDate": "2026-02-15T18:00:00.000Z",
+        "boardId": 1,
+        "goal": "Stabilize monster rig automation for stage deployment"
+      }
+    ],
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Existing subtask 3"
+            }
+          ]
+        }
+      ]
+    },
+    "duedate": null,
+    "fixVersions": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/version/10102",
+        "id": "10102",
+        "name": "2.0.0",
+        "released": false
+      }
+    ],
+    "issuelinks": [],
+    "issuetype": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10002",
+      "id": "10002",
+      "description": "A small piece of work that is part of a larger task.",
+      "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10316&avatarType=issuetype",
+      "name": "Sub-task",
+      "subtask": true,
+      "avatarId": 10316,
+      "hierarchyLevel": -1,
+      "entityId": "00000000-0000-0000-0000-000000010002"
+    },
+    "labels": [
+      "claw-fiend",
+      "firmware-rollout"
+    ],
+    "parent": {
+      "id": "94267",
+      "key": "ENG-4",
+      "self": "https://example.atlassian.acme.net/rest/api/3/issue/94267",
+      "fields": {
+        "summary": "Harden stage deployment automation for monster rigs",
+        "status": {
+          "self": "https://example.atlassian.acme.net/rest/api/3/status/10000",
+          "description": "Work waiting to be started.",
+          "iconUrl": "https://example.atlassian.acme.net/",
+          "name": "To Do",
+          "id": "10000",
+          "statusCategory": {
+            "self": "https://example.atlassian.acme.net/rest/api/3/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "priority": {
+          "self": "https://example.atlassian.acme.net/rest/api/3/priority/3",
+          "statusColor": "#F5CD47",
+          "description": "Standard priority for normal planned work.",
+          "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/medium.svg",
+          "name": "Medium",
+          "id": "3",
+          "isDefault": true
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10004",
+          "id": "10004",
+          "description": "A task that needs to be done.",
+          "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10318&avatarType=issuetype",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10318,
+          "hierarchyLevel": 0,
+          "entityId": "00000000-0000-0000-0000-000000010004"
+        },
+        "assignee": null
+      }
+    },
+    "priority": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/priority/3",
+      "statusColor": "#F5CD47",
+      "description": "Standard priority for normal planned work.",
+      "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/medium.svg",
+      "name": "Medium",
+      "id": "3",
+      "isDefault": true
+    },
+    "progress": null,
+    "project": {
+      "expand": "description,lead,url,projectKeys,permissions,insight",
+      "self": "https://example.atlassian.acme.net/rest/api/3/project/60001",
+      "id": "60001",
+      "key": "ENG",
+      "name": "Engineering Project",
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.acme.net/secure/projectavatar?pid=60001&avatarId=10324",
+        "24x24": "https://example.atlassian.acme.net/secure/projectavatar?size=small&pid=60001&avatarId=10324",
+        "16x16": "https://example.atlassian.acme.net/secure/projectavatar?size=xsmall&pid=60001&avatarId=10324",
+        "32x32": "https://example.atlassian.acme.net/secure/projectavatar?size=medium&pid=60001&avatarId=10324"
+      },
+      "projectTypeKey": "software",
+      "simplified": false,
+      "style": "classic",
+      "isPrivate": false
+    },
+    "remotelink": [],
+    "reporter": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+      "accountId": "555000:11111111-1111-1111-1111-111111111111",
+      "accountType": "atlassian",
+      "avatarUrls": {
+        "48x48": "https://avatar.example.com/avatar.png",
+        "24x24": "https://avatar.example.com/avatar.png",
+        "16x16": "https://avatar.example.com/avatar.png",
+        "32x32": "https://avatar.example.com/avatar.png"
+      },
+      "displayName": "Rook Hydra",
+      "emailAddress": "rook.hydra@acme.example.com",
+      "active": true,
+      "timeZone": "America/New_York",
+      "locale": "en_US"
+    },
+    "resolution": null,
+    "resolutiondate": null,
+    "status": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/status/10001",
+      "description": "Work has been completed on this issue.",
+      "iconUrl": "https://example.atlassian.acme.net/",
+      "name": "Done",
+      "id": "10001",
+      "statusCategory": {
+        "self": "https://example.atlassian.acme.net/rest/api/3/statuscategory/3",
+        "id": 3,
+        "key": "done",
+        "colorName": "green",
+        "name": "Done"
+      }
+    },
+    "statusCategory": null,
+    "subtasks": [],
+    "summary": "Verify rollback path for claw actuator firmware rollout",
+    "timeestimate": null,
+    "timeoriginalestimate": null,
+    "timespent": null,
+    "timetracking": null,
+    "updated": "2026-02-08T17:00:00.000+0200",
+    "versions": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+        "id": "10101",
+        "name": "1.1.0",
+        "released": false
+      }
+    ],
+    "worklog": {
+      "worklogs": [],
+      "maxResults": 0,
+      "total": 0,
+      "startAt": 0
+    },
+    "workratio": null,
+    "customfield_10402": {
+      "id": "10100",
+      "value": "Get help"
+    },
+    "customfield_10727": [
+      {
+        "id": "10727",
+        "value": "Engineering"
+      }
+    ]
+  },
+  "editmeta": {
+    "fields": {
+      "assignee": {
+        "fieldId": "assignee",
+        "key": "assignee",
+        "name": "Assignee",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "assignee",
+          "type": "user"
+        }
+      },
+      "attachment": {
+        "fieldId": "attachment",
+        "key": "attachment",
+        "name": "Attachment",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "attachment",
+          "type": "array",
+          "items": "attachment"
+        }
+      },
+      "comment": {
+        "fieldId": "comment",
+        "key": "comment",
+        "name": "Comment",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "comment",
+          "type": "comments-page"
+        }
+      },
+      "components": {
+        "fieldId": "components",
+        "key": "components",
+        "name": "Components",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "component",
+          "system": "components"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10001",
+            "id": "10001",
+            "name": "Backend"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10002",
+            "id": "10002",
+            "name": "Frontend"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10003",
+            "id": "10003",
+            "name": "API"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10004",
+            "id": "10004",
+            "name": "Database"
+          }
+        ]
+      },
+      "created": {
+        "fieldId": "created",
+        "key": "created",
+        "name": "Created",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "created",
+          "type": "datetime"
+        }
+      },
+      "creator": {
+        "fieldId": "creator",
+        "key": "creator",
+        "name": "Creator",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "creator",
+          "type": "user"
+        }
+      },
+      "customfield_10016": {
+        "fieldId": "customfield_10016",
+        "key": "customfield_10016",
+        "name": "Story Points",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "number",
+          "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+          "customId": 10016
+        }
+      },
+      "customfield_10020": {
+        "fieldId": "customfield_10020",
+        "key": "customfield_10020",
+        "name": "Sprint",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "json",
+          "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+          "customId": 10020
+        }
+      },
+      "customfield_10402": {
+        "fieldId": "customfield_10402",
+        "key": "customfield_10402",
+        "name": "Request Type",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "option",
+          "custom": "com.atlassian.servicedesk:vp-origin",
+          "customId": 10402
+        }
+      },
+      "customfield_10727": {
+        "fieldId": "customfield_10727",
+        "key": "customfield_10727",
+        "name": "Organizations",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "option",
+          "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+          "customId": 10727
+        }
+      },
+      "description": {
+        "fieldId": "description",
+        "key": "description",
+        "name": "Description",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "description",
+          "type": "string"
+        }
+      },
+      "duedate": {
+        "fieldId": "duedate",
+        "key": "duedate",
+        "name": "Due date",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "duedate",
+          "type": "date"
+        }
+      },
+      "fixVersions": {
+        "fieldId": "fixVersions",
+        "key": "fixVersions",
+        "name": "Fix Version/s",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "version",
+          "system": "fixVersions"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10102",
+            "id": "10102",
+            "name": "2.0.0",
+            "released": false
+          }
+        ]
+      },
+      "issuelinks": {
+        "fieldId": "issuelinks",
+        "key": "issuelinks",
+        "name": "Linked Issues",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "issuelinks",
+          "type": "array",
+          "items": "issuelinks"
+        }
+      },
+      "issuetype": {
+        "fieldId": "issuetype",
+        "key": "issuetype",
+        "name": "Issue Type",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "issuetype",
+          "type": "issuetype"
+        }
+      },
+      "labels": {
+        "fieldId": "labels",
+        "key": "labels",
+        "name": "Labels",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "string",
+          "system": "labels"
+        }
+      },
+      "parent": {
+        "fieldId": "parent",
+        "key": "parent",
+        "name": "Parent",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "issuelink",
+          "system": "parent"
+        }
+      },
+      "priority": {
+        "fieldId": "priority",
+        "key": "priority",
+        "name": "Priority",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "priority",
+          "type": "priority"
+        },
+        "allowedValues": [
+          {
+            "id": "1",
+            "name": "Highest"
+          },
+          {
+            "id": "2",
+            "name": "High"
+          },
+          {
+            "id": "3",
+            "name": "Medium"
+          },
+          {
+            "id": "4",
+            "name": "Low"
+          },
+          {
+            "id": "5",
+            "name": "Lowest"
+          }
+        ]
+      },
+      "progress": {
+        "fieldId": "progress",
+        "key": "progress",
+        "name": "Progress",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "progress",
+          "type": "progress"
+        }
+      },
+      "project": {
+        "fieldId": "project",
+        "key": "project",
+        "name": "Project",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "project",
+          "type": "project"
+        }
+      },
+      "remotelink": {
+        "fieldId": "remotelink",
+        "key": "remotelink",
+        "name": "Web Links",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "remotelink",
+          "type": "array",
+          "items": "remotelink"
+        }
+      },
+      "reporter": {
+        "fieldId": "reporter",
+        "key": "reporter",
+        "name": "Reporter",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "reporter",
+          "type": "user"
+        }
+      },
+      "resolution": {
+        "fieldId": "resolution",
+        "key": "resolution",
+        "name": "Resolution",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "resolution",
+          "type": "resolution"
+        }
+      },
+      "resolutiondate": {
+        "fieldId": "resolutiondate",
+        "key": "resolutiondate",
+        "name": "Resolved",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "resolutiondate",
+          "type": "datetime"
+        }
+      },
+      "status": {
+        "fieldId": "status",
+        "key": "status",
+        "name": "Status",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "status",
+          "type": "status"
+        }
+      },
+      "statusCategory": {
+        "fieldId": "statusCategory",
+        "key": "statusCategory",
+        "name": "Status Category",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "statusCategory",
+          "type": "statusCategory"
+        }
+      },
+      "subtasks": {
+        "fieldId": "subtasks",
+        "key": "subtasks",
+        "name": "Sub-tasks",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "subtasks",
+          "type": "array",
+          "items": "issuelink"
+        }
+      },
+      "summary": {
+        "fieldId": "summary",
+        "key": "summary",
+        "name": "Summary",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "summary",
+          "type": "string"
+        }
+      },
+      "timeestimate": {
+        "fieldId": "timeestimate",
+        "key": "timeestimate",
+        "name": "Remaining Estimate",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timeestimate",
+          "type": "number"
+        }
+      },
+      "timeoriginalestimate": {
+        "fieldId": "timeoriginalestimate",
+        "key": "timeoriginalestimate",
+        "name": "Original Estimate",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timeoriginalestimate",
+          "type": "number"
+        }
+      },
+      "timespent": {
+        "fieldId": "timespent",
+        "key": "timespent",
+        "name": "Time Spent",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timespent",
+          "type": "number"
+        }
+      },
+      "timetracking": {
+        "fieldId": "timetracking",
+        "key": "timetracking",
+        "name": "Time Tracking",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timetracking",
+          "type": "timetracking"
+        }
+      },
+      "updated": {
+        "fieldId": "updated",
+        "key": "updated",
+        "name": "Updated",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "updated",
+          "type": "datetime"
+        }
+      },
+      "versions": {
+        "fieldId": "versions",
+        "key": "versions",
+        "name": "Affects Version/s",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "version",
+          "system": "versions"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ]
+      },
+      "worklog": {
+        "fieldId": "worklog",
+        "key": "worklog",
+        "name": "Log Work",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "worklog",
+          "type": "worklog"
+        }
+      },
+      "workratio": {
+        "fieldId": "workratio",
+        "key": "workratio",
+        "name": "Work Ratio",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "workratio",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

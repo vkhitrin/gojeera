@@ -5,14 +5,12 @@ from textual.widgets._tabbed_content import ContentTabs
 from gojeera.app import JiraApp
 from gojeera.components.new_work_item_screen import AddWorkItemScreen
 
+from .test_helpers import load_work_item_from_search
+
 
 async def open_add_subtask_screen(pilot):
     """Navigate to work item and open Add Work Item screen as a subtask."""
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')  # Trigger search
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')  # Select first work item (EXAMPLE-19539)
-    await asyncio.sleep(0.8)  # Wait for work item to load
+    await load_work_item_from_search(pilot, 'ENG-4')
 
     # Navigate to Subtasks tab
 
@@ -46,8 +44,8 @@ async def open_add_subtask_screen(pilot):
     await asyncio.sleep(0.5)
 
     # Verify parent work item key is set
-    assert screen._parent_work_item_key == 'EXAMPLE-19539', (
-        f'Expected parent work item key to be EXAMPLE-19539, got {screen._parent_work_item_key}'
+    assert screen._parent_work_item_key == 'ENG-4', (
+        f'Expected parent work item key to be ENG-4, got {screen._parent_work_item_key}'
     )
 
     # Verify that issue type was auto-selected to Sub-task (ID 10002)

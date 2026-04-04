@@ -30,10 +30,16 @@ class ConfirmationScreen(ExtendedModalScreen[bool]):
             yield Static(self.message, id='modal_message')
             with Horizontal(id='modal_footer'):
                 yield Button(
-                    'Cancel', variant='primary', id='confirmation-button-cancel', compact=True
+                    'Cancel',
+                    variant='primary',
+                    id='confirmation-button-cancel',
+                    compact=True,
                 )
                 yield Button(
-                    'Accept', variant='error', id='confirmation-button-accept', compact=True
+                    'Accept',
+                    variant='error',
+                    id='confirmation-button-accept',
+                    compact=True,
                 )
 
     def on_mount(self) -> None:

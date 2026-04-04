@@ -75,9 +75,13 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='link-work-items-form'):
                 with Vertical():
-                    yield Label('Link Type').add_class('field_label')
+                    link_type_label = Label('Link Type')
+                    link_type_label.add_class('field_label')
+                    yield link_type_label
                     yield WorkItemLinkTypeSelector([])
-                    yield Label('Work Item Key').add_class('field_label')
+                    work_item_key_label = Label('Work Item Key')
+                    work_item_key_label.add_class('field_label')
+                    yield work_item_key_label
                     yield LinkedWorkItemInputWidget()
             with Horizontal(id='modal_footer'):
                 yield Button(
@@ -87,7 +91,12 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     disabled=True,
                     compact=True,
                 )
-                yield Button('Cancel', variant='error', id='add-link-button-quit', compact=True)
+                yield Button(
+                    'Cancel',
+                    variant='error',
+                    id='add-link-button-quit',
+                    compact=True,
+                )
         yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:

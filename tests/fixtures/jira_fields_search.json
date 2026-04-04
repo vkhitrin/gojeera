@@ -1,20 +1,639 @@
 {
+  "self": "https://example.atlassian.acme.net/rest/api/3/field/search",
   "isLast": true,
-  "maxResults": 100,
+  "maxResults": 36,
   "startAt": 0,
-  "total": 1,
+  "total": 36,
   "values": [
+    {
+      "id": "assignee",
+      "key": "assignee",
+      "name": "Assignee",
+      "schema": {
+        "system": "assignee",
+        "type": "user"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "assignee",
+      "typeDisplayName": "User"
+    },
+    {
+      "id": "attachment",
+      "key": "attachment",
+      "name": "Attachment",
+      "schema": {
+        "system": "attachment",
+        "type": "array",
+        "items": "attachment"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "attachment",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "comment",
+      "key": "comment",
+      "name": "Comment",
+      "schema": {
+        "system": "comment",
+        "type": "comments-page"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "comment",
+      "typeDisplayName": "Comments-Page"
+    },
+    {
+      "id": "components",
+      "key": "components",
+      "name": "Components",
+      "schema": {
+        "type": "array",
+        "items": "component",
+        "system": "components"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "components",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "created",
+      "key": "created",
+      "name": "Created",
+      "schema": {
+        "system": "created",
+        "type": "datetime"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "created",
+      "typeDisplayName": "Datetime"
+    },
+    {
+      "id": "creator",
+      "key": "creator",
+      "name": "Creator",
+      "schema": {
+        "system": "creator",
+        "type": "user"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "creator",
+      "typeDisplayName": "User"
+    },
+    {
+      "id": "customfield_10016",
+      "key": "customfield_10016",
+      "name": "Story Points",
+      "schema": {
+        "type": "number",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+        "customId": 10016
+      },
+      "description": "Fixture metadata for Story Points.",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "customfield_10016",
+      "typeDisplayName": "Number",
+      "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"
+    },
+    {
+      "id": "customfield_10020",
+      "key": "customfield_10020",
+      "name": "Sprint",
+      "schema": {
+        "type": "array",
+        "items": "json",
+        "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+        "customId": 10020
+      },
+      "description": "Fixture metadata for Sprint.",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "customfield_10020",
+      "typeDisplayName": "Array",
+      "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"
+    },
+    {
+      "id": "customfield_10402",
+      "key": "customfield_10402",
+      "name": "Request Type",
+      "description": "Service project request classification field.",
+      "schema": {
+        "type": "option",
+        "custom": "com.atlassian.servicedesk:vp-origin",
+        "customId": 10402
+      },
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "customfield_10402",
+      "typeDisplayName": "Option",
+      "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"
+    },
     {
       "id": "customfield_10727",
       "key": "customfield_10727",
-      "name": "Organization",
-      "description": "New Organization Multi Select field",
+      "name": "Organizations",
+      "description": "Organizations associated with a support request.",
       "schema": {
-        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
-        "customId": 10727,
+        "type": "array",
         "items": "option",
-        "type": "array"
-      }
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+        "customId": 10727
+      },
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "customfield_10727",
+      "typeDisplayName": "Array",
+      "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"
+    },
+    {
+      "id": "description",
+      "key": "description",
+      "name": "Description",
+      "schema": {
+        "system": "description",
+        "type": "string"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "description",
+      "typeDisplayName": "String"
+    },
+    {
+      "id": "duedate",
+      "key": "duedate",
+      "name": "Due date",
+      "schema": {
+        "system": "duedate",
+        "type": "date"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "duedate",
+      "typeDisplayName": "Date"
+    },
+    {
+      "id": "fixVersions",
+      "key": "fixVersions",
+      "name": "Fix Version/s",
+      "schema": {
+        "type": "array",
+        "items": "version",
+        "system": "fixVersions"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "fixVersions",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "issuelinks",
+      "key": "issuelinks",
+      "name": "Linked Issues",
+      "schema": {
+        "system": "issuelinks",
+        "type": "array",
+        "items": "issuelinks"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "issuelinks",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "issuetype",
+      "key": "issuetype",
+      "name": "Issue Type",
+      "schema": {
+        "system": "issuetype",
+        "type": "issuetype"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "issuetype",
+      "typeDisplayName": "Issuetype"
+    },
+    {
+      "id": "labels",
+      "key": "labels",
+      "name": "Labels",
+      "schema": {
+        "type": "array",
+        "items": "string",
+        "system": "labels"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "labels",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "parent",
+      "key": "parent",
+      "name": "Parent",
+      "schema": {
+        "type": "issuelink",
+        "system": "parent"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "parent",
+      "typeDisplayName": "Issuelink"
+    },
+    {
+      "id": "priority",
+      "key": "priority",
+      "name": "Priority",
+      "schema": {
+        "system": "priority",
+        "type": "priority"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "priority",
+      "typeDisplayName": "Priority"
+    },
+    {
+      "id": "progress",
+      "key": "progress",
+      "name": "Progress",
+      "schema": {
+        "system": "progress",
+        "type": "progress"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "progress",
+      "typeDisplayName": "Progress"
+    },
+    {
+      "id": "project",
+      "key": "project",
+      "name": "Project",
+      "schema": {
+        "system": "project",
+        "type": "project"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "project",
+      "typeDisplayName": "Project"
+    },
+    {
+      "id": "remotelink",
+      "key": "remotelink",
+      "name": "Web Links",
+      "schema": {
+        "system": "remotelink",
+        "type": "array",
+        "items": "remotelink"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "remotelink",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "reporter",
+      "key": "reporter",
+      "name": "Reporter",
+      "schema": {
+        "system": "reporter",
+        "type": "user"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "reporter",
+      "typeDisplayName": "User"
+    },
+    {
+      "id": "resolution",
+      "key": "resolution",
+      "name": "Resolution",
+      "schema": {
+        "system": "resolution",
+        "type": "resolution"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "resolution",
+      "typeDisplayName": "Resolution"
+    },
+    {
+      "id": "resolutiondate",
+      "key": "resolutiondate",
+      "name": "Resolved",
+      "schema": {
+        "system": "resolutiondate",
+        "type": "datetime"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "resolutiondate",
+      "typeDisplayName": "Datetime"
+    },
+    {
+      "id": "status",
+      "key": "status",
+      "name": "Status",
+      "schema": {
+        "system": "status",
+        "type": "status"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "status",
+      "typeDisplayName": "Status"
+    },
+    {
+      "id": "statusCategory",
+      "key": "statusCategory",
+      "name": "Status Category",
+      "schema": {
+        "system": "statusCategory",
+        "type": "statusCategory"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "statusCategory",
+      "typeDisplayName": "Statuscategory"
+    },
+    {
+      "id": "subtasks",
+      "key": "subtasks",
+      "name": "Sub-tasks",
+      "schema": {
+        "system": "subtasks",
+        "type": "array",
+        "items": "issuelink"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "subtasks",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "summary",
+      "key": "summary",
+      "name": "Summary",
+      "schema": {
+        "system": "summary",
+        "type": "string"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "summary",
+      "typeDisplayName": "String"
+    },
+    {
+      "id": "timeestimate",
+      "key": "timeestimate",
+      "name": "Remaining Estimate",
+      "schema": {
+        "system": "timeestimate",
+        "type": "number"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "timeestimate",
+      "typeDisplayName": "Number"
+    },
+    {
+      "id": "timeoriginalestimate",
+      "key": "timeoriginalestimate",
+      "name": "Original Estimate",
+      "schema": {
+        "system": "timeoriginalestimate",
+        "type": "number"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "timeoriginalestimate",
+      "typeDisplayName": "Number"
+    },
+    {
+      "id": "timespent",
+      "key": "timespent",
+      "name": "Time Spent",
+      "schema": {
+        "system": "timespent",
+        "type": "number"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "timespent",
+      "typeDisplayName": "Number"
+    },
+    {
+      "id": "timetracking",
+      "key": "timetracking",
+      "name": "Time Tracking",
+      "schema": {
+        "system": "timetracking",
+        "type": "timetracking"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "timetracking",
+      "typeDisplayName": "Timetracking"
+    },
+    {
+      "id": "updated",
+      "key": "updated",
+      "name": "Updated",
+      "schema": {
+        "system": "updated",
+        "type": "datetime"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "updated",
+      "typeDisplayName": "Datetime"
+    },
+    {
+      "id": "versions",
+      "key": "versions",
+      "name": "Affects Version/s",
+      "schema": {
+        "type": "array",
+        "items": "version",
+        "system": "versions"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "versions",
+      "typeDisplayName": "Array"
+    },
+    {
+      "id": "worklog",
+      "key": "worklog",
+      "name": "Log Work",
+      "schema": {
+        "system": "worklog",
+        "type": "worklog"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "worklog",
+      "typeDisplayName": "Worklog"
+    },
+    {
+      "id": "workratio",
+      "key": "workratio",
+      "name": "Work Ratio",
+      "schema": {
+        "system": "workratio",
+        "type": "number"
+      },
+      "description": "",
+      "contextsCount": 1,
+      "projectsCount": 1,
+      "screensCount": 1,
+      "isLocked": false,
+      "isUnscreenable": false,
+      "stableId": "workratio",
+      "typeDisplayName": "Number"
     }
   ]
 }

@@ -1146,8 +1146,9 @@ class APIController:
                         f'The field {JiraWorkItemGenericFields.PARENT.value} can not be updated for the selected work item.',
                         extra={'work_item_key': work_item.key},
                     )
+                parent_key = updates.get(JiraWorkItemGenericFields.PARENT.value)
                 fields_to_update[JiraWorkItemGenericFields.PARENT.value] = [
-                    {'set': {'key': updates.get(JiraWorkItemGenericFields.PARENT.value)}}
+                    {'set': {'key': parent_key} if parent_key else None}
                 ]
             else:
                 raise UpdateWorkItemException(

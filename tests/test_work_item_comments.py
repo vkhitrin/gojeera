@@ -8,13 +8,11 @@ from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.work_item_comments import CommentsScrollView, WorkItemCommentsWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def open_comments_tab_and_verify(pilot):
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
 
@@ -34,11 +32,7 @@ async def open_comments_tab_and_verify(pilot):
 
 
 async def create_comment_and_verify(pilot):
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
 
@@ -81,11 +75,7 @@ async def create_comment_and_verify(pilot):
 
 
 async def delete_comment_and_verify(pilot):
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
 

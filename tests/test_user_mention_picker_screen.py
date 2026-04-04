@@ -10,7 +10,7 @@ from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.user_mention_picker_screen import UserMentionPickerScreen
 from gojeera.models import JiraUser
 
-from .test_helpers import wait_until
+from .test_helpers import load_work_item_from_search, wait_until
 
 
 def convert_user_fixture_to_jira_user(user_data: dict) -> JiraUser:
@@ -32,11 +32,7 @@ def convert_user_fixture_to_jira_user(user_data: dict) -> JiraUser:
 
 async def navigate_to_comments_tab(pilot):
     """Navigate to work item and open Comments tab."""
-    # Open search and select work item
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     # Wait for workers to complete
     await pilot.app.workers.wait_for_complete()
@@ -199,7 +195,7 @@ def create_insert_mention_and_return_to_comment_screen(mock_jira_users):
 
         inserted_mention = (
             f'[@{first_user.display_name}]('
-            f'https://example.atlassian.net/jira/people/{first_user.account_id})'
+            f'https://example.atlassian.acme.net/jira/people/{first_user.account_id})'
         )
         await wait_until(
             lambda: inserted_mention in pilot.app.screen.comment_field.text, timeout=2.0

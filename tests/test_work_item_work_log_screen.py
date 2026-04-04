@@ -14,7 +14,7 @@ from gojeera.components.work_log_screen import LogWorkScreen
 
 
 async def open_worklog_screen(pilot):
-    screen = WorkItemWorkLogScreen(work_item_key='EXAMPLE-19539')
+    screen = WorkItemWorkLogScreen(work_item_key='ENG-3')
     await pilot.app.push_screen(screen)
     await asyncio.sleep(0.3)
     await pilot.app.workers.wait_for_complete()
@@ -23,8 +23,7 @@ async def open_worklog_screen(pilot):
 
 
 async def create_worklog_and_verify(pilot):
-
-    screen = WorkItemWorkLogScreen(work_item_key='EXAMPLE-19539')
+    screen = WorkItemWorkLogScreen(work_item_key='ENG-3')
     await pilot.app.push_screen(screen)
     await asyncio.sleep(0.3)
     await pilot.app.workers.wait_for_complete()
@@ -62,8 +61,7 @@ async def create_worklog_and_verify(pilot):
 
 
 async def delete_worklog_and_verify(pilot):
-
-    screen = WorkItemWorkLogScreen(work_item_key='EXAMPLE-19539')
+    screen = WorkItemWorkLogScreen(work_item_key='ENG-3')
     await pilot.app.push_screen(screen)
     await asyncio.sleep(0.3)
     await pilot.app.workers.wait_for_complete()
@@ -103,7 +101,7 @@ class TestWorkItemWorkLogScreen:
     ):
 
         async def run_test(pilot):
-            screen = WorkItemWorkLogScreen(work_item_key='EXAMPLE-19540')
+            screen = WorkItemWorkLogScreen(work_item_key='ENG-2')
             await pilot.app.push_screen(screen)
             await asyncio.sleep(0.3)
 
@@ -120,7 +118,7 @@ class TestWorkItemWorkLogScreen:
 
         async with respx.mock:
             worklog_route = respx.get(
-                'https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19540/worklog'
+                'https://example.atlassian.acme.net/rest/api/3/issue/ENG-2/worklog'
             )
             worklog_route.mock(return_value=Response(200, json=mock_jira_worklog_empty))
 
@@ -135,7 +133,7 @@ class TestWorkItemWorkLogScreen:
 
         with respx.mock:
             worklog_route = respx.get(
-                'https://example.atlassian.net/rest/api/3/issue/EXAMPLE-19539/worklog'
+                'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/worklog'
             )
             worklog_route.mock(return_value=Response(200, json=mock_jira_worklog))
 

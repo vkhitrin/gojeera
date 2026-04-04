@@ -1,4 +1,6 @@
 import asyncio
+import json
+from pathlib import Path
 
 from textual.widgets import Button
 
@@ -10,6 +12,10 @@ from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
 from gojeera.widgets.selection import SelectionWidget
 
 from .test_helpers import wait_for_mount
+
+ENG_8_SUMMARY = json.loads(
+    Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
+)['fields']['summary']
 
 
 async def open_new_work_item_screen(pilot):
@@ -55,7 +61,7 @@ async def fill_required_fields(pilot):
     # Fill summary
     await pilot.press('tab')  # Tab to summary field
     await asyncio.sleep(0.2)
-    await pilot.press(*'Test work item summary')
+    await pilot.press(*ENG_8_SUMMARY)
     await asyncio.sleep(0.3)
 
     # Navigate to description field to blur summary and trigger validation
@@ -134,7 +140,7 @@ async def fill_save_and_search_work_item(pilot):
     await asyncio.sleep(0.2)
 
     # Type the work item key
-    for char in 'EXAMPLE-2':
+    for char in 'ENG-8':
         await pilot.press(char)
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.2)
@@ -164,11 +170,9 @@ async def fill_save_and_search_work_item(pilot):
     )
 
     work_item = search_results.work_items[0]
-    assert work_item.key == 'EXAMPLE-2', (
-        f'Expected work item key "EXAMPLE-2", got "{work_item.key}"'
-    )
-    assert work_item.summary == 'Test work item summary', (
-        f'Expected summary "Test work item summary", got "{work_item.summary}"'
+    assert work_item.key == 'ENG-8', f'Expected work item key "ENG-8", got "{work_item.key}"'
+    assert work_item.summary == ENG_8_SUMMARY, (
+        f'Expected summary "{ENG_8_SUMMARY}", got "{work_item.summary}"'
     )
 
 

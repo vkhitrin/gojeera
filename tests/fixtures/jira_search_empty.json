@@ -1,7 +1,5 @@
 {
-  "expand": "schema,names",
-  "startAt": 0,
-  "maxResults": 20,
-  "total": 0,
-  "issues": []
+  "issues": [],
+  "nextPageToken": null,
+  "isLast": true
 }

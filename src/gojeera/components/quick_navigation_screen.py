@@ -48,7 +48,9 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='quick-navigation-form'):
                 with Vertical():
-                    yield Label('Work Item').add_class('field_label')
+                    work_item_label = Label('Work Item')
+                    work_item_label.add_class('field_label')
+                    yield work_item_label
                     yield ExtendedInput(
                         placeholder='KEY or Browse URL',
                         id='quick-navigation-work-item-key',

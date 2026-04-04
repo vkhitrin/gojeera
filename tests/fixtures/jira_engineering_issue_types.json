@@ -1,0 +1,68 @@
+[
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10002",
+    "id": "10002",
+    "description": "A small piece of work that is part of a larger task.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10316&avatarType=issuetype",
+    "name": "Sub-task",
+    "subtask": true,
+    "avatarId": 10316,
+    "hierarchyLevel": -1,
+    "entityId": "00000000-0000-0000-0000-000000010002"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10001",
+    "id": "10001",
+    "description": "A user-facing feature or requirement.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10315&avatarType=issuetype",
+    "name": "Story",
+    "subtask": false,
+    "avatarId": 10315,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010001"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10004",
+    "id": "10004",
+    "description": "A task that needs to be done.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10318&avatarType=issuetype",
+    "name": "Task",
+    "subtask": false,
+    "avatarId": 10318,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010004"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10006",
+    "id": "10006",
+    "description": "A problem or error that needs to be fixed.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10303&avatarType=issuetype",
+    "name": "Bug",
+    "subtask": false,
+    "avatarId": 10303,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010006"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10000",
+    "id": "10000",
+    "description": "A large body of work that can be broken down into stories and tasks.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10317&avatarType=issuetype",
+    "name": "Epic",
+    "subtask": false,
+    "avatarId": 10317,
+    "hierarchyLevel": 1,
+    "entityId": "00000000-0000-0000-0000-000000010000"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10007",
+    "id": "10007",
+    "description": "A strategic body of work above epics.",
+    "iconUrl": "https://example.atlassian.acme.net/secure/viewavatar?size=xsmall&avatarId=10319&avatarType=issuetype",
+    "name": "Initiative",
+    "subtask": false,
+    "hierarchyLevel": 2,
+    "avatarId": 10319,
+    "entityId": "00000000-0000-0000-0000-000000010007"
+  }
+]

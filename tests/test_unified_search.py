@@ -46,7 +46,7 @@ async def fill_basic_work_item_key(pilot):
     await pilot.press('tab')
     await asyncio.sleep(0.1)
 
-    for char in 'EXAMPLE-1234':
+    for char in 'ENG-3':
         if char == ' ':
             await pilot.press('space')
         else:
@@ -97,7 +97,7 @@ async def fill_jql_search(pilot):
     await pilot.press('tab')
     await asyncio.sleep(0.1)
 
-    for char in 'project = EXAMPLE':
+    for char in 'project = ENG':
         await pilot.press(char if char != ' ' else 'space')
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.2)

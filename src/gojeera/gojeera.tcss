@@ -1471,6 +1471,175 @@ QuickNavigationScreen #modal_footer {
   text-style: bold;
 }
 
+ParentWorkItemScreen {
+  align: center middle;
+}
+
+ParentWorkItemScreen #modal_outer {
+  width: 30%;
+  min-width: 34;
+  max-width: 42;
+  height: auto;
+  max-height: 15;
+  background: $surface;
+  padding: 0;
+}
+
+ParentWorkItemScreen #modal_title {
+  width: 100%;
+  height: auto;
+  padding: 1;
+  background: $surface;
+  color: $text;
+  text-align: center;
+  text-style: bold;
+}
+
+#parent-work-item-form {
+  width: 100%;
+  height: auto;
+  background: $surface;
+  padding: 0 2 0 2;
+  scrollbar-size-vertical: 1;
+}
+
+#parent-work-item-form Vertical {
+  width: 100%;
+  height: auto;
+}
+
+#parent-work-item-form Label {
+  margin: 0;
+}
+
+#parent-work-item-form Select {
+  margin-bottom: 1;
+}
+
+ParentWorkItemScreen Select>SelectCurrent {
+  background: $surface-lighten-1;
+  padding: 0;
+  margin: 0;
+}
+
+ParentWorkItemScreen Select>SelectCurrent>Static#label {
+  padding: 0;
+  margin: 0;
+}
+
+ParentWorkItemScreen Select>SelectCurrent>.arrow {
+  margin-right: 1;
+}
+
+ParentWorkItemScreen Select>SelectOverlay {
+  background: $surface-lighten-1;
+}
+
+ParentWorkItemScreen Select>SelectOverlay>OptionList {
+  background: $surface-lighten-1;
+}
+
+ParentWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option,
+ParentWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option-highlighted {
+  padding: 0 0 0 0;
+  margin: 0;
+}
+
+ParentWorkItemScreen #modal_footer {
+  width: 100%;
+  height: auto;
+  align: center middle;
+  padding: 0 2;
+  margin-bottom: 1;
+  background: $surface;
+}
+
+#parent-work-item-button-apply {
+  width: auto;
+  min-width: 0;
+  margin: 0 1 0 0;
+  padding: 0 1;
+  background: $success-darken-2;
+  color: $text;
+  text-align: center;
+  content-align: center middle;
+}
+
+#parent-work-item-button-apply>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#parent-work-item-button-apply:hover {
+  background: $success;
+  color: $text;
+}
+
+#parent-work-item-button-apply:hover>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#parent-work-item-button-apply:focus {
+  background: $success;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+#parent-work-item-button-apply:focus>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#parent-work-item-button-cancel {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 1;
+  background: $error-darken-1;
+  color: $text;
+  text-align: center;
+  content-align: center middle;
+}
+
+#parent-work-item-button-cancel>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#parent-work-item-button-cancel:hover {
+  background: $error-lighten-1;
+  color: $text;
+}
+
+#parent-work-item-button-cancel:hover>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+#parent-work-item-button-cancel:focus {
+  background: $error-lighten-1;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+#parent-work-item-button-cancel:focus>Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
 #add-remote-link-button-save>Static {
   color: $text;
   background: transparent;

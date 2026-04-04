@@ -102,7 +102,8 @@ class DynamicFieldWrapper(Horizontal):
         self.tooltip = tooltip
 
     def compose(self) -> ComposeResult:
-        label = Label(self._title).add_class('field_label')
+        label = Label(self._title)
+        label.add_class('field_label')
         label.tooltip = self.tooltip
 
         yield label

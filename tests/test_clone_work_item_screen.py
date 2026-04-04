@@ -5,8 +5,8 @@ from gojeera.components.clone_work_item_screen import CloneWorkItemScreen
 
 
 async def open_clone_work_item_screen(pilot):
-    work_item_key = 'EXAMPLE-1234'
-    original_summary = 'Original Work Item Summary'
+    work_item_key = 'ENG-3'
+    original_summary = 'Update documentation for merge approval process'
 
     # NOTE: (vkhitrin) we directly "enter" the screen without navigating
     #       the UI.

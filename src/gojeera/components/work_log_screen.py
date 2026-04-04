@@ -121,19 +121,27 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
             with VerticalScroll(id='modal-form-scroll'):
                 with ItemGrid(id='time-fields-grid'):
                     with Vertical(id='time-spent-container'):
-                        yield Label('Time Spent (*)').add_class('field_label')
+                        time_spent_label = Label('Time Spent (*)')
+                        time_spent_label.add_class('field_label')
+                        yield time_spent_label
                         yield TimeSpentInput(initial_value=self._initial_time_spent)
                     with Vertical(id='time-remaining-container'):
-                        yield Label('Time Remaining').add_class('field_label')
+                        time_remaining_label = Label('Time Remaining')
+                        time_remaining_label.add_class('field_label')
+                        yield time_remaining_label
                         yield TimeRemainingInput(initial_value=self._current_remaining_estimate)
 
                 with Vertical(id='datetime-container'):
-                    yield Label('Date Started').add_class('field_label')
+                    date_started_label = Label('Date Started')
+                    date_started_label.add_class('field_label')
+                    yield date_started_label
                     yield LogDateTimeInput(initial_value=self._initial_started)
                     yield Label('w = week | d = day | h = hour | m = minutes', id='time-hint')
 
                 with Vertical(id='description-container'):
-                    yield Label('Work Description').add_class('field_label')
+                    work_description_label = Label('Work Description')
+                    work_description_label.add_class('field_label')
+                    yield work_description_label
                     yield ExtendedADFMarkdownTextArea(field_id='work_description', required=False)
 
             with Horizontal(id='modal_footer'):
@@ -144,7 +152,12 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
                     disabled=False if self._mode == 'edit' else True,
                     compact=True,
                 )
-                yield Button('Cancel', variant='error', id='log-work-button-quit', compact=True)
+                yield Button(
+                    'Cancel',
+                    variant='error',
+                    id='log-work-button-quit',
+                    compact=True,
+                )
         yield ExtendedFooter()
 
     def on_mount(self) -> None:
@@ -199,7 +212,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
         result = await self.app.push_screen_wait(DecisionPickerScreen())
 
         if result:
-            marker, label = result
+            marker, _ = result
 
             insertion_text = f'> `{marker}` '
 
@@ -220,7 +233,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
         result = await self.app.push_screen_wait(PanelPickerScreen())
 
         if result:
-            marker, alert_type = result
+            marker, _ = result
 
             insertion_text = f'> {marker}\n> '
 

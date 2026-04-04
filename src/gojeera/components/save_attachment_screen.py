@@ -60,7 +60,9 @@ class SaveAttachmentScreen(ExtendedModalScreen[str]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='save-attachment-form'):
                 with Vertical(id='file-path-container'):
-                    yield Label('Save Location').add_class('field_label')
+                    save_location_label = Label('Save Location')
+                    save_location_label.add_class('field_label')
+                    yield save_location_label
                     with Horizontal(id='file-path-input-row'):
                         yield FilePathInput(
                             initial_value=str(Path.home() / self._attachment_file_name)
@@ -86,7 +88,10 @@ class SaveAttachmentScreen(ExtendedModalScreen[str]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='save-attachment-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='save-attachment-button-quit',
+                    compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)
 

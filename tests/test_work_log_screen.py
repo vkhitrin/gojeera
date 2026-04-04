@@ -5,7 +5,7 @@ from gojeera.components.work_log_screen import LogWorkScreen
 
 
 async def open_log_work_screen_empty(pilot):
-    screen = LogWorkScreen(work_item_key='EXAMPLE-19539', mode='new')
+    screen = LogWorkScreen(work_item_key='ENG-1', mode='new')
     await pilot.app.push_screen(screen)
     await asyncio.sleep(0.2)
 

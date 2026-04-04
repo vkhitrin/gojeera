@@ -5,18 +5,23 @@ from textual.widgets import Select
 from gojeera.app import JiraApp
 from gojeera.components.work_item_fields import WorkItemFields
 
+from .test_helpers import load_work_item_from_search, wait_until
+
 
 async def open_work_item_and_view_fields(pilot):
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
 
     fields_widget = pilot.app.screen.query_one(WorkItemFields)
+    await wait_until(
+        lambda: (
+            bool(fields_widget.priority_selector.value)
+            and fields_widget.priority_selector.selection is not None
+        ),
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
 
     status_selector = fields_widget.work_item_status_selector
     status_selector.focus()
@@ -29,15 +34,25 @@ async def modify_priority_field(pilot):
     fields_widget = pilot.app.screen.query_one(WorkItemFields)
 
     priority_selector = fields_widget.priority_selector
+    status_selector = fields_widget.work_item_status_selector
 
-    await asyncio.sleep(0.5)
-
-    if priority_selector._options and len(priority_selector._options) > 1:
-        priority_selector.value = '10001'
-        await asyncio.sleep(0.3)
+    await wait_until(
+        lambda: bool(priority_selector.value) and priority_selector.selection is not None,
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.2)
 
     priority_selector.focus()
+    await asyncio.sleep(0.2)
+    await pilot.press('enter')
+    await asyncio.sleep(0.2)
+    await pilot.press('down')
+    await asyncio.sleep(0.2)
+    await pilot.press('enter')
     await asyncio.sleep(0.3)
+
+    status_selector.focus()
+    await asyncio.sleep(0.2)
 
 
 async def modify_assignee_field(pilot):

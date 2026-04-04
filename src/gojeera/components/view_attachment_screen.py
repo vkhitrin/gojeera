@@ -76,9 +76,15 @@ class ViewAttachmentScreen(ExtendedModalScreen[None]):
                     pass
             with Horizontal(id='modal_footer'):
                 yield Button(
-                    'Download', variant='success', id='attachment-button-download', compact=True
+                    'Download',
+                    variant='success',
+                    id='attachment-button-download',
                 )
-                yield Button('Close', variant='error', id='attachment-button-close', compact=True)
+                yield Button(
+                    'Close',
+                    variant='error',
+                    id='attachment-button-close',
+                )
         yield ExtendedFooter(show_command_palette=False)
 
     async def _download_attachment(self, attachment_id: str) -> None:

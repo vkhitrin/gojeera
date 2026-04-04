@@ -13,13 +13,11 @@ from gojeera.components.work_item_attachments import (
     WorkItemAttachmentsWidget,
 )
 
+from .test_helpers import load_work_item_from_search
+
 
 async def select_work_item_with_attachments_and_highlight_row(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -39,11 +37,7 @@ async def upload_attachment_and_verify(pilot):
         test_file_path = Path(tmp_file.name)
 
     try:
-        await asyncio.sleep(0.1)
-        await pilot.press('ctrl+j')
-        await asyncio.sleep(0.5)
-        await pilot.press('enter')
-        await asyncio.sleep(0.8)
+        await load_work_item_from_search(pilot, 'ENG-3')
 
         tabs = pilot.app.screen.query_one(ContentTabs)
         tabs.focus()
@@ -93,11 +87,7 @@ async def upload_attachment_and_verify(pilot):
 
 async def delete_attachment_and_verify(pilot):
 
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()

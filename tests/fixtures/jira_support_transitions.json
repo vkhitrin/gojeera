@@ -1,0 +1,57 @@
+{
+  "expand": "transitions",
+  "transitions": [
+    {
+      "id": "11",
+      "name": "Start progress",
+      "to": {
+        "id": "10110",
+        "name": "Waiting for support",
+        "description": "Waiting for the support team to respond.",
+        "statusCategory": {
+          "key": "indeterminate",
+          "colorName": "yellow"
+        }
+      }
+    },
+    {
+      "id": "21",
+      "name": "Request customer info",
+      "to": {
+        "id": "10111",
+        "name": "Waiting for customer",
+        "description": "Waiting for additional information from the customer.",
+        "statusCategory": {
+          "key": "indeterminate",
+          "colorName": "yellow"
+        }
+      }
+    },
+    {
+      "id": "31",
+      "name": "Resolve request",
+      "to": {
+        "id": "10112",
+        "name": "Resolved",
+        "description": "The support request has been completed.",
+        "statusCategory": {
+          "key": "done",
+          "colorName": "green"
+        }
+      }
+    },
+    {
+      "id": "41",
+      "name": "Reopen",
+      "to": {
+        "id": "10000",
+        "name": "To Do",
+        "description": "Work waiting to be started.",
+        "statusCategory": {
+          "key": "new",
+          "colorName": "blue-gray"
+        }
+      }
+    }
+  ]
+}

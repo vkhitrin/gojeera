@@ -7,13 +7,11 @@ from gojeera.app import JiraApp, MainScreen
 from gojeera.components.new_work_item_screen import AddWorkItemScreen
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def select_work_item_and_highlight_subtask(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-4')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -29,11 +27,7 @@ async def select_work_item_and_highlight_subtask(pilot):
 
 
 async def create_subtask_and_verify(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-4')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -66,8 +60,8 @@ async def create_subtask_and_verify(pilot):
     screen._lazy_load_work_item_types()
     await asyncio.sleep(0.5)
 
-    assert screen._parent_work_item_key == 'EXAMPLE-19539', (
-        f'Expected parent work item key to be EXAMPLE-19539, got {screen._parent_work_item_key}'
+    assert screen._parent_work_item_key == 'ENG-4', (
+        f'Expected parent work item key to be ENG-4, got {screen._parent_work_item_key}'
     )
 
     work_item_type_value = screen.work_item_type_selector.value

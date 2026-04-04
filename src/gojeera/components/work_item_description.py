@@ -35,7 +35,7 @@ class WorkItemSummary(Static, can_focus=False):
     WorkItemSummary {
         border: none;
         text-style: bold;
-        color: $accent;
+        color: $primary;
         padding: 0 2 1 2;
         width: 100%;
         content-align: left middle;

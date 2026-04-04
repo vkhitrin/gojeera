@@ -6,14 +6,12 @@ from gojeera.app import JiraApp
 from gojeera.components.web_link_screen import RemoteLinkScreen
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def open_add_web_link_screen(pilot):
     """Navigate to work item and open Add Web Link screen."""
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -78,11 +76,7 @@ async def fill_web_link_fields_and_verify_save_enabled(pilot):
 
 async def open_edit_web_link_screen(pilot):
     """Navigate to work item, select a web link, and open Edit Web Link screen."""
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -134,7 +128,7 @@ class TestWebLinkScreen:
         """Snapshot: Add Web Link screen with empty fields.
 
         Verifies:
-        - Title shows "Add Remote Link - Work Item: EXAMPLE-19539"
+        - Title shows "Add Remote Link - Work Item: ENG-1"
         - URL field empty
         - Title field empty with placeholder
         - Save button disabled (no fields filled yet)
@@ -173,7 +167,7 @@ class TestWebLinkScreen:
         """Snapshot: Edit Web Link screen with existing link data pre-filled.
 
         Verifies:
-        - Title shows "Edit Remote Link - Work Item: EXAMPLE-19539"
+        - Title shows "Edit Remote Link - Work Item: ENG-1"
         - URL field pre-filled from existing link
         - Title field pre-filled from existing link
         - Save button enabled (fields already have valid data)

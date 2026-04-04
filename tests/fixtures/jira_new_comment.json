@@ -1,11 +1,17 @@
 {
-  "self": "https://example.atlassian.net/rest/api/3/issue/94264/comment/231669",
+  "self": "https://example.atlassian.acme.net/rest/api/3/issue/94264/comment/231669",
   "id": "231669",
   "author": {
-    "self": "https://example.atlassian.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
+    "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
     "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
-    "emailAddress": "testuser@example.com",
-    "displayName": "Test User",
+    "avatarUrls": {
+      "48x48": "https://avatar.example.com/avatar.png",
+      "24x24": "https://avatar.example.com/avatar.png",
+      "16x16": "https://avatar.example.com/avatar.png",
+      "32x32": "https://avatar.example.com/avatar.png"
+    },
+    "emailAddress": "rook.hydra@acme.example.com",
+    "displayName": "Rook Hydra",
     "active": true,
     "timeZone": "UTC",
     "accountType": "atlassian"
@@ -26,10 +32,16 @@
     ]
   },
   "updateAuthor": {
-    "self": "https://example.atlassian.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
+    "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=123456%3Aabcd1234-1234-1234-1234-abcdef123456",
     "accountId": "123456:abcd1234-1234-1234-1234-abcdef123456",
-    "emailAddress": "testuser@example.com",
-    "displayName": "Test User",
+    "avatarUrls": {
+      "48x48": "https://avatar.example.com/avatar.png",
+      "24x24": "https://avatar.example.com/avatar.png",
+      "16x16": "https://avatar.example.com/avatar.png",
+      "32x32": "https://avatar.example.com/avatar.png"
+    },
+    "emailAddress": "rook.hydra@acme.example.com",
+    "displayName": "Rook Hydra",
     "active": true,
     "timeZone": "UTC",
     "accountType": "atlassian"

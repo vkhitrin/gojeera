@@ -1,0 +1,52 @@
+[
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10104",
+    "id": "10104",
+    "description": "A small piece of work that is part of a larger support request.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/subtask.png",
+    "name": "Sub-task",
+    "subtask": true,
+    "hierarchyLevel": -1,
+    "entityId": "00000000-0000-0000-0000-000000010104"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10100",
+    "id": "10100",
+    "description": "A customer-facing request for help or access.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/servicerequest.png",
+    "name": "Service Request",
+    "subtask": false,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010100"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10101",
+    "id": "10101",
+    "description": "An interruption to a service that requires support attention.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/incident.png",
+    "name": "Incident",
+    "subtask": false,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010101"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10102",
+    "id": "10102",
+    "description": "An underlying support problem requiring root cause analysis.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/problem.png",
+    "name": "Problem",
+    "subtask": false,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010102"
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10103",
+    "id": "10103",
+    "description": "A controlled change to a supported service.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/change.png",
+    "name": "Change",
+    "subtask": false,
+    "hierarchyLevel": 0,
+    "entityId": "00000000-0000-0000-0000-000000010103"
+  }
+]

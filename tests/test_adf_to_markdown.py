@@ -38,7 +38,7 @@ class TestAdfToMarkdownConversion:
         assert 'Right Align' in markdown
         assert '|' in markdown
 
-        assert '@Test User' in markdown
+        assert '@Rook Hydra' in markdown
         assert '/jira/people/123456:abcd1234-1234-1234-1234-abcdef123456' in markdown
 
         assert '[date]2026-01-28' in markdown
@@ -162,12 +162,12 @@ class TestAdfToMarkdownConversion:
                     'content': [
                         {
                             'type': 'text',
-                            'text': 'EXAMPLE-19539',
+                            'text': 'ENG-1',
                             'marks': [
                                 {
                                     'type': 'link',
                                     'attrs': {
-                                        'href': 'https://example.atlassian.net/browse/EXAMPLE-19539'
+                                        'href': 'https://example.atlassian.acme.net/browse/ENG-1'
                                     },
                                 }
                             ],
@@ -177,9 +177,6 @@ class TestAdfToMarkdownConversion:
             ],
         }
 
-        markdown = convert_adf_to_markdown(adf, base_url='https://example.atlassian.net')
+        markdown = convert_adf_to_markdown(adf, base_url='https://example.atlassian.acme.net')
 
-        assert (
-            markdown.strip()
-            == '[EXAMPLE-19539](https://example.atlassian.net/browse/EXAMPLE-19539)'
-        )
+        assert markdown.strip() == '[ENG-1](https://example.atlassian.acme.net/browse/ENG-1)'

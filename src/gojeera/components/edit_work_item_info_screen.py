@@ -60,7 +60,9 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='modal-form-scroll'):
                 with Vertical(id='summary-field-container'):
-                    yield Label('Summary').add_class('field_label')
+                    summary_label = Label('Summary')
+                    summary_label.add_class('field_label')
+                    yield summary_label
                     summary_widget = ExtendedInput(
                         id='edit-work-item-summary',
                         placeholder='Enter a summary',
@@ -71,7 +73,9 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
                     yield summary_widget
 
                 with Vertical(id='description-field-container'):
-                    yield Label('Description').add_class('field_label')
+                    description_label = Label('Description')
+                    description_label.add_class('field_label')
+                    yield description_label
 
                     yield ExtendedADFMarkdownTextArea(field_id='description', required=False)
 
@@ -84,7 +88,10 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='edit-work-item-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='edit-work-item-button-quit',
+                    compact=True,
                 )
         yield ExtendedFooter()
 

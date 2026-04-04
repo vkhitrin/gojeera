@@ -28,7 +28,10 @@ from gojeera.exceptions import UpdateWorkItemException, ValidationError
 from gojeera.models import JiraUser, JiraWorkItem, WorkItemPriority
 from gojeera.utils.fields import (
     FieldMode,
+    get_parent_relation_field_ids_from_editmeta,
     get_sprint_field_id_from_editmeta,
+    is_epic_work_item_type,
+    is_parent_relation_field_name,
 )
 from gojeera.utils.mappings import get_nested
 from gojeera.utils.styling import map_jira_status_color_to_textual
@@ -662,7 +665,6 @@ class WorkItemFields(Container, can_focus=False):
                 'Pending changes [dim](^s)[/]',
                 id='work-item-fields-pending-changes-button',
                 variant='warning',
-                compact=True,
             )
             button.display = False
             yield button
@@ -2111,6 +2113,7 @@ class WorkItemFields(Container, can_focus=False):
             skip_fields.update(ignore_filter_ids)
 
         edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
+        skip_fields.update(get_parent_relation_field_ids_from_editmeta(edit_meta_fields))
 
         sprint_field_id = get_sprint_field_id_from_editmeta(edit_meta_fields)
         if sprint_field_id:
@@ -2136,12 +2139,15 @@ class WorkItemFields(Container, can_focus=False):
                 if field_value is None or field_id in skip_fields:
                     continue
 
+                # Use field name if available, otherwise fall back to field ID
+                field_label = field_names_map.get(field_id, field_id)
+                if is_parent_relation_field_name(field_label):
+                    continue
+
                 display_value = self._format_custom_field_value(field_value)
                 if not display_value:
                     continue
 
-                # Use field name if available, otherwise fall back to field ID
-                field_label = field_names_map.get(field_id, field_id)
                 field_tooltip = build_field_tooltip(
                     {
                         'fieldId': field_id,
@@ -2630,11 +2636,14 @@ class WorkItemFields(Container, can_focus=False):
             self.sprint_field_container.display = False
             return
 
-        is_subtask = bool(work_item.parent_work_item_key) or bool(
+        parent_has_locked_sprint = bool(
+            work_item.parent_work_item_key
+        ) and not is_epic_work_item_type(work_item.parent_work_item_type)
+        is_subtask_with_non_epic_parent = bool(
             work_item.work_item_type and work_item.work_item_type.subtask
-        )
+        ) and not is_epic_work_item_type(work_item.parent_work_item_type)
 
-        if is_subtask:
+        if parent_has_locked_sprint or is_subtask_with_non_epic_parent:
             self.sprint_picker_widget.disabled = True
             self.sprint_picker_widget.update_enabled = False
 

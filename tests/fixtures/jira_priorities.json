@@ -1,10 +1,47 @@
 [
   {
-    "self": "https://example.atlassian.net/rest/api/3/priority/10001",
-    "statusColor": "#EA7D24",
-    "description": "Major loss of function.",
-    "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+    "self": "https://example.atlassian.acme.net/rest/api/3/priority/1",
+    "statusColor": "#C9372C",
+    "description": "Major system outage.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/highest.svg",
+    "name": "Highest",
+    "id": "1",
+    "isDefault": false
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/priority/2",
+    "statusColor": "#E56910",
+    "description": "Serious impact requiring prompt attention.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/high.svg",
     "name": "High",
-    "id": "10001"
+    "id": "2",
+    "isDefault": false
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/priority/3",
+    "statusColor": "#F5CD47",
+    "description": "Standard priority for normal planned work.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/medium.svg",
+    "name": "Medium",
+    "id": "3",
+    "isDefault": true
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/priority/4",
+    "statusColor": "#5E6C84",
+    "description": "Minor impact or nice-to-have work.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/low.svg",
+    "name": "Low",
+    "id": "4",
+    "isDefault": false
+  },
+  {
+    "self": "https://example.atlassian.acme.net/rest/api/3/priority/5",
+    "statusColor": "#5E6C84",
+    "description": "Minimal impact.",
+    "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/low.svg",
+    "name": "Lowest",
+    "id": "5",
+    "isDefault": false
   }
 ]

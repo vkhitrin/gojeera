@@ -1,0 +1,38 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "id": 1,
+      "self": "https://example.atlassian.acme.net/rest/agile/1.0/board/1",
+      "name": "ENG Scrum Board",
+      "type": "scrum",
+      "location": {
+        "projectId": 60001,
+        "displayName": "Engineering Project (ENG)",
+        "projectName": "Engineering Project",
+        "projectKey": "ENG",
+        "projectTypeKey": "software",
+        "avatarURI": "https://example.atlassian.acme.net/secure/projectavatar?pid=60001&avatarId=10324",
+        "name": "Engineering Project (ENG)"
+      }
+    },
+    {
+      "id": 2,
+      "self": "https://example.atlassian.acme.net/rest/agile/1.0/board/2",
+      "name": "ENG Kanban Board",
+      "type": "kanban",
+      "location": {
+        "projectId": 60001,
+        "displayName": "Engineering Project (ENG)",
+        "projectName": "Engineering Project",
+        "projectKey": "ENG",
+        "projectTypeKey": "software",
+        "avatarURI": "https://example.atlassian.acme.net/secure/projectavatar?pid=60001&avatarId=10324",
+        "name": "Engineering Project (ENG)"
+      }
+    }
+  ]
+}

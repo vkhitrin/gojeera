@@ -7,13 +7,11 @@ from gojeera.app import JiraApp
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.work_item_comments import CommentsScrollView
 
-from .test_helpers import wait_until
+from .test_helpers import load_work_item_from_search, wait_until
 
 
 async def open_comments_tab(pilot):
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     await pilot.app.workers.wait_for_complete()
     await wait_until(lambda: pilot.app.screen is not None, timeout=2.0)

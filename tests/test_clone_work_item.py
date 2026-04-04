@@ -9,8 +9,8 @@ from gojeera.components.work_item_result import WorkItemSearchResultsScroll
 
 
 async def clone_and_search_work_item(pilot):
-    work_item_key = 'EXAMPLE-1234'
-    original_summary = 'Original Work Item Summary'
+    work_item_key = 'ENG-3'
+    original_summary = 'Update documentation for merge approval process'
 
     # NOTE: (vkhitrin) we directly "enter" the screen without navigating
     #       the UI.
@@ -22,7 +22,7 @@ async def clone_and_search_work_item(pilot):
     assert pilot.app.screen.work_item_key == work_item_key
     assert pilot.app.screen.original_summary == original_summary
 
-    assert screen.summary_input.value == 'CLONE - Original Work Item Summary'
+    assert screen.summary_input.value == 'CLONE - Update documentation for merge approval process'
     assert not screen.clone_button.disabled
 
     clone_button = screen.clone_button
@@ -43,7 +43,7 @@ async def clone_and_search_work_item(pilot):
     work_item_input.focus()
     await asyncio.sleep(0.2)
 
-    for char in 'EXAMPLE-2':
+    for char in 'ENG-9':
         await pilot.press(char)
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.2)
@@ -69,11 +69,9 @@ async def clone_and_search_work_item(pilot):
     )
 
     work_item = search_results.work_items[0]
-    assert work_item.key == 'EXAMPLE-2', (
-        f'Expected work item key "EXAMPLE-2", got "{work_item.key}"'
-    )
-    assert work_item.summary == 'CLONE - Original Work Item Summary', (
-        f'Expected summary "CLONE - Original Work Item Summary", got "{work_item.summary}"'
+    assert work_item.key == 'ENG-9', f'Expected work item key "ENG-9", got "{work_item.key}"'
+    assert work_item.summary == 'CLONE - Update documentation for merge approval process', (
+        f'Expected summary "CLONE - Update documentation for merge approval process", got "{work_item.summary}"'
     )
 
 

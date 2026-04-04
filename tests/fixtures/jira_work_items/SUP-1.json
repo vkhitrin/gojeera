@@ -1,0 +1,763 @@
+{
+  "id": "72001",
+  "self": "https://example.atlassian.acme.net/rest/api/3/issue/94271",
+  "key": "SUP-1",
+  "fields": {
+    "assignee": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
+      "accountId": "555000:22222222-2222-2222-2222-222222222222",
+      "accountType": "atlassian",
+      "avatarUrls": {
+        "48x48": "https://avatar.example.com/avatar-2.png",
+        "24x24": "https://avatar.example.com/avatar-2.png",
+        "16x16": "https://avatar.example.com/avatar-2.png",
+        "32x32": "https://avatar.example.com/avatar-2.png"
+      },
+      "displayName": "Nyx Basilisk",
+      "emailAddress": "nyx.basilisk@acme.example.com",
+      "active": true,
+      "timeZone": "America/New_York",
+      "locale": "en_US"
+    },
+    "attachment": [],
+    "comment": {
+      "comments": [],
+      "self": "https://example.atlassian.acme.net/rest/api/3/issue/SUP-1/comment",
+      "maxResults": 0,
+      "total": 0,
+      "startAt": 0
+    },
+    "components": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/component/10004",
+        "id": "10004",
+        "name": "Database"
+      }
+    ],
+    "created": "2026-01-30T09:00:00.000+0200",
+    "creator": null,
+    "customfield_10016": 3.0,
+    "customfield_10020": [
+      {
+        "id": 3,
+        "self": "https://example.atlassian.acme.net/rest/agile/1.0/sprint/3",
+        "state": "future",
+        "name": "Sprint 3",
+        "startDate": "2026-02-16T09:00:00.000Z",
+        "endDate": "2026-02-28T18:00:00.000Z",
+        "boardId": 2,
+        "goal": "Prepare support playbooks and rollout readiness for field installs"
+      }
+    ],
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Customer reported that the Kraken tentacle actuator overheats after roughly 12 minutes of continuous motion during onsite installation."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Requested action: dispatch field guidance and confirm whether a firmware downgrade is recommended before the weekend demo."
+            }
+          ]
+        }
+      ]
+    },
+    "duedate": null,
+    "fixVersions": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/version/10102",
+        "id": "10102",
+        "name": "2.0.0",
+        "released": false
+      }
+    ],
+    "issuelinks": [],
+    "issuetype": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/issuetype/10101",
+      "id": "10101",
+      "description": "An interruption to a service that requires support attention.",
+      "iconUrl": "https://example.atlassian.acme.net/images/icons/issuetypes/incident.png",
+      "name": "Incident",
+      "subtask": false,
+      "hierarchyLevel": 0,
+      "entityId": "00000000-0000-0000-0000-000000010101"
+    },
+    "labels": [
+      "kraken",
+      "field-incident"
+    ],
+    "parent": null,
+    "priority": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/priority/1",
+      "statusColor": "#C9372C",
+      "description": "Major system outage.",
+      "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/highest.svg",
+      "name": "Highest",
+      "id": "1",
+      "isDefault": false
+    },
+    "progress": null,
+    "project": {
+      "expand": "description,lead,url,projectKeys,permissions,insight",
+      "self": "https://example.atlassian.acme.net/rest/api/3/project/60002",
+      "id": "60002",
+      "key": "SUP",
+      "name": "Support Project",
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.acme.net/secure/projectavatar?pid=60002&avatarId=10325",
+        "24x24": "https://example.atlassian.acme.net/secure/projectavatar?size=small&pid=60002&avatarId=10325",
+        "16x16": "https://example.atlassian.acme.net/secure/projectavatar?size=xsmall&pid=60002&avatarId=10325",
+        "32x32": "https://example.atlassian.acme.net/secure/projectavatar?size=medium&pid=60002&avatarId=10325"
+      },
+      "projectTypeKey": "service_desk",
+      "simplified": false,
+      "style": "classic",
+      "isPrivate": false
+    },
+    "remotelink": [],
+    "reporter": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
+      "accountId": "555000:22222222-2222-2222-2222-222222222222",
+      "accountType": "atlassian",
+      "avatarUrls": {
+        "48x48": "https://avatar.example.com/avatar-2.png",
+        "24x24": "https://avatar.example.com/avatar-2.png",
+        "16x16": "https://avatar.example.com/avatar-2.png",
+        "32x32": "https://avatar.example.com/avatar-2.png"
+      },
+      "displayName": "Nyx Basilisk",
+      "emailAddress": "nyx.basilisk@acme.example.com",
+      "active": true,
+      "timeZone": "America/New_York",
+      "locale": "en_US"
+    },
+    "resolution": null,
+    "resolutiondate": null,
+    "status": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/status/10110",
+      "description": "Waiting for the support team to respond.",
+      "iconUrl": "https://example.atlassian.acme.net/",
+      "name": "Waiting for support",
+      "id": "10110",
+      "statusCategory": {
+        "self": "https://example.atlassian.acme.net/rest/api/3/statuscategory/4",
+        "id": 4,
+        "key": "indeterminate",
+        "colorName": "yellow",
+        "name": "In Progress"
+      }
+    },
+    "statusCategory": null,
+    "subtasks": [],
+    "summary": "Customer reports Kraken tentacle actuator overheating during install",
+    "timeestimate": null,
+    "timeoriginalestimate": null,
+    "timespent": null,
+    "timetracking": null,
+    "updated": "2026-01-30T17:00:00.000+0200",
+    "versions": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+        "id": "10101",
+        "name": "1.1.0",
+        "released": false
+      }
+    ],
+    "worklog": {
+      "worklogs": [],
+      "maxResults": 0,
+      "total": 0,
+      "startAt": 0
+    },
+    "workratio": null,
+    "customfield_10402": {
+      "id": "10101",
+      "value": "Report incident"
+    },
+    "customfield_10727": [
+      {
+        "id": "10728",
+        "value": "Support"
+      }
+    ]
+  },
+  "editmeta": {
+    "fields": {
+      "assignee": {
+        "fieldId": "assignee",
+        "key": "assignee",
+        "name": "Assignee",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "assignee",
+          "type": "user"
+        }
+      },
+      "attachment": {
+        "fieldId": "attachment",
+        "key": "attachment",
+        "name": "Attachment",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "attachment",
+          "type": "array",
+          "items": "attachment"
+        }
+      },
+      "comment": {
+        "fieldId": "comment",
+        "key": "comment",
+        "name": "Comment",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "comment",
+          "type": "comments-page"
+        }
+      },
+      "components": {
+        "fieldId": "components",
+        "key": "components",
+        "name": "Components",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "component",
+          "system": "components"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10001",
+            "id": "10001",
+            "name": "Backend"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10002",
+            "id": "10002",
+            "name": "Frontend"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10003",
+            "id": "10003",
+            "name": "API"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/component/10004",
+            "id": "10004",
+            "name": "Database"
+          }
+        ]
+      },
+      "created": {
+        "fieldId": "created",
+        "key": "created",
+        "name": "Created",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "created",
+          "type": "datetime"
+        }
+      },
+      "creator": {
+        "fieldId": "creator",
+        "key": "creator",
+        "name": "Creator",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "creator",
+          "type": "user"
+        }
+      },
+      "customfield_10016": {
+        "fieldId": "customfield_10016",
+        "key": "customfield_10016",
+        "name": "Story Points",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "number",
+          "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+          "customId": 10016
+        }
+      },
+      "customfield_10020": {
+        "fieldId": "customfield_10020",
+        "key": "customfield_10020",
+        "name": "Sprint",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "json",
+          "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+          "customId": 10020
+        }
+      },
+      "customfield_10402": {
+        "fieldId": "customfield_10402",
+        "key": "customfield_10402",
+        "name": "Request Type",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "option",
+          "custom": "com.atlassian.servicedesk:vp-origin",
+          "customId": 10402
+        }
+      },
+      "customfield_10727": {
+        "fieldId": "customfield_10727",
+        "key": "customfield_10727",
+        "name": "Organizations",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "option",
+          "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+          "customId": 10727
+        }
+      },
+      "description": {
+        "fieldId": "description",
+        "key": "description",
+        "name": "Description",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "description",
+          "type": "string"
+        }
+      },
+      "duedate": {
+        "fieldId": "duedate",
+        "key": "duedate",
+        "name": "Due date",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "duedate",
+          "type": "date"
+        }
+      },
+      "fixVersions": {
+        "fieldId": "fixVersions",
+        "key": "fixVersions",
+        "name": "Fix Version/s",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "version",
+          "system": "fixVersions"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10102",
+            "id": "10102",
+            "name": "2.0.0",
+            "released": false
+          }
+        ]
+      },
+      "issuelinks": {
+        "fieldId": "issuelinks",
+        "key": "issuelinks",
+        "name": "Linked Issues",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "issuelinks",
+          "type": "array",
+          "items": "issuelinks"
+        }
+      },
+      "issuetype": {
+        "fieldId": "issuetype",
+        "key": "issuetype",
+        "name": "Issue Type",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "issuetype",
+          "type": "issuetype"
+        }
+      },
+      "labels": {
+        "fieldId": "labels",
+        "key": "labels",
+        "name": "Labels",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "string",
+          "system": "labels"
+        }
+      },
+      "parent": {
+        "fieldId": "parent",
+        "key": "parent",
+        "name": "Parent",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "issuelink",
+          "system": "parent"
+        }
+      },
+      "priority": {
+        "fieldId": "priority",
+        "key": "priority",
+        "name": "Priority",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "priority",
+          "type": "priority"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/priority/1",
+            "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/highest.svg",
+            "name": "Highest",
+            "id": "1"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/priority/2",
+            "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/high.svg",
+            "name": "High",
+            "id": "2"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/priority/3",
+            "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/medium.svg",
+            "name": "Medium",
+            "id": "3"
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/priority/4",
+            "iconUrl": "https://example.atlassian.acme.net/images/icons/priorities/low.svg",
+            "name": "Low",
+            "id": "4"
+          }
+        ]
+      },
+      "progress": {
+        "fieldId": "progress",
+        "key": "progress",
+        "name": "Progress",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "progress",
+          "type": "progress"
+        }
+      },
+      "project": {
+        "fieldId": "project",
+        "key": "project",
+        "name": "Project",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "project",
+          "type": "project"
+        }
+      },
+      "remotelink": {
+        "fieldId": "remotelink",
+        "key": "remotelink",
+        "name": "Web Links",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "remotelink",
+          "type": "array",
+          "items": "remotelink"
+        }
+      },
+      "reporter": {
+        "fieldId": "reporter",
+        "key": "reporter",
+        "name": "Reporter",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "reporter",
+          "type": "user"
+        }
+      },
+      "resolution": {
+        "fieldId": "resolution",
+        "key": "resolution",
+        "name": "Resolution",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "resolution",
+          "type": "resolution"
+        }
+      },
+      "resolutiondate": {
+        "fieldId": "resolutiondate",
+        "key": "resolutiondate",
+        "name": "Resolved",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "resolutiondate",
+          "type": "datetime"
+        }
+      },
+      "status": {
+        "fieldId": "status",
+        "key": "status",
+        "name": "Status",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "status",
+          "type": "status"
+        }
+      },
+      "statusCategory": {
+        "fieldId": "statusCategory",
+        "key": "statusCategory",
+        "name": "Status Category",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "statusCategory",
+          "type": "statusCategory"
+        }
+      },
+      "subtasks": {
+        "fieldId": "subtasks",
+        "key": "subtasks",
+        "name": "Sub-tasks",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "subtasks",
+          "type": "array",
+          "items": "issuelink"
+        }
+      },
+      "summary": {
+        "fieldId": "summary",
+        "key": "summary",
+        "name": "Summary",
+        "required": true,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "summary",
+          "type": "string"
+        }
+      },
+      "timeestimate": {
+        "fieldId": "timeestimate",
+        "key": "timeestimate",
+        "name": "Remaining Estimate",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timeestimate",
+          "type": "number"
+        }
+      },
+      "timeoriginalestimate": {
+        "fieldId": "timeoriginalestimate",
+        "key": "timeoriginalestimate",
+        "name": "Original Estimate",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timeoriginalestimate",
+          "type": "number"
+        }
+      },
+      "timespent": {
+        "fieldId": "timespent",
+        "key": "timespent",
+        "name": "Time Spent",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timespent",
+          "type": "number"
+        }
+      },
+      "timetracking": {
+        "fieldId": "timetracking",
+        "key": "timetracking",
+        "name": "Time Tracking",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "timetracking",
+          "type": "timetracking"
+        }
+      },
+      "updated": {
+        "fieldId": "updated",
+        "key": "updated",
+        "name": "Updated",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "updated",
+          "type": "datetime"
+        }
+      },
+      "versions": {
+        "fieldId": "versions",
+        "key": "versions",
+        "name": "Affects Version/s",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "type": "array",
+          "items": "version",
+          "system": "versions"
+        },
+        "allowedValues": [
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10100",
+            "id": "10100",
+            "name": "1.0.0",
+            "released": true
+          },
+          {
+            "self": "https://example.atlassian.acme.net/rest/api/3/version/10101",
+            "id": "10101",
+            "name": "1.1.0",
+            "released": false
+          }
+        ]
+      },
+      "worklog": {
+        "fieldId": "worklog",
+        "key": "worklog",
+        "name": "Log Work",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "worklog",
+          "type": "worklog"
+        }
+      },
+      "workratio": {
+        "fieldId": "workratio",
+        "key": "workratio",
+        "name": "Work Ratio",
+        "required": false,
+        "operations": [
+          "set"
+        ],
+        "schema": {
+          "system": "workratio",
+          "type": "number"
+        }
+      }
+    }
+  }
+}

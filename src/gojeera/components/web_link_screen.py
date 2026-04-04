@@ -77,9 +77,13 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='add-remote-link-form'):
                 with Vertical():
-                    yield Label('URL').add_class('field_label')
+                    url_label = Label('URL')
+                    url_label.add_class('field_label')
+                    yield url_label
                     yield RemoteLinkURLInputWidget()
-                    yield Label('Title').add_class('field_label')
+                    title_label = Label('Title')
+                    title_label.add_class('field_label')
+                    yield title_label
                     yield RemoteLinkNameInputWidget()
             with Horizontal(id='modal_footer'):
                 yield Button(
@@ -90,7 +94,10 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
                     compact=True,
                 )
                 yield Button(
-                    'Cancel', variant='error', id='add-remote-link-button-quit', compact=True
+                    'Cancel',
+                    variant='error',
+                    id='add-remote-link-button-quit',
+                    compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)
 

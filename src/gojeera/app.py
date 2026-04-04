@@ -960,6 +960,18 @@ class MainScreen(Screen):
 
         await self.fetch_work_items(work_item.parent_key.strip())
 
+    async def action_set_parent_work_item(self) -> None:
+        work_item = self.information_panel.work_item
+        if not work_item:
+            return
+
+        from gojeera.utils.fields import supports_parent_work_item
+
+        if not supports_parent_work_item(work_item):
+            return
+
+        await self.information_panel.breadcrumb_widget.open_parent_work_item_screen()
+
     async def action_quick_navigation(self) -> None:
         from gojeera.components.quick_navigation_screen import QuickNavigationScreen
 

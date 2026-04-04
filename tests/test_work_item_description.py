@@ -1,7 +1,4 @@
 import asyncio
-import copy
-
-import pytest
 
 from gojeera.app import JiraApp
 from gojeera.widgets.gojeera_markdown import (
@@ -9,66 +6,76 @@ from gojeera.widgets.gojeera_markdown import (
     get_markdown_link_href,
 )
 
-from .test_helpers import wait_for_mount
+from .test_helpers import load_work_item_from_search, wait_for_mount, wait_until
 
 
-@pytest.fixture
-def mock_jira_search_with_results(mock_jira_search_with_description_links):
-    return copy.deepcopy(mock_jira_search_with_description_links)
+def _find_link_offset(paragraph: ExtendedMarkdownParagraph, href_substring: str) -> tuple[int, int]:
+    return next(
+        (x, y)
+        for y in range(paragraph.size.height)
+        for x in range(paragraph.size.width)
+        if (
+            (href := get_markdown_link_href(paragraph.get_style_at(x, y))) is not None
+            and href_substring in href
+        )
+    )
 
 
 async def open_description_and_hover_internal_link(pilot):
     await wait_for_mount(pilot)
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-8')
 
     await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
+    await wait_until(
+        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
 
-    paragraph = pilot.app.screen.query(ExtendedMarkdownParagraph).first()
-    await pilot.hover(paragraph, offset=(35, 0))
+    paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
+    internal_link_paragraph = next(
+        paragraph
+        for paragraph in paragraphs
+        if 'Depends on motion alert validation in' in paragraph.content.plain
+    )
+    link_offset = _find_link_offset(internal_link_paragraph, '/browse/ENG-7')
+    await pilot.hover(internal_link_paragraph, offset=link_offset)
     await pilot.pause(1.0)
 
     await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
+    await wait_until(lambda: pilot.app.screen.focused_work_item_link_key == 'ENG-7', timeout=3.0)
+    await asyncio.sleep(0.3)
 
 
 async def load_focused_internal_jira_link_from_keybind(pilot):
     await open_description_and_hover_internal_link(pilot)
-    assert pilot.app.screen.focused_work_item_link_key == 'EXAMPLE-19538'
+    assert pilot.app.screen.focused_work_item_link_key == 'ENG-7'
 
     await pilot.press('ctrl+g')
-    await asyncio.sleep(0.8)
-
     await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
+    await wait_until(lambda: pilot.app.screen.current_loaded_work_item_key == 'ENG-7', timeout=3.0)
 
-    assert pilot.app.screen.current_loaded_work_item_key == 'EXAMPLE-19538'
+    assert pilot.app.screen.current_loaded_work_item_key == 'ENG-7'
 
 
 async def open_description_and_hover_wrapped_link(pilot):
     await wait_for_mount(pilot)
-
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-8')
 
     await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
+    await wait_until(
+        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
 
     paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
     wrapped_link_paragraph = next(
-        paragraph for paragraph in paragraphs if 'Rollout checklist URL:' in paragraph.content.plain
+        paragraph for paragraph in paragraphs if 'Nightly checklist URL:' in paragraph.content.plain
     )
-    link_offset = next(
-        (x, y)
-        for y in range(wrapped_link_paragraph.size.height)
-        for x in range(wrapped_link_paragraph.size.width)
-        if get_markdown_link_href(wrapped_link_paragraph.get_style_at(x, y)) is not None
+    link_offset = _find_link_offset(
+        wrapped_link_paragraph,
+        '/animatronics/release-playbook/nightly-checklist',
     )
     await pilot.hover(wrapped_link_paragraph, offset=link_offset)
     await pilot.pause(0.3)

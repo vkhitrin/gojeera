@@ -93,6 +93,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
             field_id=field_id,
             title='ExtendedADFMarkdownTextArea',
             required=required,
+            compact=True,
         )
 
         self._required = required

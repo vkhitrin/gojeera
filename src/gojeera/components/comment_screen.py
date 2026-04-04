@@ -80,7 +80,9 @@ class CommentScreen(ExtendedModalScreen[str]):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='modal-form-scroll'):
                 with Vertical(id='comment-field-container'):
-                    yield Label('Comment').add_class('field_label')
+                    comment_label = Label('Comment')
+                    comment_label.add_class('field_label')
+                    yield comment_label
 
                     yield ExtendedADFMarkdownTextArea(field_id='comment', required=False)
 
@@ -92,7 +94,12 @@ class CommentScreen(ExtendedModalScreen[str]):
                     disabled=save_disabled,
                     compact=True,
                 )
-                yield Button('Cancel', variant='error', id=cancel_button_id, compact=True)
+                yield Button(
+                    'Cancel',
+                    variant='error',
+                    id=cancel_button_id,
+                    compact=True,
+                )
         yield ExtendedFooter()
 
     def on_mount(self) -> None:

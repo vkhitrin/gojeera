@@ -7,13 +7,11 @@ from gojeera.app import JiraApp
 from gojeera.components.web_link_screen import RemoteLinkScreen
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def select_work_item_and_highlight_web_link(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -34,12 +32,7 @@ async def select_work_item_and_highlight_web_link(pilot):
 
 
 async def create_web_link_and_verify(pilot):
-
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -106,12 +99,7 @@ async def create_web_link_and_verify(pilot):
 
 
 async def delete_web_link_and_verify(pilot):
-
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()

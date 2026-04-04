@@ -1,4 +1,5 @@
 {
+  "expand": "transitions",
   "transitions": [
     {
       "id": "11",

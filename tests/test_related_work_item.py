@@ -7,13 +7,11 @@ from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
 from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
 
+from .test_helpers import load_work_item_from_search
+
 
 async def create_related_work_item_and_verify(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()
@@ -44,7 +42,7 @@ async def create_related_work_item_and_verify(pilot):
     work_item_key_field.focus()
     await asyncio.sleep(0.1)
 
-    await pilot.press(*'EXAMPLE-100')
+    await pilot.press(*'ENG-8')
     await asyncio.sleep(0.3)
 
     link_type_selector = screen.relationship_type
@@ -70,9 +68,7 @@ async def create_related_work_item_and_verify(pilot):
 
     assert related_widget.work_items is not None
     new_related_item = related_widget.work_items[-1]
-    assert new_related_item.key == 'EXAMPLE-100', (
-        f'Expected key "EXAMPLE-100", got "{new_related_item.key}"'
-    )
+    assert new_related_item.key == 'ENG-8', f'Expected key "ENG-8", got "{new_related_item.key}"'
     assert new_related_item.link_type == 'blocks', (
         f'Expected link type "blocks", got "{new_related_item.link_type}"'
     )
@@ -80,11 +76,7 @@ async def create_related_work_item_and_verify(pilot):
 
 async def delete_issue_link_and_verify(pilot):
     """Delete an issue link and verify it's removed from the table."""
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()

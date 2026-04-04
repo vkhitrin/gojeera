@@ -6,13 +6,11 @@ from textual.widgets._tabbed_content import ContentTabs
 from gojeera.app import JiraApp
 from gojeera.components.new_attachment_screen import AddAttachmentScreen
 
+from .test_helpers import load_work_item_from_search
+
 
 async def open_add_attachment_screen(pilot):
-    await asyncio.sleep(0.1)
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.5)
-    await pilot.press('enter')
-    await asyncio.sleep(0.8)
+    await load_work_item_from_search(pilot, 'ENG-3')
 
     tabs = pilot.app.screen.query_one(ContentTabs)
     tabs.focus()

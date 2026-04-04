@@ -30,8 +30,18 @@ class QuitScreen(ExtendedModalScreen[str]):
             yield Static('Quit gojeera', id='modal_title')
             yield Static('Are you sure you want to quit?', id='modal_message')
             with Horizontal(id='modal_footer'):
-                yield Button('Cancel', variant='primary', id='button-cancel', compact=True)
-                yield Button('Quit', variant='error', id='button-quit', compact=True)
+                yield Button(
+                    'Cancel',
+                    variant='primary',
+                    id='button-cancel',
+                    compact=True,
+                )
+                yield Button(
+                    'Quit',
+                    variant='error',
+                    id='button-quit',
+                    compact=True,
+                )
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:

@@ -35,7 +35,8 @@ class ADFTextAreaWidget(GojeeraMarkdown, BaseField):
             title: Display title for the field.
             required: Whether the field is required.
             original_value: Original value from Jira - can be ADF dict, string, or None.
-            field_supports_update: Whether field can be updated (ignored - always read-only).
+            field_supports_update: Accepted for API compatibility; ignored because this widget
+                is always rendered read-only.
         """
 
         markdown_text = self._convert_to_markdown(original_value)

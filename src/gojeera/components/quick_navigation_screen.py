@@ -7,10 +7,13 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Input, Label, Static
 
-from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
 from gojeera.utils.focus import focus_first_available
-from gojeera.utils.urls import extract_work_item_key, normalize_work_item_key
+from gojeera.utils.work_item_reference import (
+    WorkItemReferenceLoader,
+    load_work_item_reference,
+    resolve_work_item_reference,
+)
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
@@ -88,14 +91,10 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         jumper.show()
 
     def _is_work_item_key_valid(self, value: str) -> bool:
-        stripped_value = value.strip()
-        return (
-            normalize_work_item_key(stripped_value) is not None
-            or self._extract_work_item_key(stripped_value) is not None
-        )
+        return self._extract_work_item_key(value) is not None
 
     def _extract_work_item_key(self, value: str) -> str | None:
-        return extract_work_item_key(value)
+        return resolve_work_item_reference(value)
 
     @on(Input.Changed, '#quick-navigation-work-item-key')
     def handle_work_item_key_changed(self, event: Input.Changed) -> None:
@@ -170,26 +169,20 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
 
     async def _open_work_item(self, work_item_key: str) -> None:
         app = cast('JiraApp', self.app)
-        response: APIControllerResponse = await app.api.get_work_item(
-            work_item_id_or_key=work_item_key,
-            fields=['summary'],
-        )
-
-        if not response.success or not response.result or not response.result.work_items:
-            self.notify(
-                response.error or 'Unable to access the selected work item',
-                severity='error',
-                title='Quick Navigation',
-            )
-            return
-
         screen_stack = app.screen_stack
         if len(screen_stack) >= 2:
             calling_screen = screen_stack[-2]
             if calling_screen.__class__.__name__ == 'MainScreen':
                 main_screen = cast('MainScreen', calling_screen)
                 self.dismiss()
-                main_screen.run_worker(main_screen.fetch_work_items(work_item_key), exclusive=True)
+                main_screen.run_worker(
+                    load_work_item_reference(
+                        cast(WorkItemReferenceLoader, main_screen),
+                        work_item_key,
+                        title='Quick Navigation',
+                    ),
+                    exclusive=True,
+                )
                 return
 
         self.dismiss({'work_item_key': work_item_key})

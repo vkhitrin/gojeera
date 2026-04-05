@@ -40,45 +40,6 @@ async def switch_to_jql_search(pilot):
     )
 
 
-async def fill_basic_work_item_key(pilot):
-    await wait_for_mount(pilot)
-
-    await pilot.press('tab')
-    await asyncio.sleep(0.1)
-
-    for char in 'ENG-3':
-        if char == ' ':
-            await pilot.press('space')
-        else:
-            await pilot.press(char)
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(0.2)
-
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    work_item_input = search_bar.query_one('#basic-work-item-key')
-    assert not work_item_input.has_class('-invalid'), (
-        f"Expected valid work item key but input has -invalid class. Value: '{work_item_input.value}'"
-    )
-
-
-async def fill_invalid_work_item_key(pilot):
-    await wait_for_mount(pilot)
-
-    await pilot.press('tab')
-    await asyncio.sleep(0.1)
-
-    for char in 'invalid-key':
-        await pilot.press(char)
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(0.2)
-
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    work_item_input = search_bar.query_one('#basic-work-item-key')
-    assert work_item_input.has_class('-invalid'), (
-        f"Expected invalid work item key to be marked with -invalid class. Value: '{work_item_input.value}'"
-    )
-
-
 async def fill_text_search(pilot):
     await switch_to_text_search(pilot)
 
@@ -239,24 +200,6 @@ class TestUnifiedSearch:
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=switch_to_jql_search)
-
-    def test_unified_search_basic_with_work_item_key(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=fill_basic_work_item_key)
-
-    def test_unified_search_basic_with_invalid_key(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=fill_invalid_work_item_key)
 
     def test_unified_search_text_with_query(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info

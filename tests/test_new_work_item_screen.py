@@ -134,21 +134,8 @@ async def fill_save_and_search_work_item(pilot):
     assert search_bar is not None, 'Unified search bar should be visible'
     assert search_bar.search_mode == 'basic', f'Expected basic mode, got {search_bar.search_mode}'
 
-    # Get the work item key input and focus it directly
-    work_item_input = search_bar.query_one('#basic-work-item-key')
-    work_item_input.focus()
+    assert search_bar.set_initial_work_item_key('ENG-8')
     await asyncio.sleep(0.2)
-
-    # Type the work item key
-    for char in 'ENG-8':
-        await pilot.press(char)
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(0.2)
-
-    # Verify the input is valid
-    assert not work_item_input.has_class('-invalid'), (
-        f'Expected valid work item key but input has -invalid class. Value: "{work_item_input.value}"'
-    )
 
     # Press the search button directly
     search_button = search_bar.query_one('#unified-search-button', Button)

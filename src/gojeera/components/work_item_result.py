@@ -6,7 +6,6 @@ from textual.binding import Binding
 from textual.containers import (
     Container,
     Horizontal,
-    Vertical,
     VerticalGroup,
     VerticalScroll,
 )
@@ -23,21 +22,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger('gojeera')
 
 
-class WorkItemSpacer(Static, can_focus=False):
-    """Spacer row between work item cards."""
-
-    def __init__(self) -> None:
-        super().__init__('', classes='work-item-spacer')
-
-
-class WorkItemContainer(Vertical, can_focus=False):
-    """A container for displaying work items."""
+class WorkItemContainer(Static, can_focus=False):
+    """A lightweight, single-widget rendering of a work item card."""
 
     DEFAULT_CSS = """
     WorkItemContainer {
         height: auto;
         padding: 1 1;
-        margin: 0;
+        margin: 0 0 1 0;
         background: $surface;
         color: $foreground;
     }
@@ -77,31 +69,76 @@ class WorkItemContainer(Vertical, can_focus=False):
                     await parent._select_work_item(self.work_item_key)
                     break
 
-    def compose(self):
+    def _render_footer_line(
+        self, priority_name: str | None, assignee_name: str | None, meta_style: str
+    ) -> Text | None:
+        if not priority_name and not assignee_name:
+            return None
+
+        footer = Text()
+        available_width = self.content_region.width or self.size.width or 0
+
+        if not assignee_name:
+            footer.append(priority_name or '', style=meta_style)
+            return footer
+
+        if not priority_name:
+            if available_width > 0:
+                right_padding = max(0, available_width - len(assignee_name))
+                footer.append(' ' * right_padding, style=meta_style)
+            footer.append(assignee_name, style=meta_style)
+            return footer
+
+        if available_width <= 0:
+            footer.append(priority_name, style=meta_style)
+            footer.append('  ', style=meta_style)
+            footer.append(assignee_name, style=meta_style)
+            return footer
+
+        minimum_gap = 2
+        assignee_width = len(assignee_name)
+
+        if assignee_width >= available_width:
+            assignee = Text(assignee_name, style=meta_style)
+            assignee.truncate(available_width, overflow='ellipsis')
+            return assignee
+
+        available_for_priority = max(0, available_width - assignee_width - minimum_gap)
+        priority = Text(priority_name, style=meta_style)
+        priority.truncate(available_for_priority, overflow='ellipsis')
+
+        footer.append_text(priority)
+        gap = max(minimum_gap, available_width - priority.cell_len - assignee_width)
+        footer.append(' ' * gap, style=meta_style)
+        footer.append(assignee_name, style=meta_style)
+        return footer
+
+    def render(self) -> Text:
         work_item_summary = self.work_item.cleaned_summary(
             CONFIGURATION.get().search_results_truncate_work_item_summary
         )
-
-        priority_name = self.work_item.priority_name
-
         work_item_type = self.work_item.work_item_type_name
-
-        project_key = self.work_item.key
-
+        priority_name = self.work_item.priority_name
         assignee_name = self.work_item.assignee_display_name
 
-        with Vertical():
-            with Horizontal(classes='work-item-row-1'):
-                yield Static(Text(f'[{work_item_type}]'), classes='work-item-type')
-                yield Static(Text(project_key), classes='work-item-key')
+        is_selected = self.has_class('-selected')
+        is_loaded = self.has_class('-loaded')
 
-            yield Static(Text(work_item_summary), classes='work-item-summary')
+        summary_style = 'bold white' if is_selected or is_loaded else 'white'
+        meta_style = 'bold white' if is_selected and is_loaded else 'bright_black'
 
-            with Horizontal(classes='work-item-row-3'):
-                if priority_name:
-                    yield Static(Text(priority_name), classes='work-item-priority')
-                if assignee_name:
-                    yield Static(Text(assignee_name), classes='work-item-assignee')
+        rendered = Text()
+        rendered.append(f'[{work_item_type}] ', style=meta_style)
+        rendered.append(self.work_item.key, style=meta_style)
+        rendered.append('\n')
+        rendered.append(work_item_summary, style=summary_style)
+
+        footer_line = self._render_footer_line(priority_name, assignee_name, meta_style)
+        if footer_line is not None:
+            rendered.append('\n')
+            rendered.append_text(footer_line)
+
+        return rendered
 
 
 class WorkItemSearchResultsScroll(VerticalScroll):
@@ -188,10 +225,10 @@ class WorkItemSearchResultsScroll(VerticalScroll):
         for i, container in enumerate(containers):
             if i == self._selected_index:
                 container.add_class('-selected')
-
                 self.current_work_item_key = container.work_item_key
             else:
                 container.remove_class('-selected')
+            container.refresh(layout=False)
 
     def action_cursor_down(self) -> None:
         containers = self.work_item_containers
@@ -214,6 +251,16 @@ class WorkItemSearchResultsScroll(VerticalScroll):
     def reset_selection(self) -> None:
         self._selected_index = 0
         self._update_selection()
+
+    async def clear_results(self) -> None:
+        await self.remove_children()
+        self.display = False
+        self.token_by_page = {}
+        self.page = 1
+        self.pending_page = None
+        self.total_pages = 1
+        self.current_work_item_key = None
+        self._selected_index = 0
 
     def scroll_to_top(self, animate: bool = False) -> None:
         self.scroll_home(animate=animate)
@@ -254,11 +301,8 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                 next_page = self.page + 1
                 self.token_by_page[next_page] = response.next_page_token
 
-            items_to_mount: list[Static | WorkItemContainer] = []
-            for index, work_item in enumerate(response.work_items):
-                if index > 0:
-                    items_to_mount.append(WorkItemSpacer())
-
+            items_to_mount: list[WorkItemContainer] = []
+            for work_item in response.work_items:
                 container = WorkItemContainer(work_item)
 
                 if work_item.key == self.current_work_item_key:
@@ -275,60 +319,19 @@ class WorkItemSearchResultsScroll(VerticalScroll):
     def mark_loaded_work_item(self, work_item_key: str) -> None:
         for container in self.work_item_containers:
             container.remove_class('-loaded')
+            container.refresh(layout=False)
 
         for container in self.work_item_containers:
             if container.work_item_key == work_item_key:
                 container.add_class('-loaded')
+                container.refresh(layout=False)
                 break
 
     async def update_work_item_in_list(self, updated_work_item: JiraWorkItem) -> None:
         for container in self.work_item_containers:
             if container.work_item_key == updated_work_item.key:
                 container.work_item = updated_work_item
-
-                try:
-                    summary_widgets = container.query('.work-item-summary')
-                    if summary_widgets:
-                        summary_widget = summary_widgets.first(Static)
-                        work_item_summary = updated_work_item.cleaned_summary(
-                            CONFIGURATION.get().search_results_truncate_work_item_summary
-                        )
-                        summary_widget.update(Text(work_item_summary))
-
-                    row3_containers = container.query('.work-item-row-3')
-                    if row3_containers:
-                        priority_widgets = container.query('.work-item-priority')
-                        assignee_widgets = container.query('.work-item-assignee')
-
-                        priority_name = updated_work_item.priority_name
-                        assignee_name = updated_work_item.assignee_display_name
-
-                        priority_exists = len(priority_widgets) > 0
-                        assignee_exists = len(assignee_widgets) > 0
-
-                        structure_changed = (
-                            (priority_exists and not priority_name)
-                            or (not priority_exists and priority_name)
-                            or (assignee_exists and not assignee_name)
-                            or (not assignee_exists and assignee_name)
-                        )
-
-                        if structure_changed:
-                            await container.remove_children()
-                            await container.recompose()
-                        else:
-                            if priority_widgets and priority_name:
-                                priority_widget = priority_widgets.first(Static)
-                                priority_widget.update(Text(priority_name))
-
-                            if assignee_widgets and assignee_name:
-                                assignee_widget = assignee_widgets.first(Static)
-                                assignee_widget.update(Text(assignee_name))
-
-                except Exception:
-                    await container.remove_children()
-                    await container.recompose()
-
+                container.refresh()
                 break
 
     async def on_click(self, event) -> None:
@@ -344,11 +347,14 @@ class WorkItemSearchResultsScroll(VerticalScroll):
         from gojeera.app import MainScreen
 
         screen = cast(MainScreen, self.screen)
+        if screen.current_loaded_work_item_key == work_item_key:
+            return
+
         self.current_work_item_key = work_item_key
 
         self.mark_loaded_work_item(work_item_key)
 
-        screen.run_worker(screen.fetch_work_items(work_item_key), exclusive=True)
+        screen.run_worker(screen.fetch_work_items(work_item_key), exclusive=True, group='work-item')
 
     def action_open_work_item_in_browser(self) -> None:
         if self.current_work_item_key:
@@ -423,6 +429,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                     use_active_search=True,
                 ),
                 exclusive=True,
+                group='search',
             )
             self.refresh_bindings()
 
@@ -444,6 +451,7 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                 use_active_search=True,
             ),
             exclusive=True,
+            group='search',
         )
         self.refresh_bindings()
 
@@ -452,10 +460,12 @@ class WorkItemsContainer(Container):
     pagination: Reactive[dict | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
     is_loading: Reactive[bool] = reactive(False, always_update=True)
+    search_active: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = CONFIGURATION.get()
+        self._clear_token = 0
 
     @property
     def content_container(self) -> VerticalGroup:
@@ -472,8 +482,11 @@ class WorkItemsContainer(Container):
     def on_mount(self) -> None:
         self.content_container.can_focus = False
         self.query_one('#work-items-page-footer', Static).can_focus = False
+        self._sync_search_layout()
 
     def show_loading(self) -> None:
+        self._clear_token += 1
+        self.search_active = True
         self.is_loading = True
 
     def hide_loading(self) -> None:
@@ -484,6 +497,38 @@ class WorkItemsContainer(Container):
 
     def clear_search_metadata(self) -> None:
         self.query_one('#work-items-page-footer', Static).update('')
+
+    def clear_search(self) -> None:
+        self._clear_token += 1
+        clear_token = self._clear_token
+
+        self.pagination = None
+        self.displayed_count = 0
+        self.clear_search_metadata()
+        self.search_active = False
+        self.call_after_refresh(lambda: self._schedule_deferred_clear(clear_token))
+
+    def watch_search_active(self, _: bool) -> None:
+        self._sync_search_layout()
+
+    def _sync_search_layout(self) -> None:
+        self.display = self.search_active
+        self.can_focus = self.search_active
+
+        layout = self.screen.query_one('#three-split-layout', Horizontal)
+        layout.set_class(not self.search_active, '-search-inactive')
+
+    def _schedule_deferred_clear(self, clear_token: int) -> None:
+        if clear_token != self._clear_token:
+            return
+        self.run_worker(self._deferred_clear_results(clear_token), exclusive=False)
+
+    async def _deferred_clear_results(self, clear_token: int) -> None:
+        if clear_token != self._clear_token:
+            return
+
+        search_results = self.query_one(WorkItemSearchResultsScroll)
+        await search_results.clear_results()
 
     def watch_pagination(self, response: dict) -> None:
         if response:

@@ -89,9 +89,7 @@ class TestWorkItemDescription:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        mock_configuration.theme = 'dracula'
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        app.theme = 'dracula'
         assert snap_compare(
             app,
             terminal_size=(80, 40),
@@ -105,10 +103,8 @@ class TestWorkItemDescription:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        mock_configuration.theme = 'dracula'
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         app._disable_tooltips = False
-        app.theme = 'dracula'
 
         assert snap_compare(
             app,

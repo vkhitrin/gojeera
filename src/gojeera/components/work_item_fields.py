@@ -135,21 +135,29 @@ class WorkItemFields(Container, can_focus=False):
     }
 
     /* Vertical layout for narrow screens */
-    #work-item-fields-form.narrow Horizontal {
+    #work-item-fields-form.narrow > StaticFieldsWidgets > .field-row-slot > Horizontal,
+    #work-item-fields-form.narrow > DynamicFieldsWidgets > .field-row-slot > Horizontal,
+    #work-item-fields-form.narrow > DateMetadata > .field-row-slot > Horizontal {
         layout: vertical;
     }
 
-    #work-item-fields-form.narrow Horizontal > Label {
+    #work-item-fields-form.narrow > StaticFieldsWidgets > .field-row-slot > Horizontal > Label,
+    #work-item-fields-form.narrow > DynamicFieldsWidgets > .field-row-slot > Horizontal > Label,
+    #work-item-fields-form.narrow > DateMetadata > .field-row-slot > Horizontal > Label {
         width: 100%;
         padding-bottom: 0;
         padding-right: 0;
     }
 
-    #work-item-fields-form.narrow Horizontal > * {
+    #work-item-fields-form.narrow > StaticFieldsWidgets > .field-row-slot > Horizontal > *,
+    #work-item-fields-form.narrow > DynamicFieldsWidgets > .field-row-slot > Horizontal > *,
+    #work-item-fields-form.narrow > DateMetadata > .field-row-slot > Horizontal > * {
         width: 100%;
     }
 
-    #work-item-fields-form.narrow Horizontal > .field_control {
+    #work-item-fields-form.narrow > StaticFieldsWidgets > .field-row-slot > Horizontal > .field_control,
+    #work-item-fields-form.narrow > DynamicFieldsWidgets > .field-row-slot > Horizontal > .field_control,
+    #work-item-fields-form.narrow > DateMetadata > .field-row-slot > Horizontal > .field_control {
         width: 100%;
         min-width: 0;
         margin-right: 0;

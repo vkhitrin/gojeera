@@ -39,18 +39,8 @@ async def clone_and_search_work_item(pilot):
     assert search_bar is not None, 'Unified search bar should be visible'
     assert search_bar.search_mode == 'basic', f'Expected basic mode, got {search_bar.search_mode}'
 
-    work_item_input = search_bar.query_one('#basic-work-item-key')
-    work_item_input.focus()
+    assert search_bar.set_initial_work_item_key('ENG-9')
     await asyncio.sleep(0.2)
-
-    for char in 'ENG-9':
-        await pilot.press(char)
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(0.2)
-
-    assert not work_item_input.has_class('-invalid'), (
-        f'Expected valid work item key but input has -invalid class. Value: "{work_item_input.value}"'
-    )
 
     search_button = search_bar.query_one('#unified-search-button', Button)
     search_button.press()

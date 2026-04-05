@@ -109,7 +109,7 @@ project = "MYPROJ" AND sprint in openSprints()
 updated >= -7d ORDER BY updated DESC
 ```
 
-### Remote Filters
+### JQL Filters
 
 ![Unified search filters view](/static/unified_search_filters_view.svg)
 
@@ -117,6 +117,9 @@ You can fetch saved filters from your Jira instance by enabling the feature
 in your configuration.
 
 Remote filters appear in the JQL autocomplete dropdown with a ☁ symbol.
+
+Filters can also be defined locally via the configuration file and appear
+with a ⌂ symbol.
 
 ## Working with Work Items
 
@@ -179,7 +182,7 @@ active tab.
 
 The information panel contains multiple tabs:
 
-#### Summary Tab
+#### Description Tab
 
 ![Work item summary tab](/static/work_item_description_tab.svg)
 

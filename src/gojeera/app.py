@@ -50,6 +50,7 @@ from gojeera.models import (
 )
 from gojeera.themes import load_themes_from_directory
 from gojeera.utils.urls import build_external_url_for_work_item
+from gojeera.utils.work_item_reference import WorkItemReferenceLoader, load_work_item_reference
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_palette import ExtendedPalette
@@ -96,6 +97,12 @@ def get_user_mention_command_provider() -> type[Provider]:
     from gojeera.commands.user_mention_provider import UserMentionCommandProvider
 
     return UserMentionCommandProvider
+
+
+def get_search_command_provider() -> type[Provider]:
+    from gojeera.commands.search_command_provider import SearchCommandProvider
+
+    return SearchCommandProvider
 
 
 class MainScreen(Screen):
@@ -368,6 +375,8 @@ class MainScreen(Screen):
         yield ExtendedFooter(show_command_palette=False)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == 'clear_search':
+            return self.search_results_container.search_active
         if action == 'edit_work_item_info':
             return self.current_loaded_work_item_key is not None
         if action == 'go_to_parent_work_item':
@@ -413,7 +422,15 @@ class MainScreen(Screen):
         workers: list[Worker] = []
 
         if self.initial_work_item_key:
-            search_bar.set_initial_work_item_key(self.initial_work_item_key)
+            self.run_worker(
+                load_work_item_reference(
+                    cast(WorkItemReferenceLoader, self),
+                    self.initial_work_item_key,
+                    title='Quick Navigation',
+                ),
+                exclusive=True,
+                group='work-item',
+            )
 
         if self.initial_jql_filter_label:
             await search_bar.set_initial_jql_filter(self.initial_jql_filter_label)
@@ -421,7 +438,7 @@ class MainScreen(Screen):
         if CONFIGURATION.get().search_on_startup:
             if not self.initial_jql_filter_label:
                 await self.app.workers.wait_for_complete(workers)
-            search_worker = self.run_worker(self.action_search(), exclusive=True)
+            search_worker = self.run_worker(self.action_search(), exclusive=True, group='search')
 
             if self.focus_item_on_startup:
                 await self.app.workers.wait_for_complete([search_worker])
@@ -767,6 +784,17 @@ class MainScreen(Screen):
 
         await self.action_search()
 
+    def action_clear_search(self) -> None:
+        if self.is_search_request_in_progress:
+            return
+
+        self._active_search_data = None
+        self._active_search_term = None
+        self.search_results_container.clear_search()
+
+        if self.focused is self.search_results_list:
+            self.query_one('#unified-search-bar', UnifiedSearchBar).focus()
+
     def _is_any_select_expanded(self) -> bool:
         for select in self.query(Select):
             if select.expanded:
@@ -786,18 +814,6 @@ class MainScreen(Screen):
     async def action_search(self, search_term: str | None = None) -> None:
         if self._is_any_select_expanded() or self.is_search_request_in_progress:
             return
-
-        search_data = self.unified_search_bar.get_search_data()
-        mode = search_data.get('mode')
-
-        if mode == 'basic':
-            if not self.unified_search_bar.is_work_item_key_valid():
-                self.notify(
-                    'Invalid work item key format. Expected format: PROJECT-123',
-                    severity='warning',
-                    title='Validation Error',
-                )
-                return
 
         self.search_results_list.page = 1
 
@@ -821,6 +837,7 @@ class MainScreen(Screen):
                 page=self.search_results_list.page,
             ),
             exclusive=True,
+            group='search',
         )
 
     @property
@@ -981,11 +998,15 @@ class MainScreen(Screen):
         if not data:
             return
 
-        work_item_key = data.get('work_item_key')
-        if not work_item_key:
+        work_item_reference = data.get('work_item_key')
+        if not work_item_reference:
             return
 
-        await self.fetch_work_items(work_item_key)
+        await load_work_item_reference(
+            cast(WorkItemReferenceLoader, self),
+            work_item_reference,
+            title='Quick Navigation',
+        )
 
     async def new_work_item(self, data: dict | None) -> None:
         if data:
@@ -1394,6 +1415,7 @@ class JiraApp(App):
 
     COMMANDS = App.COMMANDS | {
         get_work_item_command_provider,
+        get_search_command_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,

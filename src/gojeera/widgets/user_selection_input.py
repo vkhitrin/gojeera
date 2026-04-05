@@ -20,6 +20,7 @@ class UserSelectionInput(VimSelect):
             compact=True,
             classes='jira-selector',
         )
+        self.styles.width = '100%'
 
         self.jira_field_key = 'assignee'
         self._update_enabled = True

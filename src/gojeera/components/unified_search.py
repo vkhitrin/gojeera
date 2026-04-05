@@ -13,7 +13,7 @@ from textual.worker import get_current_worker
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
-from gojeera.utils.urls import normalize_work_item_key
+from gojeera.utils.urls import extract_work_item_key
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.jql_autocomplete import JQLAutoComplete
@@ -59,6 +59,7 @@ class UnifiedSearchBar(Container):
         self._cache = get_cache()
 
         self._jql_autocomplete: JQLAutoComplete | None = None
+        self._work_item_key: str | None = None
 
     def compose(self) -> ComposeResult:
         yield VimSelect(
@@ -69,12 +70,6 @@ class UnifiedSearchBar(Container):
             compact=True,
         )
 
-        yield ExtendedInput(
-            placeholder='KEY',
-            id='basic-work-item-key',
-            classes='work-item-key-input',
-            compact=True,
-        )
         yield LazySelect(
             lazy_load_callback=lambda: self.fetch_projects(),
             options=[],
@@ -124,7 +119,6 @@ class UnifiedSearchBar(Container):
         self._update_mode_display('basic')
 
         set_jump_mode(self.query_one('#search-mode-selector', VimSelect), 'focus')
-        set_jump_mode(self.query_one('#basic-work-item-key', Input), 'focus')
         set_jump_mode(self.query_one('#basic-project-selector', LazySelect), 'focus')
         set_jump_mode(self.query_one('#basic-assignee-selector', LazySelect), 'focus')
         set_jump_mode(self.query_one('#basic-type-selector', LazySelect), 'focus')
@@ -267,61 +261,6 @@ class UnifiedSearchBar(Container):
 
         self._jql_autocomplete.update_filters(all_filters)
 
-    def is_work_item_key_valid(self) -> bool:
-        work_item_input = self.query_one('#basic-work-item-key', Input)
-        value = work_item_input.value.strip() if work_item_input.value else ''
-
-        if not value:
-            return True
-
-        return normalize_work_item_key(value) is not None
-
-    @on(Input.Changed, '#basic-work-item-key')
-    def handle_work_item_key_changed(self, event: Input.Changed) -> None:
-        work_item_input = self.query_one('#basic-work-item-key', Input)
-        value = event.value.strip() if event.value else ''
-
-        if not value:
-            work_item_input.remove_class('-invalid')
-            return
-
-        if normalize_work_item_key(value) is not None:
-            work_item_input.remove_class('-invalid')
-        else:
-            work_item_input.add_class('-invalid')
-
-    @on(Input.Submitted, '#basic-work-item-key')
-    def handle_work_item_key_submitted(self, event: Input.Submitted) -> None:
-        if self.search_in_progress:
-            return
-
-        if not self.is_work_item_key_valid():
-            work_item_input = self.query_one('#basic-work-item-key', Input)
-            work_item_input.add_class('-invalid')
-            self.notify(
-                'Invalid work item key format. Expected format: PROJECT-123',
-                severity='warning',
-                title='Validation Error',
-            )
-            return
-
-        search_button = self.query_one('#unified-search-button', Button)
-        search_button.press()
-
-    @on(Input.Blurred, '#basic-work-item-key')
-    def handle_work_item_key_blurred(self, event: Input.Blurred) -> None:
-        work_item_input = self.query_one('#basic-work-item-key', Input)
-        value = event.value.strip() if event.value else ''
-
-        if not value:
-            work_item_input.remove_class('-invalid')
-            return
-
-        if normalize_work_item_key(value) is not None:
-            work_item_input.remove_class('-invalid')
-        else:
-            work_item_input.add_class('-invalid')
-
     @on(Input.Changed, '#unified-search-input')
     def handle_unified_input_changed(self, event: Input.Changed) -> None:
         if self.search_mode not in ('text', 'jql'):
@@ -407,11 +346,14 @@ class UnifiedSearchBar(Container):
     def handle_mode_change(self, event: Select.Changed) -> None:
         if event.value and isinstance(event.value, str):
             mode_str = str(event.value)
+            if mode_str != 'basic':
+                self._clear_work_item_key()
             self.search_mode = mode_str
             self._update_mode_display(mode_str)
 
     @on(Select.Changed, '#basic-project-selector')
     def handle_project_changed(self, event: Select.Changed) -> None:
+        self._clear_work_item_key()
         if event.value and isinstance(event.value, str):
             self._selected_project_key = str(event.value)
 
@@ -444,12 +386,17 @@ class UnifiedSearchBar(Container):
             status_sel.disabled = True
             self._sync_basic_filter_jump_modes()
 
+    @on(Select.Changed, '#basic-assignee-selector')
+    @on(Select.Changed, '#basic-type-selector')
+    @on(Select.Changed, '#basic-status-selector')
+    def handle_basic_filter_changed(self) -> None:
+        self._clear_work_item_key()
+
     def _update_mode_display(self, mode: str) -> None:
         with self.app.batch_update():
             self.remove_class('mode-basic', 'mode-text', 'mode-jql')
             self.add_class(f'mode-{mode}')
 
-            work_item_input = self.query_one('#basic-work-item-key', Input)
             project_selector = self.query_one('#basic-project-selector', LazySelect)
             user_selector = self.query_one('#basic-assignee-selector', LazySelect)
             type_selector = self.query_one('#basic-type-selector', LazySelect)
@@ -460,7 +407,6 @@ class UnifiedSearchBar(Container):
                 self._jql_autocomplete.disabled = mode != 'jql'
 
             if mode == 'basic':
-                work_item_input.display = True
                 project_selector.display = True
                 user_selector.display = True
                 type_selector.display = True
@@ -470,7 +416,6 @@ class UnifiedSearchBar(Container):
 
                 unified_input.remove_class('-invalid')
             elif mode == 'text':
-                work_item_input.display = False
                 project_selector.display = False
                 user_selector.display = False
                 type_selector.display = False
@@ -483,7 +428,6 @@ class UnifiedSearchBar(Container):
                 else:
                     unified_input.remove_class('-invalid')
             elif mode == 'jql':
-                work_item_input.display = False
                 project_selector.display = False
                 user_selector.display = False
                 type_selector.display = False
@@ -750,10 +694,9 @@ class UnifiedSearchBar(Container):
         mode = self.search_mode
 
         if mode == 'basic':
-            work_item_key = self.query_one('#basic-work-item-key', Input).value
             return {
                 'mode': 'basic',
-                'work_item_key': normalize_work_item_key(work_item_key or '') or work_item_key,
+                'work_item_key': self._work_item_key or '',
                 'project': self.query_one('#basic-project-selector', LazySelect).value,
                 'assignee': self.query_one('#basic-assignee-selector', LazySelect).value,
                 'type': self.query_one('#basic-type-selector', LazySelect).value,
@@ -774,26 +717,25 @@ class UnifiedSearchBar(Container):
 
         return {'mode': mode}
 
-    def set_initial_work_item_key(self, work_item_key: str) -> None:
-        normalized_work_item_key = normalize_work_item_key(work_item_key)
-        if normalized_work_item_key is None:
-            self.notify(
-                f'Invalid work item key format: "{work_item_key}". Expected format: PROJECT-123',
-                severity='error',
-                timeout=10,
-            )
-            return
+    def set_initial_work_item_key(self, value: str) -> bool:
+        work_item_key = self.extract_work_item_key(value)
+        if work_item_key is None:
+            return False
 
-        try:
-            work_item_input = self.query_one('#basic-work-item-key', Input)
-            work_item_input.value = normalized_work_item_key
-        except Exception as e:
-            self.notify(
-                f'Failed to set work item key: {str(e)}',
-                severity='error',
-                timeout=10,
-                title='Search',
-            )
+        self._work_item_key = work_item_key
+
+        mode_selector = self.query_one('#search-mode-selector', Select)
+        mode_selector.value = 'basic'
+        self.search_mode = 'basic'
+        self._update_mode_display('basic')
+        return True
+
+    def _clear_work_item_key(self) -> None:
+        self._work_item_key = None
+
+    @staticmethod
+    def extract_work_item_key(value: str) -> str | None:
+        return extract_work_item_key(value)
 
     async def set_initial_jql_filter(self, filter_label: str) -> None:
         jql_filters = CONFIGURATION.get().jql_filters

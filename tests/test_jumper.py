@@ -29,7 +29,6 @@ class TestJumper:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        mock_configuration.theme = 'dracula'
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         assert snap_compare(

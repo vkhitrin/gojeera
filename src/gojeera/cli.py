@@ -6,7 +6,7 @@ from typing import cast
 import click
 
 from gojeera.constants import LOGGER_NAME
-from gojeera.utils.urls import normalize_work_item_key
+from gojeera.utils.urls import extract_work_item_key
 
 logger = logging.getLogger(LOGGER_NAME)
 
@@ -105,6 +105,11 @@ def cli(
         click.echo('Please provide only one of these options.')
         sys.exit(1)
 
+    if work_item_key and search_on_startup:
+        click.echo('Error: --search-on-startup cannot be used with --work-item-key.')
+        click.echo('--work-item-key already triggers the initial search automatically.')
+        sys.exit(1)
+
     if project_key:
         project_key_pattern = r'^[A-Z][A-Z0-9]{1,9}$'
         if not re.match(project_key_pattern, project_key):
@@ -114,12 +119,16 @@ def cli(
             sys.exit(1)
 
     if work_item_key:
-        if normalize_work_item_key(work_item_key) is None:
-            click.echo(f'Error: Invalid work item key format: "{work_item_key}"')
-            click.echo('Work item keys must follow the format: <PROJECT>-<NUMBER>')
-            click.echo('Examples: PROJ-123, ABC-456, DEV-1')
+        raw_work_item_key = work_item_key
+        if (work_item_key := extract_work_item_key(raw_work_item_key)) is None:
+            click.echo(f'Error: Invalid work item key format: "{raw_work_item_key}"')
+            click.echo(
+                'Work item keys must follow the format <PROJECT>-<NUMBER> or be a Jira browse URL.'
+            )
+            click.echo(
+                'Examples: PROJ-123, ABC-456, DEV-1, https://your-domain.atlassian.net/browse/PROJ-123'
+            )
             sys.exit(1)
-        work_item_key = normalize_work_item_key(work_item_key)
 
     if assignee is not None and project_key is None:
         click.echo('Error: --assignee requires --project-key to be defined.')

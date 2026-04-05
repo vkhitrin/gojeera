@@ -18,6 +18,7 @@ class WorkItemStatusSelectionInput(VimSelect):
             compact=True,
             classes='jira-selector',
         )
+        self.styles.width = '100%'
         self.original_value: str | None = None
 
     async def watch_statuses(self, statuses: list[tuple[str, str]] | None = None) -> None:

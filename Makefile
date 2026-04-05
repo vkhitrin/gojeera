@@ -35,6 +35,10 @@ compile: ##Compiles code to check valid syntax
 check-css: ##Checks CSS for unused classes and IDs
 	@uv run python ./scripts/check_unused_css.py
 
+.PHONY: generate-static-svg
+generate-static-svg: ##Generate all static SVG assets from the internal scenario map
+	@python3 ./scripts/generate_static_svg.py
+
 .PHONY: analyze-codebase
 analyze-codebase: ##Analyzes codebase
 	-$(MAKE) lint

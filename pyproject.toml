@@ -43,7 +43,6 @@ dependencies = [
     "python-magic>=0.4.27",
     "textual-autocomplete>=4.0.6",
     "textual-fspicker>=1.0.0",
-    "textual-image>=0.8.5",
     "textual-jumper>=0.2.1",
     "textual-tags>=0.3.3",
     "textual[syntax]>=8.2.1",

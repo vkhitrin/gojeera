@@ -73,7 +73,6 @@ def mock_configuration():
         update_additional_fields_ignore_ids=None,
         enable_creating_additional_fields=False,
         create_additional_fields_ignore_ids=None,
-        enable_images_support=True,
     )
 
     token = CONFIGURATION.set(config)
@@ -111,7 +110,6 @@ def mock_configuration_with_sprints():
         update_additional_fields_ignore_ids=None,
         enable_creating_additional_fields=False,
         create_additional_fields_ignore_ids=None,
-        enable_images_support=True,
     )
 
     token = CONFIGURATION.set(config)
@@ -752,6 +750,27 @@ def mock_jira_priorities():
 @pytest.fixture
 def mock_jira_new_attachment():
     return load_fixture('jira_new_attachment.json')
+
+
+@pytest.fixture
+def staged_upload_file(tmp_path: Path) -> Path:
+    file_path = tmp_path / 'clipboard-upload.png'
+    file_path.write_bytes(b'png')
+    return file_path
+
+
+@pytest.fixture
+def mock_attachment_upload(mock_jira_new_attachment):
+    def _mock(work_item_key: str, filename: str = 'clipboard-upload.png'):
+        attachment = copy.deepcopy(mock_jira_new_attachment)
+        attachment['filename'] = filename
+        attachment['mimeType'] = 'image/png'
+        attachment['size'] = 3
+        return respx.post(
+            f'https://example.atlassian.acme.net/rest/api/3/issue/{work_item_key}/attachments'
+        ).mock(return_value=Response(200, json=[attachment]))
+
+    return _mock
 
 
 @pytest.fixture
@@ -1400,13 +1419,13 @@ async def mock_jira_api_with_comment_deletion(
                     # Updated state: 0 comments (after deletion)
                     updated_comments = []
 
-                    # Mock GET comments endpoint with side_effect for state changes
-                    # NOTE: (vkhitrin)  Initial comments come from the search results JSON, so the first
-                    #       call to this endpoint will be AFTER deletion (the internal refetch)
+                    # Mock GET comments endpoint with side_effect for state changes.
+                    # The widget fetches comments on initial load, then refetches after deletion.
                     respx.get(
                         f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/comment'
                     ).mock(
                         side_effect=[
+                            Response(200, json=build_comments_page(issue_key, comments_list)),
                             Response(200, json=build_comments_page(issue_key, updated_comments)),
                             Response(200, json=build_comments_page(issue_key, updated_comments)),
                         ]
@@ -1769,6 +1788,10 @@ async def mock_jira_api_with_search_results(
                 respx.get(
                     url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
                 ).mock(return_value=Response(200, json=issue))
+                comments = issue.get('fields', {}).get('comment', {}).get('comments', [])
+                respx.get(
+                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/comment.*'
+                ).mock(return_value=Response(200, json=build_comments_page(issue_key, comments)))
                 # Mock remote links endpoint for each work item
                 remote_links = issue.get('fields', {}).get('remotelink', [])
                 respx.get(
@@ -2344,19 +2367,33 @@ async def mock_jira_api_with_comment_creation(
 
         new_comment = mock_jira_new_comment
 
-        updated_response = build_comments_page(
-            'ENG-3',
-            [new_comment, initial_comment],  # Newest first (orderBy=-created)
-        )
+        current_comments = [copy.deepcopy(initial_comment)]
+
+        def get_comments_response(request):
+            return Response(
+                200,
+                json=build_comments_page(
+                    'ENG-3',
+                    current_comments,
+                ),
+            )
 
         respx.get(
             'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/comment',
-        ).mock(return_value=Response(200, json=updated_response))
+        ).mock(side_effect=get_comments_response)
 
         # Mock POST comment creation endpoint
-        respx.post('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/comment').mock(
-            return_value=Response(201, json=new_comment)
-        )
+        def create_comment_response(request):
+            created_comment = copy.deepcopy(new_comment)
+            payload = json.loads(request.content.decode('utf-8'))
+            if body := payload.get('body'):
+                created_comment['body'] = body
+            current_comments[:] = [created_comment, *current_comments]
+            return Response(201, json=created_comment)
+
+        comment_create_route = respx.post(
+            'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/comment'
+        ).mock(side_effect=create_comment_response)
 
         # Mock get specific work items for each issue in the search results
         for issue in mock_jira_search_with_results.get('issues', []):
@@ -2450,7 +2487,7 @@ async def mock_jira_api_with_comment_creation(
             return_value=Response(200, json=mock_jira_work_item_link_types)
         )
 
-        yield
+        yield {'comment_create_route': comment_create_route}
 
 
 @pytest.fixture

@@ -261,6 +261,7 @@ def build_comments(raw_comments: list[dict]) -> list[WorkItemComment]:
                     if update_author
                     else None,
                     body=comment.get('body'),
+                    rendered_body=comment.get('renderedBody'),
                 )
             )
         except Exception as e:

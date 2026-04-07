@@ -2,9 +2,12 @@ import asyncio
 import json
 from pathlib import Path
 
+from httpx import Response
+import respx
 from textual.widgets import Button
 
 from gojeera.app import JiraApp
+from gojeera.components import new_work_item_screen as new_work_item_screen_module
 from gojeera.components.new_work_item_screen import AddWorkItemScreen
 from gojeera.components.unified_search import UnifiedSearchBar
 from gojeera.components.work_item_result import WorkItemSearchResultsScroll
@@ -163,6 +166,33 @@ async def fill_save_and_search_work_item(pilot):
     )
 
 
+async def paste_clipboard_attachment_into_new_work_item(pilot):
+    await open_new_work_item_screen(pilot)
+
+    screen = pilot.app.screen
+    assert isinstance(screen, AddWorkItemScreen)
+
+    await screen.action_paste_clipboard_attachment()
+    await asyncio.sleep(0.3)
+
+    assert '<!-- gojeera:staged-clipboard-attachment -->' in screen.description_field.text
+
+
+async def fill_save_and_upload_clipboard_attachment(pilot):
+    await fill_required_fields(pilot)
+
+    screen = pilot.app.screen
+    assert isinstance(screen, AddWorkItemScreen)
+
+    await screen.action_paste_clipboard_attachment()
+    await asyncio.sleep(0.3)
+
+    screen.save_button.press()
+    await asyncio.sleep(1.5)
+
+    assert not isinstance(pilot.app.screen, AddWorkItemScreen)
+
+
 class TestNewWorkItemScreen:
     """Snapshot tests to verify new work item screen display and interactions."""
 
@@ -209,3 +239,69 @@ class TestNewWorkItemScreen:
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=open_and_select_project)
+
+    def test_new_work_item_with_clipboard_attachment(
+        self,
+        snap_compare,
+        monkeypatch,
+        mock_configuration,
+        mock_jira_api_with_new_work_item,
+        mock_user_info,
+        staged_upload_file,
+    ):
+        monkeypatch.setattr(
+            new_work_item_screen_module,
+            'stage_clipboard_attachments',
+            lambda: [staged_upload_file],
+        )
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=paste_clipboard_attachment_into_new_work_item,
+        )
+
+    def test_new_work_item_uploads_clipboard_attachment_after_creation(
+        self,
+        snap_compare,
+        monkeypatch,
+        mock_configuration,
+        mock_jira_api_with_new_work_item,
+        mock_jira_search_with_results,
+        mock_user_info,
+        staged_upload_file,
+        mock_attachment_upload,
+    ):
+        monkeypatch.setattr(
+            new_work_item_screen_module,
+            'stage_clipboard_attachments',
+            lambda: [staged_upload_file],
+        )
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        created_work_item = next(
+            issue for issue in mock_jira_search_with_results['issues'] if issue['key'] == 'ENG-8'
+        )
+        upload_route = mock_attachment_upload('ENG-8')
+        respx.get(
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8.*'
+        ).mock(return_value=Response(200, json=created_work_item))
+        update_route = respx.put(
+            'https://example.atlassian.acme.net/rest/api/3/issue/ENG-8',
+            params={'returnIssue': 'true'},
+        ).mock(return_value=Response(200, json=created_work_item))
+
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=fill_save_and_upload_clipboard_attachment,
+        )
+        assert upload_route.called
+        assert upload_route.call_count == 1
+        assert b'filename="clipboard-upload.png"' in upload_route.calls[0].request.content
+        assert update_route.called
+        assert (
+            b'https://example.atlassian.acme.net/secure/attachment/66812/clipboard-upload.png'
+            in update_route.calls[0].request.content
+        )

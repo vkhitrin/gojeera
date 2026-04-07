@@ -19,7 +19,57 @@
       "timeZone": "America/New_York",
       "locale": "en_US"
     },
-    "attachment": [],
+    "attachment": [
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/attachment/20001",
+        "id": "20001",
+        "filename": "rollout-diagram.png",
+        "author": {
+          "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "accountType": "atlassian",
+          "avatarUrls": {
+            "48x48": "https://avatar.example.com/avatar.png",
+            "24x24": "https://avatar.example.com/avatar.png",
+            "16x16": "https://avatar.example.com/avatar.png",
+            "32x32": "https://avatar.example.com/avatar.png"
+          },
+          "displayName": "Rook Hydra",
+          "active": true,
+          "timeZone": "America/New_York",
+          "locale": "en_US"
+        },
+        "created": "2026-02-10T13:10:00.000+0200",
+        "size": 182,
+        "mimeType": "image/png",
+        "content": "https://example.atlassian.acme.net/jira/rest/api/3/attachment/content/20001",
+        "thumbnail": "https://example.atlassian.acme.net/jira/rest/api/3/attachment/thumbnail/20001"
+      },
+      {
+        "self": "https://example.atlassian.acme.net/rest/api/3/attachment/20002",
+        "id": "20002",
+        "filename": "field-notes.pdf",
+        "author": {
+          "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A11111111-1111-1111-1111-111111111111",
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "accountType": "atlassian",
+          "avatarUrls": {
+            "48x48": "https://avatar.example.com/avatar.png",
+            "24x24": "https://avatar.example.com/avatar.png",
+            "16x16": "https://avatar.example.com/avatar.png",
+            "32x32": "https://avatar.example.com/avatar.png"
+          },
+          "displayName": "Rook Hydra",
+          "active": true,
+          "timeZone": "America/New_York",
+          "locale": "en_US"
+        },
+        "created": "2026-02-10T13:15:00.000+0200",
+        "size": 96,
+        "mimeType": "application/pdf",
+        "content": "https://example.atlassian.acme.net/jira/rest/api/3/attachment/content/20002"
+      }
+    ],
     "comment": {
       "comments": [],
       "self": "https://example.atlassian.acme.net/rest/api/3/issue/ENG-8/comment",
@@ -139,6 +189,36 @@
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Rollout visual reference:"
+            }
+          ]
+        },
+        {
+          "type": "mediaSingle",
+          "attrs": {
+            "width": 792,
+            "widthType": "pixel",
+            "layout": "align-start"
+          },
+          "content": [
+            {
+              "type": "media",
+              "attrs": {
+                "type": "file",
+                "id": "media-rollout-diagram",
+                "alt": "rollout-diagram.png",
+                "collection": "",
+                "height": 768,
+                "width": 1280
+              }
             }
           ]
         }

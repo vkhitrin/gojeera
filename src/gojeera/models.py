@@ -138,6 +138,7 @@ class WorkItemComment(BaseModel):
     updated: datetime | None = None
     update_author: JiraUser | None = None
     body: dict | str | None = None
+    rendered_body: str | None = None
 
     def updated_on(self) -> str:
         if not self.update_author:
@@ -150,13 +151,6 @@ class WorkItemComment(BaseModel):
 
     def created_on(self) -> str:
         return self.updated.strftime('%Y-%m-%d %H:%M') if self.updated else ''
-
-    def get_body(self, base_url: str | None = None) -> str:
-        if self.body is None:
-            return ''
-        if isinstance(self.body, str):
-            return self.body
-        return _convert_adf_to_markdown(self.body, base_url)
 
 
 @dataclass
@@ -383,7 +377,33 @@ class JiraWorkItem(JiraBaseWorkItem):
             return ''
         if isinstance(self.description, str):
             return self.description
-        return _convert_adf_to_markdown(self.description, base_url)
+        from gojeera.utils.adf_helpers import convert_adf_to_markdown
+        from gojeera.utils.urls import build_external_url_for_attachment
+
+        media_attachment_details = {
+            attachment.id: (
+                attachment.filename,
+                build_external_url_for_attachment(attachment.id, attachment.filename),
+            )
+            for attachment in self.attachments or []
+            if attachment.id and attachment.filename
+        }
+        media_attachment_details.update(
+            {
+                attachment.filename: (
+                    attachment.filename,
+                    build_external_url_for_attachment(attachment.id, attachment.filename),
+                )
+                for attachment in self.attachments or []
+                if attachment.id and attachment.filename
+            }
+        )
+
+        return convert_adf_to_markdown(
+            self.description,
+            base_url,
+            media_attachment_details=media_attachment_details,
+        )
 
     def __repr__(self) -> str:
         return f'id:{self.id} - key:{self.key}'

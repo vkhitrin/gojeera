@@ -180,3 +180,114 @@ class TestAdfToMarkdownConversion:
         markdown = convert_adf_to_markdown(adf, base_url='https://example.atlassian.acme.net')
 
         assert markdown.strip() == '[ENG-1](https://example.atlassian.acme.net/browse/ENG-1)'
+
+    def test_media_single_renders_internal_attachment_link(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'mediaSingle',
+                    'content': [
+                        {
+                            'type': 'media',
+                            'attrs': {
+                                'type': 'file',
+                                'id': 'attachment-1',
+                                'alt': 'image-20260205-112310.png',
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(
+            adf,
+            media_attachment_details={
+                'attachment-1': (
+                    'image-20260205-112310.png',
+                    'https://example.atlassian.acme.net/secure/attachment/66811/image-20260205-112310.png',
+                )
+            },
+        )
+
+        assert (
+            markdown.strip()
+            == '[image-20260205-112310.png](https://example.atlassian.acme.net/secure/attachment/66811/image-20260205-112310.png)'
+        )
+
+    def test_media_inline_without_filename_renders_generic_attachment_link(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'paragraph',
+                    'content': [
+                        {'type': 'text', 'text': 'End result:'},
+                        {'type': 'hardBreak'},
+                        {
+                            'type': 'mediaInline',
+                            'attrs': {'id': 'media-1', 'collection': '', 'type': 'file'},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(
+            adf,
+            media_attachment_details={
+                'media-1': (
+                    'Attachment',
+                    'https://example.atlassian.acme.net/secure/attachment/66811/Attachment',
+                )
+            },
+        )
+
+        assert (
+            markdown.strip()
+            == 'End result:  \n[Attachment](https://example.atlassian.acme.net/secure/attachment/66811/Attachment)'
+        )
+
+    def test_media_inline_uses_rendered_body_to_resolve_attachment_filename(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'paragraph',
+                    'content': [
+                        {'type': 'text', 'text': 'End result:'},
+                        {'type': 'hardBreak'},
+                        {
+                            'type': 'mediaInline',
+                            'attrs': {
+                                'id': 'e2efe69b-4f1f-4ee0-a223-b915c960bbb5',
+                                'collection': '',
+                                'type': 'file',
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+        rendered_body = (
+            '<p>End result:<br/>'
+            '<span class="nobr"><a href="/rest/api/3/attachment/content/74914" '
+            'data-attachment-name="API Telemetry_2026-03-29-2026-04-05.pdf" '
+            'data-media-services-id="e2efe69b-4f1f-4ee0-a223-b915c960bbb5" '
+            'rel="noreferrer">API Telemetry_2026-03-29-2026-04-05.pdf</a></span></p>'
+        )
+
+        markdown = convert_adf_to_markdown(
+            adf,
+            base_url='https://example.atlassian.acme.net',
+            rendered_body=rendered_body,
+        )
+
+        assert markdown.strip() == (
+            'End result:  \n'
+            '[API Telemetry_2026-03-29-2026-04-05.pdf](https://example.atlassian.acme.net/secure/attachment/74914/API%20Telemetry_2026-03-29-2026-04-05.pdf)'
+        )

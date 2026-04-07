@@ -1,8 +1,16 @@
 import asyncio
+from datetime import datetime
+from types import SimpleNamespace
 
 from gojeera.app import JiraApp
+from gojeera.components.work_item_attachments import AttachmentsDataTable
+from gojeera.models import Attachment, JiraUser
+from gojeera.utils.adf_helpers import extract_media_attachment_details, replace_media_with_text
 from gojeera.widgets.gojeera_markdown import (
+    ATTACHMENT_BROWSER_OPEN_HINT,
+    AttachmentTooltipProvider,
     ExtendedMarkdownParagraph,
+    build_attachment_tooltip,
     get_markdown_link_href,
 )
 
@@ -81,7 +89,175 @@ async def open_description_and_hover_wrapped_link(pilot):
     await pilot.pause(0.3)
 
 
+async def click_attachment_link_and_open_attachments_tab(pilot):
+    await wait_for_mount(pilot)
+    await load_work_item_from_search(pilot, 'ENG-1')
+
+    await pilot.app.workers.wait_for_complete()
+    await wait_until(
+        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
+
+    paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
+    attachment_paragraph = next(
+        paragraph
+        for paragraph in paragraphs
+        if 'image-20260205-112310.png' in paragraph.content.plain
+    )
+    attachment_paragraph.action_attachment('image-20260205-112310.png')
+
+    await wait_until(lambda: pilot.app.screen.tabs.active == 'tab-attachments', timeout=3.0)
+    await wait_until(
+        lambda: pilot.app.screen.query_one(AttachmentsDataTable).cursor_row == 0,
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
+
+
 class TestWorkItemDescription:
+    def test_build_attachment_tooltip_includes_attachment_metadata(self):
+        tooltip = build_attachment_tooltip(
+            'report.pdf',
+            mime_type='application/pdf',
+            size_kb='416.74 KB',
+            created_date='2026-04-05 17:32',
+            author='vadim.khitrin@plainid.com',
+        )
+
+        assert 'report.pdf' in tooltip.plain
+        assert 'application/pdf' in tooltip.plain
+        assert '416.74 KB' in tooltip.plain
+        assert '2026-04-05 17:32' in tooltip.plain
+        assert 'vadim.khitrin@plainid.com' in tooltip.plain
+
+    def test_attachment_tooltip_provider_uses_loaded_attachment_metadata(self):
+        attachment = Attachment(
+            id='74914',
+            filename='report.pdf',
+            mime_type='application/pdf',
+            size=426744,
+            created=datetime(2026, 4, 5, 17, 32),
+            author=JiraUser(
+                account_id='user-1',
+                active=True,
+                display_name='Vadim Khitrin',
+                email='vadim.khitrin@plainid.com',
+            ),
+        )
+        markdown = SimpleNamespace(
+            app=SimpleNamespace(
+                screen=SimpleNamespace(
+                    work_item_attachments_widget=SimpleNamespace(attachments=[attachment])
+                )
+            )
+        )
+
+        tooltip = AttachmentTooltipProvider(markdown).get('report.pdf')
+
+        assert 'report.pdf' in tooltip.plain
+        assert 'application/pdf' in tooltip.plain
+        assert '416.74 KB' in tooltip.plain
+        assert 'vadim.khitrin@plainid.com' in tooltip.plain
+
+    def test_attachment_tooltip_provider_falls_back_when_attachment_is_unknown(self):
+        markdown = SimpleNamespace(
+            app=SimpleNamespace(
+                screen=SimpleNamespace(work_item_attachments_widget=SimpleNamespace(attachments=[]))
+            )
+        )
+
+        tooltip = AttachmentTooltipProvider(markdown).get(None)
+
+        assert (
+            tooltip.plain
+            == f'Attachment\n\nClick to open attachments tab\n{ATTACHMENT_BROWSER_OPEN_HINT}'
+        )
+
+    def test_media_reference_is_not_emitted_as_markdown_link(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'mediaSingle',
+                    'content': [
+                        {
+                            'type': 'media',
+                            'attrs': {'type': 'file', 'id': '1', 'alt': 'native-click.png'},
+                        }
+                    ],
+                }
+            ],
+        }
+
+        replaced = replace_media_with_text(
+            adf,
+            media_attachment_details={
+                '1': (
+                    'native-click.png',
+                    'https://example.atlassian.acme.net/secure/attachment/1/native-click.png',
+                )
+            },
+        )
+        text_node = replaced['content'][0]['content'][0]
+        assert (
+            text_node['text']
+            == '[native-click.png](https://example.atlassian.acme.net/secure/attachment/1/native-click.png)'
+        )
+
+    def test_media_inline_without_filename_is_emitted_as_generic_attachment_text(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'paragraph',
+                    'content': [
+                        {'type': 'text', 'text': 'End result:'},
+                        {'type': 'hardBreak'},
+                        {'type': 'mediaInline', 'attrs': {'type': 'file', 'id': '1'}},
+                    ],
+                }
+            ],
+        }
+
+        replaced = replace_media_with_text(
+            adf,
+            media_attachment_details={
+                '1': (
+                    'Attachment',
+                    'https://example.atlassian.acme.net/secure/attachment/1/Attachment',
+                )
+            },
+        )
+        text_node = replaced['content'][0]['content'][2]
+        assert (
+            text_node['text']
+            == '[Attachment](https://example.atlassian.acme.net/secure/attachment/1/Attachment)'
+        )
+
+    def test_extract_media_attachment_details_from_rendered_body(self):
+        rendered_body = (
+            '<a href="/rest/api/3/attachment/content/74914" '
+            'data-attachment-name="API Telemetry_2026-03-29-2026-04-05.pdf" '
+            'data-media-services-id="e2efe69b-4f1f-4ee0-a223-b915c960bbb5">'
+            'API Telemetry_2026-03-29-2026-04-05.pdf</a>'
+        )
+
+        mappings = extract_media_attachment_details(
+            rendered_body,
+            base_url='https://example.atlassian.acme.net',
+        )
+
+        assert mappings == {
+            'e2efe69b-4f1f-4ee0-a223-b915c960bbb5': (
+                'API Telemetry_2026-03-29-2026-04-05.pdf',
+                'https://example.atlassian.acme.net/secure/attachment/74914/API%20Telemetry_2026-03-29-2026-04-05.pdf',
+            )
+        }
+
     def test_wrapped_link_snapshot(
         self,
         snap_compare,
@@ -126,4 +302,19 @@ class TestWorkItemDescription:
             app,
             terminal_size=(120, 40),
             run_before=load_focused_internal_jira_link_from_keybind,
+        )
+
+    def test_attachment_link_opens_attachments_tab(
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=click_attachment_link_and_open_attachments_tab,
         )

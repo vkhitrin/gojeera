@@ -69,7 +69,6 @@ show_work_item_web_links: true
 search_results_per_page: 20
 search_results_truncate_work_item_summary: null
 theme: null
-enable_images_support: true
 ```
 
 - **`show_work_item_web_links`** (default: `true`): Retrieve and
@@ -81,8 +80,6 @@ enable_images_support: true
   truncation if not set)
 - **`theme`** (optional): Name of the Textual theme to use for
   the UI
-- **`enable_images_support`** (default: `true`): Display images
-  attached to work items in the Attachments tab
 
 ### Search Behavior
 
@@ -287,6 +284,6 @@ jira:
    The dropdown will show only active and future
    sprints from all boards in the project.
 
-3. **JQL filters**: Use local filters for quick access to common
+2. **JQL filters**: Use local filters for quick access to common
    queries. Use remote filters to sync with your team's saved filters in
    Jira.

@@ -156,9 +156,6 @@ class ApplicationConfiguration(BaseSettings):
     """When `enable_creating_additional_fields = True`, optional fields with these IDs will be excluded from rendering.
     Example: ['customfield_10050', 'customfield_10051']
     When `enable_creating_additional_fields = False`, this is also used to exclude specific fields from the default set."""
-    enable_images_support: bool = True
-    """When this is set to `True` gojeera will attempt to display images attached to a work item in the Attachments
-    tab."""
     show_footer: bool = True
     """When this is `True` (default), footer key bindings are shown. When `False`, footer widgets are hidden."""
 

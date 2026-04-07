@@ -1391,6 +1391,7 @@ class APIController:
                 if update_author
                 else None,
                 body=comment.get('body'),
+                rendered_body=comment.get('renderedBody'),
             )
         )
 
@@ -1448,11 +1449,16 @@ class APIController:
                     if update_author
                     else None,
                     body=record.get('body'),
+                    rendered_body=record.get('renderedBody'),
                 )
             )
         return APIControllerResponse(result=comments)
 
-    async def add_comment(self, work_item_key_or_id: str, message: str) -> APIControllerResponse:
+    async def add_comment(
+        self,
+        work_item_key_or_id: str,
+        message: str,
+    ) -> APIControllerResponse:
         """Adds a comment to a work item.
 
         Args:
@@ -1465,7 +1471,10 @@ class APIController:
         if not message:
             return APIControllerResponse(success=False, error='Missing required message.')
         try:
-            response = await self.api.add_comment(work_item_key_or_id, message)
+            response = await self.api.add_comment(
+                work_item_key_or_id,
+                message,
+            )
         except Exception as e:
             exception_details: dict = self._extract_exception_details(e)
             self.logger.error(
@@ -1497,11 +1506,15 @@ class APIController:
             if update_author
             else None,
             body=response.get('body'),
+            rendered_body=response.get('renderedBody'),
         )
         return APIControllerResponse(result=comment)
 
     async def update_comment(
-        self, work_item_key_or_id: str, comment_id: str, message: str
+        self,
+        work_item_key_or_id: str,
+        comment_id: str,
+        message: str,
     ) -> APIControllerResponse:
         """Updates a comment on a work item.
 
@@ -1516,7 +1529,11 @@ class APIController:
         if not message:
             return APIControllerResponse(success=False, error='Missing required message.')
         try:
-            response = await self.api.update_comment(work_item_key_or_id, comment_id, message)
+            response = await self.api.update_comment(
+                work_item_key_or_id,
+                comment_id,
+                message,
+            )
         except Exception as e:
             exception_details: dict = self._extract_exception_details(e)
             self.logger.error(
@@ -1549,6 +1566,7 @@ class APIController:
             if update_author
             else None,
             body=response.get('body'),
+            rendered_body=response.get('renderedBody'),
         )
         return APIControllerResponse(result=comment)
 
@@ -1940,7 +1958,8 @@ class APIController:
         if priority_id := data.get('priority'):
             fields['priority'] = {'id': priority_id}
 
-        if description := data.get('description'):
+        description = data.get('description')
+        if isinstance(description, str) and description.strip():
             from gojeera.utils.adf_helpers import text_to_adf
 
             fields['description'] = text_to_adf(description)

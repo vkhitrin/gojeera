@@ -11,9 +11,7 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.new_attachment_screen import AddAttachmentScreen
 from gojeera.components.save_attachment_screen import SaveAttachmentScreen
-from gojeera.components.view_attachment_screen import ViewAttachmentScreen
 from gojeera.models import Attachment
-from gojeera.utils.mime import can_view_attachment
 from gojeera.utils.urls import build_external_url_for_attachment
 from gojeera.widgets.extended_data_table import ExtendedDataTable
 
@@ -70,6 +68,10 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
     @property
     def attachments_container_widget(self) -> AttachmentsContainer:
         return self.query_one(AttachmentsContainer)
+
+    @property
+    def attachments_table(self) -> 'AttachmentsDataTable | None':
+        return self.query_one(AttachmentsDataTable) if self.query(AttachmentsDataTable) else None
 
     def compose(self) -> ComposeResult:
         with VerticalGroup(classes='tab-content-container') as content:
@@ -162,6 +164,13 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
                 container.mount(table)
                 self.displayed_count = len(attachments)
 
+    def focus_attachment_by_filename(self, filename: str) -> bool:
+        table = self.attachments_table
+        if table is None:
+            return False
+
+        return table.focus_attachment_by_filename(filename)
+
 
 class AttachmentsDataTable(ExtendedDataTable):
     """A data table to list the files attached to a work item."""
@@ -210,6 +219,23 @@ class AttachmentsDataTable(ExtendedDataTable):
             current = current.parent
         return None
 
+    def focus_attachment_by_filename(self, filename: str) -> bool:
+        attachments_widget = self._get_attachments_widget()
+        attachments = attachments_widget.attachments if attachments_widget is not None else None
+        if not attachments:
+            return False
+
+        attachment = next((item for item in attachments if item.filename == filename), None)
+        if attachment is None:
+            return False
+
+        row_index = self.get_row_index(attachment.id)
+        self.move_cursor(row=row_index)
+        self.focus()
+        self._selected_attachment_id = attachment.id
+        self._selected_attachment_file_name = attachment.filename
+        return True
+
     async def action_new_attachment(self) -> None:
         widget = self._get_attachments_widget()
         if widget is not None:
@@ -228,20 +254,15 @@ class AttachmentsDataTable(ExtendedDataTable):
             self._selected_attachment_id = str(event.row_key.value)
             if (row := event.data_table.get_row(event.row_key.value)) and len(row) > 0:
                 self._selected_attachment_file_name = row[0]
-                selected_attachment_file_type = row[-1]
-                if selected_attachment_file_type:
-                    if not can_view_attachment(selected_attachment_file_type.lower()):
-                        self.notify(
-                            f'The type of file {selected_attachment_file_type} is not supported'
-                        )
-                    elif self._selected_attachment_file_name:
-                        self.app.push_screen(
-                            ViewAttachmentScreen(
-                                self._selected_attachment_id,
-                                selected_attachment_file_type,
-                                self._selected_attachment_file_name,
-                            )
-                        )
+                if self._selected_attachment_id and self._selected_attachment_file_name:
+                    work_item_key = self._work_item_key
+                    if work_item_key:
+                        self.notify('Opening attachment in the browser...', title=work_item_key)
+                    app = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+                    if url := build_external_url_for_attachment(
+                        self._selected_attachment_id, self._selected_attachment_file_name, app
+                    ):
+                        app.open_url(url)
 
     async def action_open_attachment(self) -> None:
         if self._selected_attachment_id and self._selected_attachment_file_name:

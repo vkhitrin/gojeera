@@ -1,12 +1,88 @@
 import re
 from typing import Literal, cast, overload
+from urllib.parse import quote, urljoin, urlparse
 
 from atlas_doc_parser.api import parse_node
 from markdown_it import MarkdownIt
 from mdit_py_plugins.tasklists import tasklists_plugin
 
+from gojeera.config import CONFIGURATION
 
-def replace_media_with_text(adf: dict) -> dict:
+
+def _build_attachment_url_from_rendered_href(
+    href: str,
+    filename: str,
+    base_url: str | None,
+) -> str | None:
+    if not href or not filename:
+        return None
+
+    parsed_href = urlparse(href)
+    content_match = re.search(r'/attachment/content/([^/?#]+)', parsed_href.path)
+    resolved_base_url = base_url or CONFIGURATION.get().jira.api_base_url
+    if content_match and resolved_base_url:
+        attachment_id = content_match.group(1)
+        return (
+            f'{resolved_base_url.rstrip("/")}/secure/attachment/{attachment_id}/{quote(filename)}'
+        )
+
+    if parsed_href.scheme and parsed_href.netloc:
+        return href
+
+    if resolved_base_url:
+        return urljoin(f'{resolved_base_url.rstrip("/")}/', href.lstrip('/'))
+
+    return None
+
+
+def extract_media_attachment_details(
+    rendered_body: str | None,
+    base_url: str | None = None,
+) -> dict[str, tuple[str, str | None]]:
+    """Extract Jira media-service-id to attachment details mappings from rendered HTML."""
+    if not rendered_body:
+        return {}
+
+    mappings: dict[str, tuple[str, str | None]] = {}
+    anchor_pattern = re.compile(r'<a\b[^>]*>', re.IGNORECASE)
+    media_id_pattern = re.compile(r'data-media-services-id="([^"]+)"')
+    attachment_name_pattern = re.compile(r'data-attachment-name="([^"]+)"')
+    href_pattern = re.compile(r'href="([^"]+)"')
+
+    for match in anchor_pattern.finditer(rendered_body):
+        anchor_html = match.group(0)
+        media_id_match = media_id_pattern.search(anchor_html)
+        attachment_name_match = attachment_name_pattern.search(anchor_html)
+        if not media_id_match or not attachment_name_match:
+            continue
+
+        filename = attachment_name_match.group(1)
+        href_match = href_pattern.search(anchor_html)
+        href = href_match.group(1) if href_match else ''
+        mappings[media_id_match.group(1)] = (
+            filename,
+            _build_attachment_url_from_rendered_href(href, filename, base_url),
+        )
+
+    return mappings
+
+
+def merge_media_attachment_details(
+    primary: dict[str, tuple[str, str | None]],
+    fallback: dict[str, tuple[str, str | None]],
+) -> dict[str, tuple[str, str | None]]:
+    """Merge attachment detail mappings, preferring primary entries."""
+    merged = dict(fallback)
+    merged.update(primary)
+    return merged
+
+
+def replace_media_with_text(
+    adf: dict,
+    rendered_body: str | None = None,
+    base_url: str | None = None,
+    media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+) -> dict:
     """Replace mediaSingle nodes with inline text nodes showing attachment reference.
 
     Args:
@@ -18,6 +94,11 @@ def replace_media_with_text(adf: dict) -> dict:
     if not isinstance(adf, dict):
         return adf
 
+    resolved_media_attachment_details = merge_media_attachment_details(
+        extract_media_attachment_details(rendered_body, base_url),
+        media_attachment_details or {},
+    )
+
     if 'content' in adf and isinstance(adf['content'], list):
         new_content = []
 
@@ -27,22 +108,50 @@ def replace_media_with_text(adf: dict) -> dict:
                 for media in media_content:
                     if isinstance(media, dict) and media.get('type') == 'media':
                         attrs = media.get('attrs', {})
-                        filename = attrs.get('alt', 'unknown')
+                        filename = attrs.get('alt') or 'unknown'
+                        attachment_url = None
+                        if media_details := resolved_media_attachment_details.get(
+                            attrs.get('id', '')
+                        ):
+                            filename, attachment_url = media_details
+                        elif media_details := resolved_media_attachment_details.get(filename):
+                            filename, attachment_url = media_details
 
                         para_node = {
                             'type': 'paragraph',
                             'content': [
                                 {
                                     'type': 'text',
-                                    'text': f'(See file "{filename}" in attachments tab)',
-                                    'marks': [{'type': 'em'}],
+                                    'text': f'[{filename}]({attachment_url or filename})',
                                 }
                             ],
                         }
                         new_content.append(para_node)
                         break
+            elif node.get('type') == 'mediaInline':
+                attrs = node.get('attrs', {})
+                filename = attrs.get('alt') or 'Attachment'
+                attachment_url = None
+                if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):
+                    filename, attachment_url = media_details
+                elif media_details := resolved_media_attachment_details.get(filename):
+                    filename, attachment_url = media_details
+                attachment_text = f'[{filename}]({attachment_url or filename})'
+                new_content.append(
+                    {
+                        'type': 'text',
+                        'text': attachment_text,
+                    }
+                )
             else:
-                new_content.append(replace_media_with_text(node))
+                new_content.append(
+                    replace_media_with_text(
+                        node,
+                        rendered_body=rendered_body,
+                        base_url=base_url,
+                        media_attachment_details=resolved_media_attachment_details,
+                    )
+                )
 
         adf = adf.copy()
         adf['content'] = new_content
@@ -685,7 +794,12 @@ def replace_decision_with_styled_text(adf: dict) -> dict:
     return adf
 
 
-def convert_adf_to_markdown(value: dict, base_url: str | None = None) -> str:
+def convert_adf_to_markdown(
+    value: dict,
+    base_url: str | None = None,
+    rendered_body: str | None = None,
+    media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+) -> str:
     """Convert Atlassian Document Format (ADF) to Markdown.
 
     Args:
@@ -700,7 +814,12 @@ def convert_adf_to_markdown(value: dict, base_url: str | None = None) -> str:
         and invisible mention markers that will be converted to links during rendering
     """
 
-    fixed_value = replace_media_with_text(value)
+    fixed_value = replace_media_with_text(
+        value,
+        rendered_body=rendered_body,
+        base_url=base_url,
+        media_attachment_details=media_attachment_details,
+    )
     fixed_value = fix_adf_text_with_marks(fixed_value)
     fixed_value = fix_codeblock_in_list(fixed_value)
     fixed_value = fix_ordered_list_attrs(fixed_value)
@@ -1201,7 +1320,7 @@ def text_to_adf(text: str, track_warnings: bool = False) -> dict | tuple[dict, l
         ADF document structure, or tuple of (ADF document, list of warning messages) if track_warnings=True
     """
     if not text or not text.strip():
-        result = {'type': 'doc', 'version': 1, 'content': []}
+        result = build_empty_adf_document()
         return (result, []) if track_warnings else result
 
     md = MarkdownIt('gfm-like')
@@ -1225,6 +1344,15 @@ def text_to_adf(text: str, track_warnings: bool = False) -> dict | tuple[dict, l
     else:
         content = _convert_tokens_to_adf(tokens)
         return {'type': 'doc', 'version': 1, 'content': content}
+
+
+def build_empty_adf_document(with_empty_paragraph: bool = False) -> dict:
+    """Build an empty ADF document, optionally with a single empty paragraph."""
+    return {
+        'type': 'doc',
+        'version': 1,
+        'content': [{'type': 'paragraph', 'content': []}] if with_empty_paragraph else [],
+    }
 
 
 def _convert_tokens_to_adf(

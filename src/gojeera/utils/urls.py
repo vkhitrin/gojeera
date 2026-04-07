@@ -1,6 +1,6 @@
 import re
 from typing import TYPE_CHECKING
-from urllib.parse import ParseResult, urlencode, urlparse
+from urllib.parse import ParseResult, quote, urlencode, urlparse
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
@@ -132,4 +132,4 @@ def build_external_url_for_attachment(
     if not attachment_id or not filename:
         return None
     base_url = _get_base_url(app)
-    return f'{base_url}/secure/attachment/{attachment_id}/{filename}'
+    return f'{base_url}/secure/attachment/{attachment_id}/{quote(filename)}'

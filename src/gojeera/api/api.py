@@ -731,7 +731,11 @@ class JiraAPI:
             ),
         )
 
-    async def add_comment(self, work_item_id_or_key: str, message: str) -> dict:
+    async def add_comment(
+        self,
+        work_item_id_or_key: str,
+        message: str,
+    ) -> dict:
         """Adds a comment to a work item.
 
         Args:
@@ -752,7 +756,9 @@ class JiraAPI:
         )
 
     @staticmethod
-    def _build_payload_to_add_comment(message: str) -> dict:
+    def _build_payload_to_add_comment(
+        message: str,
+    ) -> dict:
         """Build payload for adding a comment, converting markdown to ADF.
 
         Args:
@@ -767,7 +773,12 @@ class JiraAPI:
 
         return {'body': adf_doc}
 
-    async def update_comment(self, work_item_id_or_key: str, comment_id: str, message: str) -> dict:
+    async def update_comment(
+        self,
+        work_item_id_or_key: str,
+        comment_id: str,
+        message: str,
+    ) -> dict:
         """Updates a comment on a work item.
 
         Args:
@@ -803,6 +814,7 @@ class JiraAPI:
             await self._client.make_request(
                 method=httpx.AsyncClient.get,
                 url=f'issue/{work_item_id_or_key}/comment/{comment_id}',
+                params={'expand': 'renderedBody'},
             ),
         )
 
@@ -819,7 +831,7 @@ class JiraAPI:
         Returns:
             A dictionary with the details of the comments.
         """
-        params: dict[str, Any] = {'orderBy': '-created'}
+        params: dict[str, Any] = {'orderBy': '-created', 'expand': 'renderedBody'}
         if limit is not None:
             params['maxResults'] = limit
         if offset is not None:

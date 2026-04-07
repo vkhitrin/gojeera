@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -17,6 +18,14 @@ from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION
 from gojeera.constants import PROCESS_OPTIONAL_FIELDS, SKIP_FIELDS, CustomFieldType
+from gojeera.models import Attachment
+from gojeera.utils.clipboard import (
+    ClipboardAttachmentError,
+    build_staged_attachment_reference_text,
+    materialize_staged_attachment_references,
+    prepare_staged_attachment_text,
+    stage_clipboard_attachments,
+)
 from gojeera.utils.fields import (
     FieldMode,
     get_parent_relation_field_ids_from_fields_data,
@@ -47,6 +56,7 @@ logger = logging.getLogger('gojeera')
 class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('ctrl+backslash', 'show_overlay', 'Jump'),
+        ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
     TITLE = 'New Work Item'
 
@@ -72,6 +82,11 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         self._sprint_field_id: str | None = None
 
         self._cache = get_cache()
+        self._clipboard_attachment_paths: list[Path] = []
+        self._clipboard_attachment_names: list[str] = []
+        self._uploaded_clipboard_attachments: list[Attachment] = []
+        self._created_work_item_key: str | None = None
+        self._is_submitting: bool = False
 
     @property
     def _parent_work_item_type_name(self) -> str | None:
@@ -127,6 +142,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     @property
     def save_button(self) -> Button:
         return self.query_one('#add-work-item-button-save', expect_type=Button)
+
+    @property
+    def cancel_button(self) -> Button:
+        return self.query_one('#add-work-item-button-quit', expect_type=Button)
 
     @property
     def project_selector(self) -> LazySelect:
@@ -1107,77 +1126,226 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     def handle_save(self) -> None:
         if not self._validate_required_fields():
             self.notify('All required values (*) must be provided.', title='Create Work Item')
-        else:
-            project_value = self.project_selector.value
-            work_item_type_value = self.work_item_type_selector.value
-            assignee_value = self.assignee_selector.value
-            reporter_value = self.reporter_selector.value
-
-            data = {
-                'project_key': project_value if project_value != Select.NULL else None,
-                'work_item_type_id': work_item_type_value
-                if work_item_type_value != Select.NULL
-                else None,
-                'assignee_account_id': assignee_value if assignee_value != Select.NULL else None,
-                'summary': self.summary_field.value,
-                'description': self.description_field.text.strip()
-                if self.description_field.text
-                else None,
-            }
-
-            if self._reporter_is_editable:
-                data['reporter_account_id'] = (
-                    reporter_value if reporter_value != Select.NULL else None
-                )
-
-            if self._parent_work_item_key:
-                data['parent_key'] = self._parent_work_item_key
-
-            from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
-
-            for wrapper in self.dynamic_fields_container.children:
-                if not isinstance(wrapper, DynamicFieldWrapper):
-                    continue
-
-                widget = wrapper.widget
-                if not widget:
-                    continue
-
-                field_id = widget.id
-                if not field_id:
-                    continue
-
-                value = wrapper.get_value_for_create()
-
-                if field_id == 'duedate':
-                    if value:
-                        data[field_id] = value
-                    continue
-
-                if value and field_id in self._field_metadata:
-                    field_meta = self._field_metadata[field_id]
-                    formatted_value = self._format_field_value(field_id, value, field_meta, widget)
-                    if formatted_value is not None:
-                        data[field_id] = formatted_value
-                elif value:
-                    data[field_id] = value
-
-            sprint_picker = self.sprint_picker_widget
-            if (
-                self._sprint_field_id
-                and sprint_picker.is_mounted
-                and not self._sprint_inherited_from_parent
-            ):
-                sprint_value = sprint_picker.get_value_for_create()
-                if sprint_value is not None:
-                    data[self._sprint_field_id] = sprint_value
-
-            self.notify('Creating the work item...', title='Create Work Item')
-            self.dismiss(data)
+            return
+        self.run_worker(self._create_work_item(), exclusive=True)
 
     @on(Button.Pressed, '#add-work-item-button-quit')
     def handle_cancel(self) -> None:
+        if self._is_submitting:
+            return
         self.dismiss()
+
+    def _cleanup_staged_attachments(self) -> None:
+        for path in self._clipboard_attachment_paths:
+            try:
+                path.unlink(missing_ok=True)
+                parent_dir = path.parent
+                if parent_dir.name.startswith('gojeera-clipboard-'):
+                    parent_dir.rmdir()
+            except OSError:
+                pass
+        self._clipboard_attachment_paths.clear()
+        self._clipboard_attachment_names.clear()
+        self._uploaded_clipboard_attachments.clear()
+
+    def on_unmount(self) -> None:
+        self._cleanup_staged_attachments()
+
+    def _set_submitting(self, submitting: bool) -> None:
+        self._is_submitting = submitting
+        self.query_one('#modal_footer').loading = submitting
+        self.save_button.disabled = submitting
+        self.cancel_button.disabled = submitting
+
+    def dismiss_on_backdrop_click(self) -> None:
+        if self._is_submitting:
+            return
+        super().dismiss_on_backdrop_click()
+
+    def _collect_create_payload(self) -> dict[str, object | None]:
+        project_value = self.project_selector.value
+        work_item_type_value = self.work_item_type_selector.value
+        assignee_value = self.assignee_selector.value
+        reporter_value = self.reporter_selector.value
+
+        data: dict[str, object | None] = {
+            'project_key': project_value if project_value != Select.NULL else None,
+            'work_item_type_id': (
+                work_item_type_value if work_item_type_value != Select.NULL else None
+            ),
+            'assignee_account_id': assignee_value if assignee_value != Select.NULL else None,
+            'summary': self.summary_field.value,
+            'description': self.description_field.text.strip()
+            if self.description_field.text
+            else None,
+        }
+
+        if self._reporter_is_editable:
+            data['reporter_account_id'] = reporter_value if reporter_value != Select.NULL else None
+
+        if self._parent_work_item_key:
+            data['parent_key'] = self._parent_work_item_key
+
+        from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
+
+        for wrapper in self.dynamic_fields_container.children:
+            if not isinstance(wrapper, DynamicFieldWrapper):
+                continue
+
+            widget = wrapper.widget
+            if not widget:
+                continue
+
+            field_id = widget.id
+            if not field_id:
+                continue
+
+            value = wrapper.get_value_for_create()
+            if field_id == 'duedate':
+                if value:
+                    data[field_id] = value
+                continue
+
+            if value and field_id in self._field_metadata:
+                field_meta = self._field_metadata[field_id]
+                formatted_value = self._format_field_value(field_id, value, field_meta, widget)
+                if formatted_value is not None:
+                    data[field_id] = formatted_value
+            elif value:
+                data[field_id] = value
+
+        sprint_picker = self.sprint_picker_widget
+        if (
+            self._sprint_field_id
+            and sprint_picker.is_mounted
+            and not self._sprint_inherited_from_parent
+        ):
+            sprint_value = sprint_picker.get_value_for_create()
+            if sprint_value is not None:
+                data[self._sprint_field_id] = sprint_value
+
+        return data
+
+    async def _create_work_item(self) -> None:
+        application = cast('JiraApp', self.app)
+        data = self._collect_create_payload()
+
+        description_attachment_template = ''
+        description = data.get('description')
+        if self._clipboard_attachment_paths and isinstance(description, str):
+            description_attachment_template = description
+            data['description'] = prepare_staged_attachment_text(description)
+
+        base_fields = {
+            'project_key',
+            'parent_key',
+            'work_item_type_id',
+            'assignee_account_id',
+            'reporter_account_id',
+            'summary',
+            'description',
+            'duedate',
+            'priority',
+        }
+        base_data = {k: v for k, v in data.items() if k in base_fields}
+        dynamic_fields = {k: v for k, v in data.items() if k not in base_fields}
+
+        self._set_submitting(True)
+        if self._created_work_item_key is None:
+            self.notify('Creating the work item...', title='Create Work Item')
+            response: APIControllerResponse = await application.api.new_work_item(
+                base_data, **dynamic_fields
+            )
+            if not response.success or not response.result:
+                self.notify(
+                    f'Failed to create the work item: {response.error}',
+                    severity='error',
+                    title='Create Work Item',
+                )
+                self._set_submitting(False)
+                return
+
+            self._created_work_item_key = response.result.key
+            self.notify(
+                f'Work item {response.result.key} created successfully',
+                title='Create Work Item',
+            )
+
+        if self._clipboard_attachment_paths and self._created_work_item_key:
+            (
+                uploaded_attachments,
+                upload_errors,
+                failed_file_paths,
+            ) = await application.upload_staged_attachments(
+                self._created_work_item_key,
+                [str(path) for path in self._clipboard_attachment_paths],
+            )
+            self._uploaded_clipboard_attachments.extend(uploaded_attachments)
+            self._clipboard_attachment_paths = [Path(path) for path in failed_file_paths]
+
+            if uploaded_attachments:
+                self.notify(
+                    f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
+                    title='Create Work Item',
+                )
+            if upload_errors:
+                self.notify(
+                    f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
+                    severity='error',
+                    title='Create Work Item',
+                )
+                self._set_submitting(False)
+                return
+
+        if (
+            self._created_work_item_key
+            and self._uploaded_clipboard_attachments
+            and description_attachment_template
+        ):
+            uploaded_by_name = {
+                attachment.filename: attachment
+                for attachment in self._uploaded_clipboard_attachments
+            }
+            ordered_uploaded_attachments = [
+                uploaded_by_name.get(filename) for filename in self._clipboard_attachment_names
+            ]
+            reference_description = prepare_staged_attachment_text(
+                materialize_staged_attachment_references(
+                    description_attachment_template,
+                    self._clipboard_attachment_names,
+                    ordered_uploaded_attachments,
+                    app=application,
+                )
+            ).strip()
+            if reference_description:
+                created_work_item_response = await application.api.get_work_item(
+                    self._created_work_item_key
+                )
+                if (
+                    created_work_item_response.success
+                    and created_work_item_response.result
+                    and created_work_item_response.result.work_items
+                ):
+                    update_response = await application.api.update_work_item(
+                        created_work_item_response.result.work_items[0],
+                        {'description': reference_description},
+                    )
+                    if not update_response.success:
+                        self.notify(
+                            f'Failed to update work item description: {update_response.error}',
+                            severity='error',
+                            title='Create Work Item',
+                        )
+                        self._set_submitting(False)
+                        return
+
+        self.dismiss(
+            {
+                'created_work_item_key': self._created_work_item_key,
+                'parent_key': data.get('parent_key'),
+                'uploaded_attachments': self._uploaded_clipboard_attachments,
+            }
+        )
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -1254,3 +1422,33 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             textarea.move_cursor(cursor_position)
 
             textarea.insert(insertion_text)
+
+    async def action_paste_clipboard_attachment(self) -> None:
+        try:
+            staged_paths = stage_clipboard_attachments()
+        except ClipboardAttachmentError as error:
+            self.notify(str(error), severity='warning')
+            return
+
+        if not staged_paths:
+            self.notify(
+                'Clipboard does not contain a supported file path or text payload.',
+                severity='warning',
+            )
+            return
+
+        self.handle_staged_clipboard_attachments(staged_paths)
+
+    def handle_staged_clipboard_attachments(self, staged_paths: list[Path]) -> None:
+        self._clipboard_attachment_paths.extend(staged_paths)
+        self._clipboard_attachment_names.extend(path.name for path in staged_paths)
+
+        references = '\n'.join(
+            build_staged_attachment_reference_text(path.name) for path in staged_paths
+        )
+        textarea = self.description_field.query_one(TextArea)
+        textarea.focus()
+        textarea.insert(references)
+
+        attachment_label = 'attachment' if len(staged_paths) == 1 else 'attachments'
+        self.notify(f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.')

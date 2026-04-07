@@ -19,12 +19,67 @@ from textual.widgets import Static
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.comment_screen import CommentScreen
 from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.models import WorkItemComment
-from gojeera.utils.urls import build_external_url_for_work_item
+from gojeera.models import Attachment, WorkItemComment
+from gojeera.utils.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.urls import build_external_url_for_attachment, build_external_url_for_work_item
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
+
+
+def _merge_uploaded_attachments_into_widget(widget, uploaded_attachments: list[Attachment]) -> None:
+    if not uploaded_attachments:
+        return
+
+    from gojeera.components.work_item_attachments import WorkItemAttachmentsWidget
+
+    attachments_widget = widget.screen.query_one(WorkItemAttachmentsWidget)
+    current_attachments = attachments_widget.attachments or []
+    attachments_widget.attachments = current_attachments + uploaded_attachments
+
+
+def _apply_comment_result_to_collection(
+    current_comments: list[WorkItemComment] | None,
+    comment: WorkItemComment,
+    mode: str,
+) -> list[WorkItemComment]:
+    existing_comments = current_comments or []
+    if mode == 'edit':
+        return [comment if item.id == comment.id else item for item in existing_comments]
+    return [comment, *existing_comments]
+
+
+def _apply_comment_body_override(
+    comment: WorkItemComment, comment_body_markdown: str | None
+) -> WorkItemComment:
+    if not comment_body_markdown:
+        return comment
+    return WorkItemComment(
+        id=comment.id,
+        author=comment.author,
+        created=comment.created,
+        updated=comment.updated,
+        update_author=comment.update_author,
+        body=comment_body_markdown,
+        rendered_body=None,
+    )
+
+
+def _build_media_attachment_details(
+    attachments: list[Attachment] | None,
+) -> dict[str, tuple[str, str | None]]:
+    details: dict[str, tuple[str, str | None]] = {}
+    for attachment in attachments or []:
+        if not attachment.id or not attachment.filename:
+            continue
+        resolved = (
+            attachment.filename,
+            build_external_url_for_attachment(attachment.id, attachment.filename),
+        )
+        details[attachment.id] = resolved
+        details[attachment.filename] = resolved
+    return details
 
 
 class CommentContainer(Vertical, can_focus=False):
@@ -159,10 +214,37 @@ class CommentContainer(Vertical, can_focus=False):
                 'Comment information not available', severity='warning', title=self._work_item_key
             )
 
-    def handle_edit_result(self, result: str | None) -> None:
-        if result and result.strip():
-            if self._work_item_key and self._comment_id:
-                self.run_worker(self.update_comment(self._work_item_key, self._comment_id, result))
+    def handle_edit_result(self, result: dict[str, object] | str | None) -> None:
+        if not isinstance(result, dict):
+            return
+
+        comment = result.get('comment')
+        comment_body_markdown = result.get('comment_body_markdown')
+        uploaded_attachments = cast(list[Attachment], result.get('uploaded_attachments') or [])
+        if not isinstance(comment, WorkItemComment):
+            return
+        if comment_body_markdown is not None and not isinstance(comment_body_markdown, str):
+            comment_body_markdown = str(comment_body_markdown)
+        comment = _apply_comment_body_override(comment, comment_body_markdown)
+
+        _merge_uploaded_attachments_into_widget(self, uploaded_attachments)
+        if uploaded_attachments and self._work_item_key:
+            self.notify(
+                f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
+                title=self._work_item_key,
+            )
+        self.notify('Comment updated successfully', title=self._work_item_key or '')
+
+        current = self.parent
+        while current is not None:
+            if isinstance(current, WorkItemCommentsWidget):
+                current.comments = _apply_comment_result_to_collection(
+                    current.comments,
+                    comment,
+                    'edit',
+                )
+                break
+            current = current.parent
 
     def handle_delete_choice(self, result: bool | None) -> None:
         if result:
@@ -207,44 +289,6 @@ class CommentContainer(Vertical, can_focus=False):
             self.notify('Comment deleted successfully', title=work_item_key)
             self._update_comments_after_delete()
 
-    async def update_comment(self, work_item_key: str, comment_id: str, message: str) -> None:
-        """Update a comment associated with the work item.
-
-        Args:
-            work_item_key: the key of the work item whose comment we want to update.
-            comment_id: the ID of the comment we want to update.
-            message: the new message content in markdown format.
-
-        Returns:
-            `None`
-        """
-        application = cast('JiraApp', self.app)  # noqa: F821
-        response: APIControllerResponse = await application.api.update_comment(
-            work_item_key, comment_id, message
-        )
-        if not response.success:
-            self.notify(
-                f'Failed to update the comment: {response.error}',
-                severity='error',
-                title=work_item_key,
-            )
-        else:
-            self.notify('Comment updated successfully', title=work_item_key)
-            if isinstance(response.result, WorkItemComment):
-                updated_comment = response.result
-                current = self.parent
-                while current is not None:
-                    if isinstance(current, WorkItemCommentsWidget):
-                        updated_comments: list[WorkItemComment] = []
-                        for comment in current.comments or []:
-                            if comment.id == updated_comment.id:
-                                updated_comments.append(updated_comment)
-                            else:
-                                updated_comments.append(comment)
-                        current.comments = updated_comments
-                        break
-                    current = current.parent
-
 
 class CommentsScrollView(VerticalScroll):
     """Custom VerticalScroll with vim-style navigation."""
@@ -273,7 +317,7 @@ class CommentsScrollView(VerticalScroll):
             'open_comment_in_browser',
             'Open in browser',
         ),
-        Binding('e', 'edit_comment', 'Edit comment'),
+        Binding('ctrl+e', 'edit_comment', 'Edit comment'),
         Binding('ctrl+d', 'delete_comment', 'Delete comment'),
     ]
 
@@ -413,44 +457,34 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     def watch_is_loading(self, loading: bool) -> None:
         self.content_container.loading = loading
 
-    def save_comment(self, content: str | None) -> None:
-        if content and content.strip():
-            self.run_worker(self.add_comment_to_work_item(content))
+    def save_comment(self, result: dict[str, object] | str | None) -> None:
+        if not isinstance(result, dict):
+            return
+
+        comment = result.get('comment')
+        comment_body_markdown = result.get('comment_body_markdown')
+        uploaded_attachments = cast(list[Attachment], result.get('uploaded_attachments') or [])
+        if not isinstance(comment, WorkItemComment):
+            return
+        if comment_body_markdown is not None and not isinstance(comment_body_markdown, str):
+            comment_body_markdown = str(comment_body_markdown)
+        comment = _apply_comment_body_override(comment, comment_body_markdown)
+
+        _merge_uploaded_attachments_into_widget(self, uploaded_attachments)
+        if uploaded_attachments and self.work_item_key:
+            self.notify(
+                f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
+                title=self.work_item_key,
+            )
+        if self.work_item_key:
+            self.notify('Comment added successfully', title=self.work_item_key)
+        self.comments = _apply_comment_result_to_collection(self.comments, comment, 'new')
 
     def action_add_comment(self) -> None:
         if self.work_item_key:
             self.app.push_screen(
                 CommentScreen(mode='new', work_item_key=self.work_item_key), self.save_comment
             )
-
-    async def add_comment_to_work_item(self, content: str) -> None:
-        """Adds a comment to the work item and retrieves the list comments if the comment was added successfully.
-
-        Args:
-            content: the message of the comment.
-
-        Return:
-            `None`
-        """
-        if not self.work_item_key:
-            return
-
-        if message := content.strip():
-            application = cast('JiraApp', self.app)  # noqa: F821
-            response: APIControllerResponse = await application.api.add_comment(
-                self.work_item_key, message
-            )
-            if not response.success:
-                self.notify(
-                    f'Failed to add the comment: {response.error}',
-                    severity='error',
-                    title=self.work_item_key,
-                )
-            else:
-                self.notify('Comment added successfully', title=self.work_item_key)
-                if isinstance(response.result, WorkItemComment):
-                    current_comments = self.comments or []
-                    self.comments = [response.result, *current_comments]
 
     async def watch_comments(self, items: list[WorkItemComment] | None) -> None:
         """Watch for changes to comments."""
@@ -487,6 +521,11 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
         self._last_comment_ids = current_comment_fingerprint
 
+        attachments_widget = getattr(self.screen, 'work_item_attachments_widget', None)
+        media_attachment_details = _build_media_attachment_details(
+            getattr(attachments_widget, 'attachments', None)
+        )
+
         with self.app.batch_update():
             for container in scroll_view.query(CommentContainer):
                 await container.remove()
@@ -520,7 +559,19 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 subtitle_text = Text(subtitle, style='dim')
                 inner_container.compose_add_child(Static(subtitle_text, classes='comment-metadata'))
 
-                if content := comment.get_body(base_url=base_url):
+                if isinstance(comment.body, str):
+                    content = comment.body
+                elif comment.body is not None:
+                    content = convert_adf_to_markdown(
+                        comment.body,
+                        base_url,
+                        rendered_body=comment.rendered_body,
+                        media_attachment_details=media_attachment_details,
+                    )
+                else:
+                    content = ''
+
+                if content:
                     markdown_widget = GojeeraMarkdown(
                         content,
                         classes='comment-body',
@@ -542,7 +593,7 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 comment_container = CommentContainer(
                     work_item_key=self.work_item_key,
                     comment_id=comment.id,
-                    comment_body=comment.get_body(base_url=base_url) or '',
+                    comment_body=content,
                     comment_author_id=comment.author.account_id if comment.author else None,
                     id=f'comment-{comment.id}',
                 )

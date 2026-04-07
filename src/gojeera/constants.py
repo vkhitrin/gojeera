@@ -69,6 +69,9 @@ SKIP_FIELDS = [
     'summary',
     'description',
     'parent',
+    'issuelinks',
+    'attachment',
+    'assignee',
 ]
 """List of field IDs to skip when creating work items (handled separately)."""
 
@@ -95,24 +98,6 @@ class CustomFieldType(Enum):
     )
     GH_EPIC_LINK = 'com.pyxis.greenhopper.jira:gh-epic-link'
     GH_SPRINT = 'com.pyxis.greenhopper.jira:gh-sprint'
-
-
-class SupportedAttachmentVisualizationMimeTypes(Enum):
-    """MIME types supported for attachment visualization."""
-
-    IMAGE_WEBP = 'image/webp'
-    IMAGE_PNG = 'image/png'
-    IMAGE_JPEG = 'image/jpeg'
-    IMAGE_JPG = 'image/jpg'
-    IMAGE_GIF = 'image/gif'
-    IMAGE_BMP = 'image/bmp'
-    IMAGE_AVIF = 'image/avif'
-    IMAGE_TIFF = 'image/tiff'
-    APPLICATION_JSON = 'application/json'
-    APPLICATION_XML = 'application/xml'
-    TEXT_CSV = 'text/csv'
-    TEXT_PLAIN = 'text/plain'
-    TEXT_MARKDOWN = 'text/markdown'
 
 
 class WorkItemManualUpdateFieldKeys(Enum):

@@ -1,7 +1,8 @@
 from inspect import isawaitable
 import logging
 import re
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Callable, Protocol, cast
+from urllib.parse import unquote, urlparse
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -26,12 +27,21 @@ logger = logging.getLogger('gojeera')
 
 if TYPE_CHECKING:
     from gojeera.app import MainScreen
+    from gojeera.models import Attachment
 
 WORK_ITEM_BROWSE_TOOLTIP_META_KEY = 'gojeera_work_item_browse_tooltip'
 WORK_ITEM_BROWSE_KEY_META_KEY = 'gojeera_work_item_key'
 MARKDOWN_LINK_HREF_META_KEY = 'gojeera_link_href'
+ATTACHMENT_REFERENCE_FILENAME_META_KEY = 'gojeera_attachment_filename'
+ATTACHMENT_REFERENCE_TOOLTIP_META_KEY = 'gojeera_attachment_tooltip'
 WORK_ITEM_OPEN_HINT = 'CTRL+Left Mouse Click to open in gojeera'
+ATTACHMENT_OPEN_HINT = 'Click to open attachments tab'
+ATTACHMENT_BROWSER_OPEN_HINT = 'CTRL+O to open attachment in browser'
 WORK_ITEM_TOOLTIP_FIELDS = ['summary', 'status', 'issuetype']
+
+
+class _AttachmentTooltipMarkdown(Protocol):
+    app: App
 
 
 def build_work_item_tooltip(
@@ -57,6 +67,33 @@ def build_loading_work_item_tooltip() -> Text:
     tooltip.append('Loading work item...', style='bold blue')
     tooltip.append('\n')
     tooltip.append(WORK_ITEM_OPEN_HINT)
+    return tooltip
+
+
+def build_attachment_tooltip(
+    filename: str | None,
+    mime_type: str | None = None,
+    size_kb: str | None = None,
+    created_date: str | None = None,
+    author: str | None = None,
+) -> Text:
+    """Build a rich tooltip for an attachment reference."""
+    tooltip = Text()
+    tooltip.append(filename.strip() if filename else 'Attachment', style='bold')
+
+    detail_parts = [part for part in [mime_type, size_kb, created_date] if part]
+    if detail_parts:
+        tooltip.append('\n')
+        tooltip.append(' • '.join(detail_parts), style='dim')
+
+    if author:
+        tooltip.append('\n')
+        tooltip.append(author, style='dim')
+
+    tooltip.append('\n\n')
+    tooltip.append(ATTACHMENT_OPEN_HINT, style='dim')
+    tooltip.append('\n')
+    tooltip.append(ATTACHMENT_BROWSER_OPEN_HINT, style='dim')
     return tooltip
 
 
@@ -92,6 +129,51 @@ def get_markdown_link_href(style: RichStyle | Style) -> str | None:
     meta = style.meta or {}
     href = meta.get(MARKDOWN_LINK_HREF_META_KEY)
     return href if isinstance(href, str) else None
+
+
+def get_attachment_reference_filename(style: RichStyle | Style) -> str | None:
+    """Extract an attachment filename from rendered style metadata."""
+    meta = style.meta or {}
+    filename = meta.get(ATTACHMENT_REFERENCE_FILENAME_META_KEY)
+    return filename if isinstance(filename, str) else None
+
+
+def get_attachment_filename_from_href(href: str) -> str | None:
+    """Extract an attachment filename from a Jira attachment URL."""
+    if not href:
+        return None
+
+    parsed = urlparse(href)
+    if parsed.scheme == 'attachment':
+        return unquote(parsed.path) or 'Attachment'
+
+    path_parts = [part for part in parsed.path.split('/') if part]
+    if len(path_parts) >= 3 and path_parts[-3] == 'attachment' and path_parts[-2] == 'content':
+        return None
+
+    if len(path_parts) >= 4 and path_parts[-4] == 'secure' and path_parts[-3] == 'attachment':
+        return unquote(path_parts[-1]) or None
+
+    if len(path_parts) >= 2 and path_parts[-2] == 'attachment':
+        return None
+    return None
+
+
+def build_attachment_reference_style(filename: str | None) -> Style:
+    """Build style metadata for an internal attachment reference."""
+    attachment_target = filename or ''
+    return Style.from_meta(
+        {
+            ATTACHMENT_REFERENCE_FILENAME_META_KEY: attachment_target,
+            ATTACHMENT_REFERENCE_TOOLTIP_META_KEY: ATTACHMENT_OPEN_HINT,
+        }
+    )
+
+
+def build_attachment_reference_chip_label(filename: str | None) -> str:
+    """Build the inline attachment chip label shown in markdown widgets."""
+    label = filename.strip() if filename else 'Attachment'
+    return f' {label} '
 
 
 def trim_interactive_span_whitespace(content: Content) -> Content:
@@ -132,10 +214,41 @@ def apply_focused_link_style_to_strip(
         Segment(
             text,
             (
-                style + link_hover_style
+                style + RichStyle(underline=False)
+                if style is not None
+                and style.meta is not None
+                and style.meta.get(ATTACHMENT_REFERENCE_FILENAME_META_KEY) is not None
+                else style + link_hover_style
                 if style is not None
                 and style.meta is not None
                 and style.meta.get(MARKDOWN_LINK_HREF_META_KEY) == focused_link_href
+                else style
+            ),
+            control,
+        )
+        for text, style, control in strip
+    ]
+    return Strip(segments, strip.cell_length)
+
+
+def apply_attachment_hover_style_to_strip(
+    strip: Strip,
+    focused_attachment_filename: str | None,
+    attachment_hover_style: RichStyle,
+) -> Strip:
+    """Apply hover styling to the active attachment chip."""
+    if not focused_attachment_filename:
+        return strip
+
+    segments = [
+        Segment(
+            text,
+            (
+                style + attachment_hover_style
+                if style is not None
+                and style.meta is not None
+                and style.meta.get(ATTACHMENT_REFERENCE_FILENAME_META_KEY)
+                == focused_attachment_filename
                 else style
             ),
             control,
@@ -191,6 +304,40 @@ class WorkItemLinkTooltipProvider:
             self._loading.discard(work_item_key)
 
 
+class AttachmentTooltipProvider:
+    """Compose tooltip content for attachment references from loaded attachment data."""
+
+    def __init__(self, markdown: _AttachmentTooltipMarkdown) -> None:
+        self.markdown = markdown
+
+    def _find_attachment(self, filename: str | None) -> 'Attachment | None':
+        if not filename:
+            return None
+
+        screen = getattr(self.markdown.app, 'screen', None)
+        attachments_widget = getattr(screen, 'work_item_attachments_widget', None)
+        attachments = getattr(attachments_widget, 'attachments', None)
+        if not attachments:
+            return None
+
+        return next((item for item in attachments if item.filename == filename), None)
+
+    def get(self, filename: str | None) -> Text:
+        attachment = self._find_attachment(filename)
+        if attachment is None:
+            return build_attachment_tooltip(filename or None)
+
+        size = attachment.get_size()
+        size_text = f'{size} KB' if size is not None else None
+        return build_attachment_tooltip(
+            attachment.filename,
+            mime_type=attachment.get_mime_type() or None,
+            size_kb=size_text,
+            created_date=attachment.created_date or None,
+            author=attachment.display_author or None,
+        )
+
+
 class ExtendedMarkdownParagraph(MarkdownParagraph):
     """Markdown paragraph with checkbox, date, status, and decision styling."""
 
@@ -207,6 +354,7 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
     def __init__(self, markdown: Markdown, token: Token) -> None:
         super().__init__(markdown, token)
         self._focused_link_href: str | None = None
+        self._focused_attachment_filename: str | None = None
 
     def _token_to_content(self, token: Token) -> Content:
         """Convert token to content with styling."""
@@ -257,6 +405,13 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             """Add a style to the stack."""
             style_stack.append((style, position))
 
+        def get_active_attachment_filename() -> str | None:
+            for style, _start in reversed(style_stack):
+                if isinstance(style, Style):
+                    if filename := get_attachment_reference_filename(style):
+                        return filename
+            return None
+
         def close_tag() -> None:
             style, start = style_stack.pop()
             spans.append(Span(start, position, style))
@@ -288,7 +443,11 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             child_type = child.type
 
             if child_type == 'text':
-                add_content(self._whitespace_pattern.sub(' ', child.content))
+                active_attachment_filename = get_active_attachment_filename()
+                if active_attachment_filename is not None:
+                    add_content(build_attachment_reference_chip_label(active_attachment_filename))
+                else:
+                    add_content(self._whitespace_pattern.sub(' ', child.content))
 
             elif child_type == 'hardbreak':
                 add_content('\n')
@@ -342,10 +501,21 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             elif child_type == 'link_open':
                 href_attr = child.attrs.get('href', '') if child.attrs else ''
                 href = href_attr if isinstance(href_attr, str) else str(href_attr)
-                jira_base_url = (
-                    markdown.jira_base_url if isinstance(markdown, GojeeraMarkdown) else None
-                )
-                add_style(build_markdown_link_style(href, jira_base_url=jira_base_url))
+                attachment_filename = get_attachment_filename_from_href(href)
+                if attachment_filename is not None:
+                    attachment_chip_style = get_cached_style(
+                        'bold not italic not underline $primary-lighten-2 on $panel',
+                        'bold not italic not underline bright_cyan on grey23',
+                    )
+                    add_style(
+                        attachment_chip_style
+                        + build_attachment_reference_style(attachment_filename)
+                    )
+                else:
+                    jira_base_url = (
+                        markdown.jira_base_url if isinstance(markdown, GojeeraMarkdown) else None
+                    )
+                    add_style(build_markdown_link_style(href, jira_base_url=jira_base_url))
 
             elif child_type == 'image':
                 href = child.attrs.get('src', '')
@@ -394,10 +564,26 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
 
     def render_line(self, y: int) -> Strip:
         line = super().render_line(y)
-        return apply_focused_link_style_to_strip(
+        line = apply_focused_link_style_to_strip(
             line,
             self._focused_link_href,
             self.link_style_hover,
+        )
+        markdown = self._markdown
+        css_variables = markdown.app.get_css_variables() if hasattr(markdown, 'app') else {}
+        try:
+            attachment_hover_style = parse_style(
+                '$primary-lighten-2 on $primary-darken-2',
+                variables=css_variables,
+            ).rich_style
+        except Exception:
+            attachment_hover_style = parse_style(
+                'bright_cyan on blue',
+            ).rich_style
+        return apply_attachment_hover_style_to_strip(
+            line,
+            self._focused_attachment_filename,
+            attachment_hover_style,
         )
 
     def watch_hover_style(self, previous_hover_style: RichStyle, hover_style: RichStyle) -> None:
@@ -406,6 +592,19 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
         if self._focused_link_href != focused_link_href:
             self._focused_link_href = focused_link_href
             self.refresh()
+
+        attachment_filename = get_attachment_reference_filename(hover_style)
+        if self._focused_attachment_filename != attachment_filename:
+            self._focused_attachment_filename = attachment_filename
+            self.refresh()
+        if attachment_filename is not None:
+            markdown = self._markdown
+            if isinstance(markdown, GojeeraMarkdown):
+                self.tooltip = markdown.attachment_tooltip_provider.get(attachment_filename or None)
+            else:
+                self.tooltip = build_attachment_tooltip(attachment_filename or None)
+            cast('MainScreen', self.screen).focused_work_item_link_key = None
+            return
 
         work_item_key = get_markdown_link_work_item_key(hover_style)
         cast('MainScreen', self.screen).focused_work_item_link_key = work_item_key
@@ -433,8 +632,15 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             )
 
     async def _on_click(self, event: events.Click) -> None:
+        style_at_pointer = self.get_style_at(event.x, event.y)
+        attachment_filename = get_attachment_reference_filename(style_at_pointer)
+        if attachment_filename is not None:
+            event.prevent_default()
+            event.stop()
+            self.action_attachment(attachment_filename)
+            return
+
         if event.ctrl:
-            style_at_pointer = self.get_style_at(event.x, event.y)
             work_item_key = get_markdown_link_work_item_key(style_at_pointer)
             if work_item_key is not None:
                 fetch_work_items = getattr(self.screen, 'fetch_work_items', None)
@@ -460,6 +666,12 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             and get_markdown_link_work_item_key(self.hover_style) == work_item_key
         ):
             self.tooltip = tooltip
+
+    def action_attachment(self, filename: str) -> None:
+        screen = self.screen
+        navigate_to_attachment = getattr(screen, 'navigate_to_attachment', None)
+        if callable(navigate_to_attachment):
+            navigate_to_attachment(filename)
 
 
 class GojeeraBlockQuote(MarkdownBlockQuote):
@@ -696,6 +908,7 @@ class GojeeraMarkdown(Markdown):
         self._cached_app: App | None = None
         self.jira_base_url = jira_base_url
         self.work_item_tooltip_provider = WorkItemLinkTooltipProvider(self)
+        self.attachment_tooltip_provider = AttachmentTooltipProvider(self)
 
         super().__init__(
             markdown=markdown,

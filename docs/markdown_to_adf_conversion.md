@@ -39,16 +39,16 @@ Markdown input.
 
 ### Inline Nodes
 
-| ADF Node Type  | Markdown Output                       | Processing Function                                                                  |
-| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------ |
-| `text`         | Plain text                            | `atlas_doc_parser`                                                                   |
-| `mediaSingle`  | `(See file "..." in attachments tab)` | `replace_media_with_text()`                                                          |
-| `media`        | Attachment reference                  | `replace_media_with_text()`                                                          |
-| `mention`      | `[@User](url/jira/people/id)`         | `replace_mentions_with_links()`                                                      |
-| `status`       | `[status:c]text`                      | `replace_status_with_colored_text()` + `_convert_status_markers_to_inline_code()`    |
-| `date`         | `[date]YYYY-MM-DD`                    | `replace_date_with_colored_text()` + `_convert_date_markers_to_inline_code()`        |
-| `decisionList` | Blockquote with decisions             | `replace_decision_with_styled_text()`                                                |
-| `decisionItem` | `[decision:s]text`                    | `replace_decision_with_styled_text()` + `_convert_decision_markers_to_inline_code()` |
+| ADF Node Type  | Markdown Output                                                    | Processing Function                                                                  |
+| -------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `text`         | Plain text                                                         | `atlas_doc_parser`                                                                   |
+| `mediaSingle`  | `[filename](attachment-url)` when attachment metadata is available | `replace_media_with_text()`                                                          |
+| `media`        | Attachment reference                                               | `replace_media_with_text()`                                                          |
+| `mention`      | `[@User](url/jira/people/id)`                                      | `replace_mentions_with_links()`                                                      |
+| `status`       | `[status:c]text`                                                   | `replace_status_with_colored_text()` + `_convert_status_markers_to_inline_code()`    |
+| `date`         | `[date]YYYY-MM-DD`                                                 | `replace_date_with_colored_text()` + `_convert_date_markers_to_inline_code()`        |
+| `decisionList` | Blockquote with decisions                                          | `replace_decision_with_styled_text()`                                                |
+| `decisionItem` | `[decision:s]text`                                                 | `replace_decision_with_styled_text()` + `_convert_decision_markers_to_inline_code()` |
 
 ### Text Marks (Inline Styles)
 
@@ -125,6 +125,12 @@ User mentions are rendered as standard clickable markdown links:
 | ----------------------------- | ------------------- |
 | `[@User](url/jira/people/id)` | Clickable user link |
 
+Attachment references are rendered as native clickable actions in the TUI:
+
+| Pattern                      | Visual Display                                                |
+| ---------------------------- | ------------------------------------------------------------- |
+| `[filename](attachment-url)` | Attachment chip/action when the href is a Jira attachment URL |
+
 ## Processing Pipelines
 
 ### ADF → Markdown Pipeline
@@ -132,8 +138,9 @@ User mentions are rendered as standard clickable markdown links:
 The conversion from ADF to Markdown follows these steps (in order):
 
 1. **`fix_ordered_list_attrs()`** - Add missing `attrs` to `orderedList` nodes
-2. **`replace_media_with_text()`** - Convert `mediaSingle` to inline attachment
-   references
+2. **`replace_media_with_text()`** - Convert `mediaSingle` to attachment links
+   when attachment metadata is available. Jira attachment links render as
+   native attachment chips/actions in the TUI
 3. **`fix_adf_text_with_marks()`** - Fix spacing issues in `strong`/`em` marks
 4. **`fix_codeblock_in_list()`** - Extract `codeBlock` nodes from `listItem` nodes
 5. **`replace_mentions_with_links()`** - Convert `mention` nodes to standard

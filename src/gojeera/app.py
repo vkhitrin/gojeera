@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+from inspect import isawaitable
 import logging
 import os
 from pathlib import Path
@@ -46,15 +47,17 @@ from gojeera.constants import (
 )
 from gojeera.files import get_log_file, get_themes_directory
 from gojeera.models import (
+    Attachment,
     WorkItemSearchResult,
 )
 from gojeera.themes import load_themes_from_directory
-from gojeera.utils.urls import build_external_url_for_work_item
+from gojeera.utils.urls import build_external_url_for_attachment, build_external_url_for_work_item
 from gojeera.utils.work_item_reference import WorkItemReferenceLoader, load_work_item_reference
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_palette import ExtendedPalette
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
+from gojeera.widgets.gojeera_markdown import ExtendedMarkdownParagraph
 
 if TYPE_CHECKING:
     from textual.command import Provider
@@ -116,6 +119,13 @@ class MainScreen(Screen):
             action='search',
             description='Search',
             tooltip='Search items by search criteria',
+        ),
+        Binding(
+            key='ctrl+o',
+            action='open_contextual_browser_target',
+            description='Browse',
+            show=False,
+            priority=True,
         ),
         Binding(
             key='ctrl+e',
@@ -507,6 +517,78 @@ class MainScreen(Screen):
             tab.label = f'Comments [bold $background on $primary] {count} [/]'
         else:
             tab.label = 'Comments'
+
+    def navigate_to_attachment(self, filename: str) -> None:
+        self.tabs.active = 'tab-attachments'
+        self.information_panel.set_active_tab('tab-attachments')
+        if not filename:
+            return
+        found = self.work_item_attachments_widget.focus_attachment_by_filename(filename)
+        if not found and self.current_loaded_work_item_key:
+            self.notify(
+                f'Attachment "{filename}" was not found in the attachments tab.',
+                severity='warning',
+                title=self.current_loaded_work_item_key,
+            )
+
+    def open_attachment_in_browser_by_filename(self, filename: str) -> None:
+        attachments = self.work_item_attachments_widget.attachments or []
+        attachment = next((item for item in attachments if item.filename == filename), None)
+        current_loaded_work_item_key = self.current_loaded_work_item_key or ''
+        if attachment is None:
+            self.notify(
+                f'Attachment "{filename}" was not found.',
+                severity='warning',
+                title=current_loaded_work_item_key,
+            )
+            return
+
+        if current_loaded_work_item_key:
+            self.notify(
+                'Opening attachment in the browser...',
+                title=current_loaded_work_item_key,
+            )
+
+        app = cast('JiraApp', self.app)
+        if url := build_external_url_for_attachment(attachment.id, attachment.filename, app):
+            app.open_url(url)
+
+    def _get_hovered_attachment_filename(self) -> str | None:
+        for paragraph in self.query(ExtendedMarkdownParagraph):
+            filename = getattr(paragraph, '_focused_attachment_filename', None)
+            if filename:
+                return filename
+        return None
+
+    async def action_open_contextual_browser_target(self) -> None:
+        attachment_filename = self._get_hovered_attachment_filename()
+        if attachment_filename:
+            self.open_attachment_in_browser_by_filename(attachment_filename)
+            return
+
+        action_names = (
+            'action_open_attachment',
+            'action_open_link',
+            'action_open_comment_in_browser',
+            'action_open_worklog_in_browser',
+            'action_open_work_item_browser',
+            'action_open_work_item_in_browser',
+            'action_open_loaded_work_item_in_browser',
+        )
+
+        focused = self.focused
+        if focused is not None:
+            for node in focused.ancestors_with_self:
+                for action_name in action_names:
+                    action = getattr(node, action_name, None)
+                    if not callable(action):
+                        continue
+                    result = action()
+                    if isawaitable(result):
+                        await result
+                    return
+
+        self.action_open_loaded_work_item_in_browser()
 
     async def on_work_item_updated(self, message: WorkItemUpdated) -> None:
         await self.search_results_list.update_work_item_in_list(message.work_item)
@@ -1009,52 +1091,8 @@ class MainScreen(Screen):
         )
 
     async def new_work_item(self, data: dict | None) -> None:
-        if data:
-            base_fields = {
-                'project_key',
-                'parent_key',
-                'work_item_type_id',
-                'assignee_account_id',
-                'reporter_account_id',
-                'summary',
-                'description',
-                'duedate',
-                'priority',
-            }
-
-            base_data = {k: v for k, v in data.items() if k in base_fields}
-            dynamic_fields = {k: v for k, v in data.items() if k not in base_fields}
-
-            self.logger.info(
-                'Creating work item with split fields',
-                extra={
-                    'base_data': base_data,
-                    'dynamic_fields': dynamic_fields,
-                    'all_data_keys': list(data.keys()),
-                    'dynamic_field_types': {k: type(v).__name__ for k, v in dynamic_fields.items()},
-                },
-            )
-
-            response: APIControllerResponse = await self.api.new_work_item(
-                base_data, **dynamic_fields
-            )
-            if response.success and response.result:
-                self.notify(
-                    f'Work item {response.result.key} created successfully',
-                    title='Create Work Item',
-                )
-
-                if 'parent_key' in base_data and base_data['parent_key']:
-                    parent_key = base_data['parent_key']
-
-                    await self.retrieve_work_item_subtasks(parent_key)
-            else:
-                self.logger.error('Failed to create the work item', extra={'error': response.error})
-                self.notify(
-                    f'Failed to create the work item: {response.error}',
-                    severity='error',
-                    title='Create Work Item',
-                )
+        if data and data.get('parent_key'):
+            await self.retrieve_work_item_subtasks(str(data['parent_key']))
 
     async def retrieve_work_item_subtasks(self, work_item_key: str) -> None:
         if work_item_key:
@@ -1118,6 +1156,10 @@ class MainScreen(Screen):
                 )
                 return response.success, response
 
+            async def fetch_comments() -> tuple[bool, APIControllerResponse]:
+                response = await self.api.get_comments(selected_work_item_key)
+                return response.success, response
+
             (
                 (
                     main_success,
@@ -1127,9 +1169,14 @@ class MainScreen(Screen):
                     subtasks_success,
                     subtasks_response,
                 ),
+                (
+                    comments_success,
+                    comments_response,
+                ),
             ) = await asyncio.gather(
                 fetch_main_work_item(),
                 fetch_subtasks(),
+                fetch_comments(),
             )
 
             if not main_success or not main_response.result:
@@ -1169,7 +1216,15 @@ class MainScreen(Screen):
             self.related_work_items_widget.work_items = work_item.related_work_items
 
             self.work_item_comments_widget.work_item_key = work_item.key
-            self.work_item_comments_widget.comments = work_item.comments
+            if comments_success and isinstance(comments_response.result, list):
+                self.work_item_comments_widget.comments = comments_response.result
+            else:
+                if not comments_success:
+                    self.logger.error(
+                        'Unable to retrieve the comments of the work item',
+                        extra={'error': comments_response.error, 'work_item_key': work_item.key},
+                    )
+                self.work_item_comments_widget.comments = work_item.comments
 
             self.work_item_attachments_widget.work_item_key = work_item.key
             self.work_item_attachments_widget.attachments = work_item.attachments
@@ -1455,6 +1510,32 @@ class JiraApp(App):
         self._setup_logging()
         self._register_custom_themes()
         self._setup_theme(user_theme)
+
+    async def upload_staged_attachments(
+        self,
+        work_item_key: str,
+        file_paths: list[str],
+    ) -> tuple[list[Attachment], list[str], list[str]]:
+        uploaded_attachments: list[Attachment] = []
+        errors: list[str] = []
+        failed_file_paths: list[str] = []
+
+        for file_path in file_paths:
+            response = await asyncio.to_thread(self.api.add_attachment, work_item_key, file_path)
+            if response.success and isinstance(response.result, Attachment):
+                uploaded_attachments.append(response.result)
+                try:
+                    Path(file_path).unlink(missing_ok=True)
+                    parent_dir = Path(file_path).parent
+                    if parent_dir.name.startswith('gojeera-clipboard-'):
+                        parent_dir.rmdir()
+                except OSError:
+                    pass
+            else:
+                errors.append(response.error or Path(file_path).name)
+                failed_file_paths.append(file_path)
+
+        return uploaded_attachments, errors, failed_file_paths
 
     def search_themes(self) -> None:
         """Show the theme picker with the extended command palette."""

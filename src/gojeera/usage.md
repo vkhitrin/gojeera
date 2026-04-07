@@ -205,16 +205,9 @@ Manage files attached to work items.
 
 - `CTRL+N` - Add new attachment when the Attachments tab is active
 - `CTRL+D` - Delete the selected attachment
-- `Enter` - View attachment (if supported format)
+- `Enter` - Open attachment in browser
 - `CTRL+S` - Download attachment
 - `CTRL+O` - Open attachment in browser
-
-**Supported preview formats**:
-
-![Work item attachments screen](/static/work_item_attachment_screen.svg)
-
-- Images: PNG, JPG, GIF, etc. (if `enable_images_support` is enabled)
-- Text: TXT, CSV, Markdown
 
 #### Subtasks Tab
 

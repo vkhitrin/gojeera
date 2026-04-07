@@ -6,6 +6,10 @@ LoadingIndicator {
   background: $background;
 }
 
+#modal_footer LoadingIndicator {
+  background: $surface;
+}
+
 ModalScreen {
   background: $background 80%;
 }
@@ -2914,146 +2918,6 @@ DataTableSearchInput {
   background: transparent;
   padding: 0 1 0 1;
   box_sizing: border-box;
-}
-
-ViewAttachmentScreen {
-  align: center middle;
-}
-
-ViewAttachmentScreen #modal_outer {
-  width: 80%;
-  max-width: 140;
-  height: 85%;
-  max-height: 50;
-  background: $surface;
-  padding: 0;
-}
-
-ViewAttachmentScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-content {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
-  padding: 1;
-  scrollbar-size-vertical: 1;
-}
-
-ViewAttachmentScreen #attachment-content>Center {
-  align: center middle;
-  width: 100%;
-  height: auto;
-}
-
-ViewAttachmentScreen #attachment-content>Center>Image {
-  background: transparent;
-  width: auto;
-  height: auto;
-}
-
-ViewAttachmentScreen #attachment-content>Center Markdown,
-ViewAttachmentScreen #attachment-content>Center TextArea {
-  background: $surface-lighten-1;
-  width: 100%;
-  height: auto;
-}
-
-ViewAttachmentScreen #attachment-content>Center LoadingIndicator {
-  align: center middle;
-}
-
-ViewAttachmentScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-ViewAttachmentScreen #attachment-button-download {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-ViewAttachmentScreen #attachment-button-download>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-button-download:hover {
-  background: $success;
-  color: $text;
-}
-
-ViewAttachmentScreen #attachment-button-download:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-button-download:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-ViewAttachmentScreen #attachment-button-download:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-button-close {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-ViewAttachmentScreen #attachment-button-close>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-button-close:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-ViewAttachmentScreen #attachment-button-close:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ViewAttachmentScreen #attachment-button-close:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-ViewAttachmentScreen #attachment-button-close:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
 }
 
 LogWorkScreen {

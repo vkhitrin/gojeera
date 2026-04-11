@@ -205,6 +205,7 @@ class MainScreen(Screen):
         self.focused_work_item_link_key: str | None = None
         self._active_search_data: dict | None = None
         self._active_search_term: str | None = None
+        self._active_work_item_load_key: str | None = None
 
     def set_focus(
         self,
@@ -760,7 +761,6 @@ class MainScreen(Screen):
         search_data: dict | None = None,
         use_active_search: bool = False,
     ) -> None:
-        self.begin_search_request(page_number=page, show_pagination=use_active_search)
         results: WorkItemSearchResult
         list_view = self.search_results_list
 
@@ -815,6 +815,15 @@ class MainScreen(Screen):
                                 'current_page_number': list_view.page,
                             }
                         return
+
+            if work_item_key and self.current_loaded_work_item_key == work_item_key:
+                if self.focused is not list_view and list_view.work_item_search_results is not None:
+                    list_view.focus()
+                return
+
+            self.begin_search_request(page_number=page, show_pagination=use_active_search)
+
+            self._clear_loaded_work_item_state()
 
             if work_item_key:
                 results = await self._search_single_work_item(work_item_key)
@@ -950,6 +959,43 @@ class MainScreen(Screen):
     def end_search_request(self) -> None:
         self.search_results_container.hide_loading()
         self.unified_search_bar.search_in_progress = False
+
+    def _clear_loaded_work_item_state(self) -> None:
+        """Reset the currently loaded work item using the shared load-state path."""
+
+        self._active_work_item_load_key = None
+        self.current_loaded_work_item_key = None
+        self.focused_work_item_link_key = None
+
+        self.search_results_list.clear_loaded_work_item()
+
+        self.information_panel.work_item = None
+        self.work_item_info_container.work_item = None
+        self.work_item_fields_widget.work_item = None
+
+        self.related_work_items_widget.work_items = None
+        self.related_work_items_widget.work_item_key = None
+
+        self.work_item_comments_widget.comments = None
+        self.work_item_comments_widget.work_item_key = None
+
+        self.work_item_attachments_widget.attachments = None
+        self.work_item_attachments_widget.work_item_key = None
+
+        self.work_item_child_work_items_widget.work_items = None
+        self.work_item_child_work_items_widget.work_item_key = None
+
+        if CONFIGURATION.get().show_work_item_web_links:
+            self.work_item_remote_links_widget.work_item_key = None
+
+        self.tabs.disabled = True
+        self.fields_panel.disabled = True
+        self.fields_panel.display = False
+
+        self.query_one('#details-breadcrumb-row', Vertical).display = False
+        self.query_one('#details-tabs-row', Horizontal).display = False
+
+        self.call_after_refresh(self.refresh_bindings)
 
     async def action_new_work_item(self) -> None:
         from gojeera.components.new_work_item_screen import AddWorkItemScreen
@@ -1131,12 +1177,17 @@ class MainScreen(Screen):
             )
             return
 
+        if self._active_work_item_load_key == selected_work_item_key:
+            return
+
         if self.current_loaded_work_item_key == selected_work_item_key:
             return
 
-        self.is_loading = True
+        self._clear_loaded_work_item_state()
+        self._active_work_item_load_key = selected_work_item_key
+        self.search_results_list.mark_loaded_work_item(selected_work_item_key)
 
-        self.work_item_fields_widget.work_item = None
+        self.is_loading = True
 
         self.work_item_fields_widget.content_container.display = False
         completed = False
@@ -1179,8 +1230,12 @@ class MainScreen(Screen):
                 fetch_comments(),
             )
 
+            if self._active_work_item_load_key != selected_work_item_key:
+                return
+
             if not main_success or not main_response.result:
-                self.is_loading = False
+                if self._active_work_item_load_key == selected_work_item_key:
+                    self.is_loading = False
                 self.notify(
                     'Unable to find the selected work item',
                     title='Find Work Item',
@@ -1245,13 +1300,21 @@ class MainScreen(Screen):
             if CONFIGURATION.get().show_work_item_web_links:
                 self.work_item_remote_links_widget.work_item_key = work_item.key
 
+            self._active_work_item_load_key = None
             completed = True
         except asyncio.CancelledError:
-            self.is_loading = False
+            if self._active_work_item_load_key == selected_work_item_key:
+                self.is_loading = False
+                self._active_work_item_load_key = None
             raise
         finally:
-            if not completed and self.is_loading:
+            if (
+                self._active_work_item_load_key == selected_work_item_key
+                and not completed
+                and self.is_loading
+            ):
                 self.is_loading = False
+                self._active_work_item_load_key = None
 
     def _try_hide_loading_coordinated(self) -> None:
         info_container = self.work_item_info_container

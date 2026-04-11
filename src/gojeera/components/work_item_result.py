@@ -327,6 +327,11 @@ class WorkItemSearchResultsScroll(VerticalScroll):
                 container.refresh(layout=False)
                 break
 
+    def clear_loaded_work_item(self) -> None:
+        for container in self.work_item_containers:
+            container.remove_class('-loaded')
+            container.refresh(layout=False)
+
     async def update_work_item_in_list(self, updated_work_item: JiraWorkItem) -> None:
         for container in self.work_item_containers:
             if container.work_item_key == updated_work_item.key:
@@ -347,7 +352,10 @@ class WorkItemSearchResultsScroll(VerticalScroll):
         from gojeera.app import MainScreen
 
         screen = cast(MainScreen, self.screen)
-        if screen.current_loaded_work_item_key == work_item_key:
+        if (
+            screen.current_loaded_work_item_key == work_item_key
+            or screen._active_work_item_load_key == work_item_key
+        ):
             return
 
         self.current_work_item_key = work_item_key

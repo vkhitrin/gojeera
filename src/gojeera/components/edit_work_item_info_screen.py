@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
@@ -8,8 +10,15 @@ from textual.widgets import Button, Input, Label, Static, TextArea
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.panel_picker_screen import PanelPickerScreen
 from gojeera.config import CONFIGURATION
-from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields
+from gojeera.models import Attachment, JiraWorkItem, JiraWorkItemGenericFields
 from gojeera.utils.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.clipboard import (
+    ClipboardAttachmentError,
+    build_staged_attachment_reference_text,
+    materialize_staged_attachment_references,
+    prepare_staged_attachment_text,
+    stage_clipboard_attachments,
+)
 from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
@@ -18,6 +27,9 @@ from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
+if TYPE_CHECKING:
+    from gojeera.app import JiraApp
+
 logger = logging.getLogger('gojeera')
 
 
@@ -25,6 +37,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
     BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'app.pop_screen', 'Close'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
+        ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
     TITLE = 'Edit Work Item Info'
 
@@ -40,6 +53,10 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
 
         self._original_summary = self.work_item.summary if self.work_item else ''
         self._original_description = ''
+        self._clipboard_attachment_paths: list[Path] = []
+        self._clipboard_attachment_names: list[str] = []
+        self._uploaded_clipboard_attachments: list[Attachment] = []
+        self._is_submitting = False
 
     @property
     def summary_input(self) -> Input:
@@ -52,6 +69,10 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
     @property
     def save_button(self) -> Button:
         return self.query_one('#edit-work-item-button-save', expect_type=Button)
+
+    @property
+    def cancel_button(self) -> Button:
+        return self.query_one('#edit-work-item-button-quit', expect_type=Button)
 
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
@@ -158,22 +179,20 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
 
     @on(Button.Pressed, '#edit-work-item-button-save')
     def handle_save(self) -> None:
-        summary = self.summary_input.value
-        description = self.description_field.text
+        if self._is_submitting:
+            return
 
+        summary = self.summary_input.value
         if not summary or not summary.strip():
             self.notify('Summary cannot be empty', title='Edit Work Item', severity='error')
             return
 
-        self.dismiss(
-            {
-                JiraWorkItemGenericFields.SUMMARY.value: summary,
-                JiraWorkItemGenericFields.DESCRIPTION.value: description,
-            }
-        )
+        self.run_worker(self._submit_work_item_updates(), exclusive=True)
 
     @on(Button.Pressed, '#edit-work-item-button-quit')
     def handle_cancel(self) -> None:
+        if self._is_submitting:
+            return
         self.dismiss()
 
     async def action_insert_mention(self) -> None:
@@ -236,3 +255,126 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
             textarea.move_cursor(cursor_position)
 
             textarea.insert(insertion_text)
+
+    async def action_paste_clipboard_attachment(self) -> None:
+        try:
+            staged_paths = stage_clipboard_attachments()
+        except ClipboardAttachmentError as error:
+            self.notify(str(error), severity='warning')
+            return
+
+        if not staged_paths:
+            self.notify(
+                'Clipboard does not contain a supported file path or text payload.',
+                severity='warning',
+            )
+            return
+
+        self.handle_staged_clipboard_attachments(staged_paths)
+
+    def handle_staged_clipboard_attachments(self, staged_paths: list[Path]) -> None:
+        self._clipboard_attachment_paths.extend(staged_paths)
+        self._clipboard_attachment_names.extend(path.name for path in staged_paths)
+
+        references = '\n'.join(
+            build_staged_attachment_reference_text(path.name) for path in staged_paths
+        )
+        textarea = self.description_field.query_one(TextArea)
+        textarea.focus()
+        textarea.insert(references)
+
+        attachment_label = 'attachment' if len(staged_paths) == 1 else 'attachments'
+        if self.work_item:
+            self.notify(
+                f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.',
+                title=self.work_item.key,
+            )
+        else:
+            self.notify(f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.')
+
+    def _cleanup_staged_attachments(self) -> None:
+        for path in self._clipboard_attachment_paths:
+            try:
+                path.unlink(missing_ok=True)
+                parent_dir = path.parent
+                if parent_dir.name.startswith('gojeera-clipboard-'):
+                    parent_dir.rmdir()
+            except OSError:
+                pass
+        self._clipboard_attachment_paths.clear()
+        self._clipboard_attachment_names.clear()
+        self._uploaded_clipboard_attachments.clear()
+
+    def on_unmount(self) -> None:
+        self._cleanup_staged_attachments()
+
+    def _set_submitting(self, submitting: bool) -> None:
+        self._is_submitting = submitting
+        self.query_one('#modal_footer').loading = submitting
+        self.save_button.disabled = submitting
+        self.cancel_button.disabled = submitting
+
+    async def _submit_work_item_updates(self) -> None:
+        summary = self.summary_input.value
+        description = self.description_field.text
+        work_item = self.work_item
+
+        if not work_item:
+            return
+
+        self._set_submitting(True)
+
+        description_to_save = description
+
+        if self._clipboard_attachment_paths:
+            application = cast('JiraApp', self.app)
+            description_template = prepare_staged_attachment_text(description)
+            (
+                uploaded_attachments,
+                upload_errors,
+                failed_file_paths,
+            ) = await application.upload_staged_attachments(
+                work_item.key,
+                [str(path) for path in self._clipboard_attachment_paths],
+            )
+            self._uploaded_clipboard_attachments.extend(uploaded_attachments)
+            self._clipboard_attachment_paths = [Path(path) for path in failed_file_paths]
+
+            if uploaded_attachments:
+                self.notify(
+                    f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
+                    title=work_item.key,
+                )
+
+            if upload_errors:
+                self.notify(
+                    f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
+                    severity='error',
+                    title=work_item.key,
+                )
+                self._set_submitting(False)
+                return
+
+            if uploaded_attachments and description_template:
+                uploaded_by_name = {
+                    attachment.filename: attachment
+                    for attachment in self._uploaded_clipboard_attachments
+                }
+                ordered_uploaded_attachments = [
+                    uploaded_by_name.get(filename) for filename in self._clipboard_attachment_names
+                ]
+                description_to_save = prepare_staged_attachment_text(
+                    materialize_staged_attachment_references(
+                        description_template,
+                        self._clipboard_attachment_names,
+                        ordered_uploaded_attachments,
+                        app=application,
+                    )
+                ).strip()
+
+        self.dismiss(
+            {
+                JiraWorkItemGenericFields.SUMMARY.value: summary,
+                JiraWorkItemGenericFields.DESCRIPTION.value: description_to_save,
+            }
+        )

@@ -4,6 +4,8 @@ from textual.widgets import Button, Input
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
+from gojeera.components import edit_work_item_info_screen as edit_work_item_info_screen_module
+from gojeera.components.edit_work_item_info_screen import EditWorkItemInfoScreen
 
 from .test_helpers import load_work_item_from_search
 
@@ -66,6 +68,18 @@ async def open_edit_screen_and_clear_summary(pilot):
     assert save_button.disabled, 'Save button should be disabled when summary is empty'
 
 
+async def paste_clipboard_attachment_into_edit_work_item(pilot):
+    await open_work_item_and_edit(pilot)
+
+    screen = pilot.app.screen
+    assert isinstance(screen, EditWorkItemInfoScreen)
+
+    await screen.action_paste_clipboard_attachment()
+    await asyncio.sleep(0.3)
+
+    assert '<!-- gojeera:staged-clipboard-attachment -->' in screen.description_field.text
+
+
 class TestEditWorkItemInfoScreen:
     def test_edit_work_item_info_screen_initial_state(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
@@ -87,4 +101,26 @@ class TestEditWorkItemInfoScreen:
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         assert snap_compare(
             app, terminal_size=(120, 40), run_before=open_edit_screen_and_clear_summary
+        )
+
+    def test_edit_work_item_info_screen_with_clipboard_attachment(
+        self,
+        snap_compare,
+        monkeypatch,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+        staged_upload_file,
+    ):
+        monkeypatch.setattr(
+            edit_work_item_info_screen_module,
+            'stage_clipboard_attachments',
+            lambda: [staged_upload_file],
+        )
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=paste_clipboard_attachment_into_edit_work_item,
         )

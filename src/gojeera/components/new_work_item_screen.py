@@ -1252,7 +1252,6 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
         self._set_submitting(True)
         if self._created_work_item_key is None:
-            self.notify('Creating the work item...', title='Create Work Item')
             response: APIControllerResponse = await application.api.new_work_item(
                 base_data, **dynamic_fields
             )
@@ -1267,8 +1266,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
             self._created_work_item_key = response.result.key
             self.notify(
-                f'Work item {response.result.key} created successfully',
-                title='Create Work Item',
+                'Work item created successfully',
+                title=response.result.key,
             )
 
         if self._clipboard_attachment_paths and self._created_work_item_key:
@@ -1286,13 +1285,13 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             if uploaded_attachments:
                 self.notify(
                     f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
-                    title='Create Work Item',
+                    title=self._created_work_item_key,
                 )
             if upload_errors:
                 self.notify(
                     f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
                     severity='error',
-                    title='Create Work Item',
+                    title=self._created_work_item_key,
                 )
                 self._set_submitting(False)
                 return
@@ -1451,4 +1450,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         textarea.insert(references)
 
         attachment_label = 'attachment' if len(staged_paths) == 1 else 'attachments'
-        self.notify(f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.')
+        if self._created_work_item_key:
+            self.notify(
+                f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.',
+                title=self._created_work_item_key,
+            )
+        else:
+            self.notify(f'Staged {len(staged_paths)} clipboard {attachment_label} for upload.')

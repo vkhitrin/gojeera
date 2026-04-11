@@ -161,6 +161,11 @@ active tab.
 - Comments tab: delete the selected comment
 - Worklog list: delete the selected worklog
 
+`CTRL+B` shortcuts:
+
+- In the results pane, clone the selected work item.
+- In the Subtasks tab, clone the selected subtask.
+
 `CTRL+G` shortcuts:
 
 - In the main loaded-work-item view, it loads the focused internal Jira link when one is active; otherwise it loads the parent work item.
@@ -172,6 +177,11 @@ active tab.
 - In the results pane, browse the selected work item.
 - In the Subtasks tab, browse selected subtask.
 - In the Related Work Items tab, brows the selected related work item.
+
+`CTRL+E` shortcuts:
+
+- In the Description tab, edit the loaded work item summary and description.
+- In the Subtasks tab, edit the selected subtask summary.
 
 `CTRL+S` shortcuts:
 
@@ -218,7 +228,10 @@ Manage subtasks for the current work item.
 **Keybindings**:
 
 - `CTRL+N` - New subtask when the Subtasks tab is active
+- `CTRL+B` - Clone selected subtask
+- `CTRL+E` - Edit selected subtask summary
 - `Ctrl+G` - Load selected subtask
+- `Enter` - Load selected subtask
 - `CTRL+O` - Open subtask in browser
 
 #### Related Work Items Tab
@@ -257,7 +270,7 @@ Manage work item comments.
 
 - `CTRL+N` - Add new comment when the Comments tab is active
 - `CTRL+D` - Delete selected comment
-- `e` - Edit comment
+- `CTRL+E` - Edit comment
 - `CTRL+O` - Open comment in browser
 
 **Comment Features**:

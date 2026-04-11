@@ -1,11 +1,14 @@
 from typing import TYPE_CHECKING, cast
 
 from rich.text import Text
+from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalGroup, VerticalScroll
 from textual.reactive import Reactive, reactive
 
+from gojeera.api_controller.controller import APIControllerResponse
+from gojeera.components.edit_work_item_info_screen import EditWorkItemInfoScreen
 from gojeera.models import JiraWorkItem
 from gojeera.utils.urls import build_external_url_for_work_item
 from gojeera.widgets.extended_data_table import ExtendedDataTable
@@ -48,6 +51,18 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
             key='ctrl+o',
             action='open_work_item_browser',
             description='Open in Browser',
+            show=True,
+        ),
+        Binding(
+            key='ctrl+b',
+            action='clone_selected_work_item',
+            description='Clone',
+            show=True,
+        ),
+        Binding(
+            key='ctrl+e',
+            action='edit_selected_work_item_summary',
+            description='Edit Summary',
             show=True,
         ),
     ]
@@ -99,17 +114,23 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
     def watch_is_loading(self, loading: bool) -> None:
         self.content_container.loading = loading
 
-    async def action_load_selected_work_item(self) -> None:
+    def _selected_work_item(self) -> JiraWorkItem | None:
         table = self.data_table
         if table.row_count == 0:
-            return
+            return None
 
         cursor_row = table.cursor_row
         if cursor_row is None or cursor_row >= len(self.work_items or []):
+            return None
+
+        return (self.work_items or [])[cursor_row]
+
+    async def action_load_selected_work_item(self) -> None:
+        current_work_item = self._selected_work_item()
+        if current_work_item is None:
             return
 
-        row_key = table.get_row_at(cursor_row)[0]
-        work_item_key = str(row_key)
+        work_item_key = current_work_item.key
 
         screen = cast('MainScreen', self.screen)  # noqa: F821  # type: ignore[arg-type]
 
@@ -120,33 +141,82 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
             screen.tabs.active = 'tab-description'
 
     async def action_view_selected_work_item(self) -> None:
-        table = self.data_table
-        if table.row_count == 0:
+        current_work_item = self._selected_work_item()
+        if current_work_item is None:
             return
 
-        cursor_row = table.cursor_row
-        if cursor_row is None or cursor_row >= len(self.work_items or []):
-            return
-
-        row_key = table.get_row_at(cursor_row)[0]
-        str(row_key)
+        str(current_work_item.key)
 
     async def action_open_work_item_browser(self) -> None:
-        table = self.data_table
-        if table.row_count == 0:
+        current_work_item = self._selected_work_item()
+        if current_work_item is None:
             return
 
-        cursor_row = table.cursor_row
-        if cursor_row is None or cursor_row >= len(self.work_items or []):
-            return
-
-        row_key = table.get_row_at(cursor_row)[0]
-        work_item_key = str(row_key)
+        work_item_key = current_work_item.key
 
         if url := build_external_url_for_work_item(work_item_key, cast('JiraApp', self.app)):
             import webbrowser
 
             webbrowser.open_new_tab(url)
+
+    @on(ExtendedDataTable.RowSelected)
+    def selected(self, event: ExtendedDataTable.RowSelected) -> None:
+        if event.row_key.value:
+            self.run_worker(self.action_load_selected_work_item())
+
+    def action_clone_selected_work_item(self) -> None:
+        current_work_item = self._selected_work_item()
+        if current_work_item is None:
+            return
+
+        screen = cast('MainScreen', self.screen)  # noqa: F821  # type: ignore[arg-type]
+        self.run_worker(screen.clone_work_item(current_work_item.key))
+
+    async def action_edit_selected_work_item_summary(self) -> None:
+        current_work_item = self._selected_work_item()
+        if current_work_item is None:
+            return
+
+        application = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+        screen = cast('MainScreen', self.screen)  # noqa: F821  # type: ignore[arg-type]
+
+        response: APIControllerResponse = await application.api.get_work_item(current_work_item.key)
+        if not response.success or not response.result or not response.result.work_items:
+            self.notify(
+                f'Unable to load subtask {current_work_item.key} for editing',
+                severity='error',
+                title='Subtasks',
+            )
+            return
+
+        work_item = response.result.work_items[0]
+
+        async def handle_updates(updates: dict | None) -> None:
+            if not updates:
+                return
+
+            update_response: APIControllerResponse = await application.api.update_work_item(
+                work_item=work_item,
+                updates=updates,
+            )
+
+            if not update_response.success:
+                self.notify(
+                    f'Failed to update subtask: {update_response.error}',
+                    severity='error',
+                    title=work_item.key,
+                )
+                return
+
+            self.notify(f'Work item {work_item.key} updated successfully', title=work_item.key)
+
+            if self.work_item_key:
+                await screen.retrieve_work_item_subtasks(self.work_item_key)
+
+        await self.app.push_screen(
+            EditWorkItemInfoScreen(work_item=work_item),
+            callback=handle_updates,
+        )
 
     def watch_work_items(self, items: list[JiraWorkItem] | None) -> None:
         table = self.data_table

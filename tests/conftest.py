@@ -1803,6 +1803,16 @@ async def mock_jira_api_with_search_results(
                     f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
                 ).mock(return_value=Response(200, json=transitions_data))
 
+        eng_2 = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-2')
+        eng_9 = copy.deepcopy(eng_2)
+        eng_9['id'] = '94279'
+        eng_9['key'] = 'ENG-9'
+        eng_9['self'] = 'https://example.atlassian.acme.net/rest/api/3/issue/94279'
+        eng_9['fields']['summary'] = 'Second parent epic for parent picker tests'
+        respx.get(
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-9(?:\?.*)?$'
+        ).mock(return_value=Response(200, json=eng_9))
+
         # Mock projects, issue types, and statuses
         respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
             return_value=Response(200, json=mock_jira_projects)

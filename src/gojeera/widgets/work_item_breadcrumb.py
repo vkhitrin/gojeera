@@ -187,6 +187,17 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
         if self._work_item is not None and self._work_item.parent_key.strip() == parent_key:
             self.parent_action_widget.tooltip = tooltip
 
+    def _refresh_loaded_work_item_parent_fields(
+        self, screen: 'MainScreen', work_item: JiraWorkItem, parent_key: str
+    ) -> None:
+        work_item.parent_work_item_key = parent_key or None
+        work_item.parent_work_item_type = None
+
+        self.set_work_item(work_item)
+        screen.information_panel.work_item = work_item
+        screen.work_item_info_container.work_item = work_item
+        screen.work_item_fields_widget.work_item = work_item
+
     async def _update_parent_work_item(self, data: dict[str, str]) -> None:
         work_item = self._work_item
         if work_item is None:
@@ -214,6 +225,7 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
             return
 
         if response.success:
+            self._refresh_loaded_work_item_parent_fields(screen, work_item, parent_key)
             self.notify(f'Parent updated for {work_item.key}', title=work_item.key)
             await screen.fetch_work_items(work_item.key)
         else:

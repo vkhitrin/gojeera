@@ -877,17 +877,27 @@ class JiraAPI:
             ),
         )
 
-    async def update_work_item(self, work_item_id_or_key: str, payload: dict) -> dict:
+    async def update_work_item(
+        self,
+        work_item_id_or_key: str,
+        payload: dict | None = None,
+        fields: dict | None = None,
+    ) -> dict:
         """Updates a work item.
 
         Args:
             work_item_id_or_key: the case-sensitive key of the work item.
-            payload: the fields and their values.
+            payload: update operations keyed by field name.
+            fields: direct field values for the issue update request.
 
         Returns:
             A dictionary with the details of the work item after the update.
         """
-        data = {'update': payload}
+        data: dict[str, Any] = {}
+        if payload:
+            data['update'] = payload
+        if fields:
+            data['fields'] = fields
         return cast(
             dict,
             await self._client.make_request(

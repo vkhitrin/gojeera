@@ -1090,6 +1090,7 @@ class APIController:
                 raise ValidationError('The summary field can not be empty.')
 
         fields_to_update: dict[str, list] = {}
+        direct_fields_to_update: dict[str, Any] = {}
 
         if JiraWorkItemGenericFields.SUMMARY.value in updates:
             if meta_summary := metadata_fields.get(JiraWorkItemGenericFields.SUMMARY.value, {}):
@@ -1147,9 +1148,14 @@ class APIController:
                         extra={'work_item_key': work_item.key},
                     )
                 parent_key = updates.get(JiraWorkItemGenericFields.PARENT.value)
-                fields_to_update[JiraWorkItemGenericFields.PARENT.value] = [
-                    {'set': {'key': parent_key} if parent_key else None}
-                ]
+                if parent_key:
+                    direct_fields_to_update[JiraWorkItemGenericFields.PARENT.value] = {
+                        'key': parent_key
+                    }
+                else:
+                    fields_to_update[JiraWorkItemGenericFields.PARENT.value] = [
+                        {'set': {'none': True}}
+                    ]
             else:
                 raise UpdateWorkItemException(
                     f'The field {JiraWorkItemGenericFields.PARENT.value} can not be updated for the selected work item.',
@@ -1246,8 +1252,39 @@ class APIController:
                             extra={'work_item_key': work_item.key},
                         )
 
-        if fields_to_update:
-            response: dict = await self.api.update_work_item(work_item.key, fields_to_update)
+        if fields_to_update or direct_fields_to_update:
+            response: dict = await self.api.update_work_item(
+                work_item.key,
+                payload=fields_to_update,
+                fields=direct_fields_to_update,
+            )
+            if JiraWorkItemGenericFields.PARENT.value in updates:
+                verification_response = await self.get_work_item(
+                    work_item_id_or_key=work_item.key,
+                    fields=['parent'],
+                )
+                if not verification_response.success or not verification_response.result:
+                    return APIControllerResponse(
+                        success=False,
+                        error='The parent update request completed but the new parent could not be verified.',
+                    )
+
+                refreshed_items = verification_response.result.work_items or []
+                if not refreshed_items:
+                    return APIControllerResponse(
+                        success=False,
+                        error='The parent update request completed but the issue could not be reloaded.',
+                    )
+
+                refreshed_parent_key = refreshed_items[0].parent_key.strip()
+                expected_parent_key = str(
+                    updates.get(JiraWorkItemGenericFields.PARENT.value) or ''
+                ).strip()
+                if refreshed_parent_key != expected_parent_key:
+                    return APIControllerResponse(
+                        success=False,
+                        error='Jira accepted the request but the parent work item was not changed.',
+                    )
             updated_fields: list[str] = []
             if fields := response.get('fields', {}):
                 updated_fields = list(fields.keys())

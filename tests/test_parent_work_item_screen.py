@@ -17,19 +17,19 @@ async def open_parent_work_item_screen(pilot):
     await asyncio.sleep(0.5)
 
     assert isinstance(pilot.app.screen, ParentWorkItemScreen)
-    assert pilot.app.screen.parent_select.has_focus
+    assert pilot.app.screen.parent_input.has_focus
     assert pilot.app.screen.apply_button.disabled
 
 
 async def select_parent_work_item_and_enable_set(pilot):
     await open_parent_work_item_screen(pilot)
 
-    await pilot.press('enter')
+    parent_input = pilot.app.screen.parent_input
+    parent_input.value = ''
     await asyncio.sleep(0.2)
-    await pilot.press('down')
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.3)
+    await pilot.press(*'ENG-9')
+    await pilot.app.workers.wait_for_complete()
+    await asyncio.sleep(0.5)
 
     assert isinstance(pilot.app.screen, ParentWorkItemScreen)
     assert not pilot.app.screen.apply_button.disabled

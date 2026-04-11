@@ -823,8 +823,6 @@ class MainScreen(Screen):
 
             self.begin_search_request(page_number=page, show_pagination=use_active_search)
 
-            self._clear_loaded_work_item_state()
-
             if work_item_key:
                 results = await self._search_single_work_item(work_item_key)
             else:
@@ -1648,15 +1646,15 @@ class JiraApp(App):
         self.run_worker(self._initialize_startup_context(), name='startup_context')
 
     async def _initialize_startup_context(self) -> None:
-        server_info_task = asyncio.create_task(self.api.server_info())
-        user_info_task = asyncio.create_task(self.api.myself()) if self.user_info is None else None
+        server_info_coroutine = self.api.server_info()
+        user_info_coroutine = self.api.myself() if self.user_info is None else None
 
-        if user_info_task is not None:
+        if user_info_coroutine is not None:
             server_info_result, user_info_result = await asyncio.gather(
-                server_info_task, user_info_task, return_exceptions=True
+                server_info_coroutine, user_info_coroutine, return_exceptions=True
             )
         else:
-            server_info_result = await server_info_task
+            server_info_result = await server_info_coroutine
             user_info_result = None
 
         if isinstance(server_info_result, Exception):
@@ -1741,7 +1739,7 @@ class JiraApp(App):
             log_file = get_log_file()
 
         try:
-            fh = logging.FileHandler(log_file)
+            fh = logging.FileHandler(log_file, encoding='utf-8', delay=True)
         except Exception as e:
             self.logger.warning(f'Failed to create log file handler: {e}')
         else:

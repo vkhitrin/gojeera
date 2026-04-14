@@ -1,5 +1,6 @@
 import asyncio
 
+import pytest
 from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
@@ -71,6 +72,26 @@ async def fill_required_fields_and_verify_save_enabled(pilot):
     )
 
 
+async def fill_browse_url_and_verify_save_enabled(pilot):
+    await open_add_related_work_item_screen(pilot)
+
+    screen = pilot.app.screen
+    assert isinstance(screen, AddWorkItemRelationshipScreen), (
+        f'Expected AddWorkItemRelationshipScreen, got {type(screen)}'
+    )
+
+    screen.linked_work_item_key.focus()
+    await asyncio.sleep(0.1)
+
+    await pilot.press(*'https://example.atlassian.acme.net/browse/ENG-8')
+    await asyncio.sleep(0.3)
+
+    screen.relationship_type.value = '10000:outward'
+    await asyncio.sleep(0.3)
+
+    assert not screen.save_button.disabled, 'Save button should be enabled for a valid browse URL'
+
+
 class TestNewRelatedWorkItemScreen:
     def test_new_related_work_item_screen_initial_state(
         self,
@@ -97,3 +118,15 @@ class TestNewRelatedWorkItemScreen:
             terminal_size=(120, 40),
             run_before=fill_required_fields_and_verify_save_enabled,
         )
+
+    @pytest.mark.asyncio
+    async def test_new_related_work_item_screen_accepts_browse_url(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        async with app.run_test() as pilot:
+            await fill_browse_url_and_verify_save_enabled(pilot)

@@ -133,24 +133,13 @@ class ExtendedTag(Tag):
         close_styles = self.get_component_styles(
             'extended-tag--close-hover' if self._mouse_over_x() else 'extended-tag--close'
         )
-        chip_background_hex = chip_styles.background.hex
-        parent_background = self.colors[0].hex
-        left_cap = Text.from_markup(
-            f'[{chip_background_hex} on {parent_background}]{self.LEFT_END}[/]'
-        )
-        right_cap = Text.from_markup(
-            f'[{chip_background_hex} on {parent_background}]{self.RIGHT_END}[/]'
-        )
         text = Text()
 
         for index, line in enumerate(payload_lines):
             if index:
                 text.append('\n')
 
-            if index == 0:
-                text.append_text(left_cap.copy())
-            else:
-                text.append(' ', style=chip_styles.rich_style)
+            text.append(' ', style=chip_styles.rich_style)
 
             if self.show_x and index == len(payload_lines) - 1 and line.endswith('x'):
                 text.append(line[:-1], style=chip_styles.rich_style)
@@ -158,10 +147,7 @@ class ExtendedTag(Tag):
             else:
                 text.append(line, style=chip_styles.rich_style)
 
-            if index == len(payload_lines) - 1:
-                text.append_text(right_cap.copy())
-            else:
-                text.append(' ', style=chip_styles.rich_style)
+            text.append(' ', style=chip_styles.rich_style)
 
         return text
 

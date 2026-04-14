@@ -12,6 +12,7 @@ from gojeera.components.confirmation_screen import ConfirmationScreen
 from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
 from gojeera.models import JiraWorkItem, JiraWorkItemGenericFields, RelatedJiraWorkItem
 from gojeera.utils.urls import build_external_url_for_work_item
+from gojeera.utils.work_item_reference import resolve_work_item_reference
 from gojeera.widgets.extended_data_table import ExtendedDataTable
 
 if TYPE_CHECKING:
@@ -140,17 +141,10 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
             await self.app.push_screen(
                 AddWorkItemRelationshipScreen(self.work_item_key), callback=self.add_relationship
             )
-        else:
-            self.notify(
-                'Select a work item before attempting to add a link.',
-                severity='warning',
-                title='Related Work Items',
-            )
 
     async def link_work_items(self, data: dict) -> None:
         # Validate required fields
         if not self.work_item_key:
-            self.notify('Work item key is missing', severity='error')
             return
 
         right_work_item_key = data.get('right_work_item_key')
@@ -158,13 +152,13 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
         link_type_id = data.get('link_type_id')
 
         if not right_work_item_key or not isinstance(right_work_item_key, str):
-            self.notify('Missing or invalid work item key', severity='error')
+            return
+        right_work_item_key = resolve_work_item_reference(right_work_item_key)
+        if right_work_item_key is None:
             return
         if not link_type or not isinstance(link_type, str):
-            self.notify('Missing or invalid link type', severity='error')
             return
         if not link_type_id or not isinstance(link_type_id, str):
-            self.notify('Missing or invalid link type ID', severity='error')
             return
 
         application = cast('JiraApp', self.app)  # noqa: F821
@@ -181,8 +175,6 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
                 title=self.work_item_key,
             )
         else:
-            self.notify('Work items linked successfully', title=self.work_item_key)
-
             response = await application.api.get_work_item(
                 self.work_item_key,
                 fields=[JiraWorkItemGenericFields.WORK_ITEM_LINKS.value],
@@ -241,11 +233,6 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
     async def action_unlink_work_item(self) -> None:
         table = self.data_table
         if table.row_count == 0:
-            self.notify(
-                'Select a row before attempting to unlink.',
-                severity='error',
-                title='Related Work Items',
-            )
             return
 
         cursor_row = table.cursor_row
@@ -277,11 +264,6 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
                 self.notify(
                     f'Failed to delete the link: {response.error}',
                     severity='error',
-                    title=self.work_item_key,
-                )
-            else:
-                self.notify(
-                    'Link between work items deleted successfully',
                     title=self.work_item_key,
                 )
 

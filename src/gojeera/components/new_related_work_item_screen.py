@@ -3,18 +3,22 @@ from typing import TYPE_CHECKING, cast
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.timer import Timer
 from textual.widgets import Button, Input, Label, Select, Static
+from textual.worker import Worker
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.config import CONFIGURATION
-from gojeera.models import LinkWorkItemType
+from gojeera.models import JiraWorkItem, LinkWorkItemType
 from gojeera.utils.focus import focus_first_available
+from gojeera.utils.work_item_reference import resolve_work_item_reference
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.vim_select import VimSelect
+from gojeera.widgets.work_item_footer_details import WorkItemFooterDetails
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
@@ -25,8 +29,8 @@ class LinkedWorkItemInputWidget(ExtendedInput):
         super().__init__(
             classes='required',
             type='text',
-            placeholder='e.g. ABC-1234',
-            tooltip='Enter a case-sensitive key',
+            placeholder='KEY or Browse URL',
+            tooltip='Enter a work item key or Jira browse URL',
         )
         self.compact = True
 
@@ -55,6 +59,9 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
         super().__init__()
         self.work_item_key = work_item_key
         self._modal_title: str = f'Link Work Items - Work Item: {self.work_item_key}'
+        self._resolved_work_item: JiraWorkItem | None = None
+        self._search_timer: Timer | None = None
+        self._search_worker: Worker | None = None
 
     @property
     def relationship_type(self) -> WorkItemLinkTypeSelector:
@@ -68,6 +75,10 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
     def save_button(self) -> Button:
         return self.query_one('#add-link-button-save', expect_type=Button)
 
+    @property
+    def work_item_footer_details(self) -> WorkItemFooterDetails:
+        return self.query_one(WorkItemFooterDetails)
+
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
@@ -79,7 +90,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     link_type_label.add_class('field_label')
                     yield link_type_label
                     yield WorkItemLinkTypeSelector([])
-                    work_item_key_label = Label('Work Item Key')
+                    work_item_key_label = Label('Work Item')
                     work_item_key_label.add_class('field_label')
                     yield work_item_key_label
                     yield LinkedWorkItemInputWidget()
@@ -97,6 +108,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     id='add-link-button-quit',
                     compact=True,
                 )
+            yield WorkItemFooterDetails()
         yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -111,26 +123,88 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
         self.call_after_refresh(
             lambda: focus_first_available(self.relationship_type, self.linked_work_item_key)
         )
+        self._reset_validation_message()
 
-    def validate_work_item_key(self):
-        value = self.linked_work_item_key.value
-        self.save_button.disabled = (
-            False if (value and value.strip()) and self.relationship_type.selection else True
+    def _extract_work_item_key(self, value: str) -> str | None:
+        return resolve_work_item_reference(value)
+
+    def _update_save_button_state(self) -> None:
+        self.save_button.disabled = not (
+            self._resolved_work_item is not None and self.relationship_type.selection
+        )
+
+    def _set_searching_state(self, message: str) -> None:
+        self._resolved_work_item = None
+        self.work_item_footer_details.show_searching(message)
+        self._update_save_button_state()
+
+    def _set_not_found_state(self, message: str) -> None:
+        self._resolved_work_item = None
+        self.work_item_footer_details.show_not_found(message)
+        self._update_save_button_state()
+
+    def _set_resolved_work_item(self, work_item: JiraWorkItem) -> None:
+        self._resolved_work_item = work_item
+        summary = work_item.cleaned_summary(48)
+        self.work_item_footer_details.show_resolved(summary)
+        self._update_save_button_state()
+
+    def _reset_validation_message(self) -> None:
+        self._resolved_work_item = None
+        self.work_item_footer_details.show_not_found()
+        self._update_save_button_state()
+
+    async def _lookup_work_item(self, work_item_key: str) -> None:
+        app = cast('JiraApp', self.app)
+        response: APIControllerResponse = await app.api.get_work_item(
+            work_item_id_or_key=work_item_key,
+            fields=['id', 'key', 'summary', 'issuetype', 'status'],
+        )
+        if not response.success or not response.result or not response.result.work_items:
+            self.call_after_refresh(lambda: self._set_not_found_state('Work item not found'))
+            return
+
+        work_item = response.result.work_items[0]
+        self.call_after_refresh(lambda: self._set_resolved_work_item(work_item))
+
+    def _schedule_lookup(self, value: str) -> None:
+        if self._search_timer is not None:
+            self._search_timer.stop()
+            self._search_timer = None
+        if self._search_worker is not None:
+            self._search_worker.cancel()
+            self._search_worker = None
+
+        raw_value = value.strip() if value else ''
+        if not raw_value:
+            self.linked_work_item_key.remove_class('-invalid')
+            self._reset_validation_message()
+            return
+
+        work_item_key = self._extract_work_item_key(raw_value)
+        if work_item_key is None:
+            self.linked_work_item_key.add_class('-invalid')
+            self._set_not_found_state('Work item not found')
+            return
+
+        self.linked_work_item_key.remove_class('-invalid')
+        self._set_searching_state('Looking up work item...')
+        self._search_timer = self.set_timer(
+            0.1,
+            lambda: setattr(
+                self,
+                '_search_worker',
+                self.run_worker(self._lookup_work_item(work_item_key), exclusive=False),
+            ),
         )
 
     @on(Input.Changed, 'LinkedWorkItemInputWidget')
-    def validate_change(self, event: Input.Changed):
-        if event.value and event.value.strip():
-            self.save_button.disabled = not self.relationship_type.selection
-        else:
-            self.save_button.disabled = True
+    def validate_change(self, _: Input.Changed):
+        self._schedule_lookup(self.linked_work_item_key.value)
 
     @on(Select.Changed, 'WorkItemLinkTypeSelector')
     def validate_relationship(self):
-        value = self.linked_work_item_key.value
-        self.save_button.disabled = (
-            False if (value and value.strip()) and self.relationship_type.selection else True
-        )
+        self._update_save_button_state()
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
@@ -159,16 +233,13 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
     @on(Button.Pressed, '#add-link-button-save')
     def handle_save(self) -> None:
         selection = self.relationship_type.selection
-        work_item_value = self.linked_work_item_key.value
-
-        if not selection or not work_item_value:
-            self.notify('Select the type of link and the work item', title='Link Work Items')
+        if not selection or self._resolved_work_item is None:
             return
 
         link_type_id, link_type = selection.split(':')
         self.dismiss(
             {
-                'right_work_item_key': work_item_value,
+                'right_work_item_key': self._resolved_work_item.key,
                 'link_type': link_type,
                 'link_type_id': link_type_id,
             }

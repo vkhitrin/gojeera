@@ -785,7 +785,6 @@ class MainScreen(Screen):
                     self.notify(
                         'Please enter a search term or JQL query',
                         severity='warning',
-                        title='Search Warning',
                     )
                     if use_active_search:
                         list_view.pending_page = None
@@ -804,7 +803,6 @@ class MainScreen(Screen):
                         self.notify(
                             validation_result.error or 'JQL validation failed',
                             severity='warning',
-                            title='JQL Validation Error',
                         )
                         if use_active_search:
                             list_view.pending_page = None

@@ -8,6 +8,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.timer import Timer
 from textual.widgets import Button, Input, Label, Static
+from textual.worker import Worker
 
 from gojeera.config import CONFIGURATION
 from gojeera.models import JiraWorkItem, WorkItemType
@@ -18,6 +19,7 @@ from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
+from gojeera.widgets.work_item_footer_details import WorkItemFooterDetails
 from gojeera.widgets.work_item_key_picker import WorkItemKeyInput
 
 if TYPE_CHECKING:
@@ -38,7 +40,7 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
         self._modal_title = 'Set Parent'
         self._allowed_parent_type_ids: set[str] = set()
         self._search_timer: Timer | None = None
-        self._search_generation = 0
+        self._search_worker: Worker | None = None
         self._parent_types_loaded = False
         self._resolved_parent: JiraWorkItem | None = None
 
@@ -51,8 +53,8 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
         return self.query_one('#parent-work-item-button-apply', ExtendedButton)
 
     @property
-    def validation_tracker(self) -> Static:
-        return self.query_one('#parent-work-item-validation', Static)
+    def work_item_footer_details(self) -> WorkItemFooterDetails:
+        return self.query_one(WorkItemFooterDetails)
 
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
@@ -84,7 +86,7 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
                     compact=True,
                 )
 
-            yield Static('', id='parent-work-item-validation')
+            yield WorkItemFooterDetails()
 
         yield ExtendedFooter(show_command_palette=False)
 
@@ -146,60 +148,38 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
 
         self.apply_button.disabled = selected_parent_key == self._current_parent_key
 
-    def _update_validation_text(self, message: str | Text) -> None:
-        self.validation_tracker.update(message)
-
-    def _show_resolved_parent(self, work_item: JiraWorkItem) -> None:
+    def _set_resolved_parent(self, work_item: JiraWorkItem) -> None:
         if work_item.key == self._current_parent_key:
             self._reset_validation_message()
             return
         work_item_type = work_item.work_item_type.name if work_item.work_item_type else 'Work Item'
         summary = work_item.cleaned_summary(48)
         self._resolved_parent = work_item
-        tracker = self.validation_tracker
         message = Text()
         message.append(f'[{work_item_type}] ')
         message.append(work_item.key)
         message.append(' - ')
         message.append(summary)
-        self._update_validation_text(message)
-        tracker.remove_class('error')
-        tracker.remove_class('warning')
-        tracker.add_class('success')
+        self.work_item_footer_details.show_resolved(message)
         self._update_apply_button_state()
 
-    def _show_lookup_message(self, message: str) -> None:
+    def _set_searching_state(self, message: str) -> None:
         self._resolved_parent = None
-        tracker = self.validation_tracker
-        self._update_validation_text(message)
-        tracker.remove_class('success')
-        tracker.remove_class('error')
-        tracker.remove_class('warning')
+        self.work_item_footer_details.show_searching(message)
         self._update_apply_button_state()
 
-    def _show_error_message(self, message: str) -> None:
+    def _set_not_found_state(self, message: str) -> None:
         self._resolved_parent = None
-        tracker = self.validation_tracker
-        self._update_validation_text(message)
-        tracker.remove_class('success')
-        tracker.remove_class('warning')
-        tracker.add_class('error')
+        self.work_item_footer_details.show_not_found(message)
         self._update_apply_button_state()
 
     def _reset_validation_message(self) -> None:
         self._resolved_parent = None
-        tracker = self.validation_tracker
         current_parent_key = self._current_parent_key
         if current_parent_key:
-            self._update_validation_text(f'Set to current parent: {current_parent_key}')
-            tracker.remove_class('success')
-            tracker.remove_class('error')
-            tracker.add_class('warning')
+            self.work_item_footer_details.show_current_parent(current_parent_key)
         else:
-            self._update_validation_text('Type a full work item key')
-            tracker.remove_class('success')
-            tracker.remove_class('error')
-            tracker.remove_class('warning')
+            self.work_item_footer_details.show_prompt('Type a full work item key')
         self._update_apply_button_state()
 
     def _is_valid_parent_candidate(self, work_item: JiraWorkItem) -> bool:
@@ -270,28 +250,23 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
         self._parent_types_loaded = True
         return True
 
-    async def _lookup_parent_candidate(self, query: str, generation: int) -> None:
+    async def _lookup_parent_candidate(self, query: str) -> None:
         if validation_error := self._validation_error_for_key(query):
-            if generation != self._search_generation:
-                return
-            self.call_after_refresh(lambda: self._show_error_message(validation_error))
+            self.call_after_refresh(lambda: self._set_not_found_state(validation_error))
             return
 
         if not await self._ensure_parent_types_loaded():
             self.call_after_refresh(
-                lambda: self._show_error_message('Could not determine valid parent types')
+                lambda: self._set_not_found_state('Could not determine valid parent types')
             )
             return
 
         exact_match = await self._fetch_exact_parent_candidate(query)
-        if generation != self._search_generation:
-            return
-
         if exact_match is not None:
-            self.call_after_refresh(lambda: self._show_resolved_parent(exact_match))
+            self.call_after_refresh(lambda: self._set_resolved_parent(exact_match))
             return
         self.call_after_refresh(
-            lambda: self._show_error_message('Issue not found or not a valid parent')
+            lambda: self._set_not_found_state('Issue not found or not a valid parent')
         )
 
     @on(Input.Changed, 'WorkItemKeyInput')
@@ -301,6 +276,9 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
         if self._search_timer is not None:
             self._search_timer.stop()
             self._search_timer = None
+        if self._search_worker is not None:
+            self._search_worker.cancel()
+            self._search_worker = None
 
         query = event.value.strip()
         if not query:
@@ -309,16 +287,16 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
 
         normalized_query = normalize_work_item_key(query)
         if normalized_query is None:
-            self._show_error_message('Type a full work item key like PLAT-123')
+            self._set_not_found_state('Type a full work item key like PLAT-123')
             return
 
-        self._search_generation += 1
-        generation = self._search_generation
-        self._show_lookup_message('Looking up parent work item...')
+        self._set_searching_state('Looking up parent work item...')
         self._search_timer = self.set_timer(
             0.1,
-            lambda: self.run_worker(
-                self._lookup_parent_candidate(normalized_query, generation), exclusive=False
+            lambda: setattr(
+                self,
+                '_search_worker',
+                self.run_worker(self._lookup_parent_candidate(normalized_query), exclusive=False),
             ),
         )
 

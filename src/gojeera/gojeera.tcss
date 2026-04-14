@@ -1152,9 +1152,9 @@ QuickNavigationScreen {
 }
 
 QuickNavigationScreen #modal_outer {
-  width: 30%;
-  min-width: 34;
-  max-width: 42;
+  width: 45%;
+  min-width: 48;
+  max-width: 64;
   height: auto;
   max-height: 15;
   background: $surface;
@@ -1360,32 +1360,6 @@ ParentWorkItemScreen #modal_footer {
   padding: 0 2;
   margin-bottom: 1;
   background: $surface;
-}
-
-ParentWorkItemScreen #parent-work-item-validation {
-  width: 100%;
-  height: 1;
-  padding: 0 2;
-  background: $surface;
-  color: $text-muted;
-}
-
-ParentWorkItemScreen #parent-work-item-validation.success {
-  background: $success-darken-2;
-  color: $text;
-  text-style: bold;
-}
-
-ParentWorkItemScreen #parent-work-item-validation.warning {
-  background: $warning-darken-2;
-  color: $text;
-  text-style: bold;
-}
-
-ParentWorkItemScreen #parent-work-item-validation.error {
-  background: $error-darken-1;
-  color: $text;
-  text-style: bold;
 }
 
 #parent-work-item-button-apply {

@@ -1560,8 +1560,6 @@ class WorkItemFields(Container, can_focus=False):
 
     def action_save_work_item(self) -> None:
         if self._save_in_progress:
-            if self.work_item and self.work_item.key:
-                self.notify('Work item update already in progress.', title=self.work_item.key)
             return
 
         self._save_in_progress = True
@@ -1609,7 +1607,6 @@ class WorkItemFields(Container, can_focus=False):
             )
 
             if not payload and not work_item_requires_transition:
-                self.notify('Nothing to update.', title=work_item_key)
                 return
 
             application = cast('JiraApp', self.app)  # noqa: F821

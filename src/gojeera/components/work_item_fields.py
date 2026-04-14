@@ -1553,7 +1553,7 @@ class WorkItemFields(Container, can_focus=False):
 
         has_status_change = (
             self.work_item_status_selector.selection is not None
-            and self.work_item_status_selector.selection != self.work_item.status.id
+            and self.work_item_status_selector.selected_status_id != self.work_item.status.id
         )
 
         return has_field_changes or has_status_change
@@ -1605,7 +1605,7 @@ class WorkItemFields(Container, can_focus=False):
 
             work_item_requires_transition = (
                 self.work_item_status_selector.selection is not None
-                and self.work_item_status_selector.selection != self.work_item.status.id
+                and self.work_item_status_selector.selected_status_id != self.work_item.status.id
             )
 
             if not payload and not work_item_requires_transition:
@@ -1656,8 +1656,8 @@ class WorkItemFields(Container, can_focus=False):
                         )
 
             if work_item_requires_transition:
-                status_id = self.work_item_status_selector.selection
-                if status_id is None:
+                transition_id = self.work_item_status_selector.selection
+                if transition_id is None:
                     self.notify(
                         'Invalid status selection',
                         severity='error',
@@ -1666,7 +1666,7 @@ class WorkItemFields(Container, can_focus=False):
                     return
 
                 response = await application.api.transition_work_item_status(
-                    self.work_item.key, str(status_id)
+                    self.work_item.key, str(transition_id)
                 )
                 if not response.success:
                     self.notify(
@@ -1891,10 +1891,12 @@ class WorkItemFields(Container, can_focus=False):
 
                         colored_status = f'[$text-{text_color_type} bold on ${bg_color}] {transition.to_state.name} [/]'
                         display_name = f'{transition.name} → {colored_status}'
-                        allowed_status_options.append((display_name, str(transition.to_state.id)))
+                        allowed_status_options.append(
+                            (display_name, str(transition.id), str(transition.to_state.id))
+                        )
 
                 allowed_status_options = sorted(allowed_status_options, key=lambda x: str(x[0]))
-                self.work_item_status_selector.set_options(allowed_status_options)
+                self.work_item_status_selector.set_transition_options(allowed_status_options)
                 self.work_item_status_selector.disabled = False
 
                 if current_status_name:

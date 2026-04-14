@@ -1337,36 +1337,18 @@ class APIController:
         return APIControllerResponse(result=transitions)
 
     async def transition_work_item_status(
-        self, work_item_id_or_key: str, status_id: str
+        self, work_item_id_or_key: str, transition_id: str
     ) -> APIControllerResponse:
-        """Transitions a work item to a new status.
+        """Transitions a work item using a Jira transition ID.
 
         Args:
             work_item_id_or_key: the (case-sensitive) key of the work item.
-            status_id: the ID of the new status.
+            transition_id: the ID of the Jira transition to execute.
 
         Returns:
             An instance of `APIControllerResponse(success=True)` if the work item was transitioned;
             `APIControllerResponse(success=False)` if there is an error.
         """
-        response: APIControllerResponse = await self.transitions(work_item_id_or_key)
-        if not response.success or not response.result:
-            return APIControllerResponse(
-                success=False,
-                error=f'Unable to find valid status transitions for the selected item: {response.error}',
-            )
-
-        transition_id: str | None = None
-        for transition in response.result:
-            if transition.to_state.id == status_id:
-                transition_id = transition.id
-                break
-
-        if transition_id is None:
-            return APIControllerResponse(
-                success=False, error='Unable to find a valid transition for the given status ID.'
-            )
-
         try:
             await self.api.transition_work_item(work_item_id_or_key, transition_id)
         except Exception as e:
@@ -1375,7 +1357,7 @@ class APIController:
                 'Unable to update the status of the work item',
                 extra={
                     'work_item_id_or_key': work_item_id_or_key,
-                    'status_id': status_id,
+                    'transition_id': transition_id,
                     **exception_details.get('extra', {}),
                 },
             )

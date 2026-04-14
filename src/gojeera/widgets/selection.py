@@ -29,12 +29,16 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
         prompt: str | None = None,
     ):
         display_prompt = prompt or ''
+        select_value = original_value if mode == FieldMode.UPDATE else initial_value
+        if select_value is None:
+            select_value = Select.NULL
 
         super().__init__(
             options=options,
             prompt=display_prompt,
             id=field_id,
             allow_blank=allow_blank,
+            value=select_value,
             compact=True,
             type_to_search=True,
         )
@@ -55,13 +59,8 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
                 original_value=original_value,
                 field_supports_update=field_supports_update,
             )
-
-            if original_value is not None:
-                self.value = original_value
             self.add_class('create-work-item-generic-selector')
         else:
-            if initial_value != Select.NULL:
-                self.value = initial_value
             self.add_class('create-work-item-generic-selector')
 
     def get_value_for_update(self) -> dict | None:

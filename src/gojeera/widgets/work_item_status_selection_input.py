@@ -1,4 +1,7 @@
+from typing import cast
+
 from textual.reactive import Reactive, reactive
+from textual.widgets import Select
 
 from gojeera.widgets.vim_select import VimSelect
 
@@ -20,6 +23,26 @@ class WorkItemStatusSelectionInput(VimSelect):
         )
         self.styles.width = '100%'
         self.original_value: str | None = None
+        self._transition_status_ids: dict[str, str] = {}
+
+    @property
+    def selection(self) -> str | None:
+        if self.value == Select.NULL:
+            return None
+
+        return cast(str | None, self.value) if self.value else None
+
+    @property
+    def selected_status_id(self) -> str | None:
+        if transition_id := self.selection:
+            return self._transition_status_ids.get(transition_id)
+        return None
+
+    def set_transition_options(self, statuses: list[tuple[str, str, str]]) -> None:
+        self._transition_status_ids = {
+            transition_id: status_id for _label, transition_id, status_id in statuses
+        }
+        self.set_options([(label, transition_id) for label, transition_id, _status_id in statuses])
 
     async def watch_statuses(self, statuses: list[tuple[str, str]] | None = None) -> None:
         self.clear()

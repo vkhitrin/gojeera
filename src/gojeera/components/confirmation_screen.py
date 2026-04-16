@@ -22,35 +22,42 @@ class ConfirmationScreen(ExtendedModalScreen[bool]):
         super().__init__()
         self.message = message or 'Are you sure you want to perform this action?'
 
+    @property
+    def cancel_button(self) -> Button:
+        return self.query_one('#confirmation-button-cancel', Button)
+
+    @property
+    def accept_button(self) -> Button:
+        return self.query_one('#confirmation-button-accept', Button)
+
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('Confirm Action', id='modal_title')
             yield Static(self.message, id='modal_message')
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Cancel',
                     variant='primary',
                     id='confirmation-button-cancel',
+                    classes='dialog-button dialog-button--secondary',
                     compact=True,
                 )
                 yield Button(
                     'Accept',
                     variant='error',
                     id='confirmation-button-accept',
+                    classes='dialog-button dialog-button--danger',
                     compact=True,
                 )
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:
-            set_jump_mode(self.query_one('#confirmation-button-cancel', Button), 'click')
-            set_jump_mode(self.query_one('#confirmation-button-accept', Button), 'click')
+            set_jump_mode(self.cancel_button, 'click')
+            set_jump_mode(self.accept_button, 'click')
         self.call_after_refresh(
-            lambda: focus_first_available(
-                self.query_one('#confirmation-button-cancel', Button),
-                self.query_one('#confirmation-button-accept', Button),
-            )
+            lambda: focus_first_available(self.cancel_button, self.accept_button)
         )
 
     async def action_show_overlay(self) -> None:

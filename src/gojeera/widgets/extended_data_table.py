@@ -11,6 +11,31 @@ class ExtendedDataTable(DataTable):
 
     can_focus = True
     jump_mode: ClassVar[str | None] = 'focus'
+    DEFAULT_CSS = """
+    ExtendedDataTable {
+        background: transparent;
+    }
+
+    ExtendedDataTable > .datatable--header:hover {
+        background: $primary-muted;
+        color: $text-primary;
+    }
+
+    ExtendedDataTable > .datatable--cursor {
+        background: $primary-muted;
+        color: $text-primary;
+    }
+
+    ExtendedDataTable:focus > .datatable--cursor {
+        background: $primary-muted;
+        color: $text-primary;
+    }
+
+    ExtendedDataTable > .datatable--fixed-cursor {
+        background: $primary-muted;
+        color: $text-primary;
+    }
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

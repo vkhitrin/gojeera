@@ -50,6 +50,7 @@ class ApplicationCache:
             'project_statuses': CACHE_TTL_PROJECT_STATUSES,
             'remote_filters': CACHE_TTL_REMOTE_FILTERS,
             'sprints': CACHE_TTL_SPRINTS,
+            'fields': None,
         }
 
     def _make_key(self, cache_type: str, identifier: str | None = None) -> str:

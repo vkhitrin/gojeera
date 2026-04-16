@@ -291,3 +291,120 @@ class TestAdfToMarkdownConversion:
             'End result:  \n'
             '[API Telemetry_2026-03-29-2026-04-05.pdf](https://example.atlassian.acme.net/secure/attachment/74914/API%20Telemetry_2026-03-29-2026-04-05.pdf)'
         )
+
+    def test_media_group_renders_one_attachment_link_per_media_node(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'mediaGroup',
+                    'content': [
+                        {
+                            'type': 'media',
+                            'attrs': {
+                                'id': 'attachment-1',
+                                'collection': '',
+                                'type': 'file',
+                            },
+                        },
+                        {
+                            'type': 'media',
+                            'attrs': {
+                                'id': 'attachment-2',
+                                'collection': '',
+                                'type': 'file',
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(
+            adf,
+            media_attachment_details={
+                'attachment-1': (
+                    'rollout-diagram.png',
+                    'https://example.atlassian.acme.net/secure/attachment/20001/rollout-diagram.png',
+                ),
+                'attachment-2': (
+                    'field-notes.pdf',
+                    'https://example.atlassian.acme.net/secure/attachment/20002/field-notes.pdf',
+                ),
+            },
+        )
+
+        assert markdown.strip() == (
+            '[rollout-diagram.png](https://example.atlassian.acme.net/secure/attachment/20001/rollout-diagram.png)\n\n'
+            '[field-notes.pdf](https://example.atlassian.acme.net/secure/attachment/20002/field-notes.pdf)'
+        )
+
+    def test_media_inline_falls_back_to_ordered_attachment_details(self):
+        adf = {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {
+                    'type': 'paragraph',
+                    'content': [
+                        {'type': 'text', 'text': 'Please review the logs'},
+                        {'type': 'hardBreak'},
+                        {
+                            'type': 'mediaInline',
+                            'attrs': {'id': 'inline-1', 'collection': '', 'type': 'file'},
+                        },
+                        {'type': 'text', 'text': ' '},
+                        {
+                            'type': 'mediaInline',
+                            'attrs': {'id': 'inline-2', 'collection': '', 'type': 'file'},
+                        },
+                    ],
+                },
+                {
+                    'type': 'mediaSingle',
+                    'attrs': {'layout': 'align-start'},
+                    'content': [
+                        {
+                            'type': 'media',
+                            'attrs': {
+                                'type': 'file',
+                                'id': 'image-1',
+                                'alt': 'image-20260423-145323.png',
+                            },
+                        }
+                    ],
+                },
+            ],
+        }
+
+        markdown = convert_adf_to_markdown(
+            adf,
+            media_attachment_details={
+                'image-20260423-145323.png': (
+                    'image-20260423-145323.png',
+                    'https://example.atlassian.acme.net/secure/attachment/10003/image-20260423-145323.png',
+                )
+            },
+            ordered_attachment_details=[
+                (
+                    'server_0422.zip',
+                    'https://example.atlassian.acme.net/secure/attachment/10001/server_0422.zip',
+                ),
+                (
+                    'pip_0422.zip',
+                    'https://example.atlassian.acme.net/secure/attachment/10002/pip_0422.zip',
+                ),
+                (
+                    'image-20260423-145323.png',
+                    'https://example.atlassian.acme.net/secure/attachment/10003/image-20260423-145323.png',
+                ),
+            ],
+        )
+
+        assert markdown.strip() == (
+            'Please review the logs  \n'
+            '[server_0422.zip](https://example.atlassian.acme.net/secure/attachment/10001/server_0422.zip) '
+            '[pip_0422.zip](https://example.atlassian.acme.net/secure/attachment/10002/pip_0422.zip)\n\n'
+            '[image-20260423-145323.png](https://example.atlassian.acme.net/secure/attachment/10003/image-20260423-145323.png)'
+        )

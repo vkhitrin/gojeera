@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -22,6 +22,7 @@ from gojeera.widgets.vim_select import VimSelect
 
 if TYPE_CHECKING:
     from gojeera.api_controller.controller import APIController
+    from gojeera.app import MainScreen
 
 logger = logging.getLogger('gojeera')
 
@@ -61,12 +62,51 @@ class UnifiedSearchBar(Container):
         self._jql_autocomplete: JQLAutoComplete | None = None
         self._work_item_key: str | None = None
 
+    @property
+    def mode_selector(self) -> VimSelect:
+        return self.query_one('#search-mode-selector', VimSelect)
+
+    @property
+    def project_selector(self) -> LazySelect:
+        return self.query_one('#basic-project-selector', LazySelect)
+
+    @property
+    def assignee_selector(self) -> LazySelect:
+        return self.query_one('#basic-assignee-selector', LazySelect)
+
+    @property
+    def type_selector(self) -> LazySelect:
+        return self.query_one('#basic-type-selector', LazySelect)
+
+    @property
+    def status_selector(self) -> LazySelect:
+        return self.query_one('#basic-status-selector', LazySelect)
+
+    @property
+    def unified_input(self) -> Input:
+        return self.query_one('#unified-search-input', Input)
+
+    @property
+    def new_work_item_button(self) -> Button:
+        return self.query_one('#unified-search-new-work-item-button', Button)
+
+    @property
+    def search_button(self) -> Button:
+        return self.query_one('#unified-search-button', Button)
+
     def compose(self) -> ComposeResult:
         yield VimSelect(
             options=[(label, value) for label, value in self.search_modes],
-            prompt='Search mode',
+            prompt='',
             id='search-mode-selector',
             value='basic',
+            allow_blank=False,
+            compact=True,
+        )
+
+        yield Button(
+            '+',
+            id='unified-search-new-work-item-button',
             compact=True,
         )
 
@@ -118,48 +158,60 @@ class UnifiedSearchBar(Container):
     def on_mount(self) -> None:
         self._update_mode_display('basic')
 
-        set_jump_mode(self.query_one('#search-mode-selector', VimSelect), 'focus')
-        set_jump_mode(self.query_one('#basic-project-selector', LazySelect), 'focus')
-        set_jump_mode(self.query_one('#basic-assignee-selector', LazySelect), 'focus')
-        set_jump_mode(self.query_one('#basic-type-selector', LazySelect), 'focus')
-        set_jump_mode(self.query_one('#basic-status-selector', LazySelect), 'focus')
-        set_jump_mode(self.query_one('#unified-search-input', Input), 'focus')
-        set_jump_mode(self.query_one('#unified-search-button', Button), 'click')
+        set_jump_mode(self.mode_selector, 'focus')
+        set_jump_mode(self.project_selector, 'focus')
+        set_jump_mode(self.assignee_selector, 'focus')
+        set_jump_mode(self.type_selector, 'focus')
+        set_jump_mode(self.status_selector, 'focus')
+        set_jump_mode(self.unified_input, 'focus')
+        set_jump_mode(self.new_work_item_button, 'click')
+        set_jump_mode(self.search_button, 'click')
 
-        assignee_selector = self.query_one('#basic-assignee-selector', LazySelect)
-        type_selector = self.query_one('#basic-type-selector', LazySelect)
-        status_selector = self.query_one('#basic-status-selector', LazySelect)
-        assignee_selector.disabled = True
-        type_selector.disabled = True
-        status_selector.disabled = True
+        self.assignee_selector.disabled = True
+        self.type_selector.disabled = True
+        self.status_selector.disabled = True
         self._sync_basic_filter_jump_modes()
+        self._sync_search_button_state()
 
         self._init_jql_autocomplete()
 
     def _sync_basic_filter_jump_modes(self) -> None:
         for selector_id in (
-            '#basic-project-selector',
-            '#basic-assignee-selector',
-            '#basic-type-selector',
-            '#basic-status-selector',
+            self.project_selector,
+            self.assignee_selector,
+            self.type_selector,
+            self.status_selector,
         ):
-            selector = self.query_one(selector_id, LazySelect)
+            selector = selector_id
             set_jump_mode(selector, None if selector.disabled else 'focus')
 
+    def _is_query_valid(self) -> bool:
+        if self.search_mode == 'basic':
+            return True
+
+        if self.search_mode in ('text', 'jql'):
+            return bool(self.unified_input.value.strip())
+
+        return True
+
+    def _sync_search_button_state(self) -> None:
+        self.search_button.disabled = self.search_in_progress or not self._is_query_valid()
+        set_jump_mode(self.search_button, None if self.search_button.disabled else 'click')
+
     def watch_search_in_progress(self, search_in_progress: bool) -> None:
-        search_button = self.query_one('#unified-search-button', Button)
-        search_button.disabled = search_in_progress
-        set_jump_mode(search_button, None if search_in_progress else 'click')
+        self._sync_search_button_state()
+
+    @on(Button.Pressed, '#unified-search-new-work-item-button')
+    async def handle_new_work_item_button(self) -> None:
+        await cast('MainScreen', self.screen).action_new_work_item()
 
     def _init_jql_autocomplete(self) -> None:
         from gojeera.config import CONFIGURATION
 
         jql_filters = CONFIGURATION.get().jql_filters or []
 
-        jql_input = self.query_one('#unified-search-input', Input)
-
         self._jql_autocomplete = JQLAutoComplete(
-            target=jql_input,
+            target=self.unified_input,
             jql_filters=jql_filters,
         )
 
@@ -244,8 +296,9 @@ class UnifiedSearchBar(Container):
     def _update_jql_placeholder(self) -> None:
         if self.search_mode == 'jql':
             try:
-                unified_input = self.query_one('#unified-search-input', Input)
-                unified_input.placeholder = 'Enter JQL query or click for filter suggestions...'
+                self.unified_input.placeholder = (
+                    'Enter JQL query or click for filter suggestions...'
+                )
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
 
@@ -263,16 +316,22 @@ class UnifiedSearchBar(Container):
 
     @on(Input.Changed, '#unified-search-input')
     def handle_unified_input_changed(self, event: Input.Changed) -> None:
+        cast('MainScreen', self.screen).search_results_container.set_search_mode(
+            self.search_mode,
+            self.get_search_data(),
+        )
+
+        self._sync_search_button_state()
+
         if self.search_mode not in ('text', 'jql'):
             return
 
-        unified_input = self.query_one('#unified-search-input', Input)
         value = event.value.strip() if event.value else ''
 
         if not value:
-            unified_input.add_class('-invalid')
+            self.unified_input.add_class('-invalid')
         else:
-            unified_input.remove_class('-invalid')
+            self.unified_input.remove_class('-invalid')
 
     @on(Input.Submitted, '#unified-search-input')
     def handle_unified_input_submitted(self, event: Input.Submitted) -> None:
@@ -282,65 +341,59 @@ class UnifiedSearchBar(Container):
         if self.search_mode not in ('text', 'jql'):
             return
 
-        unified_input = self.query_one('#unified-search-input', Input)
         value = event.value.strip() if event.value else ''
 
         if not value:
-            unified_input.add_class('-invalid')
+            self.unified_input.add_class('-invalid')
             return
 
-        unified_input.remove_class('-invalid')
-        search_button = self.query_one('#unified-search-button', Button)
-        search_button.press()
+        self.unified_input.remove_class('-invalid')
+        self.search_button.press()
 
     @on(Input.Blurred, '#unified-search-input')
     def handle_unified_input_blurred(self, event: Input.Blurred) -> None:
         if self.search_mode not in ('text', 'jql'):
             return
 
-        unified_input = self.query_one('#unified-search-input', Input)
         value = event.value.strip() if event.value else ''
 
         if not value:
-            unified_input.add_class('-invalid')
+            self.unified_input.add_class('-invalid')
         else:
-            unified_input.remove_class('-invalid')
+            self.unified_input.remove_class('-invalid')
 
     def _lazy_load_assignees(self) -> None:
-        assignee_selector = self.query_one('#basic-assignee-selector', LazySelect)
         if self._selected_project_key:
             if self._users_fetched_for_project != self._selected_project_key:
                 self.fetch_users()
             else:
-                assignee_selector._stop_spinner()
+                self.assignee_selector._stop_spinner()
         else:
             self.notify('Please select a project first', severity='warning', title='Search')
 
-            assignee_selector._stop_spinner()
+            self.assignee_selector._stop_spinner()
 
     def _lazy_load_types(self) -> None:
-        type_selector = self.query_one('#basic-type-selector', LazySelect)
         if self._selected_project_key:
             if self._types_fetched_for_project != self._selected_project_key:
                 self.fetch_work_item_types()
             else:
-                type_selector._stop_spinner()
+                self.type_selector._stop_spinner()
         else:
             self.notify('Please select a project first', severity='warning', title='Search')
 
-            type_selector._stop_spinner()
+            self.type_selector._stop_spinner()
 
     def _lazy_load_statuses(self) -> None:
-        status_selector = self.query_one('#basic-status-selector', LazySelect)
         if self._selected_project_key:
             if self._statuses_fetched_for_project != self._selected_project_key:
                 self.fetch_statuses()
             else:
-                status_selector._stop_spinner()
+                self.status_selector._stop_spinner()
         else:
             self.notify('Please select a project first', severity='warning', title='Search')
 
-            status_selector._stop_spinner()
+            self.status_selector._stop_spinner()
 
     @on(Select.Changed, '#search-mode-selector')
     def handle_mode_change(self, event: Select.Changed) -> None:
@@ -350,6 +403,11 @@ class UnifiedSearchBar(Container):
                 self._clear_work_item_key()
             self.search_mode = mode_str
             self._update_mode_display(mode_str)
+            self._sync_search_button_state()
+            cast('MainScreen', self.screen).search_results_container.set_search_mode(
+                mode_str,
+                self.get_search_data(),
+            )
 
     @on(Select.Changed, '#basic-project-selector')
     def handle_project_changed(self, event: Select.Changed) -> None:
@@ -361,138 +419,120 @@ class UnifiedSearchBar(Container):
             self._types_fetched_for_project = None
             self._statuses_fetched_for_project = None
 
-            assignee_sel = self.query_one('#basic-assignee-selector', LazySelect)
-            type_sel = self.query_one('#basic-type-selector', LazySelect)
-            status_sel = self.query_one('#basic-status-selector', LazySelect)
-            assignee_sel.clear()
-            type_sel.clear()
-            status_sel.clear()
+            self.assignee_selector.clear()
+            self.type_selector.clear()
+            self.status_selector.clear()
 
-            assignee_sel._has_loaded = False
-            type_sel._has_loaded = False
-            status_sel._has_loaded = False
+            self.assignee_selector._has_loaded = False
+            self.type_selector._has_loaded = False
+            self.status_selector._has_loaded = False
 
-            assignee_sel.disabled = False
-            type_sel.disabled = False
-            status_sel.disabled = False
+            self.assignee_selector.disabled = False
+            self.type_selector.disabled = False
+            self.status_selector.disabled = False
             self._sync_basic_filter_jump_modes()
         else:
             self._selected_project_key = None
-            assignee_sel = self.query_one('#basic-assignee-selector', LazySelect)
-            type_sel = self.query_one('#basic-type-selector', LazySelect)
-            status_sel = self.query_one('#basic-status-selector', LazySelect)
-            assignee_sel.disabled = True
-            type_sel.disabled = True
-            status_sel.disabled = True
+            self.assignee_selector.disabled = True
+            self.type_selector.disabled = True
+            self.status_selector.disabled = True
             self._sync_basic_filter_jump_modes()
+        self._sync_search_button_state()
 
     @on(Select.Changed, '#basic-assignee-selector')
     @on(Select.Changed, '#basic-type-selector')
     @on(Select.Changed, '#basic-status-selector')
     def handle_basic_filter_changed(self) -> None:
         self._clear_work_item_key()
+        self._sync_search_button_state()
 
     def _update_mode_display(self, mode: str) -> None:
         with self.app.batch_update():
             self.remove_class('mode-basic', 'mode-text', 'mode-jql')
             self.add_class(f'mode-{mode}')
 
-            project_selector = self.query_one('#basic-project-selector', LazySelect)
-            user_selector = self.query_one('#basic-assignee-selector', LazySelect)
-            type_selector = self.query_one('#basic-type-selector', LazySelect)
-            status_selector = self.query_one('#basic-status-selector', LazySelect)
-            unified_input = self.query_one('#unified-search-input', Input)
-
             if self._jql_autocomplete:
                 self._jql_autocomplete.disabled = mode != 'jql'
 
             if mode == 'basic':
-                project_selector.display = True
-                user_selector.display = True
-                type_selector.display = True
-                status_selector.display = True
-                unified_input.display = False
-                unified_input.placeholder = ''
+                self.project_selector.display = True
+                self.assignee_selector.display = True
+                self.type_selector.display = True
+                self.status_selector.display = True
+                self.unified_input.display = False
+                self.unified_input.placeholder = ''
 
-                unified_input.remove_class('-invalid')
+                self.unified_input.remove_class('-invalid')
             elif mode == 'text':
-                project_selector.display = False
-                user_selector.display = False
-                type_selector.display = False
-                status_selector.display = False
-                unified_input.display = True
-                unified_input.placeholder = 'Enter text to search in summaries...'
+                self.project_selector.display = False
+                self.assignee_selector.display = False
+                self.type_selector.display = False
+                self.status_selector.display = False
+                self.unified_input.display = True
+                self.unified_input.placeholder = 'Enter text to search in summaries...'
 
-                if not unified_input.value.strip():
-                    unified_input.add_class('-invalid')
+                if not self.unified_input.value.strip():
+                    self.unified_input.add_class('-invalid')
                 else:
-                    unified_input.remove_class('-invalid')
+                    self.unified_input.remove_class('-invalid')
             elif mode == 'jql':
-                project_selector.display = False
-                user_selector.display = False
-                type_selector.display = False
-                status_selector.display = False
-                unified_input.display = True
+                self.project_selector.display = False
+                self.assignee_selector.display = False
+                self.type_selector.display = False
+                self.status_selector.display = False
+                self.unified_input.display = True
 
                 if hasattr(self, '_remote_filters_fetched') and self._remote_filters_fetched:
-                    unified_input.placeholder = 'Enter JQL query or click for filter suggestions...'
+                    self.unified_input.placeholder = (
+                        'Enter JQL query or click for filter suggestions...'
+                    )
                 else:
-                    unified_input.placeholder = 'Loading filters... (Enter JQL query or wait)'
+                    self.unified_input.placeholder = 'Loading filters... (Enter JQL query or wait)'
 
-                if not unified_input.value.strip():
-                    unified_input.add_class('-invalid')
+                if not self.unified_input.value.strip():
+                    self.unified_input.add_class('-invalid')
                 else:
-                    unified_input.remove_class('-invalid')
+                    self.unified_input.remove_class('-invalid')
 
     def watch_projects(self, projects: dict | None) -> None:
         if projects and 'projects' in projects:
-            project_selector = self.query_one('#basic-project-selector', LazySelect)
-
-            if project_selector._has_loaded:
-                project_selector.set_options(projects['projects'])
+            if self.project_selector._has_loaded:
+                self.project_selector.set_options(projects['projects'])
             else:
-                if project_selector._is_loading:
-                    project_selector._stop_spinner()
+                if self.project_selector._is_loading:
+                    self.project_selector._stop_spinner()
 
     def watch_users(self, users: dict | None) -> None:
         if users and 'users' in users:
-            user_selector = self.query_one('#basic-assignee-selector', LazySelect)
-
-            if user_selector._has_loaded:
-                user_selector.set_options(users['users'])
+            if self.assignee_selector._has_loaded:
+                self.assignee_selector.set_options(users['users'])
             else:
-                if user_selector._is_loading:
-                    user_selector._stop_spinner()
+                if self.assignee_selector._is_loading:
+                    self.assignee_selector._stop_spinner()
 
     def watch_types(self, types: list[tuple[str, str]] | None) -> None:
         if types:
-            type_selector = self.query_one('#basic-type-selector', LazySelect)
-
-            if type_selector._has_loaded:
-                type_selector.set_options(types)
+            if self.type_selector._has_loaded:
+                self.type_selector.set_options(types)
             else:
-                if type_selector._is_loading:
-                    type_selector._stop_spinner()
+                if self.type_selector._is_loading:
+                    self.type_selector._stop_spinner()
 
     def watch_statuses(self, statuses: list[tuple[str, str]] | None) -> None:
         if statuses:
-            status_selector = self.query_one('#basic-status-selector', LazySelect)
-
-            if status_selector._has_loaded:
-                status_selector.set_options(statuses)
+            if self.status_selector._has_loaded:
+                self.status_selector.set_options(statuses)
             else:
-                if status_selector._is_loading:
-                    status_selector._stop_spinner()
+                if self.status_selector._is_loading:
+                    self.status_selector._stop_spinner()
 
     @work(exclusive=False, group='fetch-projects')
     async def fetch_projects(self) -> None:
         worker = get_current_worker()
-        project_selector = self.query_one('#basic-project-selector', LazySelect)
-
         if not worker.is_cancelled:
             if self.projects and 'projects' in self.projects:
-                project_selector.set_options(self.projects['projects'])
-                project_selector._stop_spinner()
+                self.project_selector.set_options(self.projects['projects'])
+                self.project_selector._stop_spinner()
                 return
 
             cached_projects = self._cache.get('projects')
@@ -513,13 +553,11 @@ class UnifiedSearchBar(Container):
                     f'Failed to fetch projects: {response.error}', severity='error', title='Search'
                 )
 
-                project_selector._stop_spinner()
+                self.project_selector._stop_spinner()
 
     @work(exclusive=False, group='fetch-users')
     async def fetch_users(self) -> None:
         worker = get_current_worker()
-        user_selector = self.query_one('#basic-assignee-selector', LazySelect)
-
         if not worker.is_cancelled:
             try:
                 project_key = self._selected_project_key
@@ -529,8 +567,8 @@ class UnifiedSearchBar(Container):
                     and 'users' in self.users
                     and self._users_fetched_for_project == project_key
                 ):
-                    user_selector.set_options(self.users['users'])
-                    user_selector._stop_spinner()
+                    self.assignee_selector.set_options(self.users['users'])
+                    self.assignee_selector._stop_spinner()
                     return
 
                 cache_key = project_key if project_key else 'global'
@@ -560,25 +598,23 @@ class UnifiedSearchBar(Container):
                     self.notify(
                         f'Failed to fetch users: {response.error}', severity='error', title='Search'
                     )
-                    user_selector._stop_spinner()
+                    self.assignee_selector._stop_spinner()
             except Exception as e:
                 self.notify(f'Error fetching users: {str(e)}', severity='error', title='Search')
-                user_selector._stop_spinner()
+                self.assignee_selector._stop_spinner()
         else:
-            user_selector._stop_spinner()
+            self.assignee_selector._stop_spinner()
 
     @work(exclusive=False, group='fetch-types')
     async def fetch_work_item_types(self) -> None:
         worker = get_current_worker()
-        type_selector = self.query_one('#basic-type-selector', LazySelect)
-
         if not worker.is_cancelled:
             try:
                 project_key = self._selected_project_key
 
                 if self.types and self._types_fetched_for_project == project_key:
-                    type_selector.set_options(self.types)
-                    type_selector._stop_spinner()
+                    self.type_selector.set_options(self.types)
+                    self.type_selector._stop_spinner()
                     return
 
                 cache_key = project_key if project_key else 'global'
@@ -609,27 +645,25 @@ class UnifiedSearchBar(Container):
                         severity='error',
                         title='Search',
                     )
-                    type_selector._stop_spinner()
+                    self.type_selector._stop_spinner()
             except Exception as e:
                 self.notify(
                     f'Error fetching issue types: {str(e)}', severity='error', title='Search'
                 )
-                type_selector._stop_spinner()
+                self.type_selector._stop_spinner()
         else:
-            type_selector._stop_spinner()
+            self.type_selector._stop_spinner()
 
     @work(exclusive=False, group='fetch-statuses')
     async def fetch_statuses(self) -> None:
         worker = get_current_worker()
-        status_selector = self.query_one('#basic-status-selector', LazySelect)
-
         if not worker.is_cancelled:
             try:
                 project_key = self._selected_project_key
 
                 if self.statuses and self._statuses_fetched_for_project == project_key:
-                    status_selector.set_options(self.statuses)
-                    status_selector._stop_spinner()
+                    self.status_selector.set_options(self.statuses)
+                    self.status_selector._stop_spinner()
                     return
 
                 cache_key = project_key if project_key else 'global'
@@ -665,7 +699,7 @@ class UnifiedSearchBar(Container):
                             severity='error',
                             title='Search',
                         )
-                        status_selector._stop_spinner()
+                        self.status_selector._stop_spinner()
                 else:
                     response = await self.api.status()
                     if response.success and response.result:
@@ -683,12 +717,12 @@ class UnifiedSearchBar(Container):
                             severity='error',
                             title='Search',
                         )
-                        status_selector._stop_spinner()
+                        self.status_selector._stop_spinner()
             except Exception as e:
                 self.notify(f'Error fetching statuses: {str(e)}', severity='error', title='Search')
-                status_selector._stop_spinner()
+                self.status_selector._stop_spinner()
         else:
-            status_selector._stop_spinner()
+            self.status_selector._stop_spinner()
 
     def get_search_data(self) -> dict:
         mode = self.search_mode
@@ -697,13 +731,13 @@ class UnifiedSearchBar(Container):
             return {
                 'mode': 'basic',
                 'work_item_key': self._work_item_key or '',
-                'project': self.query_one('#basic-project-selector', LazySelect).value,
-                'assignee': self.query_one('#basic-assignee-selector', LazySelect).value,
-                'type': self.query_one('#basic-type-selector', LazySelect).value,
-                'status': self.query_one('#basic-status-selector', LazySelect).value,
+                'project': self.project_selector.value,
+                'assignee': self.assignee_selector.value,
+                'type': self.type_selector.value,
+                'status': self.status_selector.value,
             }
         elif mode == 'text':
-            text = self.query_one('#unified-search-input', Input).value
+            text = self.unified_input.value
 
             return {
                 'mode': 'text',
@@ -712,7 +746,7 @@ class UnifiedSearchBar(Container):
         elif mode == 'jql':
             return {
                 'mode': 'jql',
-                'jql': self.query_one('#unified-search-input', Input).value,
+                'jql': self.unified_input.value,
             }
 
         return {'mode': mode}
@@ -724,8 +758,7 @@ class UnifiedSearchBar(Container):
 
         self._work_item_key = work_item_key
 
-        mode_selector = self.query_one('#search-mode-selector', Select)
-        mode_selector.value = 'basic'
+        self.mode_selector.value = 'basic'
         self.search_mode = 'basic'
         self._update_mode_display('basic')
         return True
@@ -755,12 +788,9 @@ class UnifiedSearchBar(Container):
             )
             return
 
-        mode_selector = self.query_one('#search-mode-selector', Select)
-        mode_selector.value = 'jql'
+        self.mode_selector.value = 'jql'
         self.search_mode = 'jql'
         self._update_mode_display('jql')
 
-        jql_input = self.query_one('#unified-search-input', Input)
-
         cleaned_expression = filter_expression.replace('\n', ' ').replace('\t', ' ').strip()
-        jql_input.value = cleaned_expression
+        self.unified_input.value = cleaned_expression

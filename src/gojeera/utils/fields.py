@@ -3,6 +3,11 @@
 from enum import Enum
 from typing import Any
 
+from textual.app import ComposeResult
+from textual.containers import Horizontal
+from textual.reactive import reactive
+from textual.widgets import Button
+
 from gojeera.constants import CustomFieldType
 from gojeera.utils.mappings import get_nested
 
@@ -103,6 +108,58 @@ class ValidationUtils:
         if ignore_whitespace and isinstance(original, str) and isinstance(current, str):
             return original.strip() != current.strip()
         return original != current
+
+
+class PendingChangesWidget(Horizontal, can_focus=False):
+    """Transparent footer widget that exposes a full-width pending-changes button."""
+
+    PENDING_LABEL = 'Apply Changes'
+
+    DEFAULT_CSS = """
+    PendingChangesWidget {
+        width: 100%;
+        height: 1;
+        background: transparent;
+        margin: 0;
+        padding: 0;
+        align: center middle;
+    }
+
+    PendingChangesWidget > Button {
+        width: 1fr;
+        height: 1;
+        background: transparent;
+    }
+    """
+
+    has_pending_changes = reactive(False)
+    is_loading = reactive(False)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.can_focus = False
+        self.display = True
+
+    def compose(self) -> ComposeResult:
+        button = Button(
+            self.PENDING_LABEL,
+            id='work-item-fields-pending-changes-button',
+        )
+        button.display = False
+        yield button
+
+    @property
+    def button(self) -> Button:
+        return self.query_one(Button)
+
+    def watch_has_pending_changes(self, has_pending_changes: bool) -> None:
+        self.button.display = has_pending_changes or self.is_loading
+
+    def watch_is_loading(self, is_loading: bool) -> None:
+        self.button.display = self.has_pending_changes or is_loading
+        self.button.disabled = is_loading
+        self.button.label = self.PENDING_LABEL
+        self.loading = is_loading
 
 
 def get_custom_fields_values(fields_values: dict, edit_metadata_fields: dict) -> dict[str, Any]:

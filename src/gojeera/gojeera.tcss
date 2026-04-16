@@ -1,17 +1,36 @@
 * {
   scrollbar-size-vertical: 1;
+  scrollbar-background: $surface;
+  scrollbar-background-hover: $surface-lighten-1;
+  scrollbar-background-active: $surface-lighten-1;
+  scrollbar-color: $primary-darken-2;
+  scrollbar-color-hover: $primary;
+  scrollbar-color-active: $primary-lighten-1;
 }
 
 LoadingIndicator {
   background: $background;
+  color: $accent;
 }
 
 #modal_footer LoadingIndicator {
   background: $surface;
+  color: $accent;
 }
 
 ModalScreen {
   background: $background 80%;
+}
+
+ModalScreen * {
+  scrollbar-background: $surface-lighten-2;
+  scrollbar-background-hover: $surface-lighten-3;
+  scrollbar-background-active: $surface-lighten-3;
+}
+
+ModalScreen ExtendedMarkdownParagraph > .gojeera-inline-code {
+  background: $surface-lighten-1;
+  color: $text;
 }
 
 Footer {
@@ -42,8 +61,8 @@ UnifiedSearchBar {
   height: auto;
   max-height: 1;
   layout: grid;
-  grid-size: 6;
-  grid-columns: auto 1fr 1fr 1fr 1fr 8;
+  grid-size: 7;
+  grid-columns: auto 3 1fr 1fr 1fr 1fr 8;
   grid-gutter: 1;
   height: auto;
   width: 100%;
@@ -53,81 +72,90 @@ UnifiedSearchBar {
   overflow: hidden hidden;
 }
 
-UnifiedSearchBar>Select#search-mode-selector {
+UnifiedSearchBar > Select#search-mode-selector {
   column-span: 1;
-  width: 15;
-  min-width: 15;
+  width: 9;
+  min-width: 9;
   margin: 0;
 }
 
-UnifiedSearchBar>Select#search-mode-selector>SelectCurrent {
-  background: $accent-darken-3;
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent {
+  background: $primary-muted;
 }
 
-UnifiedSearchBar>Select#search-mode-selector>SelectCurrent:hover,
-UnifiedSearchBar>Select#search-mode-selector:focus>SelectCurrent {
-  background: $primary;
-}
-
-UnifiedSearchBar>Select#search-mode-selector>SelectCurrent.-has-value>Static#label {
-  color: $background;
+UnifiedSearchBar
+  > Select#search-mode-selector
+  > SelectCurrent.-has-value
+  > Static#label {
+  color: $text-primary;
   text-style: bold;
   padding: 0 0 0 1;
 }
 
-UnifiedSearchBar>Select#search-mode-selector>SelectCurrent>Static#label {
-  color: $background;
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent > Static#label {
+  color: $text-primary;
   text-style: bold;
   padding: 0 0 0 1;
 }
 
-UnifiedSearchBar>Select#search-mode-selector>SelectCurrent>.arrow {
-  color: $background;
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent > .arrow {
+  color: $text-primary;
   text-style: bold;
 }
 
-
-UnifiedSearchBar>Select>SelectOverlay>OptionList>.option-list--option-highlighted {
-  background: $success;
+OptionList > .option-list--option-highlighted,
+AutoCompleteList > .option-list--option-highlighted {
+  background: $primary-muted;
+  color: $text-primary;
 }
 
+OptionList > .option-list--option:hover,
+AutoCompleteList > .option-list--option:hover {
+  background: $primary-muted;
+  color: $text-primary;
+}
 
-UnifiedSearchBar.mode-basic>Select#basic-project-selector {
+UnifiedSearchBar.mode-basic > Select#basic-project-selector {
   column-span: 1;
   width: 100%;
 }
 
-UnifiedSearchBar.mode-basic>Select#basic-assignee-selector {
+UnifiedSearchBar.mode-basic > Select#basic-assignee-selector {
   column-span: 1;
   width: 100%;
 }
 
-UnifiedSearchBar.mode-basic>Select#basic-type-selector {
+UnifiedSearchBar.mode-basic > Select#basic-type-selector {
   column-span: 1;
   width: 100%;
 }
 
-UnifiedSearchBar.mode-basic>Select#basic-status-selector {
+UnifiedSearchBar.mode-basic > Select#basic-status-selector {
   column-span: 1;
   width: 100%;
 }
 
-UnifiedSearchBar.mode-text>Input#unified-search-input,
-UnifiedSearchBar.mode-jql>Input#unified-search-input {
+UnifiedSearchBar.mode-text > Input#unified-search-input,
+UnifiedSearchBar.mode-jql > Input#unified-search-input {
   column-span: 4;
   width: 100%;
 }
 
-UnifiedSearchBar>Input#unified-search-input {
+UnifiedSearchBar > Button#unified-search-new-work-item-button {
+  width: 3;
+  min-width: 3;
+  padding: 0;
+}
+
+UnifiedSearchBar > Input#unified-search-input {
   &.-invalid {
     background: $error 40%;
   }
 
-  &.-invalid>.input--placeholder {
+  &.-invalid > .input--placeholder {
     color: $error-lighten-3;
   }
 }
-
 
 JQLAutoComplete {
   background: $surface;
@@ -136,7 +164,7 @@ JQLAutoComplete {
   max-height: 10;
 }
 
-JQLAutoComplete>AutoCompleteList {
+JQLAutoComplete > AutoCompleteList {
   background: $surface;
   color: $text;
   border: none;
@@ -144,92 +172,89 @@ JQLAutoComplete>AutoCompleteList {
   scrollbar-size-vertical: 1;
 }
 
-JQLAutoComplete>AutoCompleteList>.option-list--option {
+JQLAutoComplete > AutoCompleteList > .option-list--option {
   background: $surface;
   color: $text;
   padding: 0 1;
   height: 1;
 }
 
-JQLAutoComplete>AutoCompleteList>.option-list--option-highlighted {
-  background: $primary;
-  color: $background;
+JQLAutoComplete > AutoCompleteList > .option-list--option-highlighted {
   text-style: bold;
   padding: 0 1;
 }
 
-JQLAutoComplete>AutoCompleteList>.option-list--option:hover {
-  background: $accent;
-  color: $background;
+JQLAutoComplete > AutoCompleteList > .option-list--option:hover {
+  text-style: bold;
 }
 
-UnifiedSearchBar>Button {
+UnifiedSearchBar > Button {
   column-span: 1;
   width: 100%;
   min-width: 8;
   margin: 0;
   padding: 0;
-  background: $accent-darken-3;
-  color: $text;
+  background: $primary-muted;
+  color: $text-primary;
   text-align: center;
   content-align: center middle;
 }
 
-UnifiedSearchBar>Button>Static {
-  color: $text;
+UnifiedSearchBar > Button > Static {
+  color: $text-primary;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar>Button:hover {
+UnifiedSearchBar > Button:hover {
   background: $primary;
   color: $text;
 }
 
-UnifiedSearchBar>Button:hover>Static {
+UnifiedSearchBar > Button:hover > Static {
   color: $text;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar>Button:disabled {
-  background: $accent-darken-3;
+UnifiedSearchBar > Button:disabled {
+  background: $primary-darken-3;
   color: $text-disabled;
 }
 
-UnifiedSearchBar>Button:disabled>Static {
-  color: $text-disabled;
-  background: transparent;
-  text-style: bold;
-}
-
-UnifiedSearchBar>Button:disabled:hover {
-  background: $accent-darken-3;
-  color: $text-disabled;
-}
-
-UnifiedSearchBar>Button:disabled:hover>Static {
+UnifiedSearchBar > Button:disabled > Static {
   color: $text-disabled;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar>Button:focus {
-  background: $primary;
-  color: $text;
+UnifiedSearchBar > Button:disabled:hover {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+UnifiedSearchBar > Button:disabled:hover > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button:focus {
+  background: $primary-muted;
+  color: $text-primary;
   text-style: bold;
   border: none;
   border-top: none;
   border-bottom: none;
 }
 
-UnifiedSearchBar>Button:focus>Static {
-  color: $text;
+UnifiedSearchBar > Button:focus > Static {
+  color: $text-primary;
   background: transparent;
   text-style: bold;
 }
 
-#main-container>Horizontal {
+#main-container > Horizontal {
   height: 1fr;
   margin-top: 0;
 }
@@ -312,17 +337,17 @@ UnifiedSearchBar>Button:focus>Static {
   text-align: center;
 }
 
-#search-results-container>VerticalGroup {
+#search-results-container > VerticalGroup {
   padding: 0;
   margin: 0;
   height: 1fr;
 }
 
-#search-results-container>Center {
+#search-results-container > Center {
   height: 1fr;
 }
 
-#search-results-container>VerticalGroup>* {
+#search-results-container > VerticalGroup > * {
   margin: 0;
 }
 
@@ -348,33 +373,11 @@ UnifiedSearchBar>Button:focus>Static {
   height: 1fr;
 }
 
-#pane-attachments,
-#pane-subtasks,
-#pane-related,
-#pane-links,
-#pane-comments {
+.work-item-tab-pane {
   padding-bottom: 2;
 }
 
 #work-item-information-switcher > * > * {
-  width: 100%;
-  height: 1fr;
-}
-
-#attachments,
-#workitem_subtasks,
-#related_work_items,
-#work_item_remote_links,
-#work_item_comments {
-  width: 100%;
-  height: 1fr;
-}
-
-#attachments .tab-content-container,
-#workitem_subtasks .tab-content-container,
-#related_work_items .tab-content-container,
-#work_item_remote_links .tab-content-container,
-#work_item_comments .tab-content-container {
   width: 100%;
   height: 1fr;
 }
@@ -399,16 +402,7 @@ UnifiedSearchBar>Button:focus>Static {
   border-subtitle-style: bold;
 }
 
-#main-container>HorizontalGroup {
-  margin: 0;
-  padding: 0;
-}
-
-#main-container>ItemGrid {
-  margin: 0;
-}
-
-#main-container>#three-split-layout {
+#main-container > #three-split-layout {
   height: 1fr;
   margin-top: 0;
   padding-bottom: 0;
@@ -419,13 +413,13 @@ UnifiedSearchBar>Button:focus>Static {
   padding: 0;
 }
 
-#main-container>HorizontalGroup {
+#main-container > HorizontalGroup {
   margin: 0;
   padding: 0;
   height: auto;
 }
 
-#main-container>ItemGrid {
+#main-container > ItemGrid {
   margin: 0;
   height: auto;
 }
@@ -456,30 +450,9 @@ UnifiedSearchBar>Button:focus>Static {
 
 #work_item_search_results {
   background: transparent;
-  scrollbar-size-vertical: 0;
   height: 1fr;
   margin: 0;
   padding: 0;
-}
-
-#work_item_search_results > WorkItemContainer {
-  height: auto;
-}
-
-#work_item_search_results > WorkItemContainer.-hover,
-#work_item_search_results > WorkItemContainer.-selected {
-  background: $accent-muted;
-  color: $text-accent;
-}
-
-#work_item_search_results > WorkItemContainer.-loaded {
-  background: $primary-muted;
-  color: $text-primary;
-}
-
-#work_item_search_results > WorkItemContainer.-loaded.-selected {
-  background: $primary-darken-3;
-  color: $text;
 }
 
 .tab-content-container {
@@ -489,57 +462,34 @@ UnifiedSearchBar>Button:focus>Static {
   margin: 0;
 }
 
-.tab-content-container>#work_item_search_results {
+.tab-content-container > #work_item_search_results {
   height: 1fr;
   margin: 0;
   padding: 0;
 }
-
 
 .work-items-section-spacer {
   height: 1;
   background: transparent;
 }
 
-WorkItemChildWorkItemsWidget {
-  scrollbar-size-vertical: 1;
-}
-
-WorkItemRemoteLinksWidget {
-  hatch: left $success 20%;
-  scrollbar-size-vertical: 1;
-}
-
-WorkItemAttachmentsWidget {
-  hatch: right $success 20%;
-  scrollbar-size-vertical: 1;
-}
-
-RelatedWorkItemsWidget {
-  hatch: right $success 20%;
-  scrollbar-size-vertical: 1;
-}
-
-WorkItemCommentsWidget {
-  hatch: right $success 20%;
-  scrollbar-size-vertical: 1;
-}
-
-#work-item-fields-form {
-  scrollbar-size-vertical: 1;
-  height: 1fr;
-  padding: 0 0 1 1;
-  margin-bottom: 0;
-  layout: vertical;
-}
-
 #work-item-fields-pending-changes-container {
   width: 100%;
   height: auto;
+  margin: 1 0 0 0;
+  padding: 0;
+  align: center middle;
+  dock: bottom;
+}
+
+#work-item-fields-pending-changes-indicator {
+  width: 100%;
+  height: 1;
   margin: 0;
   padding: 0;
-  align: right middle;
-  dock: bottom;
+  min-width: 0;
+  background: transparent;
+  border: none;
 }
 
 #work-item-fields-pending-changes-button {
@@ -548,69 +498,20 @@ WorkItemCommentsWidget {
   margin: 0;
   padding: 0;
   min-width: 0;
-  color: $warning;
-  background: $warning 20%;
+  color: $primary;
+  background: $primary-muted;
   text-style: bold;
   border: none;
 }
 
-#work-item-fields-pending-changes-button:hover {
-  color: $text;
-  background: $warning 40%;
-}
-
-#work-item-fields-pending-changes-button:hover>Static {
-  color: $text;
-}
-
-#work-item-fields-pending-changes-button:disabled {
-  background: $background;
-}
-
-#work-item-fields-pending-changes-button:disabled:hover {
-  color: $warning;
-  background: $background;
-}
-
-#work-item-fields-pending-changes-button:disabled:hover>Static {
-  color: $warning;
-}
-
-
-#work-item-fields-form>StaticFieldsWidgets {
-  margin: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-  margin-right: 2;
-  padding: 0;
-  height: auto;
-}
-
-#work-item-fields-form>StaticFieldsWidgets>.field-row-slot,
-#work-item-fields-form>DynamicFieldsWidgets>.field-row-slot,
-#work-item-fields-form>DateMetadata>.field-row-slot {
+#work-item-fields-form > StaticFieldsWidgets > .field-row-slot,
+#work-item-fields-form > DynamicFieldsWidgets > .field-row-slot,
+#work-item-fields-form > DateMetadata > .field-row-slot {
   margin: 0;
   padding: 0;
   width: 100%;
   height: auto;
 }
-
-#work-item-fields-form>DynamicFieldsWidgets {
-  margin: 0;
-  margin-bottom: 0;
-  margin-right: 2;
-  padding: 0;
-  height: auto;
-}
-
-#work-item-fields-form>DateMetadata {
-  margin: 0;
-  margin-bottom: 0;
-  margin-right: 2;
-  padding: 0;
-  height: auto;
-}
-
 
 #work-item-fields-form Horizontal {
   height: auto;
@@ -618,7 +519,7 @@ WorkItemCommentsWidget {
   align: left middle;
 }
 
-#work-item-fields-form Horizontal>.field_label {
+#work-item-fields-form Horizontal > .field_label {
   width: 20%;
   min-width: 15;
   max-width: 30;
@@ -628,80 +529,77 @@ WorkItemCommentsWidget {
   text-overflow: ellipsis;
 }
 
-#work-item-fields-form Horizontal>.field_control {
+#work-item-fields-form Horizontal > .field_control {
   width: 1fr;
   min-width: 10;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets .field_control {
+#work-item-fields-form > DynamicFieldsWidgets .field_control {
   border: none;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets Input.field_control,
-#work-item-fields-form>DynamicFieldsWidgets TextInput.field_control,
-#work-item-fields-form>DynamicFieldsWidgets NumericInput.field_control,
-#work-item-fields-form>DynamicFieldsWidgets URL.field_control,
-#work-item-fields-form>DynamicFieldsWidgets DateInput.field_control,
-#work-item-fields-form>DynamicFieldsWidgets DateTimeInput.field_control {
+#work-item-fields-form > DynamicFieldsWidgets .field-control-input {
   border: none;
   padding: 0 0;
   margin-right: 2;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets Select.field_control,
-#work-item-fields-form>DynamicFieldsWidgets LazySelect.field_control,
-#work-item-fields-form>DynamicFieldsWidgets SprintPicker.field_control {
+#work-item-fields-form > DynamicFieldsWidgets .field-control-select {
   margin-right: 2;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets Select.field_control > SelectCurrent,
-#work-item-fields-form>DynamicFieldsWidgets LazySelect.field_control > SelectCurrent,
-#work-item-fields-form>DynamicFieldsWidgets SprintPicker.field_control > SelectCurrent {
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-select
+  > SelectCurrent {
   border: none;
   padding: 0 0;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets Select.field_control > SelectCurrent > .arrow,
-#work-item-fields-form>DynamicFieldsWidgets LazySelect.field_control > SelectCurrent > .arrow,
-#work-item-fields-form>DynamicFieldsWidgets SprintPicker.field_control > SelectCurrent > .arrow {
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-select
+  > SelectCurrent
+  > .arrow {
   padding-right: 1;
 }
 
-#work-item-fields-form>StaticFieldsWidgets Select.field_control > SelectCurrent,
-#work-item-fields-form>StaticFieldsWidgets LazySelect.field_control > SelectCurrent,
-#work-item-fields-form>StaticFieldsWidgets SprintPicker.field_control > SelectCurrent {
+#work-item-fields-form
+  > StaticFieldsWidgets
+  .field-control-select
+  > SelectCurrent {
   border: none;
   padding: 0 0;
 }
 
-#work-item-fields-form>StaticFieldsWidgets Select.field_control > SelectCurrent > .arrow,
-#work-item-fields-form>StaticFieldsWidgets LazySelect.field_control > SelectCurrent > .arrow,
-#work-item-fields-form>StaticFieldsWidgets SprintPicker.field_control > SelectCurrent > .arrow {
+#work-item-fields-form
+  > StaticFieldsWidgets
+  .field-control-select
+  > SelectCurrent
+  > .arrow {
   padding-right: 1;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets MultiSelect.field_control,
-#work-item-fields-form>DynamicFieldsWidgets WorkItemLabels.field_control {
+#work-item-fields-form > DynamicFieldsWidgets .field-control-tags {
   border: none;
   padding: 0 0;
   margin-right: 2;
 }
 
-#work-item-fields-form>DynamicFieldsWidgets MultiSelect.field_control > TagInput,
-#work-item-fields-form>DynamicFieldsWidgets WorkItemLabels.field_control > TagInput,
-#work-item-fields-form>DynamicFieldsWidgets MultiSelect.field_control > TagAutoComplete > Input,
-#work-item-fields-form>DynamicFieldsWidgets WorkItemLabels.field_control > TagAutoComplete > Input {
+#work-item-fields-form > DynamicFieldsWidgets .field-control-tags > TagInput,
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-tags
+  > TagAutoComplete
+  > Input {
   border: none;
   padding: 0 0;
 }
 
-
-
-
-#work-item-fields-form Horizontal>WorkItemStatusSelectionInput,
-#work-item-fields-form Horizontal>UserSelectionInput,
-#work-item-fields-form Horizontal>SelectionWidget,
-#work-item-fields-form Horizontal>SprintPicker {
+#work-item-fields-form Horizontal > WorkItemStatusSelectionInput,
+#work-item-fields-form Horizontal > UserSelectionInput,
+#work-item-fields-form Horizontal > SelectionWidget,
+#work-item-fields-form Horizontal > SprintPicker {
   height: 1;
 }
 
@@ -728,28 +626,22 @@ WorkItemTypeField ReadOnlyField {
   padding: 0 0;
 }
 
-DateInput {
-  border: none;
-  height: 1;
-  padding: 0 0;
-}
-
 WorkItemComponentsScreen {
   align: center middle;
   background: $background;
 }
 
-WorkItemComponentsScreen>SelectionList {
+WorkItemComponentsScreen > SelectionList {
   width: 60%;
   height: 50%;
   padding: 0 1;
 
-  &>TextArea {
+  & > TextArea {
     margin-top: 1;
     scrollbar-size-vertical: 1;
   }
 
-  &>ItemGrid {
+  & > ItemGrid {
     margin-top: 1;
   }
 
@@ -757,27 +649,11 @@ WorkItemComponentsScreen>SelectionList {
   scrollbar-size-vertical: 1;
 }
 
-HelpScreen {
-  align: center middle;
-}
-
 HelpScreen #modal_outer {
   width: 90%;
   max-width: 120;
   height: 90%;
   max-height: 50;
-  background: $surface;
-  padding: 0;
-}
-
-HelpScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
 }
 
 HelpScreen MarkdownViewer,
@@ -795,135 +671,32 @@ CustomTitle {
   align: center middle;
 }
 
-CustomTitle>Rule {
+CustomTitle > Rule {
   color: $primary;
 }
 
-CustomTitle>Rule.-horizontal {
+CustomTitle > Rule.-horizontal {
   height: 1;
   margin: 0 0;
   width: 1fr;
   padding: 0 0;
 }
 
-QuitScreen {
-  align: center middle;
-}
-
 QuitScreen #modal_outer {
-  width: 50%;
-  max-width: 60;
+  width: 34;
+  max-width: 34;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-QuitScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
 }
 
 QuitScreen #modal_message {
   width: 100%;
-  height: auto;
-  padding: 0 2 1 2;
-  background: $surface;
-  color: $text;
-  text-align: center;
+  padding: 0 1 1 1;
 }
 
 QuitScreen #modal_footer {
   width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-QuitScreen #button-cancel {
-  width: auto;
-  margin-right: 1;
-  background: $primary-darken-2;
-  color: $text;
-}
-
-QuitScreen #button-cancel>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-QuitScreen #button-cancel:hover {
-  background: $primary;
-  color: $text;
-}
-
-QuitScreen #button-cancel:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-QuitScreen #button-cancel:focus {
-  background: $primary;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-}
-
-QuitScreen #button-cancel:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-QuitScreen #button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-QuitScreen #button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-QuitScreen #button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-QuitScreen #button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-QuitScreen #button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-}
-
-QuitScreen #button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-CommentScreen {
-  align: center middle;
+  padding: 0 1;
 }
 
 CommentScreen #modal_outer {
@@ -931,34 +704,30 @@ CommentScreen #modal_outer {
   max-width: 100;
   height: 80%;
   max-height: 50;
-  background: $surface;
-  padding: 0;
 }
 
-CommentScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
+CommentScreen Input,
+CommentScreen TextArea,
+RemoteLinkScreen Input,
+AddWorkItemRelationshipScreen Input,
+EditWorkItemInfoScreen Input,
+EditWorkItemInfoScreen TextArea,
+AddWorkItemScreen Input,
+AddWorkItemScreen TextArea,
+AddAttachmentScreen Input,
+SaveAttachmentScreen Input,
+LogWorkScreen Input,
+LogWorkScreen TextArea,
+QuickNavigationScreen Input,
+ParentWorkItemScreen Input,
+CloneWorkItemScreen Input {
+  background: $surface-lighten-1;
 }
 
-CommentScreen #modal-form-scroll,
-EditWorkItemInfoScreen #modal-form-scroll,
-AddWorkItemScreen #modal-form-scroll,
-LogWorkScreen #modal-form-scroll {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
-  scrollbar-size-vertical: 1;
-}
-
-CommentScreen #modal-form-scroll>*,
-EditWorkItemInfoScreen #modal-form-scroll>*,
-AddWorkItemScreen #modal-form-scroll>*,
-LogWorkScreen #modal-form-scroll>* {
+CommentScreen #modal-form-scroll > *,
+EditWorkItemInfoScreen #modal-form-scroll > *,
+AddWorkItemScreen #modal-form-scroll > *,
+LogWorkScreen #modal-form-scroll > * {
   margin-bottom: 0;
 }
 
@@ -972,62 +741,61 @@ CommentScreen #comment-field-container {
   margin-bottom: 0;
 }
 
-CommentScreen Input,
-CommentScreen TextArea {
-  background: $surface-lighten-1;
+.modal-footer-spaced {
+  margin-bottom: 1;
 }
 
-CommentScreen ExtendedADFMarkdownTextArea {
-  background: $surface-lighten-1;
-}
-
-CommentScreen ExtendedADFMarkdownTextArea TabbedContent {
-  background: $surface-lighten-1;
-}
-
-CommentScreen ExtendedADFMarkdownTextArea TextArea {
-  background: $surface-lighten-1;
-}
-
-CommentScreen #modal_footer {
+.modal-form {
   width: 100%;
   height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
   background: $surface;
+  padding: 0 1;
+  scrollbar-size-vertical: 1;
 }
 
-#add-comment-button-save,
-#edit-comment-button-save {
+.modal-form > Vertical {
+  width: 100%;
+  height: auto;
+}
+
+.modal-form > Vertical > Label {
+  margin: 0;
+}
+
+.modal-form--fields > Vertical > Input,
+.modal-form--fields > Vertical > Select {
+  margin-bottom: 1;
+}
+
+.modal-action-button {
   width: auto;
+  color: $text;
+}
+
+.modal-action-button > Static,
+.dialog-button > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.modal-action-button:hover > Static,
+.modal-action-button:focus > Static,
+.dialog-button:hover > Static,
+.dialog-button:focus > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.modal-action-button--confirm {
   margin-right: 1;
   background: $success-darken-2;
   color: $text;
 }
 
-#add-comment-button-save>Static,
-#edit-comment-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-comment-button-save:hover,
-#edit-comment-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#add-comment-button-save:hover>Static,
-#edit-comment-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-comment-button-save:focus,
-#edit-comment-button-save:focus {
+.modal-action-button--confirm:hover,
+.modal-action-button--confirm:focus {
   background: $success;
   color: $text;
   text-style: bold;
@@ -1036,42 +804,13 @@ CommentScreen #modal_footer {
   border-bottom: none;
 }
 
-#add-comment-button-save:focus>Static,
-#edit-comment-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-comment-button-quit,
-#edit-comment-button-quit {
-  width: auto;
+.modal-action-button--danger {
   background: $error-darken-1;
   color: $text;
 }
 
-#add-comment-button-quit>Static,
-#edit-comment-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-comment-button-quit:hover,
-#edit-comment-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#add-comment-button-quit:hover>Static,
-#edit-comment-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-comment-button-quit:focus,
-#edit-comment-button-quit:focus {
+.modal-action-button--danger:hover,
+.modal-action-button--danger:focus {
   background: $error-lighten-1;
   color: $text;
   text-style: bold;
@@ -1080,15 +819,71 @@ CommentScreen #modal_footer {
   border-bottom: none;
 }
 
-#add-comment-button-quit:focus>Static,
-#edit-comment-button-quit:focus>Static {
+.modal-action-button--browse {
+  margin-left: 1;
+  background: $accent-darken-3;
   color: $text;
-  background: transparent;
-  text-style: bold;
 }
 
-RemoteLinkScreen {
-  align: center middle;
+.modal-action-button--browse:hover,
+.modal-action-button--browse:focus {
+  background: $primary;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button {
+  width: auto;
+  color: $text;
+}
+
+.dialog-button--secondary {
+  margin-right: 1;
+  background: $primary-darken-2;
+  color: $text;
+}
+
+.dialog-button--secondary:hover,
+.dialog-button--secondary:focus {
+  background: $primary;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button--danger {
+  background: $error-darken-1;
+  color: $text;
+}
+
+.dialog-button--danger:hover,
+.dialog-button--danger:focus {
+  background: $error;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button--danger-soft {
+  background: $error-darken-1;
+  color: $text;
+}
+
+.dialog-button--danger-soft:hover,
+.dialog-button--danger-soft:focus {
+  background: $error-lighten-1;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
 }
 
 RemoteLinkScreen #modal_outer {
@@ -1096,59 +891,6 @@ RemoteLinkScreen #modal_outer {
   max-width: 70;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-RemoteLinkScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#add-remote-link-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#add-remote-link-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#add-remote-link-form Label {
-  margin: 0;
-}
-
-#add-remote-link-form Input {
-  margin-bottom: 1;
-}
-
-RemoteLinkScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#add-remote-link-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-QuickNavigationScreen {
-  align: center middle;
 }
 
 QuickNavigationScreen #modal_outer {
@@ -1157,129 +899,6 @@ QuickNavigationScreen #modal_outer {
   max-width: 64;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-QuickNavigationScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#quick-navigation-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#quick-navigation-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#quick-navigation-form Label {
-  margin: 0;
-}
-
-#quick-navigation-form Input {
-  margin-bottom: 1;
-}
-
-QuickNavigationScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#quick-navigation-button-open {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#quick-navigation-button-open>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#quick-navigation-button-open:hover {
-  background: $success;
-  color: $text;
-}
-
-#quick-navigation-button-open:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#quick-navigation-button-open:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#quick-navigation-button-open:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#quick-navigation-button-cancel {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#quick-navigation-button-cancel>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#quick-navigation-button-cancel:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#quick-navigation-button-cancel:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#quick-navigation-button-cancel:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#quick-navigation-button-cancel:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ParentWorkItemScreen {
-  align: center middle;
 }
 
 ParentWorkItemScreen #modal_outer {
@@ -1288,238 +907,46 @@ ParentWorkItemScreen #modal_outer {
   max-width: 64;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
 }
 
-ParentWorkItemScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#parent-work-item-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#parent-work-item-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#parent-work-item-form Label {
-  margin: 0;
-}
-
-#parent-work-item-form Select,
-#parent-work-item-form Input {
-  margin-bottom: 1;
-}
-
-ParentWorkItemScreen Select>SelectCurrent {
-  background: $surface-lighten-1;
+ParentWorkItemScreen Select > SelectCurrent {
   padding: 0;
   margin: 0;
 }
 
-ParentWorkItemScreen Select>SelectCurrent>Static#label {
+ParentWorkItemScreen Select > SelectCurrent > Static#label {
   padding: 0;
   margin: 0;
 }
 
-ParentWorkItemScreen Select>SelectCurrent>.arrow {
+ParentWorkItemScreen Select > SelectCurrent > .arrow {
   margin-right: 1;
 }
 
-ParentWorkItemScreen Select>SelectOverlay {
-  background: $surface-lighten-1;
-}
-
-ParentWorkItemScreen Select>SelectOverlay>OptionList {
-  background: $surface-lighten-1;
-}
-
-ParentWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option,
-ParentWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option-highlighted {
+ParentWorkItemScreen Select > SelectOverlay > OptionList > .option-list--option,
+ParentWorkItemScreen
+  Select
+  > SelectOverlay
+  > OptionList
+  > .option-list--option-highlighted {
   padding: 0 0 0 0;
   margin: 0;
 }
 
-ParentWorkItemScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
 #parent-work-item-button-apply {
-  width: auto;
   min-width: 0;
   margin: 0 1 0 0;
   padding: 0 1;
-  background: $success-darken-2;
-  color: $text;
   text-align: center;
   content-align: center middle;
-}
-
-#parent-work-item-button-apply>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#parent-work-item-button-apply:hover {
-  background: $success;
-  color: $text;
-}
-
-#parent-work-item-button-apply:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#parent-work-item-button-apply:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#parent-work-item-button-apply:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
 }
 
 #parent-work-item-button-cancel {
-  width: auto;
   min-width: 0;
   margin: 0;
   padding: 0 1;
-  background: $error-darken-1;
-  color: $text;
   text-align: center;
   content-align: center middle;
-}
-
-#parent-work-item-button-cancel>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#parent-work-item-button-cancel:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#parent-work-item-button-cancel:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#parent-work-item-button-cancel:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#parent-work-item-button-cancel:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#add-remote-link-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-remote-link-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#add-remote-link-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#add-remote-link-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-remote-link-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-remote-link-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-RemoteLinkScreen Input {
-  background: $surface-lighten-1;
 }
 
 RemoteLinkNameInputWidget {
@@ -1540,177 +967,29 @@ RemoteLinkURLInputWidget {
   background: $background;
 }
 
-AddWorkItemRelationshipScreen {
-  align: center middle;
-}
-
 AddWorkItemRelationshipScreen #modal_outer {
   width: 50%;
   max-width: 70;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-AddWorkItemRelationshipScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#link-work-items-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#link-work-items-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#link-work-items-form Label {
-  margin: 0;
-}
-
-#link-work-items-form Input {
-  margin-bottom: 1;
-}
-
-#link-work-items-form Select {
-  margin-bottom: 1;
-}
-
-AddWorkItemRelationshipScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#add-link-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#add-link-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-link-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#add-link-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-link-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-link-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-link-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#add-link-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-link-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#add-link-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-link-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-link-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-AddWorkItemRelationshipScreen Input {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemRelationshipScreen Select>SelectCurrent {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemRelationshipScreen Select>SelectOverlay {
-  background: $surface-lighten-1;
-}
-
-EditWorkItemInfoScreen {
-  align: center middle;
 }
 
 EditWorkItemInfoScreen #modal_outer {
-  width: 90%;
-  max-width: 140;
-  height: 90%;
-  max-height: 50;
-  background: $surface;
-  padding: 0;
+  width: 74%;
+  max-width: 110;
+  height: 80%;
+  max-height: 44;
 }
 
 EditWorkItemInfoScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
+  padding: 1 1 0 1;
 }
 
-EditWorkItemInfoScreen #modal-form-scroll {
-  padding: 0 2 1 2;
+EditWorkItemInfoScreen #edit-work-item-body {
+  width: 100%;
+  height: 1fr;
+  min-height: 0;
+  padding: 0 1;
 }
 
 EditWorkItemInfoScreen #summary-field-container {
@@ -1720,141 +999,45 @@ EditWorkItemInfoScreen #summary-field-container {
 }
 
 EditWorkItemInfoScreen #description-field-container {
-  height: auto;
+  height: 1fr;
+  min-height: 0;
   margin-top: 1;
-  margin-bottom: 0;
+  margin-bottom: 1;
 }
 
-EditWorkItemInfoScreen ExtendedADFMarkdownTextArea {
-  background: $surface-lighten-1;
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TabbedContent,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TabPane {
+  height: 1fr;
+  min-height: 0;
+  max-height: 999;
 }
 
-EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TabbedContent {
-  background: $surface-lighten-1;
-}
-
-EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TextArea {
-  background: $surface-lighten-1;
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TextArea,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea VerticalScroll {
+  height: 1fr;
+  min-height: 0;
+  max-height: 999;
 }
 
 EditWorkItemInfoScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#edit-work-item-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#edit-work-item-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#edit-work-item-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#edit-work-item-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#edit-work-item-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#edit-work-item-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#edit-work-item-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#edit-work-item-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#edit-work-item-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#edit-work-item-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#edit-work-item-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#edit-work-item-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-EditWorkItemInfoScreen Input,
-EditWorkItemInfoScreen TextArea {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen {
-  align: center middle;
+  padding: 0 1;
 }
 
 AddWorkItemScreen #modal_outer {
-  width: 95%;
-  max-width: 200;
-  height: 90%;
-  max-height: 70;
-  background: $surface;
-  padding: 0;
+  width: 72%;
+  max-width: 120;
+  height: 8;
+  max-height: 90%;
 }
 
 AddWorkItemScreen #modal_title {
-  width: 100%;
-  height: auto;
   padding: 1 1 0 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
 }
 
 AddWorkItemScreen #modal-form-scroll {
-  padding: 0 3 1 2;
+  padding: 0 1 1 1;
 }
-
 
 AddWorkItemScreen StaticFieldsWidgets {
   margin: 0;
@@ -1862,7 +1045,7 @@ AddWorkItemScreen StaticFieldsWidgets {
   height: auto;
 }
 
-AddWorkItemScreen StaticFieldsWidgets>Vertical {
+AddWorkItemScreen StaticFieldsWidgets > Vertical {
   height: auto;
   margin: 0;
 }
@@ -1873,7 +1056,7 @@ AddWorkItemScreen #assignee-field-container,
 AddWorkItemScreen #sprint-field-container,
 AddWorkItemScreen #summary-field-container,
 AddWorkItemScreen #description-field-container,
-AddWorkItemScreen DynamicFieldsWidgets>* {
+AddWorkItemScreen DynamicFieldsWidgets > * {
   height: auto;
   margin: 1 0 0 0;
 }
@@ -1906,103 +1089,6 @@ AddWorkItemScreen DynamicFieldsWidgets > DynamicFieldWrapper > Label {
   background: $surface;
 }
 
-AddWorkItemScreen ExtendedADFMarkdownTextArea {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen ExtendedADFMarkdownTextArea TabbedContent {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen ExtendedADFMarkdownTextArea TextArea {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  background: $surface;
-}
-
-#add-work-item-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#add-work-item-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-work-item-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#add-work-item-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-work-item-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-work-item-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-work-item-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#add-work-item-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-work-item-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#add-work-item-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-work-item-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-work-item-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
 #required-fields-tracker {
   width: 100%;
   text-align: center;
@@ -2026,104 +1112,46 @@ AddWorkItemScreen #modal_footer {
   text-style: bold;
 }
 
-AddWorkItemScreen Input,
-AddWorkItemScreen TextArea {
+ParentWorkItemScreen Select > SelectCurrent,
+AddWorkItemRelationshipScreen Select > SelectCurrent,
+UserMentionPickerScreen Select > SelectCurrent,
+DecisionPickerScreen Select > SelectCurrent,
+PanelPickerScreen Select > SelectCurrent {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen Select>SelectCurrent,
-AddWorkItemScreen LazySelect>SelectCurrent,
-AddWorkItemScreen SprintPicker>SelectCurrent {
+ParentWorkItemScreen Select > SelectOverlay,
+ParentWorkItemScreen Select > SelectOverlay > OptionList,
+AddWorkItemRelationshipScreen Select > SelectOverlay,
+UserMentionPickerScreen Select > SelectOverlay,
+DecisionPickerScreen Select > SelectOverlay,
+PanelPickerScreen Select > SelectOverlay {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen Select>SelectOverlay,
-AddWorkItemScreen LazySelect>SelectOverlay,
-AddWorkItemScreen SprintPicker>SelectOverlay {
+.surface-input-select > SelectCurrent {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen Select>SelectOverlay>OptionList,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList,
-AddWorkItemScreen SprintPicker>SelectOverlay>OptionList {
+.surface-input-select > SelectOverlay,
+.surface-input-select > SelectOverlay > OptionList {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option,
-AddWorkItemScreen SprintPicker>SelectOverlay>OptionList>.option-list--option {
+.surface-input-select > SelectOverlay > OptionList > .option-list--option {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen Select>SelectOverlay>OptionList>.option-list--option-highlighted,
-AddWorkItemScreen LazySelect>SelectOverlay>OptionList>.option-list--option-highlighted,
-AddWorkItemScreen SprintPicker>SelectOverlay>OptionList>.option-list--option-highlighted {
-  background: $primary;
-}
-
-AddWorkItemScreen WorkItemLabels,
-AddWorkItemScreen MultiSelect {
+.surface-input-tags,
+.surface-input-tags > TagAutoComplete,
+.surface-input-tags > TagAutoComplete > Input,
+.surface-input-tags > TagAutoComplete > AutoCompleteList,
+.surface-input-tags > TagInput {
   background: $surface-lighten-1;
 }
 
-AddWorkItemScreen WorkItemLabels>Tag,
-AddWorkItemScreen MultiSelect>Tag {
-  background: $primary;
-  color: $text;
-}
-
-AddWorkItemScreen WorkItemLabels>ExtendedTag,
-AddWorkItemScreen MultiSelect>ExtendedTag {
-  color: $text;
-
-  & > .extended-tag--chip,
-  & > .extended-tag--close,
-  & > .extended-tag--close-hover {
-    background: $primary;
-    color: $text;
-  }
-
-  &:hover > .extended-tag--chip,
-  &:focus > .extended-tag--chip,
-  &:hover > .extended-tag--close,
-  &:focus > .extended-tag--close,
-  &:hover > .extended-tag--close-hover,
-  &:focus > .extended-tag--close-hover {
-    background: $primary-darken-2;
-  }
-}
-
-AddWorkItemScreen WorkItemLabels>TagAutoComplete,
-AddWorkItemScreen MultiSelect>TagAutoComplete {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen WorkItemLabels>TagAutoComplete>Input,
-AddWorkItemScreen MultiSelect>TagAutoComplete>Input {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen MultiSelect>TagInput {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen WorkItemLabels>TagAutoComplete>AutoCompleteList,
-AddWorkItemScreen MultiSelect>TagAutoComplete>AutoCompleteList {
-  background: $surface-lighten-1;
-}
-
-AddWorkItemScreen #modal_title,
-AddWorkItemScreen #modal_footer {
-  background: $surface;
-}
-
-AddWorkItemScreen ItemGrid {
-  background: $surface;
-}
-
-CreateWorkItemFloatInput,
-.create-work-item-float-input {
-  box_sizing: content-box;
+.surface-input-float {
+  box-sizing: content-box;
   height: 1;
   width: 20;
   margin: 0 0;
@@ -2131,13 +1159,12 @@ CreateWorkItemFloatInput,
   background: $surface-lighten-1;
 }
 
-CreateWorkItemFloatInput.-invalid,
-.create-work-item-float-input.-invalid {
-  background: $error 40%;
+.create-work-item-float-input {
+  width: 100%;
 }
 
-ConfirmationScreen {
-  align: center middle;
+.surface-input-float.-invalid {
+  background: $error 40%;
 }
 
 ConfirmationScreen #modal_outer {
@@ -2145,485 +1172,49 @@ ConfirmationScreen #modal_outer {
   max-width: 60;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
 }
 
-ConfirmationScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-ConfirmationScreen #modal_message {
-  width: 100%;
-  height: auto;
-  padding: 0 2 1 2;
-  background: $surface;
-  color: $text;
-  text-align: center;
-}
-
-ConfirmationScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-ConfirmationScreen #confirmation-button-cancel {
-  width: auto;
-  margin-right: 1;
-  background: $primary-darken-2;
-  color: $text;
-}
-
-ConfirmationScreen #confirmation-button-cancel>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ConfirmationScreen #confirmation-button-cancel:hover {
-  background: $primary;
-  color: $text;
-}
-
-ConfirmationScreen #confirmation-button-cancel:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ConfirmationScreen #confirmation-button-cancel:focus {
-  background: $primary;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-}
-
-ConfirmationScreen #confirmation-button-cancel:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ConfirmationScreen #confirmation-button-accept {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-ConfirmationScreen #confirmation-button-accept>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ConfirmationScreen #confirmation-button-accept:hover {
-  background: $error;
-  color: $text;
-}
-
-ConfirmationScreen #confirmation-button-accept:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-ConfirmationScreen #confirmation-button-accept:focus {
-  background: $error;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-}
-
-ConfirmationScreen #confirmation-button-accept:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-AddAttachmentScreen {
-  align: center middle;
-}
-
-AddAttachmentScreen #modal_outer {
+AddAttachmentScreen #modal_outer,
+SaveAttachmentScreen #modal_outer,
+CloneWorkItemScreen #modal_outer {
   width: 50%;
   max-width: 70;
   height: auto;
   max-height: 25;
-  background: $surface;
-  padding: 0;
 }
 
-AddAttachmentScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#add-attachment-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#add-attachment-form>* {
+.modal-form--tight > * {
   margin-bottom: 0;
 }
 
-AddAttachmentScreen #file-path-container {
+.modal-form-section {
   height: auto;
   margin-top: 0;
   margin-bottom: 1;
 }
 
-AddAttachmentScreen #file-path-input-row {
+.modal-form-input-row {
   width: 100%;
   height: auto;
   margin-bottom: 1;
 }
 
-AddAttachmentScreen #file-path-hint {
+.modal-form > Vertical > Label.modal-form-hint {
   margin-top: 1;
   margin-bottom: 0;
   color: $text-muted;
 }
 
-AddAttachmentScreen #file-path-warning {
+.modal-form > Vertical > Label.modal-form-warning {
   margin-top: 1;
   margin-bottom: 0;
   color: $warning;
 }
 
-AddAttachmentScreen Input {
-  background: $surface-lighten-1;
-  width: 1fr;
-  height: auto;
-}
-
-AddAttachmentScreen #browse-file-button {
-  width: auto;
-  margin-left: 1;
-  background: $accent-darken-3;
-  color: $text;
-}
-
-AddAttachmentScreen #browse-file-button>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-AddAttachmentScreen #browse-file-button:hover {
-  background: $primary;
-  color: $text;
-}
-
-AddAttachmentScreen #browse-file-button:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-AddAttachmentScreen #browse-file-button:focus {
-  background: $primary;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-AddAttachmentScreen #browse-file-button:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-AddAttachmentScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#add-attachment-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#add-attachment-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-attachment-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#add-attachment-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-attachment-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-attachment-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-attachment-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#add-attachment-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-attachment-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#add-attachment-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#add-attachment-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#add-attachment-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-SaveAttachmentScreen {
-  align: center middle;
-}
-
-SaveAttachmentScreen #modal_outer {
-  width: 50%;
-  max-width: 70;
-  height: auto;
-  max-height: 25;
-  background: $surface;
-  padding: 0;
-}
-
-SaveAttachmentScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#save-attachment-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#save-attachment-form>* {
-  margin-bottom: 0;
-}
-
-SaveAttachmentScreen #file-path-container {
-  height: auto;
-  margin-top: 0;
-  margin-bottom: 1;
-}
-
-SaveAttachmentScreen #file-path-input-row {
-  width: 100%;
-  height: auto;
-  margin-bottom: 1;
-}
-
-SaveAttachmentScreen #file-path-hint {
-  margin-top: 1;
-  margin-bottom: 0;
-  color: $text-muted;
-}
-
+AddAttachmentScreen Input,
 SaveAttachmentScreen Input {
-  background: $surface-lighten-1;
   width: 1fr;
   height: auto;
-}
-
-SaveAttachmentScreen #browse-save-location-button {
-  width: auto;
-  margin-left: 1;
-  background: $accent-darken-3;
-  color: $text;
-}
-
-SaveAttachmentScreen #browse-save-location-button>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-SaveAttachmentScreen #browse-save-location-button:hover {
-  background: $primary;
-  color: $text;
-}
-
-SaveAttachmentScreen #browse-save-location-button:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-SaveAttachmentScreen #browse-save-location-button:focus {
-  background: $primary;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-SaveAttachmentScreen #browse-save-location-button:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-SaveAttachmentScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#save-attachment-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#save-attachment-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#save-attachment-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#save-attachment-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#save-attachment-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#save-attachment-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#save-attachment-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#save-attachment-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#save-attachment-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#save-attachment-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#save-attachment-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#save-attachment-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
 }
 
 ServerInfoScreen {
@@ -2631,7 +1222,7 @@ ServerInfoScreen {
   background: $background;
 }
 
-ServerInfoScreen>VerticalScroll {
+ServerInfoScreen > VerticalScroll {
   width: 60%;
   height: 100%;
   border: round $foreground;
@@ -2639,7 +1230,7 @@ ServerInfoScreen>VerticalScroll {
   scrollbar-size-vertical: 1;
 }
 
-ServerInfoScreen>VerticalScroll>DataTable {
+ServerInfoScreen > VerticalScroll > DataTable {
   background: transparent;
 }
 
@@ -2648,22 +1239,18 @@ ConfigFileScreen {
   background: $background;
 }
 
-ConfigFileScreen>Vertical {
+ConfigFileScreen > Vertical {
   width: 70%;
   height: 100%;
   border: round $foreground;
   padding: 0 1;
 }
 
-ConfigFileScreen>Vertical>DataTable {
+ConfigFileScreen > Vertical > DataTable {
   background: transparent;
   height: 50%;
   scrollbar-size-vertical: 1;
-  margin-top: 1
-}
-
-DebugInfoScreen {
-  align: center middle;
+  margin-top: 1;
 }
 
 DebugInfoScreen #modal_outer {
@@ -2671,18 +1258,6 @@ DebugInfoScreen #modal_outer {
   max-width: 120;
   height: 90%;
   max-height: 40;
-  background: $surface;
-  padding: 0;
-}
-
-DebugInfoScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
 }
 
 DebugInfoScreen #debug_tabs {
@@ -2691,7 +1266,7 @@ DebugInfoScreen #debug_tabs {
   background: $surface;
 }
 
-DebugInfoScreen #debug_tabs>ContentSwitcher {
+DebugInfoScreen #debug_tabs > ContentSwitcher {
   background: $surface;
   padding: 1 2;
 }
@@ -2729,12 +1304,12 @@ DebugInfoScreen Markdown Strong {
 }
 
 DebugInfoScreen Markdown Code {
-  background: $surface;
+  background: $surface-lighten-1;
   color: $text;
 }
 
 DebugInfoScreen Markdown CodeBlock {
-  background: $surface;
+  background: $surface-lighten-1;
   margin: 1 0;
   padding: 1;
 }
@@ -2744,7 +1319,7 @@ ChildWorkItemCollapsible {
   background: transparent;
   padding-bottom: 0;
 
-  &>Contents {
+  & > Contents {
     padding: 1 0 0 3;
   }
 }
@@ -2754,7 +1329,7 @@ RelatedWorkItemCollapsible {
   background: transparent;
   padding: 0 0 0 0;
 
-  &>Contents {
+  & > Contents {
     padding: 1 0 0 3;
   }
 }
@@ -2769,7 +1344,7 @@ ListView:focus {
   background: $background;
 }
 
-ListView>ListItem {
+ListView > ListItem {
   background: $background;
   padding: 0;
   margin: 0;
@@ -2778,19 +1353,19 @@ ListView>ListItem {
   max-height: 999;
 }
 
-ListView>ListItem:hover {
+ListView > ListItem:hover {
   background: $background;
 }
 
-ListView>ListItem.-highlight {
+ListView > ListItem.-highlight {
   background: $background;
 }
 
-ListView>ListItem:focus {
+ListView > ListItem:focus {
   background: $background;
 }
 
-ListView>ListItem:focus-within {
+ListView > ListItem:focus-within {
   background: $background;
 }
 
@@ -2847,7 +1422,7 @@ ListView>ListItem:focus-within {
   padding: 0;
 }
 
-.comment-body Markdown>* {
+.comment-body Markdown > * {
   margin-bottom: 0;
   padding-bottom: 0;
 }
@@ -2873,7 +1448,7 @@ WorkItemRemoteLinkCollapsible {
   background: transparent;
   padding-bottom: 0;
 
-  &>Contents {
+  & > Contents {
     padding: 1 0 0 3;
   }
 }
@@ -2882,18 +1457,12 @@ JQLEditorScreen {
   align: center middle;
 }
 
-JQLEditorScreen>Vertical {
+JQLEditorScreen > Vertical {
   width: 60%;
   height: 70%;
   border: round $foreground;
   background: $background 70%;
   padding: 0 1;
-}
-
-#work-item-info-description-scroll-container {
-  border: none;
-  padding: 0 0 0 0;
-  scrollbar-size-vertical: 1;
 }
 
 .work-item-info-bottom-reserve {
@@ -2911,7 +1480,7 @@ JQLEditorScreen>Vertical {
 }
 
 MarkdownFence {
-  background: $surface;
+  background: $surface-lighten-1;
 }
 
 DataTableSearchInput {
@@ -2921,31 +1490,16 @@ DataTableSearchInput {
   box_sizing: border-box;
 }
 
-LogWorkScreen {
-  align: center middle;
-}
-
 LogWorkScreen #modal_outer {
-  width: 70%;
-  max-width: 140;
-  height: 80%;
-  max-height: 50;
-  background: $surface;
-  padding: 0;
-}
-
-LogWorkScreen #modal_title {
-  width: 100%;
+  width: 56%;
+  max-width: 96;
   height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
+  max-height: 50;
 }
 
 LogWorkScreen #modal-form-scroll {
-  padding: 0 2 1 2;
+  height: auto;
+  padding: 0 1 0 1;
 }
 
 LogWorkScreen #time-fields-grid {
@@ -2953,7 +1507,7 @@ LogWorkScreen #time-fields-grid {
   grid-columns: 50% 50%;
   grid-gutter: 1;
   height: auto;
-  margin-top: 1;
+  margin-top: 0;
   margin-bottom: 1;
 }
 
@@ -2965,111 +1519,24 @@ LogWorkScreen #time-remaining-container {
 LogWorkScreen #datetime-container,
 LogWorkScreen #description-container {
   height: auto;
-  margin-top: 1;
+  margin-top: 0;
+}
+
+LogWorkScreen #datetime-container {
+  margin-bottom: 0;
+}
+
+LogWorkScreen #description-container {
   margin-bottom: 1;
 }
 
 LogWorkScreen #time-hint {
   margin-top: 0;
   margin-bottom: 1;
-  color: $text-muted;
-}
-
-LogWorkScreen Input,
-LogWorkScreen TextArea {
-  background: $surface-lighten-1;
-}
-
-TimeSpentInput,
-TimeRemainingInput {
-  width: 100%;
-  height: auto;
 }
 
 LogWorkScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#log-work-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#log-work-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#log-work-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#log-work-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#log-work-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#log-work-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#log-work-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#log-work-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#log-work-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#log-work-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#log-work-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#log-work-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
+  padding: 0 1;
 }
 
 TimeSpentInput,
@@ -3084,168 +1551,21 @@ LogDateTimeInput {
 }
 
 LogWorkScreen ExtendedADFMarkdownTextArea {
-  background: $surface-lighten-1;
   height: auto;
   min-height: 10;
   max-height: 25;
 }
 
-LogWorkScreen ExtendedADFMarkdownTextArea TabbedContent {
-  height: auto;
-  min-height: 10;
-  max-height: 25;
-}
-
-LogWorkScreen ExtendedADFMarkdownTextArea TextArea {
-  background: $surface-lighten-1;
-}
-
-#work-item-fields-form>#time-tracking-container {
-  width: 100%;
-}
-
-#time-tracking-container>TimeTrackingWidget {
-  width: 100%;
-}
-
-WorkItemWorkLogScreen {
-  align: center middle;
-}
-
-WorkItemWorkLogScreen #modal_outer {
-  width: 90%;
-  max-width: 140;
-  height: 85%;
-  max-height: 50;
-  background: $surface;
-  padding: 0;
-}
-
-WorkItemWorkLogScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-WorkItemWorkLogScreen #worklog-scroll-container {
-  width: 100%;
-  height: 1fr;
-  background: $surface;
-  padding: 0;
-  scrollbar-size-vertical: 1;
-}
-
-WorkItemWorkLogScreen #worklogs-list-view {
-  width: 100%;
-  height: auto;
-  background: $surface;
+LogWorkScreen #work_description-tabs,
+LogWorkScreen #work_description-edit-tab,
+LogWorkScreen #work_description-preview-tab {
   padding: 0 1;
 }
 
-#worklogs-list-view>WorkLogListItem {
-  background: transparent;
-  border: none;
-  margin: 0 2 0 1;
+LogWorkScreen #work_description-textarea,
+LogWorkScreen #work_description-preview-scroll,
+LogWorkScreen #work_description-markdown {
   padding: 0;
-  height: auto;
-  min-height: 0;
-  opacity: 0.6;
-}
-
-#worklogs-list-view>WorkLogListItem:hover {
-  background: transparent;
-}
-
-#worklogs-list-view>WorkLogListItem.-highlight {
-  background: transparent;
-  text-style: none;
-  opacity: 1.0;
-}
-
-#worklogs-list-view>WorkLogListItem.-highlight>.worklog-item-container {
-  border-left: solid $accent;
-}
-
-#worklogs-list-view>WorkLogListItem>.worklog-item-container {
-  background: transparent;
-  padding: 0 0 0 2;
-  margin: 0;
-  height: auto;
-  min-height: 0;
-  border-left: solid $surface-lighten-1;
-}
-
-#worklogs-list-view>WorkLogListItem>.worklog-item-container>* {
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.worklog-header-row {
-  width: 100%;
-  height: auto;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.worklog-author {
-  width: 100%;
-  color: $accent;
-  text-style: bold;
-  margin: 0;
-  padding: 0;
-  height: auto;
-  min-height: 0;
-}
-
-.worklog-metadata {
-  width: 100%;
-  color: $text-muted;
-  margin: 0;
-  padding: 0;
-  height: auto;
-  min-height: 0;
-}
-
-.worklog-body {
-  width: 100%;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  height: auto;
-  min-height: 0;
-}
-
-.worklog-body Markdown {
-  background: transparent;
-  margin: 0;
-  padding: 0;
-  height: auto;
-  min-height: 0;
-}
-
-.worklog-body Markdown>* {
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.worklog-body Link {
-  color: $accent;
-  text-style: underline;
-}
-
-.worklog-body Link:focus {
-  background: $accent-darken-2;
-  text-style: bold underline;
-}
-
-.worklog-error {
-  width: 100%;
-  color: $warning;
 }
 
 FlagWorkItemScreen {
@@ -3253,7 +1573,7 @@ FlagWorkItemScreen {
   background: $background;
 }
 
-FlagWorkItemScreen>Vertical {
+FlagWorkItemScreen > Vertical {
   width: 55%;
   height: 40%;
   border: round $foreground;
@@ -3261,7 +1581,7 @@ FlagWorkItemScreen>Vertical {
   padding: 1 1;
   scrollbar-size-vertical: 1;
 
-  &>TextArea {
+  & > TextArea {
     background: transparent;
     border: round $primary;
     height: 10;
@@ -3279,17 +1599,17 @@ SelectionsScreen {
   background: $background;
 }
 
-SelectionsScreen>SelectionList {
+SelectionsScreen > SelectionList {
   width: 60%;
   height: 50%;
   padding: 0 1;
 
-  &>TextArea {
+  & > TextArea {
     margin-top: 1;
     scrollbar-size-vertical: 1;
   }
 
-  &>ItemGrid {
+  & > ItemGrid {
     margin-top: 1;
   }
 
@@ -3315,30 +1635,57 @@ MultiSelect {
   }
 }
 
-MultiSelect>TagAutoComplete,
-MultiSelect>TagAutoComplete>Input {
+MultiSelect > TagAutoComplete {
+  width: 100%;
+  max-height: 12;
+  height: auto;
+}
+
+MultiSelect > TagAutoComplete > Input {
   width: 100%;
 }
 
-MultiSelect>TagInput {
+MultiSelect > Tag,
+WorkItemLabels > Tag {
+  background: transparent;
+  color: $text;
+}
+
+MultiSelect > ExtendedTag,
+WorkItemLabels > ExtendedTag {
+  background: transparent;
+  color: $text-primary;
+
+  & > .extended-tag--chip,
+  & > .extended-tag--close,
+  & > .extended-tag--close-hover {
+    background: $primary-muted;
+    color: $text-primary;
+  }
+
+  &:hover > .extended-tag--chip,
+  &:focus > .extended-tag--chip,
+  &:hover > .extended-tag--close,
+  &:focus > .extended-tag--close,
+  &:hover > .extended-tag--close-hover,
+  &:focus > .extended-tag--close-hover {
+    background: $primary-darken-2;
+  }
+}
+
+MultiSelect > TagInput {
   width: auto;
   min-width: 1fr;
   background: $surface;
 }
 
-MultiSelect>TagInput.-hide-arrow {
+MultiSelect > TagInput.-hide-arrow {
   color: $foreground;
 }
 
-
-MultiSelect>TagAutoComplete {
+MultiSelect > TagAutoComplete > AutoCompleteList {
   max-height: 12;
   height: auto;
-
-  &>AutoCompleteList {
-    max-height: 12;
-    height: auto;
-  }
 }
 
 WorkItemLabels {
@@ -3359,12 +1706,11 @@ WorkItemLabels {
   }
 }
 
-
-WorkItemLabels>TagAutoComplete {
+WorkItemLabels > TagAutoComplete {
   max-height: 12;
   height: auto;
 
-  &>AutoCompleteList {
+  & > AutoCompleteList {
     max-height: 12;
     height: auto;
   }
@@ -3378,149 +1724,9 @@ LazySelect {
   border: none;
 }
 
-CloneWorkItemScreen {
-  align: center middle;
-}
-
-CloneWorkItemScreen #modal_outer {
-  width: 50%;
-  max-width: 70;
-  height: auto;
-  max-height: 25;
-  background: $surface;
-  padding: 0;
-}
-
-CloneWorkItemScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#clone-work-item-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#clone-work-item-form>* {
-  margin-bottom: 0;
-}
-
-CloneWorkItemScreen #summary-field-container {
-  height: auto;
-  margin-top: 0;
-  margin-bottom: 1;
-}
-
-CloneWorkItemScreen #summary-hint {
-  margin-top: 1;
-  margin-bottom: 0;
-  color: $text-muted;
-}
-
-CloneWorkItemScreen #summary-warning {
-  margin-top: 1;
-  margin-bottom: 0;
-  color: $warning;
-}
-
 CloneWorkItemScreen Input {
-  background: $surface-lighten-1;
   width: 100%;
   height: auto;
-}
-
-CloneWorkItemScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#clone-work-item-button-save {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#clone-work-item-button-save>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#clone-work-item-button-save:hover {
-  background: $success;
-  color: $text;
-}
-
-#clone-work-item-button-save:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#clone-work-item-button-save:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#clone-work-item-button-save:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#clone-work-item-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#clone-work-item-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#clone-work-item-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#clone-work-item-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#clone-work-item-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#clone-work-item-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
 }
 
 .field_label {
@@ -3532,12 +1738,11 @@ CloneWorkItemScreen #modal_footer {
   text-style: bold;
 }
 
-
 CommandPalette {
   background: $background 60%;
 }
 
-CommandPalette>Vertical {
+CommandPalette > Vertical {
   margin-top: 1;
   width: 70vw;
   max-height: 50vh;
@@ -3580,14 +1785,14 @@ CommandPalette CommandList {
   margin: 0;
 }
 
-CommandPalette CommandList>.option-list--option {
+CommandPalette CommandList > .option-list--option {
   padding: 0 1;
   height: 1;
   min-height: 1;
   margin: 0;
 }
 
-CommandPalette CommandList>.option-list--option .command-palette--help-text {
+CommandPalette CommandList > .option-list--option .command-palette--help-text {
   display: none;
 }
 
@@ -3595,426 +1800,14 @@ CommandPalette LoadingIndicator {
   border: none;
   margin: 0;
   padding: 0;
+  color: $accent;
 }
 
-
-
-UserMentionPickerScreen {
-  align: center middle;
-}
-
-UserMentionPickerScreen #modal_outer {
-  width: 50%;
-  max-width: 70;
-  height: auto;
-  max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-UserMentionPickerScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#user-mention-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#user-mention-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#user-mention-form Label {
-  margin: 0;
-}
-
-#user-mention-form Select {
-  margin-bottom: 1;
-}
-
-UserMentionPickerScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#user-mention-button-insert {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#user-mention-button-insert>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#user-mention-button-insert:hover {
-  background: $success;
-  color: $text;
-}
-
-#user-mention-button-insert:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#user-mention-button-insert:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#user-mention-button-insert:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#user-mention-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#user-mention-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#user-mention-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#user-mention-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#user-mention-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#user-mention-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-UserMentionPickerScreen Select>SelectCurrent {
-  background: $surface-lighten-1;
-}
-
-UserMentionPickerScreen Select>SelectOverlay {
-  background: $surface-lighten-1;
-}
-
-
-DecisionPickerScreen {
-  align: center middle;
-}
-
-DecisionPickerScreen #modal_outer {
-  width: 50%;
-  max-width: 70;
-  height: auto;
-  max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-DecisionPickerScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#decision-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#decision-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#decision-form Label {
-  margin: 0;
-}
-
-#decision-form Select {
-  margin-bottom: 1;
-}
-
-DecisionPickerScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#decision-button-insert {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#decision-button-insert>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#decision-button-insert:hover {
-  background: $success;
-  color: $text;
-}
-
-#decision-button-insert:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#decision-button-insert:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#decision-button-insert:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#decision-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#decision-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#decision-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#decision-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#decision-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#decision-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-DecisionPickerScreen Select>SelectCurrent {
-  background: $surface-lighten-1;
-}
-
-DecisionPickerScreen Select>SelectOverlay {
-  background: $surface-lighten-1;
-}
-
-
-PanelPickerScreen {
-  align: center middle;
-}
-
+UserMentionPickerScreen #modal_outer,
+DecisionPickerScreen #modal_outer,
 PanelPickerScreen #modal_outer {
-  width: 50%;
-  max-width: 70;
+  width: 42%;
+  max-width: 60;
   height: auto;
   max-height: 15;
-  background: $surface;
-  padding: 0;
-}
-
-PanelPickerScreen #modal_title {
-  width: 100%;
-  height: auto;
-  padding: 1;
-  background: $surface;
-  color: $text;
-  text-align: center;
-  text-style: bold;
-}
-
-#alert-form {
-  width: 100%;
-  height: auto;
-  background: $surface;
-  padding: 0 2 0 2;
-  scrollbar-size-vertical: 1;
-}
-
-#alert-form Vertical {
-  width: 100%;
-  height: auto;
-}
-
-#alert-form Label {
-  margin: 0;
-}
-
-#alert-form Select {
-  margin-bottom: 1;
-}
-
-PanelPickerScreen #modal_footer {
-  width: 100%;
-  height: auto;
-  align: center middle;
-  padding: 0 2;
-  margin-bottom: 1;
-  background: $surface;
-}
-
-#alert-button-insert {
-  width: auto;
-  margin-right: 1;
-  background: $success-darken-2;
-  color: $text;
-}
-
-#alert-button-insert>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#alert-button-insert:hover {
-  background: $success;
-  color: $text;
-}
-
-#alert-button-insert:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#alert-button-insert:focus {
-  background: $success;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#alert-button-insert:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#alert-button-quit {
-  width: auto;
-  background: $error-darken-1;
-  color: $text;
-}
-
-#alert-button-quit>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#alert-button-quit:hover {
-  background: $error-lighten-1;
-  color: $text;
-}
-
-#alert-button-quit:hover>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-#alert-button-quit:focus {
-  background: $error-lighten-1;
-  color: $text;
-  text-style: bold;
-  border: none;
-  border-top: none;
-  border-bottom: none;
-}
-
-#alert-button-quit:focus>Static {
-  color: $text;
-  background: transparent;
-  text-style: bold;
-}
-
-PanelPickerScreen Select>SelectCurrent {
-  background: $surface-lighten-1;
-}
-
-PanelPickerScreen Select>SelectOverlay {
-  background: $surface-lighten-1;
-}
-
-WorkItemBreadcrumb {
-  color: $primary;
 }

@@ -10,6 +10,14 @@ from gojeera.utils.external_editor import (
 class ExtendedInput(Input):
     """Input widget with support for editing via an external editor."""
 
+    DEFAULT_CSS = """
+    ExtendedInput {
+        background: $surface;
+        width: 100%;
+        height: auto;
+    }
+    """
+
     BINDINGS = Input.BINDINGS + [
         Binding(
             key='f2',

@@ -61,18 +61,19 @@ class DecisionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
 
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='decision-form'):
+            with VerticalScroll(id='decision-form', classes='modal-form modal-form--fields'):
                 with Vertical():
                     decision_type_label = Label('Decision Type')
                     decision_type_label.add_class('field_label')
                     yield decision_type_label
                     yield DecisionSelector(self.DECISION_TYPES)
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Insert',
                     variant='success',
                     id='decision-button-insert',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -80,6 +81,7 @@ class DecisionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     'Cancel',
                     variant='error',
                     id='decision-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
 

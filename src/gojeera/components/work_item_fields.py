@@ -11,7 +11,7 @@ from textual.containers import Container, Horizontal, Vertical, VerticalGroup, V
 from textual.message import Message
 from textual.reactive import Reactive, reactive
 from textual.widget import Widget
-from textual.widgets import Input, Label, Select
+from textual.widgets import Button, Input, Label, Select
 from textual.widgets._select import SelectOverlay
 from textual_tags import Tag, TagAutoComplete
 
@@ -28,6 +28,7 @@ from gojeera.exceptions import UpdateWorkItemException, ValidationError
 from gojeera.models import JiraUser, JiraWorkItem, WorkItemPriority
 from gojeera.utils.fields import (
     FieldMode,
+    PendingChangesWidget,
     get_parent_relation_field_ids_from_editmeta,
     get_sprint_field_id_from_editmeta,
     is_epic_work_item_type,
@@ -48,7 +49,6 @@ from gojeera.utils.work_item_updates import (
 )
 from gojeera.widgets.date_input import DateInput
 from gojeera.widgets.date_time_input import DateTimeInput
-from gojeera.widgets.extended_button import ExtendedButton
 from gojeera.widgets.extended_jumper import set_jump_mode
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.numeric_input import NumericInput
@@ -100,6 +100,10 @@ class DateMetadata(VerticalGroup):
     DEFAULT_CSS = """
     DateMetadata {
         layout: vertical;
+        margin: 0;
+        margin-right: 2;
+        padding: 0;
+        height: auto;
     }
 
     DateMetadata > * {
@@ -127,6 +131,11 @@ class WorkItemFields(Container, can_focus=False):
     }
 
     #work-item-fields-form {
+        scrollbar-size-vertical: 1;
+        height: 1fr;
+        padding: 0 0 1 1;
+        margin-bottom: 0;
+        layout: vertical;
         padding-bottom: 0;
     }
 
@@ -176,10 +185,6 @@ class WorkItemFields(Container, can_focus=False):
     has_pending_changes: Reactive[bool] = reactive(False, always_update=True)
     _loading_form: bool = False
 
-    BINDINGS = [
-        ('ctrl+s', 'save_work_item', 'Save'),
-    ]
-
     def __init__(self):
         super().__init__(id='work-item-fields-container')
         self.available_users: list[tuple[str, str]] | None = None
@@ -189,6 +194,8 @@ class WorkItemFields(Container, can_focus=False):
         self._show_time_tracking_after_load = False
         self._field_descriptions_by_id: dict[str, str] = {}
         self._field_descriptions_loading = False
+        self._assignee_refresh_worker = None
+        self._status_refresh_worker = None
 
     @property
     def help_anchor(self) -> str:
@@ -299,10 +306,17 @@ class WorkItemFields(Container, can_focus=False):
         return self.query_one('#resolution-date', ReadOnlyInputField)
 
     @property
-    def pending_changes_button(self) -> ExtendedButton:
+    def pending_changes_indicator(self) -> PendingChangesWidget:
+        return self.query_one(
+            '#work-item-fields-pending-changes-indicator',
+            expect_type=PendingChangesWidget,
+        )
+
+    @property
+    def pending_changes_button(self) -> Button:
         return self.query_one(
             '#work-item-fields-pending-changes-button',
-            expect_type=ExtendedButton,
+            expect_type=Button,
         )
 
     @property
@@ -341,14 +355,36 @@ class WorkItemFields(Container, can_focus=False):
     def dynamic_fields_widgets_container(self) -> DynamicFieldsWidgets:
         return self.query_one(DynamicFieldsWidgets)
 
+    @property
+    def static_fields_widgets_container(self) -> StaticFieldsWidgets:
+        return self.query_one(StaticFieldsWidgets)
+
+    @property
+    def time_tracking_widget(self) -> TimeTrackingWidget:
+        return self.time_tracking_container.query_one(TimeTrackingWidget)
+
     @staticmethod
     def _field_label(text: str) -> Label:
         return Label(text, classes='field_label')
 
     @staticmethod
-    def _field_control(widget: Widget) -> Widget:
+    def _apply_field_control_classes(widget: Widget) -> None:
         widget.add_class('field_control')
         widget.styles.width = '1fr'
+
+        if isinstance(widget, (Input, TextInput, NumericInput, URL, DateInput, DateTimeInput)):
+            widget.add_class('field-control-input')
+        elif isinstance(
+            widget,
+            (Select, SelectionWidget, SprintPicker, UserPicker, UserSelectionInput),
+        ):
+            widget.add_class('field-control-select')
+        elif isinstance(widget, (MultiSelect, WorkItemLabels)):
+            widget.add_class('field-control-tags')
+
+    @staticmethod
+    def _field_control(widget: Widget) -> Widget:
+        WorkItemFields._apply_field_control_classes(widget)
         return widget
 
     @staticmethod
@@ -668,14 +704,8 @@ class WorkItemFields(Container, can_focus=False):
         with Horizontal(
             id='work-item-fields-pending-changes-container'
         ) as pending_changes_container:
-            pending_changes_container.display = False
-            button = ExtendedButton(
-                'Pending changes [dim](^s)[/]',
-                id='work-item-fields-pending-changes-button',
-                variant='warning',
-            )
-            button.display = False
-            yield button
+            pending_changes_container.display = True
+            yield PendingChangesWidget(id='work-item-fields-pending-changes-indicator')
 
     def _setup_jump_mode(self) -> None:
         content = self.content_container
@@ -683,6 +713,9 @@ class WorkItemFields(Container, can_focus=False):
         for widget in content.walk_children(Widget):
             if hasattr(widget, 'jump_mode'):
                 set_jump_mode(widget, None)
+
+        if hasattr(self.pending_changes_button, 'jump_mode'):
+            set_jump_mode(self.pending_changes_button, None)
 
         for widget in content.query('.field_control'):
             if not isinstance(widget, Widget):
@@ -694,6 +727,9 @@ class WorkItemFields(Container, can_focus=False):
             if getattr(widget, 'read_only', False):
                 continue
             set_jump_mode(widget, 'focus')
+
+        if self.pending_changes_button.can_focus and not self.pending_changes_button.disabled:
+            set_jump_mode(self.pending_changes_button, 'click')
 
     def _update_layout_mode(self) -> None:
         try:
@@ -862,30 +898,49 @@ class WorkItemFields(Container, can_focus=False):
         self.refresh(layout=True)
 
     def _update_pending_changes_footer(self) -> None:
-        self.pending_changes_container.display = True
-        self.pending_changes_button.display = True
+        self.pending_changes_indicator.has_pending_changes = self.has_pending_changes
         if self._save_in_progress:
-            self.pending_changes_button.is_loading = True
-            self.pending_changes_button.disabled = True
+            self.pending_changes_indicator.is_loading = True
             return
 
-        self.pending_changes_button.is_loading = False
-        self.pending_changes_button.disabled = not self.has_pending_changes
-
-        if self.has_pending_changes:
-            self.pending_changes_button.label = 'Pending changes [dim](^s)[/]'
-        else:
-            self.pending_changes_button.label = '[dim]No pending changes[/]'
+        self.pending_changes_indicator.is_loading = False
 
     def action_view_worklog(self) -> None:
         if self.work_item:
-            current_remaining_estimate = None
-            if self.work_item.time_tracking:
-                current_remaining_estimate = self.work_item.time_tracking.remaining_estimate
-            self.app.push_screen(
-                WorkItemWorkLogScreen(self.work_item.key, current_remaining_estimate),
-                self._handle_worklog_screen_dismissal,
+            self.run_worker(self._open_worklog_screen_if_logs_exist())
+
+    async def _open_worklog_screen_if_logs_exist(self) -> None:
+        if not self.work_item:
+            return
+
+        response: APIControllerResponse = await cast('JiraApp', self.app).api.get_work_item_worklog(
+            self.work_item.key, limit=1
+        )
+
+        if not response.success:
+            self.notify(
+                f'Unable to load work logs: {response.error}',
+                severity='error',
+                title=self.work_item.key,
             )
+            return
+
+        if not response.result or not response.result.logs:
+            self.notify(
+                'Work item has no work logs',
+                severity='warning',
+                title=self.work_item.key,
+            )
+            return
+
+        current_remaining_estimate = None
+        if self.work_item.time_tracking:
+            current_remaining_estimate = self.work_item.time_tracking.remaining_estimate
+
+        self.app.push_screen(
+            WorkItemWorkLogScreen(self.work_item.key, current_remaining_estimate),
+            self._handle_worklog_screen_dismissal,
+        )
 
     def action_log_work(self) -> None:
         if self.work_item:
@@ -1403,7 +1458,7 @@ class WorkItemFields(Container, can_focus=False):
         return ' '.join(parts) if parts else '0m'
 
     def _setup_time_tracking(self, work_item: JiraWorkItem | None) -> None:
-        widget = self.time_tracking_container.query_one(TimeTrackingWidget)
+        widget = self.time_tracking_widget
         time_tracking_data = work_item.time_tracking if work_item else None
         additional_fields = work_item.additional_fields or {} if work_item else {}
         aggregate_time_spent = additional_fields.get('aggregatetimespent')
@@ -1566,7 +1621,7 @@ class WorkItemFields(Container, can_focus=False):
         self._update_pending_changes_footer()
         self._save_work_item()
 
-    @on(ExtendedButton.Pressed, '#work-item-fields-pending-changes-button')
+    @on(Button.Pressed, '#work-item-fields-pending-changes-button')
     def handle_pending_changes_button_pressed(self) -> None:
         self.action_save_work_item()
 
@@ -1822,36 +1877,20 @@ class WorkItemFields(Container, can_focus=False):
             await application.api.search_users_assignable_to_work_item(work_item_key=work_item_key)
         )
 
+        if self.work_item and self.work_item.key != work_item_key:
+            return
+
         selectable_users: list[tuple[str, str]] = self._generate_assignable_users_for_dropdown(
             response.result,
             current_assignee,
             self.available_users,
         )
 
-        if selectable_users:
-            self.assignee_selector.set_options(selectable_users)
-            if current_assignee:
-                self.set_timer(
-                    0.01,
-                    lambda: self._update_assignee_selection(current_assignee.account_id),
-                )
-            else:
-                self.assignee_selector.original_value = None
-            self.assignee_selector.update_enabled = bool(field_is_editable)
-        else:
-            if current_assignee:
-                self.assignee_selector.set_options(
-                    [(current_assignee.display_name, current_assignee.account_id)]
-                )
-
-                self.set_timer(
-                    0.01,
-                    lambda: self._update_assignee_selection(current_assignee.account_id),
-                )
-                self.assignee_selector.update_enabled = bool(field_is_editable)
-            else:
-                self.assignee_selector.original_value = None
-                self.assignee_selector.update_enabled = False
+        self._apply_assignable_users_options(
+            selectable_users,
+            current_assignee=current_assignee,
+            field_is_editable=field_is_editable,
+        )
 
     async def _retrieve_applicable_status_codes(
         self,
@@ -1899,10 +1938,59 @@ class WorkItemFields(Container, can_focus=False):
                 if current_status_name:
                     self.work_item_status_selector.prompt = current_status_name
 
+    def _apply_assignable_users_options(
+        self,
+        selectable_users: list[tuple[str, str]],
+        current_assignee: JiraUser | None = None,
+        field_is_editable: bool | None = None,
+    ) -> None:
+        if selectable_users:
+            self.assignee_selector.set_options(selectable_users)
+            if current_assignee:
+                self.set_timer(
+                    0.01,
+                    lambda: self._update_assignee_selection(current_assignee.account_id),
+                )
+            else:
+                self.assignee_selector.original_value = None
+            self.assignee_selector.update_enabled = bool(field_is_editable)
+            return
+
+        if current_assignee:
+            self.assignee_selector.set_options(
+                [(current_assignee.display_name, current_assignee.account_id)]
+            )
+            self.set_timer(
+                0.01,
+                lambda: self._update_assignee_selection(current_assignee.account_id),
+            )
+            self.assignee_selector.update_enabled = bool(field_is_editable)
+        else:
+            self.assignee_selector.original_value = None
+            self.assignee_selector.update_enabled = False
+
+    def _prefill_status_selector(
+        self,
+        current_status_name: str | None = None,
+        current_status_id: str | None = None,
+    ) -> None:
+        self.work_item_status_selector.set_options([])
+        self.work_item_status_selector.value = Select.NULL
+        self.work_item_status_selector.original_value = current_status_id
+        self.work_item_status_selector._transition_status_ids = {}
+        self.work_item_status_selector.disabled = True
+        self.work_item_status_selector.prompt = current_status_name or 'Select a status'
+
     def watch_work_item(self, work_item: JiraWorkItem | None) -> None:
         if self._current_loading_worker is not None:
             self._current_loading_worker.cancel()
             self._current_loading_worker = None
+        if self._assignee_refresh_worker is not None:
+            self._assignee_refresh_worker.cancel()
+            self._assignee_refresh_worker = None
+        if self._status_refresh_worker is not None:
+            self._status_refresh_worker.cancel()
+            self._status_refresh_worker = None
 
         if not work_item:
             self.content_container.display = False
@@ -1928,17 +2016,36 @@ class WorkItemFields(Container, can_focus=False):
         editable_fields: dict = self._determine_editable_fields(work_item)
 
         if work_item.key:
-            await asyncio.gather(
+            self._prefill_status_selector(
+                work_item.status.name if work_item.status else None,
+                work_item.status.id if work_item.status else None,
+            )
+            prefilled_users = self._generate_assignable_users_for_dropdown(
+                None,
+                work_item.assignee,
+                self.available_users,
+            )
+            self._apply_assignable_users_options(
+                prefilled_users,
+                current_assignee=work_item.assignee,
+                field_is_editable=editable_fields.get(self.assignee_selector.jira_field_key),
+            )
+
+            self._status_refresh_worker = self.run_worker(
                 self._retrieve_applicable_status_codes(
                     work_item.key,
                     work_item.status.name if work_item.status else None,
                     work_item.status.status_category_color if work_item.status else None,
                 ),
+                exclusive=False,
+            )
+            self._assignee_refresh_worker = self.run_worker(
                 self._retrieve_users_assignable_to_work_item(
                     work_item.key,
                     work_item.assignee,
                     editable_fields.get(self.assignee_selector.jira_field_key),
                 ),
+                exclusive=False,
             )
 
             if not self.work_item or self.work_item.key != work_item_key:
@@ -2275,8 +2382,7 @@ class WorkItemFields(Container, can_focus=False):
             if wrapper.widget is None:
                 continue
 
-            wrapper.widget.add_class('field_control')
-            wrapper.widget.styles.width = '1fr'
+            self._apply_field_control_classes(wrapper.widget)
 
     async def _populate_user_picker_widgets(
         self, work_item: JiraWorkItem, editable_fields: dict
@@ -2464,7 +2570,7 @@ class WorkItemFields(Container, can_focus=False):
 
             self.affects_version_field_container.display = True
             if not self.work_item_affects_version_widget.is_mounted:
-                await self.query_one(StaticFieldsWidgets).mount(
+                await self.static_fields_widgets_container.mount(
                     self.work_item_affects_version_widget
                 )
 
@@ -2493,7 +2599,7 @@ class WorkItemFields(Container, can_focus=False):
 
             self.affects_version_field_container.display = True
             if not self.work_item_affects_version_widget.is_mounted:
-                await self.query_one(StaticFieldsWidgets).mount(
+                await self.static_fields_widgets_container.mount(
                     self.work_item_affects_version_widget
                 )
             self.work_item_affects_version_widget.update_enabled = False

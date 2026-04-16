@@ -58,12 +58,12 @@ class SaveAttachmentScreen(ExtendedModalScreen[str]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='save-attachment-form'):
-                with Vertical(id='file-path-container'):
+            with VerticalScroll(id='save-attachment-form', classes='modal-form modal-form--tight'):
+                with Vertical(id='file-path-container', classes='modal-form-section'):
                     save_location_label = Label('Save Location')
                     save_location_label.add_class('field_label')
                     yield save_location_label
-                    with Horizontal(id='file-path-input-row'):
+                    with Horizontal(id='file-path-input-row', classes='modal-form-input-row'):
                         yield FilePathInput(
                             initial_value=str(Path.home() / self._attachment_file_name)
                         )
@@ -71,19 +71,22 @@ class SaveAttachmentScreen(ExtendedModalScreen[str]):
                             'Browse...',
                             id='browse-save-location-button',
                             variant='primary',
+                            classes='modal-action-button modal-action-button--browse',
                             compact=True,
                         )
                     yield Label(
                         '• Click "Browse..." to select where to save the file\n'
                         '• You can edit the filename in the picker',
                         id='file-path-hint',
+                        classes='modal-form-hint',
                     )
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id='save-attachment-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=False,
                     compact=True,
                 )
@@ -91,6 +94,7 @@ class SaveAttachmentScreen(ExtendedModalScreen[str]):
                     'Cancel',
                     variant='error',
                     id='save-attachment-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)

@@ -32,8 +32,8 @@ compile: ##Compiles code to check valid syntax
 	@uv run python -m compileall -q .
 
 .PHONY: check-css
-check-css: ##Checks CSS for unused classes and IDs
-	@uv run python ./scripts/check_unused_css.py
+check-css: ##Checks CSS
+	@uv run python ./scripts/check_css.py
 
 .PHONY: generate-static-svg
 generate-static-svg: ##Generate all static SVG assets from the internal scenario map

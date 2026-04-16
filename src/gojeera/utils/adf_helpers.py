@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import re
 from typing import Literal, cast, overload
 from urllib.parse import quote, urljoin, urlparse
@@ -7,6 +8,8 @@ from markdown_it import MarkdownIt
 from mdit_py_plugins.tasklists import tasklists_plugin
 
 from gojeera.config import CONFIGURATION
+
+DATE_INLINE_SENTINEL = '\u2063'
 
 
 def _build_attachment_url_from_rendered_href(
@@ -44,20 +47,33 @@ def extract_media_attachment_details(
         return {}
 
     mappings: dict[str, tuple[str, str | None]] = {}
-    anchor_pattern = re.compile(r'<a\b[^>]*>', re.IGNORECASE)
+    anchor_pattern = re.compile(
+        r'<a\b(?P<attrs>[^>]*)>(?P<inner>.*?)</a>', re.IGNORECASE | re.DOTALL
+    )
+    img_pattern = re.compile(r'<img\b(?P<attrs>[^>]*)>', re.IGNORECASE)
     media_id_pattern = re.compile(r'data-media-services-id="([^"]+)"')
     attachment_name_pattern = re.compile(r'data-attachment-name="([^"]+)"')
     href_pattern = re.compile(r'href="([^"]+)"')
 
     for match in anchor_pattern.finditer(rendered_body):
-        anchor_html = match.group(0)
-        media_id_match = media_id_pattern.search(anchor_html)
-        attachment_name_match = attachment_name_pattern.search(anchor_html)
+        anchor_attrs = match.group('attrs')
+        anchor_inner = match.group('inner')
+        media_id_match = media_id_pattern.search(anchor_attrs)
+        attachment_name_match = attachment_name_pattern.search(anchor_attrs)
+
+        if not media_id_match or not attachment_name_match:
+            if img_match := img_pattern.search(anchor_inner):
+                img_attrs = img_match.group('attrs')
+                media_id_match = media_id_match or media_id_pattern.search(img_attrs)
+                attachment_name_match = attachment_name_match or attachment_name_pattern.search(
+                    img_attrs
+                )
+
         if not media_id_match or not attachment_name_match:
             continue
 
         filename = attachment_name_match.group(1)
-        href_match = href_pattern.search(anchor_html)
+        href_match = href_pattern.search(anchor_attrs)
         href = href_match.group(1) if href_match else ''
         mappings[media_id_match.group(1)] = (
             filename,
@@ -82,6 +98,7 @@ def replace_media_with_text(
     rendered_body: str | None = None,
     base_url: str | None = None,
     media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+    ordered_attachment_details: list[tuple[str, str | None]] | None = None,
 ) -> dict:
     """Replace mediaSingle nodes with inline text nodes showing attachment reference.
 
@@ -93,6 +110,49 @@ def replace_media_with_text(
     """
     if not isinstance(adf, dict):
         return adf
+
+    ordered_attachment_details = ordered_attachment_details or []
+    used_attachment_filenames: set[str] = set()
+    fallback_attachment_index = 0
+
+    def resolve_attachment_reference(
+        attrs: dict,
+        default_filename: str,
+    ) -> tuple[str, str | None]:
+        nonlocal fallback_attachment_index
+
+        filename = attrs.get('alt') or default_filename
+        attachment_url = None
+        if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):
+            filename, attachment_url = media_details
+        elif media_details := resolved_media_attachment_details.get(filename):
+            filename, attachment_url = media_details
+        else:
+            while fallback_attachment_index < len(ordered_attachment_details):
+                fallback_filename, fallback_url = ordered_attachment_details[
+                    fallback_attachment_index
+                ]
+                fallback_attachment_index += 1
+                if fallback_filename not in used_attachment_filenames:
+                    filename, attachment_url = fallback_filename, fallback_url
+                    break
+
+        if filename:
+            used_attachment_filenames.add(filename)
+        return filename, attachment_url
+
+    def build_attachment_paragraph(attrs: dict, default_filename: str) -> dict:
+        filename, attachment_url = resolve_attachment_reference(attrs, default_filename)
+
+        return {
+            'type': 'paragraph',
+            'content': [
+                {
+                    'type': 'text',
+                    'text': f'[{filename}]({attachment_url or filename})',
+                }
+            ],
+        }
 
     resolved_media_attachment_details = merge_media_attachment_details(
         extract_media_attachment_details(rendered_body, base_url),
@@ -108,34 +168,17 @@ def replace_media_with_text(
                 for media in media_content:
                     if isinstance(media, dict) and media.get('type') == 'media':
                         attrs = media.get('attrs', {})
-                        filename = attrs.get('alt') or 'unknown'
-                        attachment_url = None
-                        if media_details := resolved_media_attachment_details.get(
-                            attrs.get('id', '')
-                        ):
-                            filename, attachment_url = media_details
-                        elif media_details := resolved_media_attachment_details.get(filename):
-                            filename, attachment_url = media_details
-
-                        para_node = {
-                            'type': 'paragraph',
-                            'content': [
-                                {
-                                    'type': 'text',
-                                    'text': f'[{filename}]({attachment_url or filename})',
-                                }
-                            ],
-                        }
-                        new_content.append(para_node)
+                        new_content.append(build_attachment_paragraph(attrs, 'unknown'))
                         break
+            elif node.get('type') == 'mediaGroup':
+                media_content = node.get('content', [])
+                for media in media_content:
+                    if isinstance(media, dict) and media.get('type') == 'media':
+                        attrs = media.get('attrs', {})
+                        new_content.append(build_attachment_paragraph(attrs, 'Attachment'))
             elif node.get('type') == 'mediaInline':
                 attrs = node.get('attrs', {})
-                filename = attrs.get('alt') or 'Attachment'
-                attachment_url = None
-                if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):
-                    filename, attachment_url = media_details
-                elif media_details := resolved_media_attachment_details.get(filename):
-                    filename, attachment_url = media_details
+                filename, attachment_url = resolve_attachment_reference(attrs, 'Attachment')
                 attachment_text = f'[{filename}]({attachment_url or filename})'
                 new_content.append(
                     {
@@ -150,6 +193,7 @@ def replace_media_with_text(
                         rendered_body=rendered_body,
                         base_url=base_url,
                         media_attachment_details=resolved_media_attachment_details,
+                        ordered_attachment_details=ordered_attachment_details,
                     )
                 )
 
@@ -420,7 +464,7 @@ def _convert_date_markers_to_inline_code(markdown: str) -> str:
 
     def replace_match(match):
         date_text = match.group(1)
-        return f'`[date]{date_text}`'
+        return f'`{DATE_INLINE_SENTINEL}[date]{date_text}`'
 
     return re.sub(r'\u200b([^\u200b]+)\u200b', replace_match, markdown)
 
@@ -799,6 +843,7 @@ def convert_adf_to_markdown(
     base_url: str | None = None,
     rendered_body: str | None = None,
     media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+    ordered_attachment_details: list[tuple[str, str | None]] | None = None,
 ) -> str:
     """Convert Atlassian Document Format (ADF) to Markdown.
 
@@ -819,6 +864,7 @@ def convert_adf_to_markdown(
         rendered_body=rendered_body,
         base_url=base_url,
         media_attachment_details=media_attachment_details,
+        ordered_attachment_details=ordered_attachment_details,
     )
     fixed_value = fix_adf_text_with_marks(fixed_value)
     fixed_value = fix_codeblock_in_list(fixed_value)
@@ -1678,8 +1724,30 @@ def _convert_inline_tokens(
             i += 1
 
         elif token.type == 'code_inline':
-            text_node = {'type': 'text', 'text': token.content, 'marks': [{'type': 'code'}]}
-            content.append(text_node)
+            if date_match := re.fullmatch(r'\[date\](\d{4}-\d{2}-\d{2})', token.content):
+                try:
+                    timestamp_ms = str(
+                        int(
+                            datetime.strptime(date_match.group(1), '%Y-%m-%d')
+                            .replace(tzinfo=timezone.utc)
+                            .timestamp()
+                            * 1000
+                        )
+                    )
+                    date_node: dict = {'type': 'date', 'attrs': {'timestamp': timestamp_ms}}
+                    if active_marks:
+                        date_node['marks'] = [{'type': mark} for mark in active_marks]
+                    content.append(date_node)
+                except ValueError:
+                    text_node = {
+                        'type': 'text',
+                        'text': token.content,
+                        'marks': [{'type': 'code'}],
+                    }
+                    content.append(text_node)
+            else:
+                text_node = {'type': 'text', 'text': token.content, 'marks': [{'type': 'code'}]}
+                content.append(text_node)
             i += 1
 
         elif token.type == 'link_open':

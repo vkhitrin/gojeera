@@ -1,3 +1,4 @@
+from rich.cells import cell_len
 from textual.reactive import reactive
 from textual.timer import Timer
 from textual.widgets import Button
@@ -10,13 +11,38 @@ class ExtendedButton(Button):
 
     is_loading: reactive[bool] = reactive(False)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        *args,
+        include_label_width_padding: bool = True,
+        **kwargs,
+    ):
+        self.include_label_width_padding = include_label_width_padding
         super().__init__(*args, **kwargs)
+        if not self.include_label_width_padding:
+            self.styles.set_rule('line_pad', 0)
         self._loading_frame_index = 0
         self._loading_timer: Timer | None = None
         self._disabled_before_loading = False
         self._stored_label = self.label
         self._updating_loading_label = False
+
+    def get_content_width(self, container, viewport) -> int:
+        if self.include_label_width_padding:
+            return super().get_content_width(container, viewport)
+
+        label = self.label
+        if isinstance(label, str):
+            label_text = label
+        elif hasattr(label, 'plain') and isinstance(label.plain, str):
+            label_text = label.plain
+        else:
+            label_text = str(label)
+
+        try:
+            return max(cell_len(line) for line in label_text.splitlines())
+        except ValueError:
+            return 0
 
     def watch_label(self, label) -> None:
         if not self._updating_loading_label and not self.is_loading:

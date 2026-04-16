@@ -1870,7 +1870,59 @@ def mock_user_info(mock_jira_myself):
 def mock_jira_worklog():
     fixture_path = Path(__file__).parent / 'fixtures' / 'jira_worklog_response.json'
     with fixture_path.open() as f:
-        return json.load(f)
+        payload = json.load(f)
+
+    worklogs = payload['worklogs']
+    if len(worklogs) >= 5:
+        payload['total'] = len(worklogs)
+        payload['maxResults'] = max(payload.get('maxResults', 0), len(worklogs))
+        return payload
+
+    extra_entries = [
+        (
+            '10003',
+            '2026-02-07T14:00:00.000+0000',
+            '2026-02-07T17:00:00.000+0000',
+            '3h',
+            10800,
+            'New worklog entry for testing.',
+        ),
+        (
+            '10004',
+            '2026-02-08T09:30:00.000+0000',
+            '2026-02-08T10:15:00.000+0000',
+            '45m',
+            2700,
+            'Reviewed follow-up changes and verified edge cases.',
+        ),
+        (
+            '10005',
+            '2026-02-09T11:00:00.000+0000',
+            '2026-02-09T12:30:00.000+0000',
+            '1h 30m',
+            5400,
+            'Documented the rollout steps and updated notes.',
+        ),
+    ]
+
+    template = copy.deepcopy(worklogs[-1])
+    for worklog_id, started, updated, time_spent, seconds, text in extra_entries:
+        cloned = copy.deepcopy(template)
+        cloned['id'] = worklog_id
+        cloned['self'] = (
+            f'https://example.atlassian.acme.net/rest/api/3/issue/94264/worklog/{worklog_id}'
+        )
+        cloned['started'] = started
+        cloned['created'] = updated
+        cloned['updated'] = updated
+        cloned['timeSpent'] = time_spent
+        cloned['timeSpentSeconds'] = seconds
+        cloned['comment']['content'][0]['content'][0]['text'] = text
+        worklogs.append(cloned)
+
+    payload['total'] = len(worklogs)
+    payload['maxResults'] = max(payload.get('maxResults', 0), len(worklogs))
+    return payload
 
 
 @pytest.fixture
@@ -1915,13 +1967,14 @@ async def mock_jira_api_with_new_work_item(
         mock_search_empty_results()
 
         # Mock search for ENG-8 (newly created work item)
-        created_work_item = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-8')
+        # Use the full work item fixture so follow-up edit flows have editmeta available.
+        created_work_item = load_fixture('jira_work_items/ENG-8.json')
         respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8.*'
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8(?:\?.*)?$'
         ).mock(
             return_value=Response(
                 200,
-                json=build_issue_response(created_work_item),
+                json=created_work_item,
             )
         )
 
@@ -1973,9 +2026,6 @@ async def mock_jira_api_with_clone_work_item(
         mock_assignable_users(mock_jira_users)
         mock_project_endpoint('ENG', mock_jira_projects, mock_jira_issue_types)
 
-        # Mock search endpoint (empty results for initial state)
-        mock_search_empty_results()
-
         original_work_item = copy.deepcopy(
             next(
                 issue
@@ -2019,8 +2069,29 @@ async def mock_jira_api_with_clone_work_item(
             url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-9.*'
         ).mock(return_value=Response(200, json=cloned_work_item))
 
-        # Mock approximate count endpoint
-        mock_approximate_count_empty()
+        def clone_search_handler(request):
+            body = json.loads(request.content)
+            jql = str(body.get('jql', '')).strip().lower()
+
+            if 'key = eng-9' in jql or 'key=eng-9' in jql:
+                return Response(200, json=build_search_results_page([cloned_work_item]))
+
+            return Response(200, json=load_fixture('jira_search_empty.json'))
+
+        respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
+            side_effect=clone_search_handler
+        )
+
+        def clone_count_handler(request):
+            body = json.loads(request.content)
+            jql = str(body.get('jql', '')).strip().lower()
+            if 'key = eng-9' in jql or 'key=eng-9' in jql:
+                return Response(200, json=build_count_results(1))
+            return Response(200, json=build_count_results(0))
+
+        respx.post('https://example.atlassian.acme.net/rest/api/3/search/approximate-count').mock(
+            side_effect=clone_count_handler
+        )
 
         # Mock POST /issue endpoint (create cloned work item)
         respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(

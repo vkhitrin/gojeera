@@ -1,3 +1,4 @@
+import asyncio
 import traceback
 from typing import TYPE_CHECKING, cast
 
@@ -19,8 +20,9 @@ class WorkItemDescription(GojeeraMarkdown):
     """A widget to display the work item description with custom GojeeraMarkdown styling."""
 
     DEFAULT_CSS = """
-    WorkitemDescriptionWidget {
+    WorkItemDescription {
         border: none;
+        padding: 0 1;
     }
     """
 
@@ -35,8 +37,8 @@ class WorkItemSummary(Static, can_focus=False):
     WorkItemSummary {
         border: none;
         text-style: bold;
-        color: $primary;
-        padding: 0 2 1 2;
+        color: $accent;
+        padding: 0 1 1 1;
         width: 100%;
         content-align: left middle;
         background: transparent;
@@ -67,6 +69,9 @@ class WorkItemInfoContainer(Container, can_focus=False):
     #work-item-info-description-scroll-container {
         width: 100%;
         height: 1fr;
+        border: none;
+        padding: 0;
+        scrollbar-size-vertical: 1;
     }
     """
 
@@ -110,7 +115,10 @@ class WorkItemInfoContainer(Container, can_focus=False):
     async def _setup_work_item_description(self, work_item: JiraWorkItem) -> None:
         if work_item.description:
             base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
-            content: str = work_item.get_description(base_url=base_url)
+            content: str = await asyncio.to_thread(
+                work_item.get_description,
+                base_url=base_url,
+            )
             self.work_item_description_widget.jira_base_url = base_url
             if content:
                 await self.work_item_description_widget.update(content)

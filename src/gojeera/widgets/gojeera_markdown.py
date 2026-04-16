@@ -13,12 +13,12 @@ from textual import events
 from textual.app import App
 from textual.await_complete import AwaitComplete
 from textual.content import Content, Span
-from textual.markup import parse_style
 from textual.strip import Strip
 from textual.style import Style
 from textual.widgets import Markdown
 from textual.widgets._markdown import MarkdownBlockQuote, MarkdownParagraph
 
+from gojeera.utils.adf_helpers import DATE_INLINE_SENTINEL
 from gojeera.utils.mdit_adf_decision import decision_plugin
 from gojeera.utils.mdit_adf_panels import panels_plugin
 from gojeera.utils.urls import WORK_ITEM_BROWSE_TOOLTIP, extract_work_item_key
@@ -34,6 +34,7 @@ WORK_ITEM_BROWSE_KEY_META_KEY = 'gojeera_work_item_key'
 MARKDOWN_LINK_HREF_META_KEY = 'gojeera_link_href'
 ATTACHMENT_REFERENCE_FILENAME_META_KEY = 'gojeera_attachment_filename'
 ATTACHMENT_REFERENCE_TOOLTIP_META_KEY = 'gojeera_attachment_tooltip'
+INLINE_CODE_META_KEY = 'gojeera_inline_code'
 WORK_ITEM_OPEN_HINT = 'CTRL+Left Mouse Click to open in gojeera'
 ATTACHMENT_OPEN_HINT = 'Click to open attachments tab'
 ATTACHMENT_BROWSER_OPEN_HINT = 'CTRL+O to open attachment in browser'
@@ -176,6 +177,11 @@ def build_attachment_reference_chip_label(filename: str | None) -> str:
     return f' {label} '
 
 
+def build_inline_code_style() -> Style:
+    """Build style metadata for inline code spans rendered inside markdown."""
+    return Style.from_meta({INLINE_CODE_META_KEY: True})
+
+
 def trim_interactive_span_whitespace(content: Content) -> Content:
     """Trim leading and trailing whitespace from interactive spans."""
     if not content.spans:
@@ -249,6 +255,50 @@ def apply_attachment_hover_style_to_strip(
                 and style.meta is not None
                 and style.meta.get(ATTACHMENT_REFERENCE_FILENAME_META_KEY)
                 == focused_attachment_filename
+                else style
+            ),
+            control,
+        )
+        for text, style, control in strip
+    ]
+    return Strip(segments, strip.cell_length)
+
+
+def apply_attachment_chip_style_to_strip(
+    strip: Strip,
+    attachment_chip_style: RichStyle,
+) -> Strip:
+    """Apply base styling to attachment chip segments."""
+    segments = [
+        Segment(
+            text,
+            (
+                style + attachment_chip_style
+                if style is not None
+                and style.meta is not None
+                and style.meta.get(ATTACHMENT_REFERENCE_FILENAME_META_KEY) is not None
+                else style
+            ),
+            control,
+        )
+        for text, style, control in strip
+    ]
+    return Strip(segments, strip.cell_length)
+
+
+def apply_inline_code_style_to_strip(
+    strip: Strip,
+    inline_code_style: RichStyle,
+) -> Strip:
+    """Apply base styling to inline code segments."""
+    segments = [
+        Segment(
+            text,
+            (
+                style + inline_code_style
+                if style is not None
+                and style.meta is not None
+                and style.meta.get(INLINE_CODE_META_KEY) is True
                 else style
             ),
             control,
@@ -341,15 +391,104 @@ class AttachmentTooltipProvider:
 class ExtendedMarkdownParagraph(MarkdownParagraph):
     """Markdown paragraph with checkbox, date, status, and decision styling."""
 
-    _style_cache: dict[str, Style] = {}
+    COMPONENT_CLASSES = MarkdownParagraph.COMPONENT_CLASSES | {
+        'gojeera-inline-code',
+        'gojeera-inline-date',
+        'gojeera-inline-status-neutral',
+        'gojeera-inline-status-error',
+        'gojeera-inline-status-info',
+        'gojeera-inline-status-success',
+        'gojeera-inline-status-warning',
+        'gojeera-inline-status-accent',
+        'gojeera-inline-status-muted',
+        'gojeera-attachment-chip',
+        'gojeera-attachment-chip-hover',
+        'gojeera-checkbox-unchecked',
+        'gojeera-checkbox-checked',
+    }
+
+    DEFAULT_CSS = """
+    ExtendedMarkdownParagraph {
+        & > .gojeera-inline-code {
+            background: $surface;
+            color: $text-muted;
+        }
+
+        & > .gojeera-inline-date {
+            background: $surface;
+            color: $text;
+        }
+
+        & > .gojeera-inline-status-neutral {
+            background: $surface;
+            color: $text;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-error {
+            background: $error;
+            color: $text;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-info {
+            background: $accent-muted;
+            color: $text-primary;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-success {
+            background: $success;
+            color: $text;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-warning {
+            background: $warning;
+            color: $text;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-accent {
+            background: $accent;
+            color: $text;
+            text-style: bold;
+        }
+
+        & > .gojeera-inline-status-muted {
+            background: $accent-muted;
+            color: $text-primary;
+            text-style: bold;
+        }
+
+        & > .gojeera-attachment-chip {
+            background: $primary-muted;
+            color: $text-primary;
+            text-style: bold not italic not underline;
+        }
+
+        /* This class is used only for render_line hover styling. */
+        & > .gojeera-attachment-chip-hover {
+            background: $primary-darken-2;
+            color: $primary-lighten-2;
+            text-style: bold not italic not underline;
+        }
+
+        & > .gojeera-checkbox-unchecked {
+            color: $accent;
+        }
+
+        & > .gojeera-checkbox-checked {
+            color: $success;
+            text-style: bold;
+        }
+    }
+    """
 
     _whitespace_pattern = re.compile(r'\s+')
-    _date_pattern = re.compile(r'\[date\](.+)')
+    _date_pattern = re.compile(rf'{re.escape(DATE_INLINE_SENTINEL)}\[date\](.+)')
     _status_pattern = re.compile(r'\[status:([nrbgypt])\](.+)')
     _decision_pattern = re.compile(r'\[decision:([dau])\](.+)')
-
-    _global_css_cache: dict[str, str] | None = None
-    _global_css_cache_id: int | None = None
 
     def __init__(self, markdown: Markdown, token: Token) -> None:
         super().__init__(markdown, token)
@@ -358,41 +497,14 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
 
     def _token_to_content(self, token: Token) -> Content:
         """Convert token to content with styling."""
-
         markdown = self._markdown
-
-        css_variables: dict[str, str] = {}
-        if isinstance(markdown, GojeeraMarkdown):
-            try:
-                if markdown._cached_app is None:
-                    markdown._cached_app = markdown.app
-
-                app_id = id(markdown._cached_app)
-
-                if (
-                    self.__class__._global_css_cache_id == app_id
-                    and self.__class__._global_css_cache is not None
-                ):
-                    css_variables = self.__class__._global_css_cache
-                else:
-                    css_variables = markdown._cached_app.get_css_variables()
-                    self.__class__._global_css_cache = css_variables
-                    self.__class__._global_css_cache_id = app_id
-            except Exception:
-                css_variables = {}
-        else:
-            try:
-                if hasattr(markdown, 'app'):
-                    css_variables = markdown.app.get_css_variables()
-            except Exception as e:
-                logger.debug(f'Exception occurred: {e}')
 
         if token.children is None:
             return Content('')
 
         tokens: list[str] = []
         spans: list[Span] = []
-        style_stack: list[tuple[Style | str, int]] = []
+        style_stack: list[tuple[Style | str | tuple[Style | str, ...], int]] = []
         position: int = 0
 
         def add_content(text: str) -> None:
@@ -401,42 +513,39 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             tokens.append(text)
             position += len(text)
 
-        def add_style(style: Style | str) -> None:
+        def add_style(style: Style | str | tuple[Style | str, ...]) -> None:
             """Add a style to the stack."""
             style_stack.append((style, position))
 
         def get_active_attachment_filename() -> str | None:
             for style, _start in reversed(style_stack):
-                if isinstance(style, Style):
-                    if filename := get_attachment_reference_filename(style):
-                        return filename
+                if isinstance(style, tuple):
+                    styles = cast(tuple[Style | str, ...], style)
+                else:
+                    styles = (style,)
+                for item in styles:
+                    if isinstance(item, Style):
+                        if filename := get_attachment_reference_filename(item):
+                            return filename
             return None
 
         def close_tag() -> None:
             style, start = style_stack.pop()
-            spans.append(Span(start, position, style))
+            if isinstance(style, tuple):
+                styles = cast(tuple[Style | str, ...], style)
+            else:
+                styles = (style,)
+            for item in styles:
+                spans.append(Span(start, position, item))
 
-        def get_cached_style(style_str: str, fallback_str: str | None = None) -> Style:
-            """Get a cached style or parse and cache it."""
-            cache_key = f'{style_str}_{id(css_variables)}'
-            if cache_key not in self._style_cache:
-                try:
-                    self._style_cache[cache_key] = parse_style(style_str, variables=css_variables)
-                except Exception:
-                    if fallback_str:
-                        self._style_cache[cache_key] = parse_style(fallback_str)
-                    else:
-                        self._style_cache[cache_key] = parse_style(style_str)
-            return self._style_cache[cache_key]
-
-        status_color_map = {
-            'n': get_cached_style('on $surface', 'on grey50'),
-            'r': get_cached_style('on $error', 'on red'),
-            'b': get_cached_style('on $primary', 'on blue'),
-            'g': get_cached_style('on $success', 'on green'),
-            'y': get_cached_style('on $warning', 'on yellow'),
-            'p': get_cached_style('on $accent', 'on magenta'),
-            't': get_cached_style('on $primary', 'on cyan'),
+        status_class_map = {
+            'n': 'gojeera-inline-status-neutral',
+            'r': 'gojeera-inline-status-error',
+            'b': 'gojeera-inline-status-info',
+            'g': 'gojeera-inline-status-success',
+            'y': 'gojeera-inline-status-warning',
+            'p': 'gojeera-inline-status-accent',
+            't': 'gojeera-inline-status-muted',
         }
 
         for child in token.children:
@@ -461,8 +570,7 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
                 date_match = self._date_pattern.match(content_text)
                 if date_match:
                     date_text = date_match.group(1)
-                    date_style = get_cached_style('on $surface', 'on cyan')
-                    add_style(date_style)
+                    add_style('.gojeera-inline-date')
                     add_content(date_text)
                     close_tag()
                     continue
@@ -472,8 +580,9 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
                     color_code = status_match.group(1)
                     status_text = status_match.group(2)
 
-                    status_style = status_color_map.get(color_code, status_color_map['n'])
-                    add_style(status_style)
+                    add_style(
+                        f'.{status_class_map.get(color_code, "gojeera-inline-status-neutral")}'
+                    )
                     add_content(status_text)
                     close_tag()
                     continue
@@ -485,7 +594,7 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
                     add_content(f'⤷ {decision_text}')
                     continue
 
-                add_style('.code_inline')
+                add_style(build_inline_code_style())
                 add_content(content_text)
                 close_tag()
 
@@ -503,14 +612,7 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
                 href = href_attr if isinstance(href_attr, str) else str(href_attr)
                 attachment_filename = get_attachment_filename_from_href(href)
                 if attachment_filename is not None:
-                    attachment_chip_style = get_cached_style(
-                        'bold not italic not underline $primary-lighten-2 on $panel',
-                        'bold not italic not underline bright_cyan on grey23',
-                    )
-                    add_style(
-                        attachment_chip_style
-                        + build_attachment_reference_style(attachment_filename)
-                    )
+                    add_style(build_attachment_reference_style(attachment_filename))
                 else:
                     jira_base_url = (
                         markdown.jira_base_url if isinstance(markdown, GojeeraMarkdown) else None
@@ -541,21 +643,11 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
             has_checked = '☑' in plain_text
 
             if has_unchecked or has_checked:
-                if isinstance(markdown, GojeeraMarkdown):
-                    unchecked_style_str = markdown.checkbox_unchecked_style
-                    checked_style_str = markdown.checkbox_checked_style
-                else:
-                    unchecked_style_str = 'dim grey50'
-                    checked_style_str = 'bold green'
-
-                unchecked_style = get_cached_style(unchecked_style_str)
-                checked_style = get_cached_style(checked_style_str)
-
                 for i, char in enumerate(plain_text):
                     if has_unchecked and char == '☐':
-                        content = content.stylize(unchecked_style, i, i + 1)
+                        content = content.stylize('.gojeera-checkbox-unchecked', i, i + 1)
                     elif has_checked and char == '☑':
-                        content = content.stylize(checked_style, i, i + 1)
+                        content = content.stylize('.gojeera-checkbox-checked', i, i + 1)
 
         return trim_interactive_span_whitespace(content)
 
@@ -564,26 +656,23 @@ class ExtendedMarkdownParagraph(MarkdownParagraph):
 
     def render_line(self, y: int) -> Strip:
         line = super().render_line(y)
+        line = apply_inline_code_style_to_strip(
+            line,
+            self.get_component_rich_style('gojeera-inline-code'),
+        )
         line = apply_focused_link_style_to_strip(
             line,
             self._focused_link_href,
             self.link_style_hover,
         )
-        markdown = self._markdown
-        css_variables = markdown.app.get_css_variables() if hasattr(markdown, 'app') else {}
-        try:
-            attachment_hover_style = parse_style(
-                '$primary-lighten-2 on $primary-darken-2',
-                variables=css_variables,
-            ).rich_style
-        except Exception:
-            attachment_hover_style = parse_style(
-                'bright_cyan on blue',
-            ).rich_style
+        line = apply_attachment_chip_style_to_strip(
+            line,
+            self.get_component_rich_style('gojeera-attachment-chip'),
+        )
         return apply_attachment_hover_style_to_strip(
             line,
             self._focused_attachment_filename,
-            attachment_hover_style,
+            self.get_component_rich_style('gojeera-attachment-chip-hover'),
         )
 
     def watch_hover_style(self, previous_hover_style: RichStyle, hover_style: RichStyle) -> None:
@@ -791,18 +880,70 @@ class GojeeraMarkdown(Markdown):
         width: auto;
     }
 
-    GojeeraMarkdown MarkdownH1,
-    GojeeraMarkdown MarkdownH2,
-    GojeeraMarkdown MarkdownH3,
-    GojeeraMarkdown MarkdownH4,
-    GojeeraMarkdown MarkdownH5,
+    GojeeraMarkdown MarkdownH1 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        color: $text;
+        text-style: bold;
+        background: $surface-lighten-1;
+    }
+
+    GojeeraMarkdown MarkdownH2 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        color: $text;
+        text-style: bold;
+        background: $surface-lighten-1;
+    }
+
+    GojeeraMarkdown MarkdownH3 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        color: $text;
+        text-style: bold;
+        background: $boost;
+    }
+
+    GojeeraMarkdown MarkdownH4 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        color: $text;
+        text-style: bold;
+        background: $boost;
+    }
+
+    GojeeraMarkdown MarkdownH5 {
+        margin: 0 0 1 0;
+        width: auto;
+        content-align: left top;
+        padding-left: 1;
+        padding-right: 1;
+        color: $text;
+        text-style: bold;
+        background: $boost;
+    }
+
     GojeeraMarkdown MarkdownH6 {
         margin: 0 0 1 0;
         width: auto;
         content-align: left top;
         padding-left: 1;
         padding-right: 1;
+        color: $text;
         text-style: bold;
+        background: $boost;
     }
 
     GojeeraMarkdown MarkdownH1 > MarkdownBlock,
@@ -818,13 +959,14 @@ class GojeeraMarkdown(Markdown):
         margin: 0 0 1 0;
     }
 
-    GojeeraMarkdown MarkdownBulletList,
-    GojeeraMarkdown MarkdownOrderedList {
+    GojeeraMarkdown MarkdownBulletList {
         margin: 0 0 1 0;
         padding: 0;
     }
 
     GojeeraMarkdown MarkdownOrderedList {
+        margin: 0 0 1 0;
+        padding: 0;
         margin-left: 0;
         padding-left: 0;
     }
@@ -846,34 +988,18 @@ class GojeeraMarkdown(Markdown):
         padding: 0;
     }
 
-    GojeeraMarkdown MarkdownH1 {
-        background: $primary 30%;
+    GojeeraMarkdown MarkdownHorizontalRule {
+        border-bottom: solid $surface-lighten-1;
     }
 
-    GojeeraMarkdown MarkdownH2 {
-        background: $primary 20%;
+    GojeeraMarkdown MarkdownTableContent > .header {
+        color: $text-accent;
     }
 
-    GojeeraMarkdown MarkdownH3 {
-        background: $primary 15%;
-    }
-
-    GojeeraMarkdown MarkdownH4 {
-        background: $primary 10%;
-    }
-
-    GojeeraMarkdown MarkdownH5 {
-        background: $primary 7%;
-    }
-
-    GojeeraMarkdown MarkdownH6 {
-        background: $primary 5%;
+    GojeeraMarkdown MarkdownTableContent > .markdown-table--header {
+        text-style: bold;
     }
     """
-
-    checkbox_unchecked_style: str = '$primary'
-
-    checkbox_checked_style: str = 'bold $success'
 
     BLOCKS = {
         **Markdown.BLOCKS,
@@ -905,7 +1031,6 @@ class GojeeraMarkdown(Markdown):
         jira_base_url: str | None = None,
     ) -> None:
         self._last_markdown_content: str | None = None
-        self._cached_app: App | None = None
         self.jira_base_url = jira_base_url
         self.work_item_tooltip_provider = WorkItemLinkTooltipProvider(self)
         self.attachment_tooltip_provider = AttachmentTooltipProvider(self)

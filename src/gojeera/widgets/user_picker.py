@@ -13,6 +13,12 @@ class UserPicker(VimSelect, BaseField, BaseUpdateField):
     User picker widget.
     """
 
+    DEFAULT_CSS = """
+    UserPicker {
+        width: 100%;
+    }
+    """
+
     users: Reactive[dict | None] = reactive(None, always_update=True)
 
     update_enabled: Reactive[bool] = reactive(True)
@@ -49,11 +55,11 @@ class UserPicker(VimSelect, BaseField, BaseUpdateField):
                 original_value=original_value,
                 field_supports_update=field_supports_update,
             )
-            self.add_class('work_item_details_input_field')
-
             self.pending_value = original_value
 
             self.update_enabled = field_supports_update
+        else:
+            self.add_class('surface-input-select')
 
     def watch_update_enabled(self, enabled: bool) -> None:
         self.disabled = not enabled

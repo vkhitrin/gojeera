@@ -34,8 +34,6 @@ class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
             compact=True,
         )
 
-        self.styles.width = '100%'
-
         self.setup_base_field(
             mode=mode,
             field_id=field_id,
@@ -52,9 +50,9 @@ class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
                 field_supports_update=field_supports_update,
             )
             self.value = str_value
-            self.add_class('work_item_details_input_field')
         else:
             self.add_class('create-work-item-float-input')
+            self.add_class('surface-input-float')
 
     def get_value_for_update(self) -> float | None:
         if self.mode != FieldMode.UPDATE:

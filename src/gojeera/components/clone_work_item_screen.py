@@ -40,8 +40,8 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='clone-work-item-form'):
-                with Vertical(id='summary-field-container'):
+            with VerticalScroll(id='clone-work-item-form', classes='modal-form modal-form--tight'):
+                with Vertical(id='summary-field-container', classes='modal-form-section'):
                     summary_label = Label('Summary')
                     summary_label.add_class('field_label')
                     yield summary_label
@@ -58,17 +58,20 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
                         '• Edit the summary above or keep the default\n'
                         '• Same project and issue type will be used',
                         id='summary-hint',
+                        classes='modal-form-hint',
                     )
                     yield Label(
                         '⚠ Most fields copied; status, comments, attachments excluded',
                         id='summary-warning',
+                        classes='modal-form-warning',
                     )
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Clone',
                     variant='success',
                     id='clone-work-item-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=False,
                     compact=True,
                 )
@@ -76,6 +79,7 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
                     'Cancel',
                     variant='error',
                     id='clone-work-item-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)

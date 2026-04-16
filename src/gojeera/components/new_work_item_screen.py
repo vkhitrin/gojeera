@@ -38,11 +38,11 @@ from gojeera.utils.widgets_factory_utils import (
     StaticFieldsWidgets,
     build_dynamic_widgets,
 )
+from gojeera.widgets.dynamic_modal_screen import DynamicModalScreen
 from gojeera.widgets.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_input import ExtendedInput
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
-from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.lazy_select import LazySelect
 from gojeera.widgets.multi_select import MultiSelect
 from gojeera.widgets.sprint_picker import SprintPicker
@@ -53,8 +53,8 @@ from gojeera.widgets.work_item_labels import WorkItemLabels
 logger = logging.getLogger('gojeera')
 
 
-class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
-    BINDINGS = ExtendedModalScreen.BINDINGS + [
+class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
+    BINDINGS = DynamicModalScreen.BINDINGS + [
         ('ctrl+backslash', 'show_overlay', 'Jump'),
         ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
@@ -186,6 +186,53 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     @property
     def required_tracker(self) -> Static:
         return self.query_one('#required-fields-tracker', Static)
+
+    @property
+    def description_textarea(self) -> TextArea:
+        return self.description_field.query_one(TextArea)
+
+    @property
+    def modal_outer(self) -> VerticalSuppressClicks:
+        return self.query_one('#modal_outer', VerticalSuppressClicks)
+
+    @property
+    def modal_form_scroll(self) -> VerticalScroll:
+        return self.query_one('#modal-form-scroll', VerticalScroll)
+
+    @property
+    def modal_footer(self) -> Horizontal:
+        return self.query_one('#modal_footer', Horizontal)
+
+    @property
+    def work_item_type_field_container(self) -> Widget:
+        return self.query_one('#work-item-type-field-container')
+
+    @property
+    def reporter_field_container(self) -> Widget:
+        return self.query_one('#reporter-field-container')
+
+    @property
+    def assignee_field_container(self) -> Widget:
+        return self.query_one('#assignee-field-container')
+
+    @property
+    def summary_field_container(self) -> Widget:
+        return self.query_one('#summary-field-container')
+
+    @property
+    def description_field_container(self) -> Widget:
+        return self.query_one('#description-field-container')
+
+    @property
+    def sprint_field_container(self) -> Widget:
+        return self.query_one('#sprint-field-container')
+
+    def _set_primary_field_containers_display(self, visible: bool) -> None:
+        self.work_item_type_field_container.display = visible
+        self.reporter_field_container.display = visible
+        self.assignee_field_container.display = visible
+        self.summary_field_container.display = visible
+        self.description_field_container.display = visible
 
     def _validate_required_fields(self) -> bool:
         pending_fields = []
@@ -324,6 +371,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                             options=[],
                             prompt='Select a project',
                             id='create-work-item-select-project',
+                            classes='surface-input-select',
                             type_to_search=True,
                             compact=True,
                         )
@@ -339,6 +387,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                             options=[],
                             prompt='Select a work item type',
                             id='create-work-item-select-type',
+                            classes='surface-input-select',
                             type_to_search=True,
                             compact=True,
                         )
@@ -354,6 +403,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                             options=[],
                             prompt='Select a reporter',
                             id='create-work-item-select-reporter',
+                            classes='surface-input-select',
                             type_to_search=True,
                             compact=True,
                         )
@@ -368,6 +418,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                             options=[],
                             prompt='Select an assignee',
                             id='create-work-item-select-assignee',
+                            classes='surface-input-select',
                             type_to_search=True,
                             compact=True,
                         )
@@ -394,7 +445,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         placeholder='',
                         compact=True,
                     )
-                    summary_widget.add_class(*['work_item_details_input_field', 'required'])
+                    summary_widget.add_class('required')
                     yield summary_widget
 
                 with Vertical(id='description-field-container'):
@@ -411,6 +462,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     'Save',
                     variant='success',
                     id='add-work-item-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -418,6 +470,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     'Cancel',
                     variant='error',
                     id='add-work-item-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
 
@@ -445,18 +498,33 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             self.description_field.make_jumpable()
 
             set_jump_mode(self.save_button, 'click')
-            set_jump_mode(self.query_one('#add-work-item-button-quit', Button), 'click')
+            set_jump_mode(self.cancel_button, 'click')
 
-        self.query_one('#work-item-type-field-container').display = False
-        self.query_one('#reporter-field-container').display = False
-        self.query_one('#assignee-field-container').display = False
-        self.query_one('#summary-field-container').display = False
-        self.query_one('#description-field-container').display = False
+        self._set_primary_field_containers_display(False)
         self.dynamic_fields_container.display = False
+        self.initialize_dynamic_modal()
         if self._project_key:
             self.call_after_refresh(self._initialize_prefilled_form)
         else:
             self.call_after_refresh(lambda: focus_first_available(self.project_selector))
+
+    def apply_dynamic_modal_layout(self) -> None:
+        content_height = sum(
+            child.outer_size.height
+            for child in self.modal_form_scroll.children
+            if getattr(child, 'display', True)
+        )
+        chrome_height = (
+            self.modal_title.outer_size.height
+            + self.modal_footer.outer_size.height
+            + self.required_tracker.outer_size.height
+        )
+        viewport_cap = max(16, int(self.screen.size.height * 0.9))
+        minimum_height = 8
+        self.modal_outer.styles.height = min(
+            viewport_cap,
+            max(minimum_height, content_height + chrome_height),
+        )
 
     def _initialize_prefilled_form(self) -> None:
         """Preload project-dependent fields when the screen opens with a predefined project."""
@@ -466,10 +534,9 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     def _apply_prefilled_subtask_type(self, project_key: str, work_item_type_id: str) -> None:
         """Apply the derived subtask type after the selector options have rendered."""
 
-        type_selector = self.query_one('#create-work-item-select-type', LazySelect)
         with self.prevent(Select.Changed):
-            type_selector.value = work_item_type_id
-        type_selector.disabled = True
+            self.work_item_type_selector.value = work_item_type_id
+        self.work_item_type_selector.disabled = True
 
         self._selected_work_item_type_id = work_item_type_id
         self.dynamic_fields_container.display = True
@@ -480,6 +547,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                 exclusive=False,
             )
 
+        self.schedule_dynamic_modal_layout()
         self.save_button.disabled = not self._validate_required_fields()
         self.call_after_refresh(lambda: focus_first_available(self.summary_field))
 
@@ -499,28 +567,24 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         cached_projects = self._cache.get('projects')
         if cached_projects is not None:
             try:
-                project_selector = self.query_one('#create-work-item-select-project', LazySelect)
                 projects_list = [(f'{p.name} ({p.key})', p.key) for p in cached_projects]
                 with self.prevent(Select.Changed):
-                    project_selector.set_options(projects_list)
+                    self.project_selector.set_options(projects_list)
 
                 if self._project_key:
                     with self.prevent(Select.Changed):
-                        project_selector.value = self._project_key
+                        self.project_selector.value = self._project_key
 
                     if self._parent_work_item_key:
-                        project_selector.disabled = True
+                        self.project_selector.disabled = True
 
                     self._selected_project_key = self._project_key
 
-                    self.query_one('#work-item-type-field-container').display = True
-                    self.query_one('#reporter-field-container').display = True
-                    self.query_one('#assignee-field-container').display = True
-                    self.query_one('#summary-field-container').display = True
-                    self.query_one('#description-field-container').display = True
+                    self._set_primary_field_containers_display(True)
 
                     self._lazy_load_work_item_types()
                     self._lazy_load_users()
+                    self.schedule_dynamic_modal_layout()
 
                     self.save_button.disabled = not self._validate_required_fields()
             except Exception as e:
@@ -545,29 +609,23 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                 projects_list = [(f'{p.name} ({p.key})', p.key) for p in projects]
 
                 try:
-                    project_selector = self.query_one(
-                        '#create-work-item-select-project', LazySelect
-                    )
                     with self.prevent(Select.Changed):
-                        project_selector.set_options(projects_list)
+                        self.project_selector.set_options(projects_list)
 
                     if self._project_key:
                         with self.prevent(Select.Changed):
-                            project_selector.value = self._project_key
+                            self.project_selector.value = self._project_key
 
                         if self._parent_work_item_key:
-                            project_selector.disabled = True
+                            self.project_selector.disabled = True
 
                         self._selected_project_key = self._project_key
 
-                        self.query_one('#work-item-type-field-container').display = True
-                        self.query_one('#reporter-field-container').display = True
-                        self.query_one('#assignee-field-container').display = True
-                        self.query_one('#summary-field-container').display = True
-                        self.query_one('#description-field-container').display = True
+                        self._set_primary_field_containers_display(True)
 
                         self._lazy_load_work_item_types()
                         self._lazy_load_users()
+                        self.schedule_dynamic_modal_layout()
 
                         self.save_button.disabled = not self._validate_required_fields()
                 except Exception as e:
@@ -580,10 +638,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                 )
 
                 try:
-                    project_selector = self.query_one(
-                        '#create-work-item-select-project', LazySelect
-                    )
-                    project_selector._stop_spinner()
+                    self.project_selector._stop_spinner()
                 except Exception as e:
                     logger.debug(f'Exception occurred: {e}')
 
@@ -594,8 +649,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             )
 
             try:
-                type_selector = self.query_one('#create-work-item-select-type', LazySelect)
-                type_selector._stop_spinner()
+                self.work_item_type_selector._stop_spinner()
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
             return
@@ -610,9 +664,8 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
             self._types_fetched_for_project = cache_key
             try:
-                type_selector = self.query_one('#create-work-item-select-type', LazySelect)
                 with self.prevent(Select.Changed):
-                    type_selector.set_options(types_list)
+                    self.work_item_type_selector.set_options(types_list)
 
                 if self._requires_subtask_issue_type and types_list:
                     work_item_type_id = types_list[0][1]
@@ -631,8 +684,6 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
     @work(exclusive=False, group='fetch-types')
     async def _fetch_work_item_types_worker(self, project_key: str) -> None:
         worker = get_current_worker()
-        type_selector = self.query_one('#create-work-item-select-type', LazySelect)
-
         if not worker.is_cancelled:
             try:
                 application = cast('JiraApp', self.app)  # noqa: F821
@@ -648,7 +699,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     types_list = [(t.name, t.id) for t in types]
 
                     with self.prevent(Select.Changed):
-                        type_selector.set_options(types_list)
+                        self.work_item_type_selector.set_options(types_list)
                     self._types_fetched_for_project = project_key
 
                     if self._requires_subtask_issue_type and types_list:
@@ -664,16 +715,16 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                         severity='error',
                         title='Create Work Item',
                     )
-                    type_selector._stop_spinner()
+                    self.work_item_type_selector._stop_spinner()
             except Exception as e:
                 self.notify(
                     f'Error fetching work item types: {str(e)}',
                     severity='error',
                     title='Create Work Item',
                 )
-                type_selector._stop_spinner()
+                self.work_item_type_selector._stop_spinner()
         else:
-            type_selector._stop_spinner()
+            self.work_item_type_selector._stop_spinner()
 
     def _lazy_load_users(self) -> None:
         if not self._selected_project_key:
@@ -705,16 +756,14 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
             self._users_fetched_for_project = cache_key
             try:
-                reporter_selector = self.query_one('#create-work-item-select-reporter', LazySelect)
-                reporter_selector.set_options(users_options)
+                self.reporter_selector.set_options(users_options)
 
                 if self._reporter_account_id:
-                    reporter_selector.value = self._reporter_account_id
+                    self.reporter_selector.value = self._reporter_account_id
 
                     self.save_button.disabled = not self._validate_required_fields()
 
-                assignee_selector = self.query_one('#create-work-item-select-assignee', LazySelect)
-                assignee_selector.set_options(users_options)
+                self.assignee_selector.set_options(users_options)
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
             return
@@ -756,20 +805,14 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     self._cache.set('project_users_tuples', users_list, project_key)
 
                     try:
-                        reporter_selector = self.query_one(
-                            '#create-work-item-select-reporter', LazySelect
-                        )
-                        reporter_selector.set_options(users_list)
+                        self.reporter_selector.set_options(users_list)
 
                         if self._reporter_account_id:
-                            reporter_selector.value = self._reporter_account_id
+                            self.reporter_selector.value = self._reporter_account_id
 
                             self.save_button.disabled = not self._validate_required_fields()
 
-                        assignee_selector = self.query_one(
-                            '#create-work-item-select-assignee', LazySelect
-                        )
-                        assignee_selector.set_options(users_list)
+                        self.assignee_selector.set_options(users_list)
 
                         self._users_fetched_for_project = project_key
                     except Exception as e:
@@ -811,32 +854,25 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
         with self.app.batch_update():
             if self._selected_project_key:
-                self.query_one('#work-item-type-field-container').display = True
-                self.query_one('#reporter-field-container').display = True
-                self.query_one('#assignee-field-container').display = True
-                self.query_one('#summary-field-container').display = True
-                self.query_one('#description-field-container').display = True
+                self._set_primary_field_containers_display(True)
 
                 self._types_fetched_for_project = None
                 self._users_fetched_for_project = None
                 self._metadata_fetched_for = None
 
                 try:
-                    work_item_type_sel = self.query_one('#create-work-item-select-type', LazySelect)
-                    reporter_sel = self.query_one('#create-work-item-select-reporter', LazySelect)
-                    assignee_sel = self.query_one('#create-work-item-select-assignee', LazySelect)
+                    self.work_item_type_selector.clear()
+                    self.reporter_selector.clear()
+                    self.assignee_selector.clear()
 
-                    work_item_type_sel.clear()
-                    reporter_sel.clear()
-                    assignee_sel.clear()
-
-                    work_item_type_sel._has_loaded = False
-                    reporter_sel._has_loaded = False
-                    assignee_sel._has_loaded = False
+                    self.work_item_type_selector._has_loaded = False
+                    self.reporter_selector._has_loaded = False
+                    self.assignee_selector._has_loaded = False
                 except Exception as e:
                     logger.debug(f'Exception occurred: {e}')
 
                 self._lazy_load_users()
+                self.schedule_dynamic_modal_layout()
 
             self.save_button.disabled = not self._validate_required_fields()
 
@@ -852,6 +888,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             and work_item_type_value != Select.NULL
         ):
             self.dynamic_fields_container.display = True
+            self.schedule_dynamic_modal_layout()
 
             combo = (str(project_value), str(work_item_type_value))
             if self._metadata_fetched_for != combo:
@@ -895,7 +932,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
         self._sprint_field_id = None
         try:
-            self.query_one('#sprint-field-container').display = False
+            self.sprint_field_container.display = False
         except Exception:
             pass
 
@@ -936,7 +973,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
                     self.description_field.mark_required()
 
                     try:
-                        desc_container = self.query_one('#description-field-container', Vertical)
+                        desc_container = self.description_field_container
                         desc_label = desc_container.query_one(Label)
                         desc_label.add_class('required_field_label')
                     except Exception as e:
@@ -980,6 +1017,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             self.dynamic_fields_container.loading = False
             await self.dynamic_fields_container.remove_children()
             await self.dynamic_fields_container.mount_all(metadata_fields)
+            self.schedule_dynamic_modal_layout()
 
             self._make_dynamic_widgets_jumpable()
 
@@ -990,12 +1028,12 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             ):
                 try:
                     self._sprint_field_id = sprint_field_id
-                    sprint_container = self.query_one('#sprint-field-container')
-                    sprint_container.display = True
+                    self.sprint_field_container.display = True
                     self.sprint_picker_widget.start_loading()
                     self.run_worker(
                         self._populate_sprint_picker_widgets(project_key), exclusive=False
                     )
+                    self.schedule_dynamic_modal_layout()
                 except Exception:
                     pass
             user_picker_widgets = self.dynamic_fields_container.query(UserPicker)
@@ -1111,14 +1149,14 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             else:
                 sprint_picker.sprints = {'sprints': [], 'selection': None}
                 try:
-                    self.query_one('#sprint-field-container').display = False
+                    self.sprint_field_container.display = False
                 except Exception:
                     pass
         except Exception as e:
             logger.warning(f'Failed to fetch sprints for project {project_key}: {e}')
             sprint_picker.sprints = {'sprints': [], 'selection': None}
             try:
-                self.query_one('#sprint-field-container').display = False
+                self.sprint_field_container.display = False
             except Exception:
                 pass
 
@@ -1153,7 +1191,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
 
     def _set_submitting(self, submitting: bool) -> None:
         self._is_submitting = submitting
-        self.query_one('#modal_footer').loading = submitting
+        self.modal_footer.loading = submitting
         self.save_button.disabled = submitting
         self.cancel_button.disabled = submitting
 
@@ -1358,7 +1396,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         from gojeera.utils.mention_helpers import insert_user_mention
 
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
+            description_widget = self.description_field
         except Exception as e:
             logger.error(f'Failed to get Description widget: {e}')
             return
@@ -1371,13 +1409,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         )
 
     async def action_insert_decision(self) -> None:
-        from textual.widgets import TextArea
-
         from gojeera.components.decision_picker_screen import DecisionPickerScreen
 
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception as e:
             logger.error(f'Failed to get Description widget or TextArea: {e}')
             return
@@ -1397,13 +1432,10 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
             textarea.insert(insertion_text)
 
     async def action_insert_alert(self) -> None:
-        from textual.widgets import TextArea
-
         from gojeera.components.panel_picker_screen import PanelPickerScreen
 
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception as e:
             logger.error(f'Failed to get Description widget or TextArea: {e}')
             return
@@ -1445,7 +1477,7 @@ class AddWorkItemScreen(ExtendedModalScreen[dict[str, object | None]]):
         references = '\n'.join(
             build_staged_attachment_reference_text(path.name) for path in staged_paths
         )
-        textarea = self.description_field.query_one(TextArea)
+        textarea = self.description_textarea
         textarea.focus()
         textarea.insert(references)
 

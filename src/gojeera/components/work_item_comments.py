@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, cast
+import logging
+from typing import TYPE_CHECKING, Any, cast
 import webbrowser
 
 from rich.text import Text
@@ -26,6 +27,9 @@ from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
+
+
+logger = logging.getLogger(__name__)
 
 
 def _merge_uploaded_attachments_into_widget(widget, uploaded_attachments: list[Attachment]) -> None:
@@ -82,6 +86,50 @@ def _build_media_attachment_details(
     return details
 
 
+def _inspect_adf_body(body: object) -> dict[str, object]:
+    if not isinstance(body, dict):
+        return {
+            'top_level_node_types': [],
+            'media_node_count': 0,
+            'media_node_types': [],
+        }
+    body_dict = cast(dict[str, Any], body)
+
+    top_level_node_types: list[str] = []
+    media_node_count = 0
+    media_node_types: set[str] = set()
+
+    def visit(node: object, *, is_top_level: bool = False) -> None:
+        nonlocal media_node_count
+        if not isinstance(node, dict):
+            return
+        node_dict = cast(dict[str, Any], node)
+
+        node_type = node_dict.get('type')
+        if isinstance(node_type, str):
+            if is_top_level:
+                top_level_node_types.append(node_type)
+            if node_type.startswith('media'):
+                media_node_count += 1
+                media_node_types.add(node_type)
+
+        content = node_dict.get('content')
+        if isinstance(content, list):
+            for child in content:
+                visit(child)
+
+    content = body_dict.get('content')
+    if isinstance(content, list):
+        for child in content:
+            visit(child, is_top_level=True)
+
+    return {
+        'top_level_node_types': top_level_node_types,
+        'media_node_count': media_node_count,
+        'media_node_types': sorted(media_node_types),
+    }
+
+
 class CommentContainer(Vertical, can_focus=False):
     """A container representing a single comment."""
 
@@ -92,13 +140,21 @@ class CommentContainer(Vertical, can_focus=False):
         margin: 0;
         background: transparent;
         color: $foreground;
-        opacity: 0.5;
     }
-    
+
     CommentContainer.-selected {
         background: transparent;
         color: $foreground;
-        opacity: 1.0;
+    }
+
+    CommentContainer.-selected .comment-author {
+        color: $primary;
+    }
+
+    CommentContainer.-selected .comment-metadata {
+        color: $text;
+        text-style: none;
+        border-bottom: solid $primary-darken-2;
     }
 
     CommentContainer > Vertical {
@@ -399,6 +455,8 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     WorkItemCommentsWidget {
         width: 100%;
         height: 1fr;
+        hatch: right $success 20%;
+        scrollbar-size-vertical: 1;
     }
 
     WorkItemCommentsWidget > .tab-content-container {
@@ -580,6 +638,29 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                     markdown_widget.can_focus = False
                     inner_container.compose_add_child(markdown_widget)
                 else:
+                    if comment.body is None:
+                        render_reason = 'comment.body is None'
+                    elif isinstance(comment.body, str):
+                        render_reason = 'comment.body is empty string'
+                    else:
+                        render_reason = 'convert_adf_to_markdown returned empty content'
+                    body_details = _inspect_adf_body(comment.body)
+
+                    logger.error(
+                        'Unable to display comment body; rendering fallback message',
+                        extra={
+                            'work_item_key': self.work_item_key,
+                            'comment_id': comment.id,
+                            'reason': render_reason,
+                            'body_type': type(comment.body).__name__,
+                            'has_rendered_body': bool(comment.rendered_body),
+                            'attachment_count': len(
+                                getattr(attachments_widget, 'attachments', None) or []
+                            ),
+                            'media_attachment_details_count': len(media_attachment_details),
+                            **body_details,
+                        },
+                    )
                     inner_container.compose_add_child(
                         Static(
                             Text(

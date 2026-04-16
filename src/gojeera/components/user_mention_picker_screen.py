@@ -65,7 +65,7 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
 
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='user-mention-form'):
+            with VerticalScroll(id='user-mention-form', classes='modal-form modal-form--fields'):
                 with Vertical():
                     user_label = Label('User')
                     user_label.add_class('field_label')
@@ -77,11 +77,12 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     ]
                     yield UserMentionSelector(options)
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Insert',
                     variant='success',
                     id='user-mention-button-insert',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -89,6 +90,7 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     'Cancel',
                     variant='error',
                     id='user-mention-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
 

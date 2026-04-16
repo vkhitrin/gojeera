@@ -9,7 +9,7 @@ from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.widgets import Static, TabbedContent, TabPane
+from textual.widgets import Static, TabPane
 import yaml
 
 from gojeera.api_controller.controller import APIControllerResponse
@@ -20,6 +20,7 @@ from gojeera.utils.focus import focus_first_available
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
+from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
@@ -58,15 +59,39 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         self._cache = get_cache()
 
     @property
-    def tabs(self) -> TabbedContent:
-        return self.query_one('#debug_tabs', TabbedContent)
+    def tabs(self) -> ExtendedTabbedContent:
+        return self.query_one('#debug_tabs', ExtendedTabbedContent)
+
+    @property
+    def modal_outer(self):
+        return self.query_one('#modal_outer')
+
+    @property
+    def config_markdown(self) -> GojeeraMarkdown:
+        return self.query_one('#config-markdown', expect_type=GojeeraMarkdown)
+
+    @property
+    def cache_markdown(self) -> GojeeraMarkdown:
+        return self.query_one('#cache-markdown', expect_type=GojeeraMarkdown)
+
+    @property
+    def server_markdown(self) -> GojeeraMarkdown:
+        return self.query_one('#server-markdown', expect_type=GojeeraMarkdown)
+
+    @property
+    def user_markdown(self) -> GojeeraMarkdown:
+        return self.query_one('#user-markdown', expect_type=GojeeraMarkdown)
+
+    @property
+    def global_markdown(self) -> GojeeraMarkdown:
+        return self.query_one('#global-markdown', expect_type=GojeeraMarkdown)
 
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('Debug Information', id='modal_title')
-            with TabbedContent(initial='tab-config', id='debug_tabs'):
+            with ExtendedTabbedContent(initial='tab-config', id='debug_tabs'):
                 with TabPane('Configuration', id='tab-config'):
                     with VerticalScroll():
                         yield GojeeraMarkdown(open_links=False, id='config-markdown')
@@ -84,14 +109,12 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
-        container = self.query_one('#modal_outer')
-        container.scroll_home()
+        self.modal_outer.scroll_home()
 
         if CONFIGURATION.get().jumper.enabled:
             from textual.widgets._tabbed_content import ContentTab
 
-            tabs = self.query_one('#debug_tabs', TabbedContent)
-            content_tabs = list(tabs.query(ContentTab))
+            content_tabs = list(self.tabs.query(ContentTab))
             for content_tab in content_tabs:
                 setattr(content_tab, 'jump_mode', 'click')  # noqa: B010
 
@@ -116,8 +139,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         jumper.show()
 
     async def _populate_config_section(self) -> None:
-        config_md = self.query_one('#config-markdown', expect_type=GojeeraMarkdown)
-
         config = CONFIGURATION.get()
 
         import json as json_lib
@@ -132,11 +153,9 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         lines.append(yaml_output.rstrip())
         lines.append('```')
 
-        config_md.update('\n'.join(lines))
+        self.config_markdown.update('\n'.join(lines))
 
     async def _populate_cache_section(self) -> None:
-        cache_md = self.query_one('#cache-markdown', expect_type=GojeeraMarkdown)
-
         stats = self._cache.get_stats()
 
         lines = ['### Cache Statistics\n']
@@ -169,22 +188,19 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
             for key, status, ttl_info, age_seconds in cache_entries:
                 lines.append(f'| `{key}` | {status} | `{ttl_info}` | `{age_seconds}s` |')
 
-        cache_md.update('\n'.join(lines))
+        self.cache_markdown.update('\n'.join(lines))
 
     def _show_server_loading(self) -> None:
         with self.app.batch_update():
-            server_md = self.query_one('#server-markdown', expect_type=GojeeraMarkdown)
-            server_md.update('*Loading server information...*')
+            self.server_markdown.update('*Loading server information...*')
 
     def _show_user_loading(self) -> None:
         with self.app.batch_update():
-            user_md = self.query_one('#user-markdown', expect_type=GojeeraMarkdown)
-            user_md.update('*Loading user information...*')
+            self.user_markdown.update('*Loading user information...*')
 
     def _show_global_settings_loading(self) -> None:
         with self.app.batch_update():
-            global_md = self.query_one('#global-markdown', expect_type=GojeeraMarkdown)
-            global_md.update('*Loading global settings...*')
+            self.global_markdown.update('*Loading global settings...*')
 
     @work(exclusive=False)
     async def _fetch_server_info(self) -> None:
@@ -202,8 +218,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         self._update_server_section(server_info)
 
     def _update_server_section(self, server_info: JiraServerInfo | None) -> None:
-        server_md = self.query_one('#server-markdown', expect_type=GojeeraMarkdown)
-
         lines = []
 
         if server_info:
@@ -227,7 +241,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('*Unable to fetch server information*')
 
-        server_md.update('\n'.join(lines))
+        self.server_markdown.update('\n'.join(lines))
 
     @work(exclusive=False)
     async def _fetch_user_info(self) -> None:
@@ -248,8 +262,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         self._update_user_section(user_info)
 
     def _update_user_section(self, user_info: JiraMyselfInfo | None) -> None:
-        user_md = self.query_one('#user-markdown', expect_type=GojeeraMarkdown)
-
         lines = []
 
         if user_info:
@@ -269,7 +281,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('*Unable to fetch user information*')
 
-        user_md.update('\n'.join(lines))
+        self.user_markdown.update('\n'.join(lines))
 
     @work(exclusive=False)
     async def _fetch_global_settings(self) -> None:
@@ -289,8 +301,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     def _update_global_settings_section(
         self, jira_global_settings: JiraGlobalSettings | None
     ) -> None:
-        global_md = self.query_one('#global-markdown', expect_type=GojeeraMarkdown)
-
         lines = []
 
         if jira_global_settings:
@@ -324,19 +334,17 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('*Unable to fetch global settings*')
 
-        global_md.update('\n'.join(lines))
+        self.global_markdown.update('\n'.join(lines))
 
     def on_key(self, event: events.Key) -> None:
         if event.key == 'escape':
             self.app.pop_screen()
             event.stop()
         elif event.key == 'pageup':
-            container = self.query_one('#modal_outer')
-            container.scroll_page_up()
+            self.modal_outer.scroll_page_up()
             event.stop()
         elif event.key == 'pagedown':
-            container = self.query_one('#modal_outer')
-            container.scroll_page_down()
+            self.modal_outer.scroll_page_down()
             event.stop()
 
     def action_focus_next(self) -> None:

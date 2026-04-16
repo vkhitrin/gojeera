@@ -348,3 +348,83 @@ class TestWorkItemComments:
             terminal_size=(120, 40),
             run_before=open_comments_tab_with_fetched_inline_file,
         )
+
+    def test_fetched_comments_use_rendered_body_for_media_group_snapshot(
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_user_info,
+        mock_jira_search_with_results,
+        mock_jira_api_with_search_results,
+    ):
+        respx.get(
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-1/comment\?.*expand=renderedBody.*'
+        ).mock(
+            return_value=Response(
+                200,
+                json={
+                    'comments': [
+                        {
+                            'id': 'comment-media-group',
+                            'created': '2026-04-05T17:32:00.000+0000',
+                            'updated': '2026-04-05T17:32:00.000+0000',
+                            'author': {
+                                'accountId': 'user-1',
+                                'active': True,
+                                'displayName': 'Vadim Khitrin',
+                                'emailAddress': 'vadim@example.com',
+                            },
+                            'body': {
+                                'type': 'doc',
+                                'version': 1,
+                                'content': [
+                                    {
+                                        'type': 'mediaGroup',
+                                        'content': [
+                                            {
+                                                'type': 'media',
+                                                'attrs': {
+                                                    'id': 'attachment-1',
+                                                    'type': 'file',
+                                                    'collection': '',
+                                                },
+                                            },
+                                            {
+                                                'type': 'media',
+                                                'attrs': {
+                                                    'id': 'attachment-2',
+                                                    'type': 'file',
+                                                    'collection': '',
+                                                },
+                                            },
+                                        ],
+                                    }
+                                ],
+                            },
+                            'renderedBody': (
+                                '<div>'
+                                '<a href="/rest/api/3/attachment/content/20001" '
+                                'data-media-services-id="attachment-1" '
+                                'data-attachment-name="rollout-diagram.png">'
+                                'rollout-diagram.png'
+                                '</a>'
+                                '<a href="/rest/api/3/attachment/content/20002" '
+                                'data-media-services-id="attachment-2" '
+                                'data-attachment-name="field-notes.pdf">'
+                                'field-notes.pdf'
+                                '</a>'
+                                '</div>'
+                            ),
+                        }
+                    ]
+                },
+            )
+        )
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=open_comments_tab_with_fetched_inline_file,
+        )

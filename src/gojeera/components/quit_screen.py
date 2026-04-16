@@ -23,36 +23,41 @@ class QuitScreen(ExtendedModalScreen[str]):
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
 
+    @property
+    def cancel_button(self) -> Button:
+        return self.query_one('#button-cancel', Button)
+
+    @property
+    def quit_button(self) -> Button:
+        return self.query_one('#button-quit', Button)
+
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('Quit gojeera', id='modal_title')
             yield Static('Are you sure you want to quit?', id='modal_message')
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Cancel',
                     variant='primary',
                     id='button-cancel',
+                    classes='dialog-button dialog-button--secondary',
                     compact=True,
                 )
                 yield Button(
                     'Quit',
                     variant='error',
                     id='button-quit',
+                    classes='dialog-button dialog-button--danger-soft',
                     compact=True,
                 )
 
     def on_mount(self) -> None:
         if CONFIGURATION.get().jumper.enabled:
-            set_jump_mode(self.query_one('#button-cancel', Button), 'click')
-            set_jump_mode(self.query_one('#button-quit', Button), 'click')
-        self.call_after_refresh(
-            lambda: focus_first_available(
-                self.query_one('#button-cancel', Button),
-                self.query_one('#button-quit', Button),
-            )
-        )
+            set_jump_mode(self.cancel_button, 'click')
+            set_jump_mode(self.quit_button, 'click')
+        self.call_after_refresh(lambda: focus_first_available(self.cancel_button, self.quit_button))
 
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:

@@ -1,10 +1,15 @@
+from itertools import zip_longest
 import logging
+from types import MethodType
 from typing import TYPE_CHECKING
 
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Container, VerticalGroup, VerticalScroll
-from textual.widgets import TabbedContent, TabPane
+from textual.css.query import NoMatches
+from textual.widgets import ContentSwitcher, TabbedContent, TabPane
 from textual.widgets._tabbed_content import ContentTab, ContentTabs, Tab
+from textual.widgets._tabs import Underline
 
 if TYPE_CHECKING:
     from gojeera.app import MainScreen
@@ -13,14 +18,82 @@ if TYPE_CHECKING:
 logger = logging.getLogger('gojeera')
 
 
+def _highlight_active_full_width(self: ContentTabs, animate: bool = True) -> None:
+    """Move the underline bar to span the full active tab region, including padding."""
+    underline = self.query_one(Underline)
+    try:
+        self.query_one('#tabs-list > Tab.-active')
+    except NoMatches:
+        object.__setattr__(underline, 'show_highlight', False)
+        object.__setattr__(underline, 'highlight_start', 0)
+        object.__setattr__(underline, 'highlight_end', 0)
+        return
+
+    object.__setattr__(underline, 'show_highlight', True)
+
+    def move_underline(animate: bool) -> None:
+        try:
+            active_tab = self.query_one('#tabs-list > Tab.-active')
+        except NoMatches:
+            return
+
+        start, end = active_tab.virtual_region.column_span
+        if animate:
+            underline.animate(
+                'highlight_start',
+                start,
+                duration=0.3,
+                level='basic',
+            )
+            underline.animate(
+                'highlight_end',
+                end,
+                duration=0.3,
+                level='basic',
+            )
+        else:
+            object.__setattr__(underline, 'highlight_start', start)
+            object.__setattr__(underline, 'highlight_end', end)
+
+    if animate and self.app.animation_level != 'none':
+        self.set_timer(
+            0.02,
+            lambda: self.call_after_refresh(move_underline, True),
+        )
+    else:
+        self.call_after_refresh(move_underline, False)
+
+
 class ExtendedTabbedContent(TabbedContent):
     """Custom TabbedContent that handles Tab navigation in a custom manner."""
 
     can_focus = True
 
     DEFAULT_CSS = """
-    ExtendedTabbedContent > ContentTabs:focus .underline--bar {
-        background: $foreground 10%;
+    ExtendedTabbedContent > ContentTabs ContentTab {
+        background: transparent;
+        color: $text-muted;
+    }
+
+    ExtendedTabbedContent > ContentTabs ContentTab.-badged {
+        padding: 0 0 0 1;
+    }
+
+    ExtendedTabbedContent > ContentTabs ContentTab:hover,
+    ExtendedTabbedContent > ContentTabs ContentTab:focus {
+        background: $primary-muted;
+        color: $text-primary;
+        text-style: bold;
+    }
+
+    ExtendedTabbedContent > ContentTabs:focus ContentTab.-active {
+        background: $primary-muted;
+        color: $text-primary;
+        text-style: bold;
+    }
+
+    ExtendedTabbedContent > ContentTabs .underline--bar {
+        color: $primary;
     }
     """
 
@@ -80,10 +153,57 @@ class ExtendedTabbedContent(TabbedContent):
         super().__init__(*titles, **kwargs)
         self.external_content = external_content
         self._external_information_panel = None
+        self._tab_base_labels: dict[str, str] = {}
+
+    def compose(self) -> ComposeResult:
+        pane_content = [
+            self._set_id(
+                (
+                    content
+                    if isinstance(content, TabPane)
+                    else TabPane(title or self.render_str(f'Tab {index}'), content)
+                ),
+                self._generate_tab_id(),
+            )
+            for index, (title, content) in enumerate(zip_longest(self.titles, self._tab_content), 1)
+        ]
+        tabs = [
+            ContentTab(
+                content._title,
+                content.id or '',
+                disabled=content.disabled,
+            )
+            for content in pane_content
+        ]
+
+        content_tabs = ContentTabs(*tabs, active=self._initial or None, tabbed_content=self)
+        object.__setattr__(
+            content_tabs,
+            '_highlight_active',
+            MethodType(_highlight_active_full_width, content_tabs),
+        )
+        yield content_tabs
+
+        with ContentSwitcher(initial=self._initial or None):
+            yield from pane_content
 
     @property
     def tabs_widget(self) -> ContentTabs:
         return self.query_one(ContentTabs)
+
+    @property
+    def information_panel(self):
+        from gojeera.components.work_item_information import WorkItemInformation
+
+        if self._external_information_panel is None:
+            self._external_information_panel = self.screen.query_one(WorkItemInformation)
+        return self._external_information_panel
+
+    @property
+    def work_item_fields_widget(self):
+        from gojeera.components.work_item_fields import WorkItemFields
+
+        return self.screen.query_one(WorkItemFields)
 
     @property
     def tab_count(self) -> int:
@@ -92,6 +212,30 @@ class ExtendedTabbedContent(TabbedContent):
     def get_tab(self, pane_id: str | TabPane) -> Tab:
         target_id = pane_id.id if isinstance(pane_id, TabPane) else pane_id
         return self.tabs_widget.get_content_tab(target_id)
+
+    @staticmethod
+    def _label_text(label: object) -> str:
+        if isinstance(label, str):
+            return label
+        plain = getattr(label, 'plain', None)
+        if isinstance(plain, str):
+            return plain
+        return str(label)
+
+    def _tab_base_label(self, tab_id: str) -> str:
+        if tab_id not in self._tab_base_labels:
+            self._tab_base_labels[tab_id] = self._label_text(self.get_tab(tab_id).label)
+        return self._tab_base_labels[tab_id]
+
+    def set_tab_badge(self, tab_id: str, badge: int | None) -> None:
+        tab = self.get_tab(tab_id)
+        base_label = self._tab_base_label(tab_id)
+        if badge is not None and badge > 0:
+            tab.add_class('-badged')
+            tab.label = f'{base_label}[bold $text-primary] {badge} [/]'
+        else:
+            tab.remove_class('-badged')
+            tab.label = base_label
 
     def hide_tab(self, tab_id: str) -> None:
         self.tabs_widget.hide(tab_id)
@@ -115,14 +259,9 @@ class ExtendedTabbedContent(TabbedContent):
             return
 
         try:
-            from gojeera.components.work_item_information import WorkItemInformation
-
-            if self._external_information_panel is None:
-                self._external_information_panel = self.screen.query_one(WorkItemInformation)
-
-            active_pane_id = self._external_information_panel.pane_id_for_tab(active)
-            if self._external_information_panel.content_switcher.current != active_pane_id:
-                self._external_information_panel.set_active_tab(active)
+            active_pane_id = self.information_panel.pane_id_for_tab(active)
+            if self.information_panel.content_switcher.current != active_pane_id:
+                self.information_panel.set_active_tab(active)
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -216,20 +355,14 @@ class ExtendedTabbedContent(TabbedContent):
             comments_widget.action_add_comment()
 
     def action_view_worklog(self) -> None:
-        from gojeera.components.work_item_fields import WorkItemFields
-
         try:
-            work_item_fields_widget = self.screen.query_one(WorkItemFields)
-            work_item_fields_widget.action_view_worklog()
+            self.work_item_fields_widget.action_view_worklog()
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
     def action_log_work(self) -> None:
-        from gojeera.components.work_item_fields import WorkItemFields
-
         try:
-            work_item_fields_widget = self.screen.query_one(WorkItemFields)
-            work_item_fields_widget.action_log_work()
+            self.work_item_fields_widget.action_log_work()
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -240,9 +373,7 @@ class ExtendedTabbedContent(TabbedContent):
             active_pane = self.get_pane(self.active)
             if self.external_content:
                 try:
-                    from gojeera.components.work_item_information import WorkItemInformation
-
-                    active_pane = self.screen.query_one(WorkItemInformation).get_active_pane()
+                    active_pane = self.information_panel.get_active_pane()
                 except Exception as e:
                     logger.debug(f'Exception occurred: {e}')
             if active_pane:
@@ -272,9 +403,7 @@ class ExtendedTabbedContent(TabbedContent):
             active_pane = self.get_pane(self.active)
             if self.external_content:
                 try:
-                    from gojeera.components.work_item_information import WorkItemInformation
-
-                    active_pane = self.screen.query_one(WorkItemInformation).get_active_pane()
+                    active_pane = self.information_panel.get_active_pane()
                 except Exception as e:
                     logger.debug(f'Exception occurred: {e}')
             if active_pane and focused in active_pane.walk_children():
@@ -288,8 +417,7 @@ class ExtendedTabbedContent(TabbedContent):
                         break
 
                 if focused == first_focusable:
-                    content_tabs = self.query_one(ContentTabs)
-                    content_tabs.focus()
+                    self.tabs_widget.focus()
                     return
 
         self.screen.focus_previous()

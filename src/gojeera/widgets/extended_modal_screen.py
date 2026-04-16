@@ -17,6 +17,53 @@ T = TypeVar('T')
 class ExtendedModalScreen(ModalScreen[T], Generic[T]):
     """Modal screen with global overlay bindings that remain available in modals."""
 
+    DEFAULT_CSS = """
+    ExtendedModalScreen {
+        align: center middle;
+    }
+
+    ExtendedModalScreen #modal_outer {
+        background: $surface;
+        padding: 0;
+        max-height: 90%;
+        overflow: hidden hidden;
+    }
+
+    ExtendedModalScreen #modal_title {
+        width: 100%;
+        height: auto;
+        padding: 1;
+        background: $surface;
+        color: $text;
+        text-align: center;
+        text-style: bold;
+    }
+
+    ExtendedModalScreen #modal_footer {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        padding: 0 2;
+        background: $surface;
+    }
+
+    ExtendedModalScreen #modal_message {
+        width: 100%;
+        height: auto;
+        padding: 0 2 1 2;
+        background: $surface;
+        color: $text;
+        text-align: center;
+    }
+
+    ExtendedModalScreen #modal-form-scroll {
+        width: 100%;
+        height: 1fr;
+        background: $surface;
+        scrollbar-size-vertical: 1;
+    }
+    """
+
     BINDINGS = [
         register_binding_in_command_palette(
             Binding(

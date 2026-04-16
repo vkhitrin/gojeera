@@ -61,7 +61,9 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='quick-navigation-form'):
+            with VerticalScroll(
+                id='quick-navigation-form', classes='modal-form modal-form--fields'
+            ):
                 with Vertical():
                     work_item_label = Label('Work Item')
                     work_item_label.add_class('field_label')
@@ -72,11 +74,12 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
                         classes='work-item-key-input',
                         compact=True,
                     )
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Open',
                     variant='success',
                     id='quick-navigation-button-open',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -84,6 +87,7 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
                     'Cancel',
                     variant='error',
                     id='quick-navigation-button-cancel',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
             yield WorkItemFooterDetails()

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Input, Label, Static, TextArea
 
 from gojeera.components.decision_picker_screen import DecisionPickerScreen
@@ -67,6 +67,10 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
         return self.query_one(ExtendedADFMarkdownTextArea)
 
     @property
+    def description_textarea(self) -> TextArea:
+        return self.description_field.query_one(TextArea)
+
+    @property
     def save_button(self) -> Button:
         return self.query_one('#edit-work-item-button-save', expect_type=Button)
 
@@ -79,7 +83,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='modal-form-scroll'):
+            with Vertical(id='edit-work-item-body'):
                 with Vertical(id='summary-field-container'):
                     summary_label = Label('Summary')
                     summary_label.add_class('field_label')
@@ -90,7 +94,6 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
                         compact=True,
                         value=self.work_item.summary if self.work_item else '',
                     )
-                    summary_widget.add_class('work_item_details_input_field')
                     yield summary_widget
 
                 with Vertical(id='description-field-container'):
@@ -100,11 +103,12 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
 
                     yield ExtendedADFMarkdownTextArea(field_id='description', required=False)
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id='edit-work-item-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -112,6 +116,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
                     'Cancel',
                     variant='error',
                     id='edit-work-item-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter()
@@ -126,12 +131,12 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
         self._update_button_state()
 
         if CONFIGURATION.get().jumper.enabled:
-            set_jump_mode(self.query_one('#edit-work-item-summary', Input), 'focus')
+            set_jump_mode(self.summary_input, 'focus')
 
             self.description_field.make_jumpable()
 
             set_jump_mode(self.save_button, 'click')
-            set_jump_mode(self.query_one('#edit-work-item-button-quit', Button), 'click')
+            set_jump_mode(self.cancel_button, 'click')
         self.call_after_refresh(
             lambda: focus_first_available(self.summary_input, self.description_field)
         )
@@ -214,8 +219,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
 
     async def action_insert_decision(self) -> None:
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception as e:
             logger.error(f'Failed to get Description widget or TextArea: {e}')
             return
@@ -236,8 +240,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
 
     async def action_insert_alert(self) -> None:
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception as e:
             logger.error(f'Failed to get Description widget or TextArea: {e}')
             return
@@ -279,7 +282,7 @@ class EditWorkItemInfoScreen(ExtendedModalScreen[dict[str, str]]):
         references = '\n'.join(
             build_staged_attachment_reference_text(path.name) for path in staged_paths
         )
-        textarea = self.description_field.query_one(TextArea)
+        textarea = self.description_textarea
         textarea.focus()
         textarea.insert(references)
 

@@ -62,7 +62,9 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
 
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='parent-work-item-form'):
+            with VerticalScroll(
+                id='parent-work-item-form', classes='modal-form modal-form--fields'
+            ):
                 with Vertical():
                     parent_work_item_label = Label('Parent Work Item')
                     parent_work_item_label.add_class('field_label')
@@ -71,11 +73,12 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
                     parent_input.disabled = True
                     yield parent_input
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield ExtendedButton(
                     'Set',
                     variant='success',
                     id='parent-work-item-button-apply',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -83,6 +86,7 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
                     'Cancel',
                     variant='error',
                     id='parent-work-item-button-cancel',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
 

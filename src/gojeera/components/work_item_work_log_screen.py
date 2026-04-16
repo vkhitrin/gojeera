@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, ClassVar, cast
 
 from rich.text import Text
+from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import ListItem, ListView, Static
+from textual.reactive import reactive
+from textual.widgets import Button, Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.confirmation_screen import ConfirmationScreen
@@ -17,17 +19,39 @@ from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper
 from gojeera.widgets.extended_modal_screen import ExtendedModalScreen
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
+from gojeera.widgets.spacer import Spacer
 from gojeera.widgets.vertical_suppress_clicks import VerticalSuppressClicks
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class WorkLogListView(ListView):
-    """Custom ListView for worklogs with vim-style j/k navigation."""
+class WorkLogListView(VerticalScroll):
+    """Scrollable worklog list with vim-style navigation and card selection."""
+
+    DEFAULT_CSS = """
+    WorkLogListView {
+        width: 100%;
+        height: auto;
+        background: $surface;
+        max-height: 15;
+        margin: 0 1;
+        padding: 0 1 1 1;
+        scrollbar-size-vertical: 1;
+    }
+
+    WorkLogListView > .worklog-empty-state {
+        width: 100%;
+        color: $text-muted;
+        content-align: center middle;
+        text-align: center;
+        padding: 2 1;
+    }
+    """
 
     can_focus = True
     jump_mode: ClassVar[str | None] = 'focus'
+    index = reactive(-1)
 
     BINDINGS = [
         Binding('j', 'cursor_down', 'Next worklog', show=False),
@@ -36,6 +60,50 @@ class WorkLogListView(ListView):
         Binding('ctrl+e', 'edit_worklog', 'Edit worklog'),
         Binding('ctrl+d', 'delete_worklog', 'Delete worklog'),
     ]
+
+    @property
+    def items(self) -> list['WorkLogListItem']:
+        return list(self.query(WorkLogListItem))
+
+    @property
+    def highlighted_child(self) -> 'WorkLogListItem | None':
+        items = self.items
+        if 0 <= self.index < len(items):
+            return items[self.index]
+        return None
+
+    async def clear(self) -> None:
+        self.index = -1
+        await self.remove_children()
+
+    async def append(self, item: 'WorkLogListItem') -> None:
+        await self.mount(item)
+        if self.index == -1:
+            self.index = 0
+
+    def action_cursor_down(self) -> None:
+        items = self.items
+        if not items:
+            return
+        self.index = min(self.index + 1, len(items) - 1) if self.index >= 0 else 0
+
+    def action_cursor_up(self) -> None:
+        items = self.items
+        if not items:
+            return
+        self.index = max(self.index - 1, 0) if self.index >= 0 else 0
+
+    def watch_index(self, index: int) -> None:
+        items = self.items
+        for idx, item in enumerate(items):
+            if idx == index:
+                item.add_class('-highlight')
+            else:
+                item.remove_class('-highlight')
+
+        highlighted = self.highlighted_child
+        if highlighted is not None:
+            self.scroll_to_widget(highlighted, animate=False)
 
     def action_open_worklog_in_browser(self) -> None:
         if self.highlighted_child and isinstance(self.highlighted_child, WorkLogListItem):
@@ -56,20 +124,115 @@ class WorkLogListView(ListView):
             self.notify('No worklog selected', severity='warning', title='Worklog')
 
 
-class WorkLogListItem(ListItem):
-    """A list item representing a single worklog entry."""
+class WorkLogListItem(Vertical):
+    """A card representing a single worklog entry."""
 
     DEFAULT_CSS = """
     WorkLogListItem {
+        background: transparent;
+        border: none;
         height: auto;
         padding: 0;
-        margin: 0 2;
+        margin: 0 1 0 0;
+        min-height: 0;
+        opacity: 0.6;
     }
 
-    WorkLogListItem > Vertical {
-        height: auto;
+    WorkLogListItem:hover {
+        opacity: 1;
+    }
+
+    WorkLogListItem.-highlight {
+        opacity: 1;
+    }
+
+    WorkLogListItem > .worklog-item-container {
+        background: transparent;
         padding: 0;
         margin: 0;
+        height: auto;
+        min-height: 0;
+    }
+
+    WorkLogListItem:hover > .worklog-item-container > .worklog-header-row,
+    WorkLogListItem:hover > .worklog-item-container > .worklog-metadata,
+    WorkLogListItem:hover > .worklog-item-container > .worklog-error {
+        background: $surface-lighten-1;
+    }
+
+    WorkLogListItem:hover > .worklog-item-container > .worklog-body {
+        background: $surface-lighten-1;
+    }
+
+    WorkLogListItem.-highlight > .worklog-item-container > .worklog-header-row,
+    WorkLogListItem.-highlight > .worklog-item-container > .worklog-metadata,
+    WorkLogListItem.-highlight > .worklog-item-container > .worklog-error {
+        background: $primary-muted;
+    }
+
+    WorkLogListItem.-highlight > .worklog-item-container > .worklog-body {
+        background: $primary-muted;
+    }
+
+    WorkLogListItem > .worklog-item-container > * {
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    WorkLogListItem .worklog-header-row {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        margin: 0;
+        padding: 0 1;
+    }
+
+    WorkLogListItem .worklog-author {
+        width: 100%;
+        color: $accent;
+        text-style: bold;
+        margin: 0;
+        padding: 0;
+        height: auto;
+        min-height: 0;
+    }
+
+    WorkLogListItem .worklog-metadata {
+        width: 100%;
+        color: $text-muted;
+        margin: 0;
+        padding: 0 1;
+        height: auto;
+        min-height: 0;
+    }
+
+    WorkLogListItem .worklog-body {
+        width: 100%;
+        background: transparent;
+        padding: 0 1;
+        margin: 0;
+        height: auto;
+        min-height: 0;
+    }
+
+    WorkLogListItem .worklog-body > * {
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    WorkLogListItem .worklog-body Link {
+        color: $accent;
+        text-style: underline;
+    }
+
+    WorkLogListItem .worklog-body Link:focus {
+        background: $accent-darken-2;
+        text-style: bold underline;
+    }
+
+    WorkLogListItem .worklog-error {
+        width: 100%;
+        color: $warning;
     }
     """
 
@@ -186,9 +349,17 @@ class WorkLogListItem(ListItem):
 class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     """A modal screen that displays the work logs of a work item using ListView with pagination."""
 
+    DEFAULT_CSS = """
+    WorkItemWorkLogScreen #modal_outer {
+        width: 68%;
+        max-width: 96;
+        height: auto;
+        max-height: 24;
+    }
+    """
+
     BINDINGS = ExtendedModalScreen.BINDINGS + [
         ('escape', 'close_screen', 'Close'),
-        ('ctrl+n', 'add_worklog', 'New worklog'),
         ('ctrl+backslash', 'show_overlay', 'Jump'),
     ]
     TITLE = 'Worklog'
@@ -213,8 +384,15 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(f'{self.TITLE} - {self._work_item_key}', id='modal_title')
-            with VerticalScroll(id='worklog-scroll-container'):
-                yield WorkLogListView(id='worklogs-list-view', initial_index=0)
+            yield WorkLogListView(id='worklogs-list-view')
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
+                yield Button(
+                    'Close',
+                    variant='primary',
+                    id='worklog-button-close',
+                    classes='dialog-button dialog-button--secondary',
+                    compact=True,
+                )
         yield ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -227,63 +405,6 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
             return
         jumper = self.query_one(ExtendedJumper)
         jumper.show()
-
-    def action_add_worklog(self) -> None:
-        if self._work_item_key:
-            self.run_worker(self._do_add_worklog())
-        else:
-            self.notify('Work item key not available', severity='error', title='Worklog')
-
-    async def _do_add_worklog(self) -> None:
-        result = await self.app.push_screen_wait(
-            LogWorkScreen(
-                work_item_key=self._work_item_key,
-                mode='new',
-                current_remaining_estimate=self._current_remaining_estimate,
-                started=datetime.now().strftime('%Y-%m-%d %H:%M'),
-            )
-        )
-
-        if result and result.get('mode') == 'new':
-            await self._add_worklog(result)
-
-    async def _add_worklog(self, data: dict) -> None:
-        application = cast('JiraApp', self.app)  # noqa: F821
-
-        time_spent = data.get('time_spent')
-        started = data.get('started')
-
-        if not time_spent or not started:
-            self.notify(
-                'Missing required fields for logging work', severity='error', title='Worklog'
-            )
-            return
-
-        try:
-            started_dt = datetime.fromisoformat(started).replace(tzinfo=timezone.utc)
-        except (ValueError, TypeError) as e:
-            self.notify(f'Invalid started date format: {e}', severity='error', title='Worklog')
-            return
-
-        response: APIControllerResponse = await application.api.add_work_item_worklog(
-            work_item_key_or_id=self._work_item_key,
-            started=started_dt,
-            time_spent=time_spent,
-            time_remaining=data.get('time_remaining'),
-            comment=data.get('description'),
-            current_remaining_estimate=data.get('current_remaining_estimate'),
-        )
-
-        if response.success:
-            self.notify('Worklog added', title='Worklog')
-
-            await self.reload_worklogs()
-        else:
-            self.notify(
-                f'Failed to add worklog: {response.error}',
-                title='Worklog',
-                severity='error',
-            )
 
     async def _handle_worklog_update(self, data: dict) -> None:
         application = cast('JiraApp', self.app)  # noqa: F821
@@ -343,6 +464,10 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     def action_close_screen(self) -> None:
         self.dismiss()
 
+    @on(Button.Pressed, '#worklog-button-close')
+    def handle_close(self) -> None:
+        self.dismiss()
+
     async def reload_worklogs(self) -> None:
         list_view = self.worklog_list_view
         await list_view.clear()
@@ -362,7 +487,13 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
 
         if response.success and (result := response.result):
             list_view = self.worklog_list_view
-            for worklog in result.logs:
+            if not result.logs:
+                await list_view.mount(
+                    Static('No worklogs found for this work item.', classes='worklog-empty-state')
+                )
+                return
+
+            for index, worklog in enumerate(result.logs):
                 worklog_container = Vertical(classes='worklog-item-container')
 
                 header_row = Horizontal(classes='worklog-header-row')
@@ -388,6 +519,7 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
                 if worklog.comment:
                     base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
                     if content := worklog.get_comment(base_url=base_url):
+                        content = content.strip()
                         worklog_container.compose_add_child(
                             GojeeraMarkdown(content, classes='worklog-body')
                         )
@@ -423,9 +555,11 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
                     id=f'worklog-{worklog.id}',
                 )
 
-                list_view.append(list_item)
+                await list_view.append(list_item)
+                if index < len(result.logs) - 1:
+                    await list_view.mount(Spacer())
 
-            if not append and list_view.children:
+            if not append and list_view.items:
                 list_view.index = 0
 
         self._is_loading = False

@@ -3,15 +3,18 @@ import textwrap
 from typing import Sequence, cast
 
 from rich.segment import Segment
+from rich.style import Style as RichStyle
 from rich.text import Text
 from textual import events
 from textual.app import RenderResult
+from textual.css.query import NoMatches
 from textual.geometry import Offset, Region, Size, Spacing
 from textual.message import Message
 from textual.reactive import reactive
 from textual.strip import Strip
 from textual.widget import Widget
 from textual.widgets import Input
+from textual_autocomplete._autocomplete import AutoCompleteList
 from textual_tags import Tag, TagAutoComplete, TagInput, Tags
 
 from gojeera.utils.fields import BaseField, FieldMode
@@ -35,7 +38,7 @@ class ExtendedTag(Tag):
         width: auto;
         height: auto;
         min-height: 1;
-        color: $primary-lighten-2;
+        color: $text-primary;
         background: transparent;
 
         &:hover {
@@ -49,18 +52,18 @@ class ExtendedTag(Tag):
         }
 
         & > .extended-tag--chip {
-            color: $primary-lighten-2;
-            background: $panel;
+            color: $text-primary;
+            background: $primary-muted;
         }
 
         & > .extended-tag--close {
-            color: $primary-lighten-2;
-            background: $panel;
+            color: $text-primary;
+            background: $primary-muted;
         }
 
         & > .extended-tag--close-hover {
             color: red;
-            background: $panel;
+            background: $primary-muted;
         }
 
         &:hover > .extended-tag--chip,
@@ -70,6 +73,24 @@ class ExtendedTag(Tag):
         &:hover > .extended-tag--close-hover,
         &:focus > .extended-tag--close-hover {
             background: $primary-darken-2;
+        }
+
+        &:light {
+            & > .extended-tag--close-hover {
+                background: $primary;
+            }
+
+            &:hover > .extended-tag--chip,
+            &:focus > .extended-tag--chip,
+            &:hover > .extended-tag--close,
+            &:focus > .extended-tag--close {
+                background: $primary-muted;
+            }
+
+            &:hover > .extended-tag--close-hover,
+            &:focus > .extended-tag--close-hover {
+                background: $primary;
+            }
         }
     }
     """
@@ -133,6 +154,12 @@ class ExtendedTag(Tag):
         close_styles = self.get_component_styles(
             'extended-tag--close-hover' if self._mouse_over_x() else 'extended-tag--close'
         )
+        chip_rich_style = chip_styles.rich_style
+        close_rich_style = close_styles.rich_style
+        if self.mouse_hover and not self.app.current_theme.dark:
+            hover_text_color = self.colors[0].hex
+            chip_rich_style += RichStyle(color=hover_text_color)
+            close_rich_style += RichStyle(color=hover_text_color)
         text = Text()
 
         for index, line in enumerate(payload_lines):
@@ -142,12 +169,12 @@ class ExtendedTag(Tag):
             text.append(' ', style=chip_styles.rich_style)
 
             if self.show_x and index == len(payload_lines) - 1 and line.endswith('x'):
-                text.append(line[:-1], style=chip_styles.rich_style)
-                text.append('x', style=close_styles.rich_style)
+                text.append(line[:-1], style=chip_rich_style)
+                text.append('x', style=close_rich_style)
             else:
-                text.append(line, style=chip_styles.rich_style)
+                text.append(line, style=chip_rich_style)
 
-            text.append(' ', style=chip_styles.rich_style)
+            text.append(' ', style=chip_rich_style)
 
         return text
 
@@ -161,8 +188,16 @@ class MultiSelectTagAutoComplete(TagAutoComplete):
             self.visible = visible
             super().__init__()
 
+    def _safe_option_list(self) -> AutoCompleteList | None:
+        try:
+            return self.option_list
+        except NoMatches:
+            return None
+
     def _hide_if_target_unfocused(self) -> None:
-        option_list = self.option_list
+        option_list = self._safe_option_list()
+        if option_list is None:
+            return
         if (
             not self.target.has_focus
             and not self.has_focus
@@ -187,20 +222,24 @@ class MultiSelectTagAutoComplete(TagAutoComplete):
             and not getattr(parent, 'allow_new_tags', False)
         ):
             self._handle_target_update()
-            if self.option_list.option_count:
+            option_list = self._safe_option_list()
+            if option_list and option_list.option_count:
                 event.prevent_default()
                 event.stop()
                 self.action_show()
-                self.option_list.highlighted = 0
+                option_list.highlighted = 0
             return
 
         super()._listen_to_messages(event)
 
     def _rebuild_options(self, target_state, search_string: str) -> None:
         super()._rebuild_options(target_state, search_string)
-        option_count = max(1, min(self.option_list.option_count, 12))
+        option_list = self._safe_option_list()
+        if option_list is None:
+            return
+        option_count = max(1, min(option_list.option_count, 12))
         self.styles.height = option_count
-        self.option_list.styles.height = option_count
+        option_list.styles.height = option_count
 
     def _align_to_target(self) -> None:
         parent = self.parent
@@ -210,7 +249,9 @@ class MultiSelectTagAutoComplete(TagAutoComplete):
         parent_widget = cast(Widget, parent)
 
         x, y = self.target.cursor_screen_offset
-        dropdown = self.option_list
+        dropdown = self._safe_option_list()
+        if dropdown is None:
+            return
         parent_width = max(1, parent_widget.region.width)
         dropdown.styles.width = parent_width
         width, height = dropdown.outer_size
@@ -364,9 +405,7 @@ class MultiSelect(Tags, BaseField):
         self._initially_selected_tags = selected_tag_names
 
         if self.mode == FieldMode.CREATE:
-            self.add_class('create-work-item-generic-input-field')
-        elif self.mode == FieldMode.UPDATE:
-            self.add_class('work_item_details_input_field')
+            self.add_class('surface-input-tags')
 
         if required:
             self.add_class('required')
@@ -383,17 +422,24 @@ class MultiSelect(Tags, BaseField):
         )
         yield tag_autocomplete
 
+    @property
+    def multi_select_tag_input(self) -> MultiSelectTagInput:
+        return self.query_one(MultiSelectTagInput)
+
+    @property
+    def tag_input_widget(self) -> TagInput:
+        return self.query_one(TagInput)
+
     def _has_remaining_options(self) -> bool:
         return any(option not in self.selected_tags for option in self._all_option_names)
 
     def _sync_dropdown_arrow_visibility(self) -> None:
-        tag_input = self.query_one(MultiSelectTagInput)
-        tag_input.set_class(not self._has_remaining_options(), '-hide-arrow')
+        self.multi_select_tag_input.set_class(not self._has_remaining_options(), '-hide-arrow')
 
     def on_multi_select_tag_auto_complete_visibility_changed(
         self, event: MultiSelectTagAutoComplete.VisibilityChanged
     ) -> None:
-        self.query_one(MultiSelectTagInput).expanded = event.visible
+        self.multi_select_tag_input.expanded = event.visible
 
     def _ensure_safe_selected_tags(self) -> SafeSet:
         """Keep selected_tags on the non-throwing set implementation."""
@@ -473,16 +519,14 @@ class MultiSelect(Tags, BaseField):
         def set_placeholder_text():
             try:
                 placeholder_text = ''
-                tag_input = self.query_one(TagInput)
-                tag_input.placeholder = placeholder_text
+                self.tag_input_widget.placeholder = placeholder_text
             except Exception as e:
                 logger.debug(f'Exception occurred: {e}')
 
         self.call_later(set_placeholder_text)
 
         try:
-            tag_input = self.query_one(TagInput)
-            tag_input.styles.display = 'block'
+            self.tag_input_widget.styles.display = 'block'
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -673,10 +717,7 @@ class MultiSelect(Tags, BaseField):
         self.tag_values.update(self._all_option_names)
 
         try:
-            from textual_tags import TagInput as TagInputWidget
-
-            tag_input = self.query_one(TagInputWidget)
-            tag_input.styles.display = 'block'
+            self.tag_input_widget.styles.display = 'block'
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 

@@ -12,6 +12,15 @@ from gojeera.utils.fields import (
 class DateInput(MaskedInput, BaseField, BaseUpdateField):
     """This widget extends MaskedInput with template '9999-99-99' (YYYY-MM-DD format)."""
 
+    DEFAULT_CSS = """
+    DateInput {
+        width: 100%;
+        border: none;
+        height: 1;
+        padding: 0 0;
+    }
+    """
+
     def __init__(
         self,
         mode: FieldMode,
@@ -29,8 +38,6 @@ class DateInput(MaskedInput, BaseField, BaseUpdateField):
             compact=True,
             placeholder='1970-01-01',
         )
-
-        self.styles.width = '100%'
 
         self.setup_base_field(
             mode=mode,

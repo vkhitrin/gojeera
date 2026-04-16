@@ -41,8 +41,12 @@ def build_work_item_search_jql(
     if fields:
         jql = ' and '.join(fields)
     if jql_query:
+        normalized_jql_query = jql_query.strip()
         if jql:
-            jql = f'{jql} and {jql_query}'
+            if normalized_jql_query.lower().startswith('order by '):
+                jql = f'{jql} {normalized_jql_query}'
+            else:
+                jql = f'{jql} and {normalized_jql_query}'
         else:
-            jql = jql_query
+            jql = normalized_jql_query
     return jql

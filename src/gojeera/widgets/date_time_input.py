@@ -16,6 +16,12 @@ class DateTimeInput(MaskedInput, BaseField, BaseUpdateField):
     Uses MaskedInput with template '9999-99-99 99:99:99' for datetime entry.
     """
 
+    DEFAULT_CSS = """
+    DateTimeInput {
+        width: 100%;
+    }
+    """
+
     def __init__(
         self,
         mode: FieldMode,
@@ -33,8 +39,6 @@ class DateTimeInput(MaskedInput, BaseField, BaseUpdateField):
             valid_empty=valid_empty,
         )
 
-        self.styles.width = '100%'
-
         self.setup_base_field(
             mode=mode,
             field_id=field_id,
@@ -49,12 +53,8 @@ class DateTimeInput(MaskedInput, BaseField, BaseUpdateField):
                 original_value=original_value,
                 field_supports_update=field_supports_update,
             )
-            self.add_class('work_item_details_input_field')
-
             if original_value:
                 self.value = original_value
-        else:
-            self.add_class('create-work-item-datetime-input')
 
     def validate(self, value: str) -> ValidationResult | None:
         """Override validation to allow empty values when `valid_empty` is enabled.

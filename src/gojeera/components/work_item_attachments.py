@@ -33,6 +33,8 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
     WorkItemAttachmentsWidget {
         width: 100%;
         height: 1fr;
+        hatch: right $success 20%;
+        scrollbar-size-vertical: 1;
     }
 
     WorkItemAttachmentsWidget > .tab-content-container {
@@ -147,17 +149,17 @@ class WorkItemAttachmentsWidget(VerticalScroll, can_focus=False):
 
             if self.work_item_key:
                 table = AttachmentsDataTable(self.work_item_key)
-                table.add_columns(*['File Name', 'Size (KB)', 'Added', 'Author', 'Type'])
+                table.add_columns(*['File Name', 'Type', 'Size (KB)', 'Author', 'Added'])
 
                 item: Attachment
                 for item in attachments:
                     table.add_row(
                         *[
                             item.filename,
-                            item.get_size() or '-',
-                            item.created_date,
-                            item.display_author,
                             item.get_mime_type(),
+                            item.get_size() or '-',
+                            item.display_author,
+                            item.created_date,
                         ],
                         key=item.id,
                     )

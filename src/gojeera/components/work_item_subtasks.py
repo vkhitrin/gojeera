@@ -22,6 +22,7 @@ class WorkItemChildWorkItemsWidget(VerticalScroll, can_focus=False):
     WorkItemChildWorkItemsWidget {
         width: 100%;
         height: 1fr;
+        scrollbar-size-vertical: 1;
     }
 
     WorkItemChildWorkItemsWidget > .tab-content-container {

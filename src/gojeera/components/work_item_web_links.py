@@ -93,14 +93,14 @@ class RemoteLinksDataTable(ExtendedDataTable):
             self._selected_link_id = str(event.row_key.value)
             if (row := event.data_table.get_row(event.row_key.value)) and len(row) > 0:
                 self._selected_link_title = str(row[0]) if len(row) > 0 else None
-                self._selected_link_url = str(row[1]) if len(row) > 1 else None
+                self._selected_link_url = str(row[3]) if len(row) > 3 else None
 
     @on(ExtendedDataTable.RowSelected)
     def selected(self, event: ExtendedDataTable.RowSelected) -> None:
         if event.row_key.value:
             self._selected_link_id = str(event.row_key.value)
-            if (row := event.data_table.get_row(event.row_key.value)) and len(row) > 1:
-                self._selected_link_url = str(row[1])
+            if (row := event.data_table.get_row(event.row_key.value)) and len(row) > 3:
+                self._selected_link_url = str(row[3])
                 if self._selected_link_url:
                     self.run_worker(self.action_open_link())
 
@@ -257,6 +257,8 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
     WorkItemRemoteLinksWidget {
         width: 100%;
         height: 1fr;
+        hatch: left $success 20%;
+        scrollbar-size-vertical: 1;
     }
 
     WorkItemRemoteLinksWidget > .tab-content-container {
@@ -391,7 +393,7 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
                 return
 
             table = RemoteLinksDataTable(self._work_item_key or '')
-            table.add_columns('Title', 'URL', 'Relationship', 'Status')
+            table.add_columns('Title', 'Relationship', 'Status', 'URL')
 
             link_count = 0
             for item in links:
@@ -407,9 +409,9 @@ class WorkItemRemoteLinksWidget(VerticalScroll, can_focus=False):
 
                 table.add_row(
                     item.title or 'Untitled',
-                    item.url,
                     item.relationship or '',
                     status,
+                    item.url,
                     key=item.id,
                 )
                 link_count += 1

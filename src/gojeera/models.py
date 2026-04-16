@@ -398,11 +398,20 @@ class JiraWorkItem(JiraBaseWorkItem):
                 if attachment.id and attachment.filename
             }
         )
+        ordered_attachment_details = [
+            (
+                attachment.filename,
+                build_external_url_for_attachment(attachment.id, attachment.filename),
+            )
+            for attachment in self.attachments or []
+            if attachment.id and attachment.filename
+        ]
 
         return convert_adf_to_markdown(
             self.description,
             base_url,
             media_attachment_details=media_attachment_details,
+            ordered_attachment_details=ordered_attachment_details,
         )
 
     def __repr__(self) -> str:

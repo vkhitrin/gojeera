@@ -26,8 +26,6 @@ class TextInput(ExtendedInput, BaseField, BaseUpdateField):
             compact=True,
         )
 
-        self.styles.width = '100%'
-
         self.setup_base_field(
             mode=mode,
             field_id=field_id,
@@ -42,12 +40,8 @@ class TextInput(ExtendedInput, BaseField, BaseUpdateField):
                 original_value=original_value or '',
                 field_supports_update=field_supports_update,
             )
-            self.add_class('work_item_details_input_field')
-
             if original_value:
                 self.value = original_value
-        else:
-            self.add_class('create-work-item-generic-input-field')
 
     def get_value_for_update(self) -> str:
         if self.mode != FieldMode.UPDATE:

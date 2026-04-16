@@ -14,6 +14,13 @@ class URL(Input, BaseField, BaseUpdateField):
     URL input widget.
     """
 
+    DEFAULT_CSS = """
+    URL {
+        width: 100%;
+        padding: 0;
+    }
+    """
+
     def __init__(
         self,
         mode: FieldMode,
@@ -36,16 +43,11 @@ class URL(Input, BaseField, BaseUpdateField):
             **kwargs,
         )
 
-        self.styles.width = '100%'
-
-        self.styles.padding = (0, 0, 0, 0)
-
         self.label_text = title
 
         if mode == FieldMode.CREATE:
-            self.add_class('create-field')
+            pass
         elif mode == FieldMode.UPDATE:
-            self.add_class('update-field')
             if original_value:
                 self.value = original_value
             if not field_supports_update:

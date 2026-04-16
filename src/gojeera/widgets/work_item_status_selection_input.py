@@ -7,6 +7,12 @@ from gojeera.widgets.vim_select import VimSelect
 
 
 class WorkItemStatusSelectionInput(VimSelect):
+    DEFAULT_CSS = """
+    WorkItemStatusSelectionInput {
+        width: 100%;
+    }
+    """
+
     WIDGET_ID = 'jira-work-item-status-selector'
 
     statuses: Reactive[list[tuple[str, str]] | None] = reactive(None, always_update=True)
@@ -21,7 +27,6 @@ class WorkItemStatusSelectionInput(VimSelect):
             compact=True,
             classes='jira-selector',
         )
-        self.styles.width = '100%'
         self.original_value: str | None = None
         self._transition_status_ids: dict[str, str] = {}
 

@@ -2446,6 +2446,17 @@ class APIController:
             `APIControllerResponse(success=True, result=fields)` if the operation was successful;
             `APIControllerResponse(success=False)` if there is an error.
         """
+        cached_fields = self.cache.get('fields')
+        if cached_fields is not None:
+            if field_name:
+                filtered_fields = [
+                    field
+                    for field in cached_fields
+                    if str(field.name).lower() == field_name.lower()
+                ]
+                return APIControllerResponse(result=filtered_fields)
+            return APIControllerResponse(result=cached_fields)
+
         try:
             response = await self.api.get_fields()
         except Exception as e:
@@ -2491,6 +2502,8 @@ class APIController:
                     schema=field.get('schema', {}),
                 )
             )
+        if field_name is None:
+            self.cache.set('fields', fields)
         return APIControllerResponse(result=fields)
 
     async def get_label_suggestions(self, query: str = '') -> APIControllerResponse:

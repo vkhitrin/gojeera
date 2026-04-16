@@ -37,15 +37,15 @@ class WorkItemInformation(Container):
         with ContentSwitcher(id='work-item-information-switcher', initial='pane-description'):
             with Vertical(id='pane-description', classes='summary-description-container'):
                 yield WorkItemInfoContainer()
-            with Vertical(id='pane-attachments'):
+            with Vertical(id='pane-attachments', classes='work-item-tab-pane'):
                 yield WorkItemAttachmentsWidget()
-            with Vertical(id='pane-subtasks'):
+            with Vertical(id='pane-subtasks', classes='work-item-tab-pane'):
                 yield WorkItemChildWorkItemsWidget()
-            with Vertical(id='pane-related'):
+            with Vertical(id='pane-related', classes='work-item-tab-pane'):
                 yield RelatedWorkItemsWidget()
-            with Vertical(id='pane-links'):
+            with Vertical(id='pane-links', classes='work-item-tab-pane'):
                 yield WorkItemRemoteLinksWidget()
-            with Vertical(id='pane-comments'):
+            with Vertical(id='pane-comments', classes='work-item-tab-pane'):
                 yield WorkItemCommentsWidget()
 
     @property

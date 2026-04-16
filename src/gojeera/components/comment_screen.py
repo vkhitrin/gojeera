@@ -76,6 +76,10 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         return self.query_one(ExtendedADFMarkdownTextArea)
 
     @property
+    def comment_textarea(self) -> TextArea:
+        return self.comment_field.query_one(TextArea)
+
+    @property
     def save_button(self) -> Button:
         button_id = (
             '#edit-comment-button-save' if self.mode == 'edit' else '#add-comment-button-save'
@@ -111,11 +115,12 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
 
                     yield ExtendedADFMarkdownTextArea(field_id='comment', required=False)
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id=save_button_id,
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=save_disabled,
                     compact=True,
                 )
@@ -123,6 +128,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
                     'Cancel',
                     variant='error',
                     id=cancel_button_id,
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter()
@@ -135,10 +141,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             self.comment_field.make_jumpable()
 
             set_jump_mode(self.save_button, 'click')
-            cancel_button_id = (
-                '#edit-comment-button-quit' if self.mode == 'edit' else '#add-comment-button-quit'
-            )
-            set_jump_mode(self.query_one(cancel_button_id, Button), 'click')
+            set_jump_mode(self.cancel_button, 'click')
         self.call_after_refresh(lambda: focus_first_available(self.comment_field))
 
     async def action_show_overlay(self) -> None:
@@ -163,7 +166,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         self.run_worker(self._insert_decision_worker(), exclusive=False)
 
     async def _insert_decision_worker(self) -> None:
-        textarea = self.comment_field.query_one(TextArea)
+        textarea = self.comment_textarea
         cursor_position = textarea.cursor_location
 
         result = await self.app.push_screen_wait(DecisionPickerScreen())
@@ -182,7 +185,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         self.run_worker(self._insert_alert_worker(), exclusive=False)
 
     async def _insert_alert_worker(self) -> None:
-        textarea = self.comment_field.query_one(TextArea)
+        textarea = self.comment_textarea
         cursor_position = textarea.cursor_location
 
         result = await self.app.push_screen_wait(PanelPickerScreen())

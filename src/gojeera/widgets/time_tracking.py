@@ -22,11 +22,6 @@ class TimeTrackingWidget(Vertical):
         width: 100%;
     }
 
-    #time-tracking-title {
-        color: $text-muted;
-        text-style: bold;
-    }
-
     #time-tracking-stats {
         width: 100%;
         height: auto;
@@ -80,6 +75,25 @@ class TimeTrackingWidget(Vertical):
     @property
     def progress_bar(self) -> ProgressBar:
         return self.query_one(ProgressBar)
+
+    @property
+    def logged_label(self) -> Label:
+        return self.query_one('#time-tracking-logged', Label)
+
+    @property
+    def remaining_label(self) -> Label:
+        return self.query_one('#time-tracking-remaining', Label)
+
+    @property
+    def meta_label(self) -> Label:
+        return self.query_one('#time-tracking-meta', Label)
+
+    def _update_labels(self) -> None:
+        self.logged_label.update(self._build_first_row_text())
+        self.remaining_label.update(self._build_remaining_text())
+        meta_text = self._build_second_row_text()
+        self.meta_label.update(meta_text)
+        self.meta_label.display = bool(meta_text)
 
     def _derive_logged_text(self) -> str:
         if self._time_spent:
@@ -144,22 +158,7 @@ class TimeTrackingWidget(Vertical):
 
     def on_mount(self):
         try:
-            logged_label = self.query_one('#time-tracking-logged', Label)
-            logged_label.update(self._build_first_row_text())
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
-
-        try:
-            remaining_label = self.query_one('#time-tracking-remaining', Label)
-            remaining_label.update(self._build_remaining_text())
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
-
-        try:
-            meta_label = self.query_one('#time-tracking-meta', Label)
-            meta_text = self._build_second_row_text()
-            meta_label.update(meta_text)
-            meta_label.display = bool(meta_text)
+            self._update_labels()
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -197,22 +196,7 @@ class TimeTrackingWidget(Vertical):
         self._remaining_estimate_seconds = remaining_estimate_seconds
 
         try:
-            logged_label = self.query_one('#time-tracking-logged', Label)
-            logged_label.update(self._build_first_row_text())
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
-
-        try:
-            remaining_label = self.query_one('#time-tracking-remaining', Label)
-            remaining_label.update(self._build_remaining_text())
-        except Exception as e:
-            logger.debug(f'Exception occurred: {e}')
-
-        try:
-            meta_label = self.query_one('#time-tracking-meta', Label)
-            meta_text = self._build_second_row_text()
-            meta_label.update(meta_text)
-            meta_label.display = bool(meta_text)
+            self._update_labels()
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 

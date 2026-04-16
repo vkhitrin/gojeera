@@ -75,7 +75,7 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='add-remote-link-form'):
+            with VerticalScroll(id='add-remote-link-form', classes='modal-form modal-form--fields'):
                 with Vertical():
                     url_label = Label('URL')
                     url_label.add_class('field_label')
@@ -85,11 +85,12 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
                     title_label.add_class('field_label')
                     yield title_label
                     yield RemoteLinkNameInputWidget()
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id='add-remote-link-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -97,6 +98,7 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
                     'Cancel',
                     variant='error',
                     id='add-remote-link-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)

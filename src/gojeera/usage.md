@@ -7,7 +7,7 @@ For configuration options, see [configuration.md](configuration.md).
 
 ## Overview
 
-![gojeera interface](/tests/__snapshots__/test_app_appearance/TestAppAppearance.test_app_with_theme_dracula.svg)
+![gojeera interface](/tests/__snapshots__/test_work_item_description/TestWorkItemDescription.test_internal_jira_link_tooltip_snapshot.svg)
 
 gojeera aims to provide a vim-like keyboard-driven interface for interacting with
 Jira work items. The main view is inspired by the Jira Cloud web UI, with a
@@ -38,17 +38,18 @@ gojeera --work-item-key "PROJ-123"
 
 ## Global Keybindings
 
-| Key      | Action           | Description                                     |
-| -------- | ---------------- | ----------------------------------------------- |
-| `Ctrl+C` | Quit             | Exit the application                            |
-| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation    |
-| `Ctrl+P` | Command Palette  | Open command palette                            |
-| `?`      | Help             | Open help                                       |
-| `F10`    | Quick Navigation | Open a work item directly by key                |
-| `F11`    | Toggle Footer    | Show or hide the footer for the current session |
-| `F12`    | Debug Info       | Show debug information (config, server, user)   |
-| `[`      | Previous Tab     | Navigate to previous tab in work item details   |
-| `]`      | Next Tab         | Navigate to next tab in work item details       |
+| Key      | Action           | Description                                              |
+| -------- | ---------------- | -------------------------------------------------------- |
+| `Ctrl+C` | Quit             | Exit the application                                     |
+| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation             |
+| `Ctrl+P` | Command Palette  | Open command palette                                     |
+| `CTRL+N` | New Work Item    | Create a new work item from the main search/results view |
+| `?`      | Help             | Open help                                                |
+| `F10`    | Quick Navigation | Open a work item directly by key                         |
+| `F11`    | Toggle Footer    | Show or hide the footer for the current session          |
+| `F12`    | Debug Info       | Show debug information (config, server, user)            |
+| `[`      | Previous Tab     | Navigate to previous tab in work item details            |
+| `]`      | Next Tab         | Navigate to next tab in work item details                |
 
 ## External Editing
 
@@ -121,76 +122,78 @@ Remote filters appear in the JQL autocomplete dropdown with a ☁ symbol.
 Filters can also be defined locally via the configuration file and appear
 with a ⌂ symbol.
 
-## Working with Work Items
+## Browsing Work Items
 
-### Interacting with Work Items
+### Search Results
 
-After executing a search, work items are displayed in the information panel.
-Navigate using:
+![Work item search results](/static/work_item_search_results.svg)
 
-- `n` / `↓` - Move down
-- `p` / `↑` - Move up
-- `n` - Next page
-- `p` - Previous page
-- `CTRL+O` - Open in browser for the currently highlighted result
-- `CTRL+B` - Clone work item
-- `CTRL+Y` - Copy key to clipboard
-- `CTRL+U` - Copy URL to clipboard
-- `CTRL+N` - New work item from the main search/results view
-- `Enter` - Load full details of selected work item
+After executing a search, gojeera shows a dedicated results pane with:
 
-`CTRL+N`, `CTRL+O`, `CTRL+D`, `CTRL+S` and `CTRL+G` are contextual shortcuts.
-They trigger different actions depending on the currently focused widget or
-active tab.
+- Ordering controls:
+  - Order by predefined fields, `Created`, `Key`, `Last viewed`, `Priority`,
+    `Resolved`, `Status`, `Updated`
+    By default `Created` is set.
+  - Sort by ascending/descending value of the field.
+    By default `Descending` is set.
+- Work items.
+- Pagination and total results returned by search.
 
-`CTRL+N` shortcuts:
+Each work item may contain:
 
-- Main search/results view: create a new work item
-- Subtasks tab: create a subtask
-- Attachments tab: add an attachment
-- Related Work Items tab: link another work item
-- Web Links tab: add a remote link
-- Comments tab: add a comment
-- Worklog list: add a worklog
+- Work item key and type.
+- Summary
+- Priority, Status, and Assignee.
 
-`CTRL+D` shortcuts:
+### Search Result Navigation
 
-- Attachments tab: delete the selected attachment
-- Related Work Items tab: unlink the selected work item
-- Web Links tab: delete the selected web link
-- Comments tab: delete the selected comment
-- Worklog list: delete the selected worklog
+Use the results pane to move through matches and load the selected item:
 
-`CTRL+B` shortcuts:
+- `j` / `↓` - Move to the next result
+- `k` / `↑` - Move to the previous result
+- `g` - Jump to the first result
+- `G` - Jump to the last result
+- `n` - Load the next page of search results
+- `p` - Load the previous page of search results
+- `Enter` - Load the selected work item
+- `CTRL+O` - Open the selected work item in browser
+- `CTRL+B` - Clone the selected work item
+- `CTRL+Y` - Copy the selected work item key
+- `CTRL+U` - Copy the selected work item URL
 
-- In the results pane, clone the selected work item.
-- In the Subtasks tab, clone the selected subtask.
+### Search Result Controls
 
-`CTRL+G` shortcuts:
+The search results pane combines:
 
-- In the main loaded-work-item view, it loads the focused internal Jira link when one is active; otherwise it loads the parent work item.
-- In the Subtasks tab, it loads the selected subtask.
-- In the Related Work Items tab, it loads the selected related work item.
+- search ordering controls
+- page navigation
+- rendered Jira result cards
 
-`CTRL+O` shortcuts:
+The controls row above the results lets you:
 
-- In the results pane, browse the selected work item.
-- In the Subtasks tab, browse selected subtask.
-- In the Related Work Items tab, brows the selected related work item.
-
-`CTRL+E` shortcuts:
-
-- In the Description tab, edit the loaded work item summary and description.
-- In the Subtasks tab, edit the selected subtask summary.
-
-`CTRL+S` shortcuts:
-
-- In the main view, save updated fields.
-- In the attachments tab, download attachment locally.
+- change the ordering field
+- toggle ascending / descending direction
+- rerun the active search
 
 ### Work Item Tabs
 
+Once a result is loaded, the information panel switches to work-item tabs.
+
 The information panel contains multiple tabs:
+
+- Description
+- Attachments
+- Subtasks
+- Web Links
+- Comments
+
+Several shortcuts are contextual and depend on the active tab:
+
+- `CTRL+D` - delete the selected item in the active context
+- `CTRL+G` - load the selected linked/internal work item
+- `CTRL+O` - open the selected item in the browser
+- `CTRL+E` - edit the current description or selected subtask
+- `CTRL+S` - save fields or download the selected attachment
 
 #### Description Tab
 
@@ -233,19 +236,6 @@ Manage subtasks for the current work item.
 - `Ctrl+G` - Load selected subtask
 - `Enter` - Load selected subtask
 - `CTRL+O` - Open subtask in browser
-
-#### Related Work Items Tab
-
-![Work item related items tab](/static/work_item_related_tab.svg)
-
-Manage work item relationships (blocks, is blocked by, relates to, etc.).
-
-**Keybindings**:
-
-- `CTRL+N` - Link to another work item when the Related Work Items tab is active
-- `CTRL+D` - Unlink selected work item
-- `Ctrl+G` - Load selected work item
-- `CTRL+O` - Open work item in browser
 
 #### Web Links Tab
 
@@ -293,7 +283,6 @@ gojeera supports Jira's time tracking features:
 
 When the worklog list is open:
 
-- `CTRL+N` - Add a worklog
 - `CTRL+D` - Delete the selected worklog
 - `CTRL+E` - Edit the selected worklog
 - `CTRL+O` - Open the selected worklog in browser

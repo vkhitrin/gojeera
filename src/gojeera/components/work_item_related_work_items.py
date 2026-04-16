@@ -47,6 +47,8 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
     RelatedWorkItemsWidget {
         width: 100%;
         height: 1fr;
+        hatch: right $success 20%;
+        scrollbar-size-vertical: 1;
     }
 
     RelatedWorkItemsWidget > .tab-content-container {
@@ -117,11 +119,11 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
 
     def on_mount(self) -> None:
         table = self.data_table
-        table.add_column('Link Type', key='link_type', width=20)
         table.add_column('Key', key='key', width=12)
+        table.add_column('Summary', key='summary', width=50)
+        table.add_column('Link Type', key='link_type', width=20)
         table.add_column('Status', key='status', width=15)
         table.add_column('Priority', key='priority', width=12)
-        table.add_column('Summary', key='summary', width=50)
 
     def show_loading(self) -> None:
         self.is_loading = True
@@ -286,11 +288,11 @@ class RelatedWorkItemsWidget(VerticalScroll, can_focus=False):
             work_item: RelatedJiraWorkItem
             for work_item in items:
                 table.add_row(
-                    Text(work_item.link_type),
                     Text(work_item.key),
+                    Text(work_item.cleaned_summary()),
+                    Text(work_item.link_type),
                     Text(work_item.display_status()),
                     Text(work_item.priority_name or '-'),
-                    Text(work_item.cleaned_summary()),
                     key=work_item.id,
                 )
 

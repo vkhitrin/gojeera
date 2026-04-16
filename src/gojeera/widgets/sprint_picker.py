@@ -42,9 +42,9 @@ class SprintPicker(LazySelect, BaseField, BaseUpdateField):
                 original_value=original_value,
                 field_supports_update=field_supports_update,
             )
-            self.add_class('work_item_details_input_field')
-
             self.pending_value = original_value
+        else:
+            self.add_class('surface-input-select')
 
         self._start_loading_on_mount = False
 

@@ -84,7 +84,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='link-work-items-form'):
+            with VerticalScroll(id='link-work-items-form', classes='modal-form modal-form--fields'):
                 with Vertical():
                     link_type_label = Label('Link Type')
                     link_type_label.add_class('field_label')
@@ -94,11 +94,12 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     work_item_key_label.add_class('field_label')
                     yield work_item_key_label
                     yield LinkedWorkItemInputWidget()
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id='add-link-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -106,6 +107,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     'Cancel',
                     variant='error',
                     id='add-link-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
             yield WorkItemFooterDetails()

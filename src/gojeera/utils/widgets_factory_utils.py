@@ -29,6 +29,10 @@ class StaticFieldsWidgets(VerticalGroup):
     DEFAULT_CSS = """
     StaticFieldsWidgets {
         layout: vertical;
+        margin: 0;
+        margin-right: 2;
+        padding: 0;
+        height: auto;
     }
 
     StaticFieldsWidgets > * {
@@ -54,6 +58,10 @@ class DynamicFieldsWidgets(VerticalGroup):
     DEFAULT_CSS = """
     DynamicFieldsWidgets {
         layout: vertical;
+        margin: 0;
+        margin-right: 2;
+        padding: 0;
+        height: auto;
     }
 
     DynamicFieldsWidgets > * {

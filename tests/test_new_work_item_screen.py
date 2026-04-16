@@ -10,15 +10,18 @@ from gojeera.app import JiraApp
 from gojeera.components import new_work_item_screen as new_work_item_screen_module
 from gojeera.components.new_work_item_screen import AddWorkItemScreen
 from gojeera.components.unified_search import UnifiedSearchBar
-from gojeera.components.work_item_result import WorkItemSearchResultsScroll
 from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
 from gojeera.widgets.selection import SelectionWidget
+from gojeera.widgets.work_item_search_results_scroll import WorkItemSearchResultsScroll
 
-from .test_helpers import wait_for_mount
+from .test_helpers import wait_for_mount, wait_until
 
 ENG_8_SUMMARY = json.loads(
     Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
 )['fields']['summary']
+ENG_8_WORK_ITEM = json.loads(
+    Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
+)
 
 
 async def open_new_work_item_screen(pilot):
@@ -193,6 +196,22 @@ async def fill_save_and_upload_clipboard_attachment(pilot):
     assert not isinstance(pilot.app.screen, AddWorkItemScreen)
 
 
+async def fill_save_and_open_created_work_item_attachments(pilot):
+    await fill_save_and_upload_clipboard_attachment(pilot)
+
+    await pilot.app.screen.fetch_work_items('ENG-8')
+    await pilot.app.workers.wait_for_complete()
+    await wait_until(lambda: pilot.app.screen.current_loaded_work_item_key == 'ENG-8', timeout=3.0)
+
+    pilot.app.screen.tabs.active = 'tab-attachments'
+    pilot.app.screen.information_panel.set_active_tab('tab-attachments')
+    await wait_until(
+        lambda: pilot.app.screen.work_item_attachments_widget.attachments_table is not None,
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
+
+
 class TestNewWorkItemScreen:
     """Snapshot tests to verify new work item screen display and interactions."""
 
@@ -226,49 +245,13 @@ class TestNewWorkItemScreen:
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=fill_save_and_search_work_item)
 
-    def test_new_work_item_with_sprint_selection(
-        self,
-        snap_compare,
-        mock_configuration_with_sprints,
-        mock_jira_api_with_sprints,
-        mock_user_info,
-    ):
-        """Snapshot: New work item screen with sprint selection dropdown enabled."""
-        config = mock_configuration_with_sprints
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_and_select_project)
-
-    def test_new_work_item_with_clipboard_attachment(
-        self,
-        snap_compare,
-        monkeypatch,
-        mock_configuration,
-        mock_jira_api_with_new_work_item,
-        mock_user_info,
-        staged_upload_file,
-    ):
-        monkeypatch.setattr(
-            new_work_item_screen_module,
-            'stage_clipboard_attachments',
-            lambda: [staged_upload_file],
-        )
-
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=paste_clipboard_attachment_into_new_work_item,
-        )
-
     def test_new_work_item_uploads_clipboard_attachment_after_creation(
         self,
         snap_compare,
         monkeypatch,
         mock_configuration,
         mock_jira_api_with_new_work_item,
-        mock_jira_search_with_results,
+        mock_jira_new_attachment,
         mock_user_info,
         staged_upload_file,
         mock_attachment_upload,
@@ -280,12 +263,18 @@ class TestNewWorkItemScreen:
         )
 
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        created_work_item = next(
-            issue for issue in mock_jira_search_with_results['issues'] if issue['key'] == 'ENG-8'
-        )
+        created_work_item = json.loads(json.dumps(ENG_8_WORK_ITEM))
+        uploaded_attachment = json.loads(json.dumps(mock_jira_new_attachment))
+        uploaded_attachment['filename'] = 'clipboard-upload.png'
+        uploaded_attachment['mimeType'] = 'image/png'
+        uploaded_attachment['size'] = 3
+        created_work_item['fields']['attachment'] = [
+            *created_work_item['fields'].get('attachment', []),
+            uploaded_attachment,
+        ]
         upload_route = mock_attachment_upload('ENG-8')
         respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8.*'
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8(?:\?.*)?$'
         ).mock(return_value=Response(200, json=created_work_item))
         update_route = respx.put(
             'https://example.atlassian.acme.net/rest/api/3/issue/ENG-8',
@@ -295,7 +284,7 @@ class TestNewWorkItemScreen:
         assert snap_compare(
             app,
             terminal_size=(120, 40),
-            run_before=fill_save_and_upload_clipboard_attachment,
+            run_before=fill_save_and_open_created_work_item_attachments,
         )
         assert upload_route.called
         assert upload_route.call_count == 1

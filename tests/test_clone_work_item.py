@@ -1,11 +1,12 @@
 import asyncio
 
-from textual.widgets import Button
+from textual.widgets import Button, Input
 
 from gojeera.app import JiraApp, MainScreen
 from gojeera.components.clone_work_item_screen import CloneWorkItemScreen
 from gojeera.components.unified_search import UnifiedSearchBar
-from gojeera.components.work_item_result import WorkItemSearchResultsScroll
+from gojeera.widgets.vim_select import VimSelect
+from gojeera.widgets.work_item_search_results_scroll import WorkItemSearchResultsScroll
 
 
 async def clone_and_search_work_item(pilot):
@@ -32,14 +33,16 @@ async def clone_and_search_work_item(pilot):
 
     assert isinstance(pilot.app.screen, MainScreen)
 
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
     assert search_bar is not None, 'Unified search bar should be visible'
-    assert search_bar.search_mode == 'basic', f'Expected basic mode, got {search_bar.search_mode}'
+    mode_selector = search_bar.query_one('#search-mode-selector', VimSelect)
+    mode_selector.value = 'jql'
+    await asyncio.sleep(0.3)
 
-    assert search_bar.set_initial_work_item_key('ENG-9')
+    assert search_bar.search_mode == 'jql', f'Expected jql mode, got {search_bar.search_mode}'
+
+    jql_input = search_bar.query_one('#unified-search-input', Input)
+    jql_input.value = 'key = ENG-9'
     await asyncio.sleep(0.2)
 
     search_button = search_bar.query_one('#unified-search-button', Button)

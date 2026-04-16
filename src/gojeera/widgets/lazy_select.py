@@ -39,6 +39,14 @@ class LazySelect(VimSelect):
 
             self._lazy_load_callback()
 
+    @property
+    def select_current(self) -> SelectCurrent:
+        return self.query_one(SelectCurrent)
+
+    @property
+    def select_current_label(self) -> Static:
+        return self.select_current.query_one('#label', Static)
+
     def _start_spinner(self) -> None:
         self._spinner_index = 0
         self._update_spinner()
@@ -53,9 +61,8 @@ class LazySelect(VimSelect):
         self._spinner_index = (self._spinner_index + 1) % len(self.SPINNER_FRAMES)
         self.prompt = new_prompt
         try:
-            select_current = self.query_one(SelectCurrent)
-            select_current.placeholder = new_prompt
-            select_current.query_one('#label', Static).update(new_prompt)
+            self.select_current.placeholder = new_prompt
+            self.select_current_label.update(new_prompt)
         except Exception:
             pass
 
@@ -67,10 +74,9 @@ class LazySelect(VimSelect):
                 self._spinner_timer = None
             self.prompt = self._original_prompt
             try:
-                select_current = self.query_one(SelectCurrent)
-                select_current.placeholder = self._original_prompt
+                self.select_current.placeholder = self._original_prompt
                 if self.value == self.BLANK:
-                    select_current.query_one('#label', Static).update(self._original_prompt)
+                    self.select_current_label.update(self._original_prompt)
             except Exception:
                 pass
 

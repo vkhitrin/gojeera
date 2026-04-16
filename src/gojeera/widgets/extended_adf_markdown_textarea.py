@@ -32,12 +32,14 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         max-height: 12;
         padding: 0;
         margin-bottom: 0;
+        background: $surface-lighten-1;
     }
 
     ExtendedADFMarkdownTextArea TabbedContent {
         height: 12;
         min-height: 12;
         max-height: 12;
+        background: $surface-lighten-1;
     }
 
     ExtendedADFMarkdownTextArea TabPane {
@@ -50,6 +52,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         min-height: 10;
         max-height: 10;
         padding: 0;
+        background: $surface-lighten-1;
         scrollbar-size-vertical: 1;
         scrollbar-size-horizontal: 1;
     }
@@ -58,6 +61,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         height: 10;
         min-height: 10;
         max-height: 10;
+        background: $surface-lighten-1;
         scrollbar-size-vertical: 1;
     }
 
@@ -74,10 +78,6 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         margin-top: 1;
     }
 
-    ExtendedADFMarkdownTextArea .adf-warning-icon {
-        color: $warning;
-        text-style: bold;
-    }
     """
 
     def __init__(
@@ -118,10 +118,25 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         yield Label('', id=f'{self.id}-warnings', classes='adf-warning')
 
     @property
+    def textarea(self) -> TextArea:
+        return self.query_one(f'#{self.id}-textarea', TextArea)
+
+    @property
+    def tabbed_content(self) -> ExtendedTabbedContent:
+        return self.query_one(f'#{self.id}-tabs', ExtendedTabbedContent)
+
+    @property
+    def markdown_preview(self) -> GojeeraMarkdown:
+        return self.query_one(f'#{self.id}-markdown', GojeeraMarkdown)
+
+    @property
+    def warning_label(self) -> Label:
+        return self.query_one(f'#{self.id}-warnings', Label)
+
+    @property
     def text(self) -> str:
         try:
-            textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-            text_value = textarea.text if hasattr(textarea, 'text') else self._text
+            text_value = self.textarea.text if hasattr(self.textarea, 'text') else self._text
             return text_value
         except Exception:
             return self._text
@@ -130,8 +145,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
     def text(self, value: str) -> None:
         self._text = value
         try:
-            textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-            textarea.text = value
+            self.textarea.text = value
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -160,17 +174,14 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
     def handle_tab_activated(self, event: ExtendedTabbedContent.TabActivated) -> None:
         if event.pane.id == f'{self.id}-preview-tab':
             try:
-                textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-                current_text = textarea.text if hasattr(textarea, 'text') else ''
-
-                markdown = self.query_one(f'#{self.id}-markdown', GojeeraMarkdown)
+                current_text = self.textarea.text if hasattr(self.textarea, 'text') else ''
                 if current_text.strip():
                     preview_text = self._render_task_checkboxes(current_text)
-                    markdown.update(preview_text)
+                    self.markdown_preview.update(preview_text)
 
                     self._check_adf_warnings(current_text)
                 else:
-                    markdown.update('_No content to preview_')
+                    self.markdown_preview.update('_No content to preview_')
                     self._adf_warnings = []
 
                 self._update_warning_display()
@@ -188,14 +199,12 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
 
     def make_jumpable(self) -> None:
         try:
-            tabbed_content = self.query_one(f'#{self.id}-tabs', ExtendedTabbedContent)
-            content_tabs = list(tabbed_content.query(ContentTab))
+            content_tabs = list(self.tabbed_content.query(ContentTab))
             for content_tab in content_tabs:
                 content_tab.can_focus = False
                 set_jump_mode(content_tab, 'click')
 
-            textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-            set_jump_mode(textarea, 'focus')
+            set_jump_mode(self.textarea, 'focus')
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
@@ -203,7 +212,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         """Return the underlying textarea used for keyboard input."""
 
         try:
-            return self.query_one(f'#{self.id}-textarea', TextArea)
+            return self.textarea
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
             return None
@@ -211,15 +220,11 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
     def insert_mention(self, account_id: str, display_name: str, base_url: str) -> None:
         """Insert a user mention at the current cursor position."""
         try:
-            textarea = self.query_one(f'#{self.id}-textarea', TextArea)
-
             mention_text = f'[@{display_name}]({base_url}/jira/people/{account_id})'
 
-            textarea.focus()
-
-            textarea.insert(mention_text)
-
-            self._text = textarea.text
+            self.textarea.focus()
+            self.textarea.insert(mention_text)
+            self._text = self.textarea.text
 
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
@@ -293,23 +298,20 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
 
     def _update_warning_display(self) -> None:
         try:
-            warning_label = self.query_one(f'#{self.id}-warnings', Label)
-
             if self._adf_warnings:
                 warning_text = '⚠ ADF Conversion Warnings:\n' + '\n'.join(
                     f'  • {w}' for w in self._adf_warnings
                 )
-                warning_label.update(warning_text)
-                warning_label.display = True
+                self.warning_label.update(warning_text)
+                self.warning_label.display = True
             else:
-                warning_label.display = False
+                self.warning_label.display = False
         except Exception as e:
             logger.debug(f'Exception occurred: {e}')
 
     def _update_tab_label(self) -> None:
         try:
-            tabbed_content = self.query_one(f'#{self.id}-tabs', ExtendedTabbedContent)
-            content_tabs = list(tabbed_content.query(ContentTab))
+            content_tabs = list(self.tabbed_content.query(ContentTab))
 
             for tab in content_tabs:
                 label_str = (

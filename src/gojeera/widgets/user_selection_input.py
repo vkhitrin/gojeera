@@ -7,6 +7,12 @@ from gojeera.widgets.vim_select import VimSelect
 
 
 class UserSelectionInput(VimSelect):
+    DEFAULT_CSS = """
+    UserSelectionInput {
+        width: 100%;
+    }
+    """
+
     WIDGET_ID = 'jira-users-selector'
     users: Reactive[dict | None] = reactive(None, always_update=True)
 
@@ -20,8 +26,6 @@ class UserSelectionInput(VimSelect):
             compact=True,
             classes='jira-selector',
         )
-        self.styles.width = '100%'
-
         self.jira_field_key = 'assignee'
         self._update_enabled = True
 

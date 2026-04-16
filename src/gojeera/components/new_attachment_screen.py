@@ -57,34 +57,38 @@ class AddAttachmentScreen(ExtendedModalScreen[str]):
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='add-attachment-form'):
-                with Vertical(id='file-path-container'):
+            with VerticalScroll(id='add-attachment-form', classes='modal-form modal-form--tight'):
+                with Vertical(id='file-path-container', classes='modal-form-section'):
                     file_path_label = Label('File Path')
                     file_path_label.add_class('field_label')
                     yield file_path_label
-                    with Horizontal(id='file-path-input-row'):
+                    with Horizontal(id='file-path-input-row', classes='modal-form-input-row'):
                         yield FilePathInput()
                         yield Button(
                             'Browse...',
                             id='browse-file-button',
                             variant='primary',
+                            classes='modal-action-button modal-action-button--browse',
                             compact=True,
                         )
                     yield Label(
                         '• Click "Browse..." to open the file picker\n'
                         '• Navigate and select the file to attach',
                         id='file-path-hint',
+                        classes='modal-form-hint',
                     )
                     yield Label(
                         '⚠ Large files may cause temporary UI unresponsiveness!',
                         id='file-path-warning',
+                        classes='modal-form-warning',
                     )
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Attach',
                     variant='success',
                     id='add-attachment-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=True,
                     compact=True,
                 )
@@ -92,6 +96,7 @@ class AddAttachmentScreen(ExtendedModalScreen[str]):
                     'Cancel',
                     variant='error',
                     id='add-attachment-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter(show_command_palette=False)

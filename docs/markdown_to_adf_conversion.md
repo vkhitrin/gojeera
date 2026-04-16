@@ -43,6 +43,7 @@ Markdown input.
 | -------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `text`         | Plain text                                                         | `atlas_doc_parser`                                                                   |
 | `mediaSingle`  | `[filename](attachment-url)` when attachment metadata is available | `replace_media_with_text()`                                                          |
+| `mediaGroup`   | One attachment link paragraph per `media` child                    | `replace_media_with_text()`                                                          |
 | `media`        | Attachment reference                                               | `replace_media_with_text()`                                                          |
 | `mention`      | `[@User](url/jira/people/id)`                                      | `replace_mentions_with_links()`                                                      |
 | `status`       | `[status:c]text`                                                   | `replace_status_with_colored_text()` + `_convert_status_markers_to_inline_code()`    |
@@ -89,6 +90,7 @@ Markdown input.
 | `**text**`       | `strong` mark | `_convert_inline_tokens()` |
 | `*text*`         | `em` mark     | `_convert_inline_tokens()` |
 | `text`           | `code` mark   | `_convert_inline_tokens()` |
+| `` `[date]YYYY-MM-DD` `` | `date` node | `_convert_inline_tokens()` |
 | `[text](url)`    | `link` mark   | `_convert_inline_tokens()` |
 | `~~text~~`       | `strike` mark | `_convert_inline_tokens()` |
 
@@ -138,9 +140,14 @@ Attachment references are rendered as native clickable actions in the TUI:
 The conversion from ADF to Markdown follows these steps (in order):
 
 1. **`fix_ordered_list_attrs()`** - Add missing `attrs` to `orderedList` nodes
-2. **`replace_media_with_text()`** - Convert `mediaSingle` to attachment links
-   when attachment metadata is available. Jira attachment links render as
-   native attachment chips/actions in the TUI
+2. **`replace_media_with_text()`** - Convert `mediaSingle`, `mediaGroup`, and
+   `mediaInline` attachment nodes to attachment links when attachment metadata
+   is available. Resolution order is:
+   - rendered HTML media metadata when available
+   - direct media-id / filename mappings from loaded issue attachments
+   - ordered attachment fallback from the loaded issue attachments for unresolved
+     inline/media nodes
+   Jira attachment links render as native attachment chips/actions in the TUI
 3. **`fix_adf_text_with_marks()`** - Fix spacing issues in `strong`/`em` marks
 4. **`fix_codeblock_in_list()`** - Extract `codeBlock` nodes from `listItem` nodes
 5. **`replace_mentions_with_links()`** - Convert `mention` nodes to standard

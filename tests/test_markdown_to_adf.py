@@ -124,3 +124,19 @@ class TestMarkdownToAdfConversion:
         assert cell['type'] == 'tableHeader'
         assert cell['content'][0]['type'] == 'paragraph'
         assert cell['content'][0]['content'][0]['text'] == 'A'
+
+    def test_date_marker_inline_code_converts_to_adf_date_node(self):
+        markdown = 'It will be kept on during `[date]2026-04-24` and `[date]2026-04-25`.'
+
+        adf = text_to_adf(markdown)
+
+        assert adf['type'] == 'doc'
+        assert adf['version'] == 1
+
+        paragraph = adf['content'][0]
+        assert paragraph['type'] == 'paragraph'
+
+        date_nodes = [node for node in paragraph['content'] if node.get('type') == 'date']
+        assert len(date_nodes) == 2
+        assert date_nodes[0]['attrs']['timestamp'] == '1776988800000'
+        assert date_nodes[1]['attrs']['timestamp'] == '1777075200000'

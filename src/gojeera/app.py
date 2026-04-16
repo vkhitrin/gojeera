@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pythonjsonlogger.json import JsonFormatter
 from textual import events, on
@@ -32,10 +32,6 @@ from gojeera.components.work_item_information import (
     WorkItemInformation,
 )
 from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
-from gojeera.components.work_item_result import (
-    WorkItemsContainer,
-    WorkItemSearchResultsScroll,
-)
 from gojeera.components.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
@@ -58,6 +54,11 @@ from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_palette import ExtendedPalette
 from gojeera.widgets.extended_tabbed_content import ExtendedTabbedContent
 from gojeera.widgets.gojeera_markdown import ExtendedMarkdownParagraph
+from gojeera.widgets.work_item_search_results_scroll import (
+    SearchResultRow,
+    WorkItemSearchResultsScroll,
+)
+from gojeera.widgets.work_items_container import WorkItemsContainer
 
 if TYPE_CHECKING:
     from textual.command import Provider
@@ -132,6 +133,13 @@ class MainScreen(Screen):
             action='edit_work_item_info',
             description='Edit Info',
             tooltip='Edit summary and description',
+            show=True,
+        ),
+        Binding(
+            key='ctrl+s',
+            action='apply_changes',
+            description='Apply Changes',
+            tooltip='Apply pending field changes',
             show=True,
         ),
         Binding(
@@ -247,7 +255,18 @@ class MainScreen(Screen):
                 self.log.debug(widget, 'was focused')
 
         self._update_focus_styles(focused, blurred)
+        self._sync_jump_targets()
         self.call_after_refresh(self.refresh_bindings)
+
+    def _sync_jump_targets(self) -> None:
+        if not CONFIGURATION.get().jumper.enabled:
+            return
+        search_results_container = self.query_one('#search-results-container', WorkItemsContainer)
+        search_results_list = self.search_results_list
+        set_jump_mode(
+            search_results_container,
+            None if self.focused is search_results_list else 'focus',
+        )
 
     def _update_focus_styles(self, focused=None, blurred=None) -> None:
         """Update focus-related styles without restyling whole subtrees."""
@@ -340,6 +359,14 @@ class MainScreen(Screen):
     def details_container(self) -> Vertical:
         return self.query_one('#details-container', expect_type=Vertical)
 
+    @property
+    def details_breadcrumb_row(self) -> Vertical:
+        return self.query_one('#details-breadcrumb-row', Vertical)
+
+    @property
+    def details_tabs_row(self) -> Horizontal:
+        return self.query_one('#details-tabs-row', Horizontal)
+
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
@@ -399,14 +426,13 @@ class MainScreen(Screen):
         if self.user_info:
             account_id = self.user_info.account_id
             self.logger.info(f'Using pre-authenticated account ID: {account_id}')
-            search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
-            search_bar.post_message(search_bar.AccountIdReady(account_id))
+            self.unified_search_bar.post_message(self.unified_search_bar.AccountIdReady(account_id))
 
         if CONFIGURATION.get().jumper.enabled:
-            set_jump_mode(self.query_one('#unified-search-bar', UnifiedSearchBar), 'focus')
-            set_jump_mode(self.query_one('#search-results-container', WorkItemsContainer), 'focus')
+            set_jump_mode(self.unified_search_bar, 'focus')
+            set_jump_mode(self.search_results_container, 'focus')
 
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
+        tabs = self.tabs
         tabs.can_focus = True
         tabs.tabs_widget.can_focus = True
         for tab in tabs.query(ContentTab):
@@ -428,8 +454,6 @@ class MainScreen(Screen):
         self.fields_panel.disabled = True
         self.fields_panel.display = False
 
-        search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
-
         workers: list[Worker] = []
 
         if self.initial_work_item_key:
@@ -444,7 +468,7 @@ class MainScreen(Screen):
             )
 
         if self.initial_jql_filter_label:
-            await search_bar.set_initial_jql_filter(self.initial_jql_filter_label)
+            await self.unified_search_bar.set_initial_jql_filter(self.initial_jql_filter_label)
 
         if CONFIGURATION.get().search_on_startup:
             if not self.initial_jql_filter_label:
@@ -476,48 +500,27 @@ class MainScreen(Screen):
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
         self.user_info = user_info
         self.logger.info(f'Using authenticated account ID: {user_info.account_id}')
-        search_bar = self.query_one('#unified-search-bar', UnifiedSearchBar)
-        search_bar.post_message(search_bar.AccountIdReady(user_info.account_id))
+        self.unified_search_bar.post_message(
+            self.unified_search_bar.AccountIdReady(user_info.account_id)
+        )
 
     def _update_attachments_tab_title(self, count: int) -> None:
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-        tab = tabs.get_tab('tab-attachments')
-        if count > 0:
-            tab.label = f'Attachments [bold $background on $primary] {count} [/]'
-        else:
-            tab.label = 'Attachments'
+        self._update_information_tab_badge('tab-attachments', count)
 
     def _update_subtasks_tab_title(self, count: int) -> None:
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-        tab = tabs.get_tab('tab-subtasks')
-        if count > 0:
-            tab.label = f'Subtasks [bold $background on $primary] {count} [/]'
-        else:
-            tab.label = 'Subtasks'
+        self._update_information_tab_badge('tab-subtasks', count)
 
     def _update_related_tab_title(self, count: int) -> None:
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-        tab = tabs.get_tab('tab-related')
-        if count > 0:
-            tab.label = f'Related Items [bold $background on $primary] {count} [/]'
-        else:
-            tab.label = 'Related Items'
+        self._update_information_tab_badge('tab-related', count)
 
     def _update_links_tab_title(self, count: int) -> None:
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-        tab = tabs.get_tab('tab-links')
-        if count > 0:
-            tab.label = f'Web Links [bold $background on $primary] {count} [/]'
-        else:
-            tab.label = 'Web Links'
+        self._update_information_tab_badge('tab-links', count)
 
     def _update_comments_tab_title(self, count: int) -> None:
-        tabs = self.query_one('#tabs-information', ExtendedTabbedContent)
-        tab = tabs.get_tab('tab-comments')
-        if count > 0:
-            tab.label = f'Comments [bold $background on $primary] {count} [/]'
-        else:
-            tab.label = 'Comments'
+        self._update_information_tab_badge('tab-comments', count)
+
+    def _update_information_tab_badge(self, tab_id: str, count: int) -> None:
+        self.tabs.set_tab_badge(tab_id, count)
 
     def navigate_to_attachment(self, filename: str) -> None:
         self.tabs.active = 'tab-attachments'
@@ -612,6 +615,7 @@ class MainScreen(Screen):
         search_field_work_item_type: int | None = None
         project_key: str | None = None
         jql_expression: str | None = None
+        order_by: str | None = None
 
         if mode == 'basic':
             project_key = effective_search_data.get('project')
@@ -635,6 +639,9 @@ class MainScreen(Screen):
         elif mode in ('text', 'jql'):
             jql_expression = effective_search_data.get('jql')
 
+        if mode in ('basic', 'text'):
+            order_by = self.search_results_container.controls.current_order_by
+
         jql_query: str | None = self._build_jql_query(
             search_term=search_term,
             jql_expression=jql_expression,
@@ -653,7 +660,9 @@ class MainScreen(Screen):
                 ]
             )
         ):
-            jql_query = 'created >= -30d order by created DESC'
+            jql_query = f'created >= -30d order by {order_by or "created DESC"}'
+        elif order_by:
+            jql_query = self._append_order_by(jql_query, order_by)
 
         response: APIControllerResponse
         response = await self.api.search_work_items(
@@ -677,8 +686,7 @@ class MainScreen(Screen):
             )
             self.notify(
                 error_message,
-                severity='warning',
-                title='Work Item Search',
+                severity='error',
             )
             return WorkItemSearchResult(total=0, start=0, end=0, response=None)
 
@@ -731,6 +739,17 @@ class MainScreen(Screen):
         elif jql_expression:
             return jql_expression
         return None
+
+    @staticmethod
+    def _append_order_by(jql_query: str | None, order_by: str) -> str:
+        stripped_order_by = order_by.strip()
+        if not stripped_order_by:
+            return jql_query or ''
+        if not jql_query:
+            return f'ORDER BY {stripped_order_by}'
+        if ' order by ' in f' {jql_query.lower()} ':
+            return jql_query
+        return f'{jql_query} ORDER BY {stripped_order_by}'
 
     async def _search_single_work_item(self, work_item_key: str) -> WorkItemSearchResult:
         response: APIControllerResponse = await self.api.get_work_item(
@@ -842,6 +861,9 @@ class MainScreen(Screen):
                 list_view.page = page
                 list_view.pending_page = None
 
+            if not use_active_search and results.response is not None:
+                list_view.clear_loaded_work_item()
+
             list_view.work_item_search_results = results.response
             if self.focused is not list_view:
                 list_view.focus()
@@ -888,6 +910,50 @@ class MainScreen(Screen):
                 return True
         return False
 
+    @staticmethod
+    def _normalize_search_value(value: Any) -> Any:
+        if value == Select.NULL:
+            return None
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    def _normalize_search_data(self, search_data: dict[str, Any] | None) -> dict[str, Any]:
+        if not search_data:
+            return {}
+        return {key: self._normalize_search_value(value) for key, value in search_data.items()}
+
+    def _is_same_active_search(self, search_term: str | None = None) -> bool:
+        if (
+            self._active_search_data is None
+            or self.search_results_list.work_item_search_results is None
+        ):
+            return False
+        current_search_data = self._normalize_search_data(self.unified_search_bar.get_search_data())
+        active_search_data = self._normalize_search_data(self._active_search_data)
+        current_search_term = self._normalize_search_value(search_term)
+        active_search_term = self._normalize_search_value(self._active_search_term)
+        return (
+            current_search_data == active_search_data and current_search_term == active_search_term
+        )
+
+    def _rerun_active_search(self) -> None:
+        requested_page = 1
+        self.search_results_list.page = requested_page
+        self.search_results_list.pending_page = None
+        self.search_results_list.reset_viewport()
+        next_page_token = self.search_results_list.token_by_page.get(requested_page)
+        self.begin_search_request(page_number=requested_page)
+        self.run_worker(
+            self.search_work_items(
+                next_page_token=next_page_token,
+                page=requested_page,
+                use_active_search=True,
+            ),
+            exclusive=True,
+            group='search',
+        )
+
     async def action_show_overlay(self) -> None:
         if not CONFIGURATION.get().jumper.enabled:
             return
@@ -900,6 +966,21 @@ class MainScreen(Screen):
 
     async def action_search(self, search_term: str | None = None) -> None:
         if self._is_any_select_expanded() or self.is_search_request_in_progress:
+            return
+
+        current_search_data = self.unified_search_bar.get_search_data()
+        current_mode = current_search_data.get('mode')
+        if current_mode in ('text', 'jql'):
+            current_jql = str(current_search_data.get('jql') or '').strip()
+            if not current_jql:
+                self.notify(
+                    'Please enter a search term or JQL query',
+                    severity='warning',
+                )
+                return
+
+        if self._is_same_active_search(search_term):
+            self._rerun_active_search()
             return
 
         self.search_results_list.page = 1
@@ -936,6 +1017,19 @@ class MainScreen(Screen):
         page_number: int | None = None,
         show_pagination: bool = True,
     ) -> None:
+        if show_pagination:
+            current_search_data = (
+                self._active_search_data or self.unified_search_bar.get_search_data()
+            )
+        else:
+            current_search_data = self.unified_search_bar.get_search_data()
+        self.search_results_container.set_search_mode(
+            current_search_data.get('mode', 'basic'),
+            current_search_data,
+        )
+        if not show_pagination:
+            self.search_results_container.results_loaded = False
+        self.search_results_list.prepare_for_search()
         self.search_results_container.show_loading()
         self.unified_search_bar.search_in_progress = True
 
@@ -953,6 +1047,9 @@ class MainScreen(Screen):
         }
 
     def end_search_request(self) -> None:
+        if self.search_results_list.is_pending_initial_render:
+            self.unified_search_bar.search_in_progress = False
+            return
         self.search_results_container.hide_loading()
         self.unified_search_bar.search_in_progress = False
 
@@ -988,8 +1085,8 @@ class MainScreen(Screen):
         self.fields_panel.disabled = True
         self.fields_panel.display = False
 
-        self.query_one('#details-breadcrumb-row', Vertical).display = False
-        self.query_one('#details-tabs-row', Horizontal).display = False
+        self.details_breadcrumb_row.display = False
+        self.details_tabs_row.display = False
 
         self.call_after_refresh(self.refresh_bindings)
 
@@ -1087,6 +1184,11 @@ class MainScreen(Screen):
             return
         self.work_item_fields_widget.action_log_work()
 
+    def action_apply_changes(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        self.work_item_fields_widget.action_save_work_item()
+
     async def action_go_to_parent_work_item(self) -> None:
         if self.focused_work_item_link_key:
             self.run_worker(
@@ -1152,8 +1254,7 @@ class MainScreen(Screen):
                 )
                 self.notify(
                     'Unable to retrieve the sub tasks of the work item',
-                    severity='warning',
-                    title='Work Item Search',
+                    severity='error',
                 )
                 self.work_item_child_work_items_widget.work_items = None
             else:
@@ -1326,8 +1427,8 @@ class MainScreen(Screen):
 
                 if work_item_info.work_item is not None:
                     work_item_info.breadcrumb_widget.display = True
-                    self.query_one('#details-breadcrumb-row', Vertical).display = True
-                    self.query_one('#details-tabs-row', Horizontal).display = True
+                    self.details_breadcrumb_row.display = True
+                    self.details_tabs_row.display = True
                     tabs_widget = self.tabs
                     tabs_widget.disabled = False
 
@@ -1343,8 +1444,8 @@ class MainScreen(Screen):
     def watch_is_loading(self, loading: bool) -> None:
         self.details_container.loading = loading
         if loading:
-            self.query_one('#details-breadcrumb-row', Vertical).display = False
-            self.query_one('#details-tabs-row', Horizontal).display = False
+            self.details_breadcrumb_row.display = False
+            self.details_tabs_row.display = False
 
     async def clone_work_item(self, work_item_key: str) -> None:
         if not work_item_key:
@@ -1464,15 +1565,13 @@ class MainScreen(Screen):
             return
 
         work_item_container = containers[item_index]
-        from gojeera.components.work_item_result import WorkItemContainer
-
-        if not isinstance(work_item_container, WorkItemContainer):
+        if not isinstance(work_item_container, SearchResultRow):
             return
 
         scroll_view._selected_index = item_index
         scroll_view._update_selection()
 
-        scroll_view.scroll_to_widget(work_item_container, animate=False)
+        scroll_view.scroll_to_index(item_index)
 
         await asyncio.sleep(0.1)
         await self.app.animator.wait_for_idle()

@@ -110,8 +110,16 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
         return self.query_one(ExtendedADFMarkdownTextArea)
 
     @property
+    def description_textarea(self) -> TextArea:
+        return self.work_description_input.query_one(TextArea)
+
+    @property
     def save_button(self) -> Button:
         return self.query_one('#log-work-button-save', expect_type=Button)
+
+    @property
+    def cancel_button(self) -> Button:
+        return self.query_one('#log-work-button-quit', expect_type=Button)
 
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
@@ -121,7 +129,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
             with VerticalScroll(id='modal-form-scroll'):
                 with ItemGrid(id='time-fields-grid'):
                     with Vertical(id='time-spent-container'):
-                        time_spent_label = Label('Time Spent (*)')
+                        time_spent_label = Label('Time Spent')
                         time_spent_label.add_class('field_label')
                         yield time_spent_label
                         yield TimeSpentInput(initial_value=self._initial_time_spent)
@@ -136,7 +144,11 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
                     date_started_label.add_class('field_label')
                     yield date_started_label
                     yield LogDateTimeInput(initial_value=self._initial_started)
-                    yield Label('w = week | d = day | h = hour | m = minutes', id='time-hint')
+                    yield Label(
+                        'w = week | d = day | h = hour | m = minutes',
+                        id='time-hint',
+                        classes='modal-form-hint',
+                    )
 
                 with Vertical(id='description-container'):
                     work_description_label = Label('Work Description')
@@ -144,11 +156,12 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
                     yield work_description_label
                     yield ExtendedADFMarkdownTextArea(field_id='work_description', required=False)
 
-            with Horizontal(id='modal_footer'):
+            with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Save',
                     variant='success',
                     id='log-work-button-save',
+                    classes='modal-action-button modal-action-button--confirm',
                     disabled=False if self._mode == 'edit' else True,
                     compact=True,
                 )
@@ -156,6 +169,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
                     'Cancel',
                     variant='error',
                     id='log-work-button-quit',
+                    classes='modal-action-button modal-action-button--danger',
                     compact=True,
                 )
         yield ExtendedFooter()
@@ -172,7 +186,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
             self.work_description_input.make_jumpable()
 
             set_jump_mode(self.save_button, 'click')
-            set_jump_mode(self.query_one('#log-work-button-quit', Button), 'click')
+            set_jump_mode(self.cancel_button, 'click')
         self.call_after_refresh(
             lambda: focus_first_available(
                 self.time_spent_input,
@@ -190,7 +204,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
 
     async def action_insert_mention(self) -> None:
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
+            description_widget = self.work_description_input
         except Exception:
             return
 
@@ -202,8 +216,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
 
     async def action_insert_decision(self) -> None:
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception:
             return
 
@@ -223,8 +236,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
 
     async def action_insert_alert(self) -> None:
         try:
-            description_widget = self.query_one(ExtendedADFMarkdownTextArea)
-            textarea = description_widget.query_one(TextArea)
+            textarea = self.description_textarea
         except Exception:
             return
 

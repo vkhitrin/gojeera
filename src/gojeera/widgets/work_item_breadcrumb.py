@@ -29,39 +29,30 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
         height: auto;
         width: 1fr;
         padding: 0;
-        color: $text-muted;
+        color: $text;
         background: $background;
         layout: horizontal;
     }
 
     WorkItemBreadcrumb > .breadcrumb-text {
         width: auto;
-        color: $text-muted;
-        text-style: bold;
+        color: $text;
         padding: 0;
     }
 
     WorkItemBreadcrumb > .breadcrumb-separator {
         width: auto;
-        color: $text-muted;
-        text-style: bold;
+        color: $text;
         padding: 0 1 0 1;
-    }
-
-    #breadcrumb-project-sep {
-        padding: 0 0 0 1;
-    }
-
-    #breadcrumb-parent-sep {
-        padding: 0 1 0 0;
     }
 
     WorkItemBreadcrumb > .breadcrumb-parent-work_item {
         width: auto;
         min-width: 0;
         margin: 0;
-        color: $accent;
+        color: $primary;
         text-style: bold;
+        text-align: left;
         padding: 0;
         background: transparent;
         border: none;
@@ -70,7 +61,7 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
     }
 
     WorkItemBreadcrumb > .breadcrumb-parent-work_item:hover {
-        color: $accent-lighten-3;
+        color: $primary-lighten-2;
         text-style: bold;
         background: transparent;
         border: none;
@@ -78,7 +69,7 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
     }
 
     WorkItemBreadcrumb > .breadcrumb-parent-work_item:focus {
-        color: $accent-lighten-3;
+        color: $primary-lighten-2;
         text-style: bold;
         background: transparent;
         border: none;
@@ -86,7 +77,7 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
     }
 
     WorkItemBreadcrumb > .breadcrumb-parent-work_item.-active {
-        color: $accent-lighten-3;
+        color: $primary-lighten-2;
         text-style: bold;
         background: transparent;
         border: none;
@@ -116,6 +107,7 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
             classes='breadcrumb-parent-work_item',
             id='breadcrumb-parent-work_item',
             compact=True,
+            include_label_width_padding=False,
         )
 
         parent_separator = Static('/', classes='breadcrumb-separator', id='breadcrumb-parent-sep')

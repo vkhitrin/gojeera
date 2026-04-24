@@ -365,7 +365,8 @@ class WorkItemFields(Container, can_focus=False):
 
     @staticmethod
     def _field_label(text: str) -> Label:
-        return Label(text, classes='field_label')
+        normalized_text = ' '.join(text.split())
+        return Label(normalized_text, classes='field_label')
 
     @staticmethod
     def _apply_field_control_classes(widget: Widget) -> None:
@@ -2254,7 +2255,7 @@ class WorkItemFields(Container, can_focus=False):
                     continue
 
                 # Use field name if available, otherwise fall back to field ID
-                field_label = field_names_map.get(field_id, field_id)
+                field_label = ' '.join(str(field_names_map.get(field_id, field_id)).split())
                 if is_parent_relation_field_name(field_label):
                     continue
 
@@ -2287,11 +2288,10 @@ class WorkItemFields(Container, can_focus=False):
                         field_container = slot.query_one(
                             '.dynamic-field-container', expect_type=Horizontal
                         )
-                        label = Label(field_label, classes='field_label')
+                        label = self._field_label(field_label)
                         label.tooltip = field_tooltip
                         readonly_field = ReadOnlyInputField()
-                        readonly_field.add_class('field_control')
-                        readonly_field.styles.width = '1fr'
+                        self._field_control(readonly_field)
                         readonly_field.value = display_value
                         readonly_field.tooltip = field_tooltip
                         await field_container.mount(label, readonly_field)

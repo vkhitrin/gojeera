@@ -660,7 +660,7 @@ HelpScreen MarkdownViewer,
 HelpScreen ExtendedMarkdownViewer {
   height: 1fr;
   background: $surface;
-  padding: 0 2;
+  padding: 0 1 1 1;
   scrollbar-size-vertical: 1;
   border: none;
 }

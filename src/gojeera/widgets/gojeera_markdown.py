@@ -1,3 +1,4 @@
+from functools import lru_cache
 from inspect import isawaitable
 import logging
 import re
@@ -6,6 +7,8 @@ from urllib.parse import unquote, urlparse
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
 from rich.segment import Segment
 from rich.style import Style as RichStyle
 from rich.text import Text
@@ -16,7 +19,7 @@ from textual.content import Content, Span
 from textual.strip import Strip
 from textual.style import Style
 from textual.widgets import Markdown
-from textual.widgets._markdown import MarkdownBlockQuote, MarkdownParagraph
+from textual.widgets._markdown import MarkdownBlockQuote, MarkdownFence, MarkdownParagraph
 
 from gojeera.utils.adf_helpers import DATE_INLINE_SENTINEL
 from gojeera.utils.mdit_adf_decision import decision_plugin
@@ -868,6 +871,86 @@ class GojeeraBlockQuote(MarkdownBlockQuote):
         return False
 
 
+class GojeeraMarkdownFence(MarkdownFence):
+    """Code fence that keeps language-less blocks as plain text."""
+
+    # Prism language names we may receive from ADF/markdown integrations:
+    # https://github.com/react-syntax-highlighter/react-syntax-highlighter/blob/master/AVAILABLE_LANGUAGES_PRISM.MD
+    PRISM_LANGUAGE_ALIASES = {
+        'bat': 'batch',
+        'clike': 'c',
+        'docker': 'dockerfile',
+        'markup-templating': 'html',
+        'markup': 'html',
+        'objectivec': 'objective-c',
+        'plantuml': 'plantuml',
+        'shell-session': 'console',
+        'shellsession': 'console',
+        'text': 'text',
+        'plaintext': 'text',
+        'none': 'text',
+    }
+
+    @classmethod
+    def _language_variants(cls, language: str) -> list[str]:
+        stripped = language.strip()
+        if not stripped:
+            return []
+
+        normalized = stripped.casefold()
+        kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', stripped).casefold()
+        snake = kebab.replace('-', '_')
+        compact = normalized.replace('-', '').replace('_', '')
+
+        candidates = [
+            normalized,
+            kebab,
+            snake,
+            normalized.replace('_', '-'),
+            normalized.replace('-', '_'),
+            compact,
+        ]
+
+        alias_candidates = [
+            cls.PRISM_LANGUAGE_ALIASES.get(candidate)
+            for candidate in candidates
+            if candidate in cls.PRISM_LANGUAGE_ALIASES
+        ]
+
+        ordered_candidates = [*alias_candidates, *candidates]
+        seen: set[str] = set()
+        unique_candidates: list[str] = []
+        for candidate in ordered_candidates:
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            unique_candidates.append(candidate)
+        return unique_candidates
+
+    @classmethod
+    @lru_cache(maxsize=256)
+    def normalize_language(cls, language: str) -> str | None:
+        variants = cls._language_variants(language)
+        if not variants:
+            return None
+
+        for candidate in variants:
+            try:
+                get_lexer_by_name(candidate)
+            except ClassNotFound:
+                continue
+            return candidate
+
+        return 'text'
+
+    @classmethod
+    def highlight(cls, code: str, language: str) -> Content:
+        normalized_language = cls.normalize_language(language)
+        if normalized_language is None:
+            return Content(code).stylize_before('$text')
+        return super().highlight(code, normalized_language)
+
+
 class GojeeraMarkdown(Markdown):
     """
     Custom Markdown widget that extends GitHub Flavored Markdown
@@ -964,6 +1047,14 @@ class GojeeraMarkdown(Markdown):
         padding: 0;
     }
 
+    GojeeraMarkdown MarkdownBullet {
+        color: $text;
+    }
+
+    GojeeraMarkdown MarkdownBullet:light {
+        color: $text;
+    }
+
     GojeeraMarkdown MarkdownOrderedList {
         margin: 0 0 1 0;
         padding: 0;
@@ -1005,6 +1096,8 @@ class GojeeraMarkdown(Markdown):
         **Markdown.BLOCKS,
         'paragraph_open': ExtendedMarkdownParagraph,
         'blockquote_open': GojeeraBlockQuote,
+        'fence': GojeeraMarkdownFence,
+        'code_block': GojeeraMarkdownFence,
     }
 
     _cached_parser: MarkdownIt | None = None

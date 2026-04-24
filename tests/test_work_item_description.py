@@ -10,6 +10,7 @@ from gojeera.widgets.gojeera_markdown import (
     ATTACHMENT_BROWSER_OPEN_HINT,
     AttachmentTooltipProvider,
     ExtendedMarkdownParagraph,
+    GojeeraMarkdownFence,
     build_attachment_tooltip,
     get_markdown_link_href,
 )
@@ -117,6 +118,22 @@ async def click_attachment_link_and_open_attachments_tab(pilot):
 
 
 class TestWorkItemDescription:
+    def test_markdown_fence_normalizes_prism_language_aliases(self):
+        assert GojeeraMarkdownFence.normalize_language('docker') == 'dockerfile'
+        assert GojeeraMarkdownFence.normalize_language('markup') == 'html'
+        assert GojeeraMarkdownFence.normalize_language('objectivec') == 'objective-c'
+        assert GojeeraMarkdownFence.normalize_language('shellSession') == 'console'
+        assert GojeeraMarkdownFence.normalize_language('diff') == 'diff'
+
+    def test_markdown_fence_treats_missing_language_as_plain_text(self):
+        assert GojeeraMarkdownFence.normalize_language('') is None
+        assert GojeeraMarkdownFence.normalize_language('   ') is None
+
+    def test_markdown_fence_falls_back_to_text_for_unsupported_prism_languages(self):
+        assert GojeeraMarkdownFence.normalize_language('markupTemplating') == 'html'
+        assert GojeeraMarkdownFence.normalize_language('plantUml') == 'text'
+        assert GojeeraMarkdownFence.normalize_language('tremor') == 'text'
+
     def test_build_attachment_tooltip_includes_attachment_metadata(self):
         tooltip = build_attachment_tooltip(
             'report.pdf',

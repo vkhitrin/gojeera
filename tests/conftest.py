@@ -1,4 +1,6 @@
+import asyncio
 import copy
+import inspect
 import json
 from pathlib import Path
 
@@ -7,7 +9,11 @@ from pydantic import SecretStr
 import pytest
 import pytest_textual_snapshot
 import respx
-from textual.widgets import Input
+from rich.console import Console
+from syrupy import SnapshotAssertion
+from textual.app import App
+from textual.pilot import Pilot
+from textual.widgets import Input, TextArea
 
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
@@ -21,6 +27,8 @@ def disable_input_cursor_blink(monkeypatch):
 
     original_on_mount = Input._on_mount
     original_restart_blink = Input._restart_blink
+    original_text_area_on_mount = TextArea._on_mount
+    original_text_area_restart_blink = TextArea._restart_blink
 
     def patched_on_mount(self, event):
         original_on_mount(self, event)
@@ -33,8 +41,158 @@ def disable_input_cursor_blink(monkeypatch):
             return
         original_restart_blink(self)
 
+    def patched_text_area_on_mount(self, event):
+        original_text_area_on_mount(self, event)
+        self.cursor_blink = False
+        self._pause_blink(visible=False)
+
+    def patched_text_area_restart_blink(self):
+        if not self.cursor_blink:
+            self._pause_blink(visible=False)
+            return
+        original_text_area_restart_blink(self)
+
     monkeypatch.setattr(Input, '_on_mount', patched_on_mount)
     monkeypatch.setattr(Input, '_restart_blink', patched_restart_blink)
+    monkeypatch.setattr(TextArea, '_on_mount', patched_text_area_on_mount)
+    monkeypatch.setattr(TextArea, '_restart_blink', patched_text_area_restart_blink)
+
+
+def _snapshot_loading_in_progress(app: App) -> bool:
+    screen = app.screen
+
+    if screen.__class__.__name__ == 'MainScreen':
+        if bool(getattr(screen, '_active_work_item_load_key', None)):
+            return True
+        if bool(getattr(getattr(screen, 'unified_search_bar', None), 'search_in_progress', False)):
+            return True
+        if bool(getattr(getattr(screen, 'search_results_container', None), 'is_loading', False)):
+            return True
+        if bool(
+            getattr(
+                getattr(screen, 'search_results_list', None), 'is_pending_initial_render', False
+            )
+        ):
+            return True
+        return False
+
+    for node in screen.walk_children(with_self=True):
+        if not bool(getattr(node, 'display', True)) or not bool(getattr(node, 'visible', True)):
+            continue
+        for attribute_name in ('is_loading', 'search_in_progress', '_is_loading'):
+            if bool(getattr(node, attribute_name, False)):
+                return True
+    return False
+
+
+async def wait_for_snapshot_stability(
+    pilot: Pilot, *, timeout: float = 5.0, interval: float = 0.05
+) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+
+    while True:
+        await pilot.wait_for_scheduled_animations()
+        await pilot.pause()
+
+        if not _snapshot_loading_in_progress(pilot.app):
+            await asyncio.sleep(interval)
+            await pilot.wait_for_scheduled_animations()
+            await pilot.pause()
+            if not _snapshot_loading_in_progress(pilot.app):
+                return
+
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError('Timed out waiting for snapshot state to settle')
+
+        await asyncio.sleep(interval)
+
+
+@pytest.fixture
+def snap_compare(snapshot: SnapshotAssertion, request: pytest.FixtureRequest):
+    """Compare snapshots after globally settling async UI state."""
+    snapshot = snapshot.use_extension(pytest_textual_snapshot.SVGImageExtension)
+
+    def compare(
+        app: str | Path | App,
+        press=(),
+        terminal_size: tuple[int, int] = (80, 24),
+        run_before=None,
+    ) -> bool:
+        from textual._doc import take_svg_screenshot
+        from textual._import_app import import_app
+
+        node = request.node
+
+        if isinstance(app, App):
+            app_instance = app
+            app_path = ''
+        else:
+            path = Path(app)
+            if path.is_absolute():
+                app_path = str(path.resolve())
+                app_instance = import_app(app_path)
+            else:
+                resolved = (node.path.parent / app).resolve()
+                app_path = str(resolved)
+                app_instance = import_app(app_path)
+
+        async def run_before_settled(pilot: Pilot) -> None:
+            if run_before is not None:
+                result = run_before(pilot)
+                if inspect.isawaitable(result):
+                    await result
+            await wait_for_snapshot_stability(pilot)
+
+        actual_screenshot = take_svg_screenshot(
+            app=app_instance,
+            press=press,
+            terminal_size=terminal_size,
+            run_before=run_before_settled,
+        )
+        console = Console(legacy_windows=False, force_terminal=True)
+        pseudo_app = pytest_textual_snapshot.PseudoApp(
+            pytest_textual_snapshot.PseudoConsole(console.legacy_windows, console.size)
+        )
+
+        result = snapshot == actual_screenshot
+
+        custom_execution_index = (
+            snapshot._execution_name_index.get(snapshot._custom_index)
+            if snapshot._custom_index
+            else None
+        )
+        execution_index = (
+            custom_execution_index
+            if isinstance(custom_execution_index, int)
+            else snapshot.num_executions - 1
+        )
+        assertion_result = snapshot.executions.get(execution_index)
+        snapshot_exists = (
+            execution_index in snapshot.executions
+            and assertion_result
+            and assertion_result.final_data is not None
+        )
+
+        expected_svg_text = str(snapshot)
+        full_path, line_number, name = node.reportinfo()
+        data = (
+            result,
+            expected_svg_text,
+            actual_screenshot,
+            pseudo_app,
+            full_path,
+            line_number,
+            name,
+            inspect.getdoc(node.function) or '',
+            app_path,
+            snapshot_exists,
+        )
+        data_path = pytest_textual_snapshot.node_to_report_path(request.node)
+        data_path.write_bytes(pytest_textual_snapshot.pickle.dumps(data))
+
+        return result
+
+    return compare
 
 
 # NOTE: (vkhitrin) Clear the global application cache after each test

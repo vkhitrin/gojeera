@@ -1,6 +1,6 @@
 import re
 from typing import TYPE_CHECKING
-from urllib.parse import ParseResult, quote, urlencode, urlparse
+from urllib.parse import ParseResult, parse_qs, quote, urlencode, urlparse
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from gojeera.config import CONFIGURATION
 
 WORK_ITEM_KEY_PATTERN = re.compile(r'^[A-Z][A-Z0-9]+-\d+$', re.IGNORECASE)
+JIRA_ID_PATTERN = re.compile(r'^\d+$')
 WORK_ITEM_BROWSE_TOOLTIP = 'Can be loaded inside gojeera using CTRL+mouse click'
 
 
@@ -90,6 +91,39 @@ def extract_work_item_key(value: str, base_url: str | None = None) -> str | None
         return None
 
     return work_item_key
+
+
+def extract_focused_comment_id(value: str, base_url: str | None = None) -> str | None:
+    """Extract a focused comment ID from a Jira browse URL."""
+    return _extract_browse_query_id(value, 'focusedCommentId', base_url)
+
+
+def extract_focused_work_log_id(value: str, base_url: str | None = None) -> str | None:
+    """Extract a focused work log ID from a Jira browse URL."""
+    return _extract_browse_query_id(value, 'focusedWorklogId', base_url)
+
+
+def _extract_browse_query_id(
+    value: str, parameter_name: str, base_url: str | None = None
+) -> str | None:
+    """Extract a numeric browse-query identifier from a Jira browse URL."""
+    parsed_result = _parse_work_item_browse_url(value)
+    if parsed_result is None:
+        return None
+
+    parsed_value, value_parts, _ = parsed_result
+    if base_url and not _is_current_jira_browse_url(parsed_value, value_parts, base_url):
+        return None
+
+    query_values = parse_qs(parsed_value.query).get(parameter_name)
+    if not query_values:
+        return None
+
+    identifier = query_values[0].strip()
+    if not identifier or not JIRA_ID_PATTERN.fullmatch(identifier):
+        return None
+
+    return identifier
 
 
 def build_external_url_for_work_item(

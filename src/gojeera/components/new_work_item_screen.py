@@ -78,7 +78,9 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
 
         self._types_fetched_for_project: str | None = None
         self._users_fetched_for_project: str | None = None
-        self._metadata_fetched_for: tuple[str, str] | None = None
+        self._metadata_loaded_for: tuple[str, str] | None = None
+        self._loading_metadata_for: tuple[str, str] | None = None
+        self._selected_work_item_type_id: str | None = None
         self._sprint_field_id: str | None = None
 
         self._cache = get_cache()
@@ -541,7 +543,8 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
         self._selected_work_item_type_id = work_item_type_id
         self.dynamic_fields_container.display = True
 
-        if self._metadata_fetched_for != (project_key, work_item_type_id):
+        target = (project_key, work_item_type_id)
+        if self._metadata_loaded_for != target and self._loading_metadata_for != target:
             self.run_worker(
                 self.fetch_work_item_create_metadata(project_key, work_item_type_id),
                 exclusive=False,
@@ -858,7 +861,9 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
 
                 self._types_fetched_for_project = None
                 self._users_fetched_for_project = None
-                self._metadata_fetched_for = None
+                self._metadata_loaded_for = None
+                self._loading_metadata_for = None
+                self._selected_work_item_type_id = None
 
                 try:
                     self.work_item_type_selector.clear()
@@ -881,6 +886,12 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
         project_value = self.project_selector.value
         work_item_type_value = self.work_item_type_selector.value
 
+        self._selected_work_item_type_id = (
+            str(work_item_type_value)
+            if work_item_type_value and work_item_type_value != Select.NULL
+            else None
+        )
+
         if (
             project_value
             and project_value != Select.NULL
@@ -891,7 +902,7 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
             self.schedule_dynamic_modal_layout()
 
             combo = (str(project_value), str(work_item_type_value))
-            if self._metadata_fetched_for != combo:
+            if self._metadata_loaded_for != combo and self._loading_metadata_for != combo:
                 self.run_worker(
                     self.fetch_work_item_create_metadata(
                         str(project_value), str(work_item_type_value)
@@ -925,10 +936,11 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
     async def fetch_work_item_create_metadata(
         self, project_key: str, work_item_type_id: str
     ) -> None:
-        if self._metadata_fetched_for == (project_key, work_item_type_id):
+        target = (project_key, work_item_type_id)
+        if self._metadata_loaded_for == target or self._loading_metadata_for == target:
             return
 
-        self._metadata_fetched_for = (project_key, work_item_type_id)
+        self._loading_metadata_for = target
 
         self._sprint_field_id = None
         try:
@@ -945,24 +957,26 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
             project_key, work_item_type_id
         )
 
-        if isinstance(response, Exception):
-            self.dynamic_fields_container.loading = False
-            self.notify(
-                f'Error fetching metadata: {str(response)}',
-                severity='error',
-                title='Create Work Item',
-            )
-            return
+        try:
+            if isinstance(response, Exception):
+                self.dynamic_fields_container.loading = False
+                self.notify(
+                    f'Error fetching metadata: {str(response)}',
+                    severity='error',
+                    title='Create Work Item',
+                )
+                return
 
-        if not response.success or not response.result:
-            self.dynamic_fields_container.loading = False
+            if not response.success or not response.result:
+                self.dynamic_fields_container.loading = False
 
-            self.notify(
-                'Unable to find the required information for creating work items.',
-                severity='error',
-                title='Create Work Item',
-            )
-        else:
+                self.notify(
+                    'Unable to find the required information for creating work items.',
+                    severity='error',
+                    title='Create Work Item',
+                )
+                return
+
             fields_data = response.result.get('fields', [])
             for field in fields_data:
                 field_id = field.get('fieldId')
@@ -1046,6 +1060,11 @@ class AddWorkItemScreen(DynamicModalScreen[dict[str, object | None]]):
                     users_data = {'users': users_response.result, 'selection': None}
                     for user_picker in user_picker_widgets:
                         user_picker.users = users_data
+
+            self._metadata_loaded_for = target
+        finally:
+            if self._loading_metadata_for == target:
+                self._loading_metadata_for = None
 
     def _format_field_value(
         self, field_id: str, value: Any, field_metadata: dict, widget: Widget | None = None

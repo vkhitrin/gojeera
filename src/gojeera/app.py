@@ -48,7 +48,11 @@ from gojeera.models import (
 )
 from gojeera.themes import load_themes_from_directory
 from gojeera.utils.urls import build_external_url_for_attachment, build_external_url_for_work_item
-from gojeera.utils.work_item_reference import WorkItemReferenceLoader, load_work_item_reference
+from gojeera.utils.work_item_reference import (
+    WorkItemNavigationTarget,
+    WorkItemReferenceLoader,
+    load_work_item_reference,
+)
 from gojeera.widgets.extended_footer import ExtendedFooter
 from gojeera.widgets.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.extended_palette import ExtendedPalette
@@ -211,6 +215,7 @@ class MainScreen(Screen):
         self.logger = logging.getLogger(LOGGER_NAME)
         self.current_loaded_work_item_key: str | None = None
         self.focused_work_item_link_key: str | None = None
+        self._pending_work_item_navigation_target: WorkItemNavigationTarget | None = None
         self._active_search_data: dict | None = None
         self._active_search_term: str | None = None
         self._active_work_item_load_key: str | None = None
@@ -1224,7 +1229,7 @@ class MainScreen(Screen):
         if not data:
             return
 
-        work_item_reference = data.get('work_item_key')
+        work_item_reference = data.get('work_item_reference')
         if not work_item_reference:
             return
 
@@ -1233,6 +1238,27 @@ class MainScreen(Screen):
             work_item_reference,
             title='Quick Navigation',
         )
+
+    def set_pending_work_item_navigation_target(
+        self, target: WorkItemNavigationTarget | None
+    ) -> None:
+        self._pending_work_item_navigation_target = target
+
+    def _set_active_work_item_tab(self, tab_id: str) -> None:
+        self.tabs.active = tab_id
+        self.information_panel.set_active_tab(tab_id)
+
+    def _apply_pending_work_item_navigation_target(self) -> None:
+        target = self._pending_work_item_navigation_target
+        if target is None:
+            return
+
+        try:
+            if target.focused_comment_id:
+                self._set_active_work_item_tab('tab-comments')
+                self.work_item_comments_widget.focus_comment_by_id(target.focused_comment_id)
+        finally:
+            self._pending_work_item_navigation_target = None
 
     async def new_work_item(self, data: dict | None) -> None:
         if data and data.get('parent_key'):
@@ -1278,6 +1304,7 @@ class MainScreen(Screen):
             return
 
         if self.current_loaded_work_item_key == selected_work_item_key:
+            self._apply_pending_work_item_navigation_target()
             return
 
         self._clear_loaded_work_item_state()
@@ -1377,6 +1404,8 @@ class MainScreen(Screen):
                         extra={'error': comments_response.error, 'work_item_key': work_item.key},
                     )
                 self.work_item_comments_widget.comments = work_item.comments
+
+            self._apply_pending_work_item_navigation_target()
 
             self.work_item_attachments_widget.work_item_key = work_item.key
             self.work_item_attachments_widget.attachments = work_item.attachments

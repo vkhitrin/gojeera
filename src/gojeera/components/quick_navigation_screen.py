@@ -41,6 +41,7 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         super().__init__()
         self._modal_title = 'Quick Navigation'
         self._resolved_work_item: JiraWorkItem | None = None
+        self._resolved_work_item_reference: str | None = None
         self._search_timer: Timer | None = None
         self._search_worker: Worker | None = None
 
@@ -116,21 +117,24 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
 
     def _set_searching_state(self, message: str) -> None:
         self._resolved_work_item = None
+        self._resolved_work_item_reference = None
         self.work_item_footer_details.show_searching(message)
         self._update_open_button_state()
 
-    def _set_resolved_work_item(self, work_item: JiraWorkItem) -> None:
+    def _set_resolved_work_item(self, work_item: JiraWorkItem, reference: str) -> None:
         self._resolved_work_item = work_item
+        self._resolved_work_item_reference = reference
         summary = work_item.cleaned_summary(48)
         self.work_item_footer_details.show_resolved(summary)
         self._update_open_button_state()
 
     def _reset_validation_message(self) -> None:
         self._resolved_work_item = None
+        self._resolved_work_item_reference = None
         self.work_item_footer_details.show_not_found()
         self._update_open_button_state()
 
-    async def _lookup_work_item(self, work_item_key: str) -> None:
+    async def _lookup_work_item(self, work_item_key: str, reference: str) -> None:
         app = cast('JiraApp', self.app)
         response: APIControllerResponse = await app.api.get_work_item(
             work_item_id_or_key=work_item_key,
@@ -141,7 +145,7 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             return
 
         work_item = response.result.work_items[0]
-        self.call_after_refresh(lambda: self._set_resolved_work_item(work_item))
+        self.call_after_refresh(lambda: self._set_resolved_work_item(work_item, reference))
 
     def _schedule_lookup(self, value: str) -> None:
         if self._search_timer is not None:
@@ -170,12 +174,13 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
             lambda: setattr(
                 self,
                 '_search_worker',
-                self.run_worker(self._lookup_work_item(work_item_key), exclusive=False),
+                self.run_worker(self._lookup_work_item(work_item_key, raw_value), exclusive=False),
             ),
         )
 
     def _set_not_found_state(self, message: str) -> None:
         self._resolved_work_item = None
+        self._resolved_work_item_reference = None
         self.work_item_footer_details.show_not_found(message)
         self._update_open_button_state()
 
@@ -200,9 +205,10 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
         if self._resolved_work_item is None:
             return
 
-        self.run_worker(self._open_work_item(self._resolved_work_item.key), exclusive=True)
+        work_item_reference = self._resolved_work_item_reference or self._resolved_work_item.key
+        self.run_worker(self._open_work_item(work_item_reference), exclusive=True)
 
-    async def _open_work_item(self, work_item_key: str) -> None:
+    async def _open_work_item(self, work_item_reference: str) -> None:
         app = cast('JiraApp', self.app)
         screen_stack = app.screen_stack
         if len(screen_stack) >= 2:
@@ -213,14 +219,14 @@ class QuickNavigationScreen(ExtendedModalScreen[dict[str, str]]):
                 main_screen.run_worker(
                     load_work_item_reference(
                         cast(WorkItemReferenceLoader, main_screen),
-                        work_item_key,
+                        work_item_reference,
                         title='Quick Navigation',
                     ),
                     exclusive=True,
                 )
                 return
 
-        self.dismiss({'work_item_key': work_item_key})
+        self.dismiss({'work_item_reference': work_item_reference})
 
     @on(Button.Pressed, '#quick-navigation-button-cancel')
     def handle_cancel(self) -> None:

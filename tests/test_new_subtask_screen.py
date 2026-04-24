@@ -5,7 +5,7 @@ from textual.widgets._tabbed_content import ContentTabs
 from gojeera.app import JiraApp
 from gojeera.components.new_work_item_screen import AddWorkItemScreen
 
-from .test_helpers import load_work_item_from_search
+from .test_helpers import load_work_item_from_search, wait_until
 
 
 async def open_add_subtask_screen(pilot):
@@ -30,18 +30,18 @@ async def open_add_subtask_screen(pilot):
     screen = pilot.app.screen
     assert isinstance(screen, AddWorkItemScreen), f'Expected AddWorkItemScreen, got {type(screen)}'
 
-    # Wait for all background workers to complete (fetch projects, types, users)
-    await pilot.app.workers.wait_for_complete()
-
-    # Give UI additional time to update and process after workers complete
-    await asyncio.sleep(1.0)
-
-    # NOTE: (vkhitrin) revisit this test!
-    # Force a UI refresh to ensure all updates are processed
-    # This is needed because the worker may complete before the UI is fully ready,
-    # so calling the lazy load again ensures the cached data is applied to the UI
-    screen._lazy_load_work_item_types()
-    await asyncio.sleep(0.5)
+    await wait_until(
+        lambda: (
+            screen._parent_work_item_key == 'ENG-4'
+            and screen.work_item_type_selector.value == '10002'
+            and screen._metadata_loaded_for == ('ENG', '10002')
+            and screen._loading_metadata_for is None
+            and not screen.dynamic_fields_container.loading
+            and screen.reporter_selector.value == '555000:11111111-1111-1111-1111-111111111111'
+        ),
+        timeout=5.0,
+    )
+    await asyncio.sleep(0.2)
 
     # Verify parent work item key is set
     assert screen._parent_work_item_key == 'ENG-4', (

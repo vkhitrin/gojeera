@@ -180,8 +180,7 @@ class CommentContainer(Vertical, can_focus=False):
             containers = parent.comment_containers
             for i, container in enumerate(containers):
                 if container._comment_id == self._comment_id:
-                    parent._selected_index = i
-                    parent._update_selection()
+                    parent.select_comment_at(i)
                     break
 
     async def action_delete_comment(self) -> None:
@@ -391,7 +390,10 @@ class CommentsScrollView(VerticalScroll):
 
     @property
     def comment_containers(self) -> list[CommentContainer]:
-        return list(self.query(CommentContainer))
+        widget = self._get_comments_widget()
+        if widget is not None:
+            return widget.comment_containers
+        return []
 
     @property
     def selected_comment(self) -> CommentContainer | None:
@@ -408,23 +410,27 @@ class CommentsScrollView(VerticalScroll):
             else:
                 container.remove_class('-selected')
 
+    def select_comment_at(self, index: int, *, scroll_into_view: bool = True) -> bool:
+        containers = self.comment_containers
+        if not containers or not 0 <= index < len(containers):
+            return False
+
+        self._selected_index = index
+        self._update_selection()
+
+        if scroll_into_view and (selected := self.selected_comment):
+            self.scroll_to_widget(selected, animate=False)
+        return True
+
     def action_cursor_down(self) -> None:
         containers = self.comment_containers
         if containers:
-            self._selected_index = min(self._selected_index + 1, len(containers) - 1)
-            self._update_selection()
-
-            if selected := self.selected_comment:
-                self.scroll_to_widget(selected, animate=False)
+            self.select_comment_at(min(self._selected_index + 1, len(containers) - 1))
 
     def action_cursor_up(self) -> None:
         containers = self.comment_containers
         if containers:
-            self._selected_index = max(self._selected_index - 1, 0)
-            self._update_selection()
-
-            if selected := self.selected_comment:
-                self.scroll_to_widget(selected, animate=False)
+            self.select_comment_at(max(self._selected_index - 1, 0))
 
     def action_open_comment_in_browser(self) -> None:
         if selected := self.selected_comment:
@@ -472,7 +478,10 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     def __init__(self):
         super().__init__(id='work_item_comments')
         self._work_item_key = None
-        self._last_comment_ids: set[tuple[str, datetime | None]] | None = None
+        self._last_comment_fingerprint: set[tuple[str, datetime | None]] | None = None
+        self._comment_indices: dict[str, int] = {}
+        self._comment_containers: list[CommentContainer] = []
+        self._pending_focus_comment_id: str | None = None
 
     @property
     def help_anchor(self) -> str:
@@ -496,6 +505,10 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     @property
     def comments_scroll_view(self) -> CommentsScrollView:
         return self.query_one(CommentsScrollView)
+
+    @property
+    def comment_containers(self) -> list[CommentContainer]:
+        return self._comment_containers
 
     def compose(self) -> ComposeResult:
         with VerticalGroup(classes='tab-content-container') as content:
@@ -544,6 +557,48 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 CommentScreen(mode='new', work_item_key=self.work_item_key), self.save_comment
             )
 
+    def focus_comment_by_id(self, comment_id: str) -> None:
+        self._pending_focus_comment_id = comment_id
+        self.call_after_refresh(self._apply_pending_comment_focus)
+
+    def _focus_comment_by_id(self, comment_id: str) -> bool:
+        scroll_view = self.comments_scroll_view
+        index = self._comment_indices.get(comment_id)
+        if index is None:
+            return False
+
+        containers = self.comment_containers
+        if not 0 <= index < len(containers):
+            return False
+
+        target = containers[index]
+        scroll_view.select_comment_at(index, scroll_into_view=False)
+        self.call_after_refresh(lambda: scroll_view.scroll_to_widget(target, animate=False))
+        self.call_after_refresh(lambda: scroll_view.focus())
+        return True
+
+    def _apply_pending_comment_focus(self) -> None:
+        comment_id = self._pending_focus_comment_id
+        if not comment_id or not self.is_attached:
+            return
+
+        if self._focus_comment_by_id(comment_id):
+            self._pending_focus_comment_id = None
+            return
+
+        self._pending_focus_comment_id = None
+        self.notify(
+            'Comment not found on the loaded work item',
+            severity='warning',
+            title=self.work_item_key,
+        )
+
+    async def _clear_rendered_comments(self) -> None:
+        for container in self._comment_containers:
+            await container.remove()
+        self._comment_containers = []
+        self._comment_indices = {}
+
     async def watch_comments(self, items: list[WorkItemComment] | None) -> None:
         """Watch for changes to comments."""
 
@@ -560,11 +615,10 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
         if not items:
             with self.app.batch_update():
-                for container in scroll_view.query(CommentContainer):
-                    await container.remove()
+                await self._clear_rendered_comments()
                 self.is_loading = False
                 self.displayed_count = 0
-                self._last_comment_ids = None
+                self._last_comment_fingerprint = None
             return
 
         current_comment_fingerprint = {
@@ -572,25 +626,23 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         }
 
         if (
-            self._last_comment_ids is not None
-            and self._last_comment_ids == current_comment_fingerprint
+            self._last_comment_fingerprint is not None
+            and self._last_comment_fingerprint == current_comment_fingerprint
         ):
             return
 
-        self._last_comment_ids = current_comment_fingerprint
+        self._last_comment_fingerprint = current_comment_fingerprint
 
         attachments_widget = getattr(self.screen, 'work_item_attachments_widget', None)
         media_attachment_details = _build_media_attachment_details(
             getattr(attachments_widget, 'attachments', None)
         )
+        sorted_items = sorted(items, key=lambda comment: comment.updated or 0, reverse=True)
 
         with self.app.batch_update():
-            for container in scroll_view.query(CommentContainer):
-                await container.remove()
+            await self._clear_rendered_comments()
 
-            items.sort(key=lambda x: x.updated or 0, reverse=True)
-
-            for comment in items:
+            for index, comment in enumerate(sorted_items):
                 if not self.is_attached or not scroll_view.is_attached:
                     return
 
@@ -686,6 +738,9 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 except MountError:
                     return
 
+                self._comment_containers.append(comment_container)
+                self._comment_indices[comment.id] = index
+
             self.hide_loading()
 
         if not self.is_attached or not scroll_view.is_attached:
@@ -693,4 +748,5 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
         scroll_view.reset_selection()
 
-        self.displayed_count = len(items)
+        self.displayed_count = len(sorted_items)
+        self._apply_pending_comment_focus()

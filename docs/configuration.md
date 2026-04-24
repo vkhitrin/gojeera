@@ -1,8 +1,5 @@
 # Configuration
 
-gojeera uses a YAML configuration file to customize its behavior and connect to
-your Jira instance. This document describes all available configuration options.
-
 ## Configuration File Location
 
 By default, gojeera looks for a configuration file at:
@@ -16,6 +13,29 @@ environment variable:
 export GOJEERA_CONFIG_FILE=/path/to/your/config.yaml
 ```
 
+## Authentication
+
+Create profiles for authentication:
+
+```bash
+gojeera auth login
+```
+
+Or use environment variables:
+
+```bash
+# Basic Authentication
+export GOJEERA_JIRA__API_EMAIL="your-email@example.com"
+export GOJEERA_JIRA__API_BASE_URL="https://your-instance.atlassian.net"
+export GOJEERA_JIRA__API_TOKEN="your-api-token"
+# OAuth2
+export GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN="your-access-token"
+export GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN="your-refresh-token"
+export GOJEERA_JIRA__OAUTH2_CLIENT_SECRET="your-client-secret"
+```
+
+Environment variables override the operating system keyring.
+
 ## Configuration via Environment Variables
 
 All configuration options can be set via environment variables using the
@@ -25,7 +45,7 @@ prefix `GOJEERA_`. For nested configurations, use double underscores
 Examples:
 
 ```bash
-export GOJEERA_JIRA__API_USERNAME="your-email@example.com"
+export GOJEERA_JIRA__API_EMAIL="your-email@example.com"
 export GOJEERA_JIRA__API_TOKEN="your-api-token"
 export GOJEERA_JIRA__API_BASE_URL="https://your-instance.atlassian.net"
 export GOJEERA_LOG_LEVEL="DEBUG"
@@ -41,24 +61,6 @@ earlier ones):
 2. YAML configuration file
 3. Environment variables
 4. CLI arguments (for specific options)
-
-## Required Configuration
-
-### Jira API Connection
-
-These settings are **required** to connect to your Jira instance:
-
-```yaml
-jira:
-  api_username: "your-email@example.com"
-  api_token: "your-api-token"
-  api_base_url: "https://your-instance.atlassian.net"
-```
-
-- **`api_username`** (**required**): Your Jira username or email address
-- **`api_token`** (**required**): Your Jira API token
-  ([generate one here](https://id.atlassian.com/manage-profile/security/api-tokens))
-- **`api_base_url`** (**required**): The base URL of your Jira instance
 
 ## Optional Configuration
 
@@ -268,13 +270,17 @@ example configuration file with common settings.
 
 ## Minimal Configuration Example
 
-The minimum required configuration to get started:
+Authentication is not stored in `gojeera.yaml`. The minimum setup is:
+
+1. Create a profile with `gojeera auth login`
+2. Optionally add non-auth settings to `gojeera.yaml`
+
+For example:
 
 ```yaml
-jira:
-  api_username: "your-email@example.com"
-  api_token: "your-api-token-here"
-  api_base_url: "https://your-instance.atlassian.net"
+theme: null
+search_on_startup: false
+show_footer: true
 ```
 
 ## Configuration Tips

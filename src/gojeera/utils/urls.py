@@ -34,7 +34,7 @@ def _get_base_url(app: 'JiraApp | None' = None) -> str:
         if server_info and hasattr(server_info, 'base_url'):
             return server_info.base_url
 
-    return CONFIGURATION.get().jira.api_base_url
+    return CONFIGURATION.get().jira.require_api_base_url()
 
 
 def _parse_work_item_browse_url(value: str) -> tuple[ParseResult, list[str], str] | None:

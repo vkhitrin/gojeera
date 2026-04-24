@@ -47,10 +47,10 @@ gojeera --help
 This will show you the available commands for the CLI tool
 
 ```bash
-$ uv run gojeera --help
-Usage: gojeera [OPTIONS]
+$ gojeera --help
+Usage: gojeera [OPTIONS] COMMAND [ARGS]...
 
-  Launches the gojeera TUI application.
+  Launches gojeera.
 
 Options:
   -p, --project-key TEXT          A case-sensitive Jira project key.
@@ -66,8 +66,13 @@ Options:
                                   Focus and open the work item at the
                                   specified position on startup. Requires
                                   --search-on-startup.
+  --profile TEXT                  The authentication profile to use for this
+                                  invocation.
   --version                       Show the version of the tool.
   --help                          Show this message and exit.
+
+Commands:
+  auth  Manage Jira secrets in the operating system secret store.
 ```
 
 ## Usage

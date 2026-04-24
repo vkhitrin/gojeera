@@ -196,8 +196,11 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     async def _populate_application_section(self) -> None:
         app = cast('JiraApp', self.app)
         main_screen = self._get_main_screen()
+        jira_config = app.config.jira
 
         app_state: dict[str, object] = {
+            'auth_profile': jira_config.get_active_profile_name(),
+            'auth_type': jira_config.auth_type,
             'theme': getattr(app, 'theme', None),
             'focused_widget': self._describe_widget(getattr(app, 'focused', None)),
             'screen_stack': [type(screen).__name__ for screen in app.screen_stack],

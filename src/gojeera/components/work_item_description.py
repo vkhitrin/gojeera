@@ -9,6 +9,7 @@ from textual.widgets import Static
 
 from gojeera.api_controller.controller import APIControllerResponse
 from gojeera.components.edit_work_item_info_screen import EditWorkItemInfoScreen
+from gojeera.logging_utils import build_log_extra
 from gojeera.models import JiraWorkItem
 from gojeera.widgets.gojeera_markdown import GojeeraMarkdown
 
@@ -199,11 +200,14 @@ class WorkItemInfoContainer(Container, can_focus=False):
                 hide_loading()
             else:
                 self.app.log.error(
-                    f'Screen does not have _try_hide_loading_coordinated method. '
-                    f'Screen type: {type(main_screen).__name__}'
+                    'Screen does not have _try_hide_loading_coordinated method.',
+                    extra=build_log_extra({'screen_type': type(main_screen).__name__}),
                 )
         except Exception as e:
-            self.app.log.error(f'Failed to call coordinated loading: {e}\n{traceback.format_exc()}')
+            self.app.log.error(
+                f'Failed to call coordinated loading: {e}\n{traceback.format_exc()}',
+                extra=build_log_extra({'error': str(e)}),
+            )
 
     async def action_edit_work_item_info(self) -> None:
         current_work_item = self.work_item

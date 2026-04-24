@@ -48,7 +48,7 @@ def compile_textual_css(tcss_file: Path, project_css: list[ProjectClassCss]) -> 
     app = JiraApp(
         settings=ApplicationConfiguration.model_construct(
             jira=JiraConfig.model_construct(
-                api_username='',
+                api_email='',
                 api_token=SecretStr(''),
                 api_base_url='',
             )

@@ -9,10 +9,76 @@ For configuration options, see [configuration.md](configuration.md).
 
 ![gojeera interface](/tests/__snapshots__/test_work_item_description/TestWorkItemDescription.test_internal_jira_link_tooltip_snapshot.svg)
 
-gojeera aims to provide a vim-like keyboard-driven interface for interacting with
-Jira work items. The main view is inspired by the Jira Cloud web UI, with a
-search panel on the left, work item list in the middle, and work item fields
+gojeera's interface is navigable using mouse and keyboard.
+
+The main view is inspired by the Jira Cloud web UI, with a
+search panel on the left, work item details in the middle, and work item fields
 panel on the right.
+
+## Authenticating With Atlassian Jira
+
+gojeera uses profiles for authentication. Each profile stores Jira connection
+metadata while secrets are stored in the operating
+system keyring.
+
+Supported authentication modes:
+
+- **Basic**: Jira site URL + email + API token
+  <https://id.atlassian.com/manage-profile/security/api-tokens>
+- **OAuth2**: Atlassian 3LO app + browser login + discovered Jira site
+  <https://developer.atlassian.com/cloud/jira/software/oauth-2-3lo-apps/>
+
+### Authentication Commands
+
+```bash
+# Create or edit a profile
+gojeera auth login
+
+# Show configured profiles and validation state
+gojeera auth status
+
+# Remove a profile
+gojeera auth logout
+```
+
+### Basic Authentication
+
+When you select `Basic (email + API token)`, the wizard prompts for:
+
+- `Profile name`
+- `Jira instance URL`
+- `Jira email`
+- `Jira API token`
+
+Before the profile is saved, gojeera validates the credentials against Jira.
+
+### OAuth2 Authentication
+
+When you select `OAuth2`, gojeera supports Atlassian 3LO login.
+
+The wizard prompts for:
+
+- `Profile name`
+- `Atlassian client ID`
+- `Atlassian client secret`
+
+gojeera always uses the `Extended + User Identity` scope set.
+
+The application requests the following oauth2 scopes:
+`read:jira-user`, `read:jira-work`, `write:jira-work`,
+`manage:jira-data-provider`, `read:servicedesk-request`, `read:servicemanagement-insi
+ght-objects`, `offline_access`, `read:me`, `read:account`
+
+### Choosing a Profile
+
+If you have multiple profiles, you can either:
+
+- Mark one profile as active in `gojeera auth login`
+- Select one explicitly when launching the app
+
+```bash
+gojeera --profile "service_account"
+```
 
 ## Starting gojeera
 
@@ -34,6 +100,9 @@ gojeera --jql-filter "My Work Items"
 
 # Open a specific work item
 gojeera --work-item-key "PROJ-123"
+
+# Use a specific authentication profile
+gojeera --profile "service_account"
 ```
 
 ## Global Keybindings
@@ -424,4 +493,3 @@ directly to that widget.
 - **Configuration**: See [configuration.md](configuration.md) for all configuration options
 - **Markdown/ADF**: See [markdown_to_adf_conversion.md](markdown_to_adf_conversion.md) for conversion details
 - **Jira JQL**: [Jira Query Language documentation](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
-- **API Tokens**: [Generate Jira API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)

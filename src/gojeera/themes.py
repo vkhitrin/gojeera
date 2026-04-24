@@ -5,6 +5,7 @@ from textual.theme import Theme
 import yaml
 
 from gojeera.constants import LOGGER_NAME
+from gojeera.logging_utils import build_log_extra
 
 logger = logging.getLogger(LOGGER_NAME)
 
@@ -98,7 +99,10 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
     themes = []
 
     if not themes_directory.exists():
-        logger.debug(f'Themes directory does not exist: {themes_directory}')
+        logger.debug(
+            'Themes directory does not exist',
+            extra=build_log_extra({'themes_directory': str(themes_directory)}),
+        )
         return themes
 
     yaml_files = list(themes_directory.glob('*.yaml')) + list(themes_directory.glob('*.yml'))
@@ -109,18 +113,33 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
                 theme_config = yaml.safe_load(f)
 
             if not theme_config:
-                logger.warning(f'Empty theme file: {yaml_file.name}')
+                logger.warning(
+                    'Empty theme file',
+                    extra=build_log_extra({'theme_file': yaml_file.name}),
+                )
                 continue
 
             theme = create_theme_from_config(theme_config)
             themes.append(theme)
-            logger.debug(f'Loaded theme "{theme.name}" from {yaml_file.name}')
+            logger.debug(
+                'Loaded theme from file',
+                extra=build_log_extra({'theme_name': theme.name, 'theme_file': yaml_file.name}),
+            )
 
         except yaml.YAMLError as e:
-            logger.error(f'Failed to parse theme file {yaml_file.name}: {str(e)}')
+            logger.error(
+                'Failed to parse theme file',
+                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
+            )
         except ValueError as e:
-            logger.error(f'Invalid theme in {yaml_file.name}: {str(e)}')
+            logger.error(
+                'Invalid theme definition',
+                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
+            )
         except Exception as e:
-            logger.warning(f'Unexpected error loading theme from {yaml_file.name}: {str(e)}')
+            logger.warning(
+                'Unexpected error loading theme',
+                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
+            )
 
     return themes

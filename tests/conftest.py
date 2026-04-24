@@ -207,9 +207,9 @@ def clear_global_cache():
 @pytest.fixture(autouse=True)
 def mock_configuration():
     jira_config = JiraConfig(
-        api_username='testuser@example.com',
+        api_email_override='testuser@example.com',
         api_token=SecretStr('test-token'),
-        api_base_url='https://example.atlassian.acme.net',
+        api_base_url_override='https://example.atlassian.acme.net',
     )
 
     config = ApplicationConfiguration(
@@ -244,9 +244,9 @@ def mock_configuration():
 def mock_configuration_with_sprints():
     """Configuration with sprint selection enabled for sprint-related tests."""
     jira_config = JiraConfig(
-        api_username='testuser@example.com',
+        api_email_override='testuser@example.com',
         api_token=SecretStr('test-token'),
-        api_base_url='https://example.atlassian.acme.net',
+        api_base_url_override='https://example.atlassian.acme.net',
     )
 
     config = ApplicationConfiguration(

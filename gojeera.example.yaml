@@ -1,10 +1,3 @@
-# Jira API Configuration
-jira:
-  api_username: "foo@bar"
-  api_token: "12345"
-  api_base_url: "https://<your-hostname>.atlassian.net"
-
-jira_base_url: "https://<your-hostname>.atlassian.net"
 show_work_item_web_links: True
 ignore_users_without_email: True
 enable_sprint_selection: true

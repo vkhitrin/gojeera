@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime
 from io import BufferedReader, BytesIO
 import json
 import logging
 from pathlib import Path
 import sys
-from typing import TYPE_CHECKING, Any, BinaryIO, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, cast
 
 # https://darren.codes/posts/python-startup-time/
 sys.modules['httpx._main'] = cast(Any, None)
@@ -17,9 +18,10 @@ from gojeera.api.client import AsyncHTTPClient, AsyncJiraClient, JiraClient  # n
 from gojeera.api.utils import build_work_item_search_jql  # noqa: E402
 from gojeera.constants import LOGGER_NAME, WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS  # noqa: E402
 from gojeera.exceptions import FileUploadException  # noqa: E402
+from gojeera.logging_utils import build_log_extra  # noqa: E402
 
 if TYPE_CHECKING:
-    from gojeera.config import ApplicationConfiguration
+    from gojeera.config import ApplicationConfiguration, JiraAuthContext
 
 
 class JiraAPI:
@@ -30,45 +32,66 @@ class JiraAPI:
 
     def __init__(
         self,
-        base_url: str,
-        api_username: str,
-        api_token: str,
+        auth: JiraAuthContext,
         configuration: ApplicationConfiguration,
+        oauth2_token_refresher: Callable[[], str | None] | None = None,
     ):
+        rest_api_path_prefix = auth.rest_api_path_prefix or self.REST_API_PATH_PREFIX
+        agile_api_path_prefix = auth.agile_api_path_prefix or self.AGILE_API_PATH_PREFIX
         self._client = AsyncJiraClient(
-            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
-            api_username=api_username,
-            api_token=api_token.strip(),
+            base_url=f'{auth.api_base_url.rstrip("/")}{rest_api_path_prefix}',
+            api_email=auth.api_email,
+            api_token=auth.api_token.strip() if auth.api_token is not None else None,
             configuration=configuration,
+            bearer_token=auth.bearer_token,
+            token_refresh_callback=oauth2_token_refresher,
         )
 
         self._sync_client = JiraClient(
-            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
-            api_username=api_username,
-            api_token=api_token.strip(),
+            base_url=f'{auth.api_base_url.rstrip("/")}{rest_api_path_prefix}',
+            api_email=auth.api_email,
+            api_token=auth.api_token.strip() if auth.api_token is not None else None,
             configuration=configuration,
+            bearer_token=auth.bearer_token,
+            token_refresh_callback=oauth2_token_refresher,
         )
 
         self._async_http_client = AsyncHTTPClient(
-            base_url=f'{base_url.rstrip("/")}{self.REST_API_PATH_PREFIX}',
-            api_username=api_username,
-            api_token=api_token.strip(),
+            base_url=f'{auth.api_base_url.rstrip("/")}{rest_api_path_prefix}',
+            api_email=auth.api_email,
+            api_token=auth.api_token.strip() if auth.api_token is not None else None,
             configuration=configuration,
+            bearer_token=auth.bearer_token,
+            token_refresh_callback=oauth2_token_refresher,
         )
 
         self._agile_client = AsyncJiraClient(
-            base_url=f'{base_url.rstrip("/")}{self.AGILE_API_PATH_PREFIX}',
-            api_username=api_username,
-            api_token=api_token.strip(),
+            base_url=f'{auth.api_base_url.rstrip("/")}{agile_api_path_prefix}',
+            api_email=auth.api_email,
+            api_token=auth.api_token.strip() if auth.api_token is not None else None,
             configuration=configuration,
+            bearer_token=auth.bearer_token,
+            token_refresh_callback=oauth2_token_refresher,
         )
 
-        self._base_url = base_url
+        self._base_url = auth.api_base_url
+        self._auth = auth
         self.logger = logging.getLogger(LOGGER_NAME)
+
+    def set_bearer_token(self, bearer_token: str | None) -> None:
+        self._auth = replace(self._auth, bearer_token=bearer_token)
+        self._client.set_bearer_token(bearer_token)
+        self._sync_client.set_bearer_token(bearer_token)
+        self._async_http_client.set_bearer_token(bearer_token)
+        self._agile_client.set_bearer_token(bearer_token)
 
     @property
     def base_url(self) -> str:
         return self._base_url
+
+    @property
+    def auth(self) -> 'JiraAuthContext':
+        return self._auth
 
     @property
     def client(self) -> AsyncJiraClient:
@@ -588,7 +611,10 @@ class JiraAPI:
         seen_ids = set()
 
         if account_id:
-            self.logger.info(f'Fetching personal filters for account_id={account_id}')
+            self.logger.info(
+                'Fetching personal filters',
+                extra=build_log_extra({'account_id': account_id, 'shared': False}),
+            )
             personal_params: dict[str, Any] = {
                 'maxResults': max_results,
                 'expand': 'jql,favourite',
@@ -602,13 +628,19 @@ class JiraAPI:
             )
 
             if personal_response and 'values' in personal_response:
-                self.logger.info(f'Received {len(personal_response["values"])} personal filters')
+                self.logger.info(
+                    'Received personal filters',
+                    extra=build_log_extra({'count': len(personal_response['values'])}),
+                )
                 filters.extend(
                     self._process_filters(personal_response['values'], starred_only, seen_ids)
                 )
 
         if include_shared:
-            self.logger.info('Fetching shared filters (accessible via groups/projects)')
+            self.logger.info(
+                'Fetching shared filters',
+                extra=build_log_extra({'shared': True}),
+            )
             shared_params: dict[str, Any] = {
                 'maxResults': max_results,
                 'expand': 'jql,favourite',
@@ -621,12 +653,15 @@ class JiraAPI:
             )
 
             if shared_response and 'values' in shared_response:
-                self.logger.info(f'Received {len(shared_response["values"])} shared filters')
+                self.logger.info(
+                    'Received shared filters',
+                    extra=build_log_extra({'count': len(shared_response['values'])}),
+                )
                 filters.extend(
                     self._process_filters(shared_response['values'], starred_only, seen_ids)
                 )
 
-        self.logger.info(f'Returning {len(filters)} total filters')
+        self.logger.info('Returning filters', extra=build_log_extra({'count': len(filters)}))
         return filters
 
     def _process_filters(
@@ -654,11 +689,17 @@ class JiraAPI:
                 continue
 
             if starred_only and not is_favourite:
-                self.logger.info(f'Skipping non-starred filter: {name}')
+                self.logger.info(
+                    'Skipping non-starred filter',
+                    extra=build_log_extra({'filter_name': name}),
+                )
                 continue
 
             if not name or not jql:
-                self.logger.warning(f'Filter missing name or JQL: {filter_data}')
+                self.logger.warning(
+                    'Filter missing name or JQL',
+                    extra=build_log_extra({'filter_data': filter_data}),
+                )
                 continue
 
             processed.append(

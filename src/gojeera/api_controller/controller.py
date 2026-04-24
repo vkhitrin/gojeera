@@ -1,6 +1,6 @@
 from collections import defaultdict
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 import logging
 import mimetypes
@@ -9,9 +9,14 @@ from pathlib import Path
 from typing import Any, cast
 
 from dateutil.parser import isoparse
+import httpx
+from pydantic import SecretStr
 
 from gojeera.api.api import JiraAPI
+from gojeera.api.client import AsyncJiraClient
 from gojeera.api_controller.factories import WorkItemFactory
+from gojeera.auth_profiles import OAuth2AuthProfile
+from gojeera.auth_service import AuthService
 from gojeera.cache import get_cache
 from gojeera.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.constants import (
@@ -27,6 +32,15 @@ from gojeera.exceptions import (
     ServiceUnavailableException,
     UpdateWorkItemException,
     ValidationError,
+)
+from gojeera.logging_utils import (
+    ExceptionLogDetails,
+)
+from gojeera.logging_utils import (
+    build_log_extra as shared_build_log_extra,
+)
+from gojeera.logging_utils import (
+    extract_exception_details as shared_extract_exception_details,
 )
 from gojeera.models import (
     Attachment,
@@ -73,24 +87,70 @@ class APIController:
 
     def __init__(self, configuration: ApplicationConfiguration | None = None):
         self.config = CONFIGURATION.get() if not configuration else configuration
+        self.auth = self.config.jira.build_auth_context()
         self.api: JiraAPI
+        self.identity_api: AsyncJiraClient | None = None
+        self.auth_service = AuthService()
 
-        self.api = JiraAPI(
-            base_url=self.config.jira.api_base_url,
-            api_username=self.config.jira.api_username,
-            api_token=self.config.jira.api_token.get_secret_value(),
-            configuration=self.config,
+        oauth2_token_refresher = (
+            self._refresh_oauth2_access_token if self.auth.auth_type == 'oauth2' else None
         )
+        self.api = JiraAPI(
+            auth=self.auth,
+            configuration=self.config,
+            oauth2_token_refresher=oauth2_token_refresher,
+        )
+        if self.auth.auth_type == 'oauth2' and self.auth.identity_base_url is not None:
+            self.identity_api = AsyncJiraClient(
+                base_url=self.auth.identity_base_url,
+                api_email=self.auth.api_email,
+                api_token=self.auth.api_token,
+                configuration=self.config,
+                bearer_token=self.auth.bearer_token,
+                token_refresh_callback=oauth2_token_refresher,
+            )
         self.skip_users_without_email = self.config.ignore_users_without_email
         self.logger = logging.getLogger(LOGGER_NAME)
         self.cache = get_cache()
 
+    def _refresh_oauth2_access_token(self) -> str | None:
+        active_profile = self.config.jira.active_profile
+        if not isinstance(active_profile, OAuth2AuthProfile):
+            raise ValueError('OAuth2 token refresh requires an active OAuth2 profile.')
+
+        token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
+        refreshed_token = token_response.access_token
+
+        self.auth = replace(self.auth, bearer_token=refreshed_token)
+        self.api.set_bearer_token(refreshed_token)
+        if self.identity_api is not None:
+            self.identity_api.set_bearer_token(refreshed_token)
+
+        object.__setattr__(self.config.jira, 'oauth2_access_token', SecretStr(refreshed_token))
+        if token_response.refresh_token:
+            object.__setattr__(
+                self.config.jira,
+                'oauth2_refresh_token',
+                SecretStr(token_response.refresh_token),
+            )
+        return refreshed_token
+
+    async def close(self) -> None:
+        await self.api.client.close_async_client()
+        await self.api.async_http_client.close_async_client()
+        if self.identity_api is not None:
+            await self.identity_api.close_async_client()
+
     @staticmethod
-    def _extract_exception_details(exception: Exception) -> dict:
-        extra: dict = getattr(exception, 'extra', {}) or {}
-        error_messages = extra.get('errorMessages', [])
-        message = error_messages[0] if error_messages else str(exception)
-        return {'message': message, 'extra': extra}
+    def _extract_exception_details(exception: Exception) -> ExceptionLogDetails:
+        return shared_extract_exception_details(exception)
+
+    @staticmethod
+    def _build_log_extra(
+        base: dict[str, Any] | None = None,
+        exception_details: ExceptionLogDetails | None = None,
+    ) -> dict[str, Any]:
+        return shared_build_log_extra(base, exception_details)
 
     async def get_project(self, key: str) -> APIControllerResponse:
         """Retrieves the details of a project by key.
@@ -106,15 +166,12 @@ class APIController:
         try:
             response: dict = await self.api.get_project(key)
         except Exception as e:
-            exception_details: dict = self._extract_exception_details(e)
+            exception_details = self._extract_exception_details(e)
             self.logger.error(
                 'Unable to retrieve project',
-                extra={
-                    'key': key,
-                    **exception_details.get('extra', {}),
-                },
+                extra=self._build_log_extra({'key': key}, exception_details),
             )
-            return APIControllerResponse(success=False, error=exception_details.get('message'))
+            return APIControllerResponse(success=False, error=exception_details.message)
         return APIControllerResponse(
             result=Project(
                 id=str(response.get('id', '')),
@@ -152,20 +209,20 @@ class APIController:
                     keys=keys,
                 )
             except Exception as e:
-                exception_details: dict = self._extract_exception_details(e)
+                exception_details = self._extract_exception_details(e)
                 self.logger.error(
                     'There was an error while searching projects',
-                    extra={
-                        'error': str(e),
-                        'query': query,
-                        'keys': keys,
-                        'limit': RECORDS_PER_PAGE_SEARCH_PROJECTS,
-                        **exception_details.get('extra', {}),
-                    },
+                    extra=self._build_log_extra(
+                        {
+                            'error': str(e),
+                            'query': query,
+                            'keys': keys,
+                            'limit': RECORDS_PER_PAGE_SEARCH_PROJECTS,
+                        },
+                        exception_details,
+                    ),
                 )
-                return APIControllerResponse(
-                    result=projects, error=exception_details.get('message')
-                )
+                return APIControllerResponse(result=projects, error=exception_details.message)
             else:
                 for project in response.get('values', []):
                     projects.append(
@@ -195,15 +252,12 @@ class APIController:
         try:
             response: list[dict] = await self.api.get_project_statuses(project_key)
         except Exception as e:
-            exception_details: dict = self._extract_exception_details(e)
+            exception_details = self._extract_exception_details(e)
             self.logger.error(
                 'Unable to find status codes associated to a project',
-                extra={
-                    'project_key': project_key,
-                    **exception_details.get('extra', {}),
-                },
+                extra=self._build_log_extra({'project_key': project_key}, exception_details),
             )
-            return APIControllerResponse(success=False, error=exception_details.get('message'))
+            return APIControllerResponse(success=False, error=exception_details.message)
         statuses_by_work_item_type: dict[str, dict] = defaultdict(dict)
         for record in response:
             statuses_for_work_item_type: list[WorkItemStatus] = []
@@ -1035,23 +1089,59 @@ class APIController:
             `APIControllerResponse(success=False)` if there is an error fetching the details.
         """
         try:
-            response: dict = await self.api.myself()
+            if self.config.jira.auth_type == 'oauth2' and self.identity_api is not None:
+                identity_response = cast(
+                    dict,
+                    await self.identity_api.make_request(
+                        method=httpx.AsyncClient.get,
+                        url='me',
+                        headers={'Accept': 'application/json'},
+                    ),
+                )
+                jira_response = await self.api.myself()
+                result = JiraMyselfInfo(
+                    account_id=str(
+                        identity_response.get('account_id') or jira_response.get('accountId', '')
+                    ),
+                    account_type=str(
+                        identity_response.get('account_type')
+                        or jira_response.get('accountType', '')
+                    ),
+                    active=str(
+                        identity_response.get('account_status')
+                        or ('active' if jira_response.get('active', False) else 'inactive')
+                    ).lower()
+                    == 'active',
+                    display_name=str(
+                        identity_response.get('name')
+                        or identity_response.get('nickname')
+                        or jira_response.get('displayName')
+                        or identity_response.get('account_id')
+                        or ''
+                    ),
+                    email=identity_response.get('email') or jira_response.get('emailAddress'),
+                    groups=[
+                        JiraUserGroup(id=g.get('id'), name=g.get('name'))
+                        for g in get_nested(jira_response, 'groups', 'items', default=[])
+                    ],
+                )
+            else:
+                response = await self.api.myself()
+                result = JiraMyselfInfo(
+                    account_id=str(response.get('accountId', '')),
+                    account_type=str(response.get('accountType', '')),
+                    active=bool(response.get('active', False)),
+                    display_name=str(response.get('displayName', '')),
+                    email=response.get('emailAddress'),
+                    groups=[
+                        JiraUserGroup(id=g.get('id'), name=g.get('name'))
+                        for g in get_nested(response, 'groups', 'items', default=[])
+                    ],
+                )
         except Exception as e:
             exception_details: dict = self._extract_exception_details(e)
             return APIControllerResponse(success=False, error=exception_details.get('message'))
-        return APIControllerResponse(
-            result=JiraMyselfInfo(
-                account_id=str(response.get('accountId', '')),
-                account_type=str(response.get('accountType', '')),
-                active=bool(response.get('active', False)),
-                display_name=str(response.get('displayName', '')),
-                email=response.get('emailAddress'),
-                groups=[
-                    JiraUserGroup(id=g.get('id'), name=g.get('name'))
-                    for g in get_nested(response, 'groups', 'items', default=[])
-                ],
-            )
-        )
+        return APIControllerResponse(result=result)
 
     async def update_work_item(
         self, work_item: JiraWorkItem, updates: dict
@@ -2460,9 +2550,12 @@ class APIController:
         try:
             response = await self.api.get_fields()
         except Exception as e:
-            exception_details: dict = self._extract_exception_details(e)
-            self.logger.error('Unable to fetch fields', extra=exception_details.get('extra'))
-            return APIControllerResponse(success=False, error=exception_details.get('message'))
+            exception_details = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to fetch fields',
+                extra=self._build_log_extra(exception_details=exception_details),
+            )
+            return APIControllerResponse(success=False, error=exception_details.message)
 
         descriptions_by_id: dict[str, str] = {}
         start_at = 0

@@ -67,8 +67,7 @@ class QuitScreen(ExtendedModalScreen[str]):
 
     async def close_connections(self):
         app = cast('JiraApp', self.screen.app)  # noqa: F821
-        await app.api.api.client.close_async_client()
-        await app.api.api.async_http_client.close_async_client()
+        await app.api.close()
 
     @on(Button.Pressed, '#button-quit')
     def handle_quit(self) -> None:

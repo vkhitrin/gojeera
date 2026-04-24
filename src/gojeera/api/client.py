@@ -21,6 +21,7 @@ from gojeera.exceptions import (
     ServiceInvalidResponseException,
     ServiceUnavailableException,
 )
+from gojeera.logging_utils import build_log_extra
 
 if TYPE_CHECKING:
     from gojeera.config import ApplicationConfiguration
@@ -65,13 +66,22 @@ class AsyncHTTPClient:
     def __init__(
         self,
         base_url: str,
-        api_username: str,
-        api_token: str,
+        api_email: str | None,
+        api_token: str | None,
         configuration: ApplicationConfiguration,
+        bearer_token: str | None = None,
+        token_refresh_callback: Callable[[], str | None] | None = None,
     ):
         ssl_certificate_settings: SSLCertificateSettings = _setup_ssl_certificates(configuration)
         self.base_url: str = base_url.rstrip('/')
-        self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        self.authentication = (
+            httpx.BasicAuth(api_email, api_token.strip())
+            if api_email is not None and api_token is not None
+            else None
+        )
+        self.default_headers: dict[str, str] = {}
+        if bearer_token is not None:
+            self.default_headers['Authorization'] = f'Bearer {bearer_token.strip()}'
         timeout = httpx.Timeout(60.0, connect=10.0, read=60.0, write=30.0)
         self.client: httpx.AsyncClient = httpx.AsyncClient(
             verify=ssl_certificate_settings.verify_ssl,
@@ -79,18 +89,25 @@ class AsyncHTTPClient:
             timeout=timeout,
         )
         self.logger = logging.getLogger(LOGGER_NAME)
+        self.token_refresh_callback = token_refresh_callback
 
-    @staticmethod
-    def set_headers(headers: dict | None = None) -> dict:
+    def set_headers(self, headers: dict | None = None) -> dict:
         default_headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         }
+        default_headers.update(self.default_headers)
         if headers:
             default_headers.update(headers)
         return default_headers
 
     def get_resource_url(self, resource: str) -> str:
         return f'{self.base_url}/{resource}'
+
+    def set_bearer_token(self, bearer_token: str | None) -> None:
+        if bearer_token is None:
+            self.default_headers.pop('Authorization', None)
+        else:
+            self.default_headers['Authorization'] = f'Bearer {bearer_token.strip()}'
 
     async def close_async_client(self):
         await self.client.aclose()
@@ -103,59 +120,102 @@ class AsyncHTTPClient:
         timeout: int = 55,
         **kwargs,
     ) -> Any | None:
-        headers = self.set_headers(headers)
         url = self.get_resource_url(url)
+        retry_after_refresh = True
+        while True:
+            request_headers = self.set_headers(headers)
 
-        try:
-            response: httpx.Response = await method(
-                self.client,
-                url,
-                headers=headers,
-                timeout=timeout,
-                auth=self.authentication,
-                **kwargs,
-            )
-        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
-            msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(msg, extra={'url': url})
-            raise ServiceUnavailableException(msg, extra={'url': url}) from e
+            try:
+                response: httpx.Response = await method(
+                    self.client,
+                    url,
+                    headers=request_headers,
+                    timeout=timeout,
+                    auth=self.authentication,
+                    **kwargs,
+                )
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
+                msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(msg, extra=build_log_extra({'url': url}))
+                raise ServiceUnavailableException(msg, context={'url': url}) from e
 
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            error_details: dict | None = self._parse_error_response(response)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if (
+                    response.status_code == 401
+                    and retry_after_refresh
+                    and self.authentication is None
+                    and 'Authorization' in self.default_headers
+                    and self.token_refresh_callback is not None
+                ):
+                    retry_after_refresh = False
+                    try:
+                        refreshed_token = self.token_refresh_callback()
+                    except Exception as refresh_error:
+                        self.logger.warning(
+                            'OAuth2 token refresh failed',
+                            extra=build_log_extra({'url': url, 'error': str(refresh_error)}),
+                        )
+                    else:
+                        if refreshed_token:
+                            self.set_bearer_token(refreshed_token)
+                            continue
 
-            extra = {
-                'url': url,
-                'status_code': response.status_code,
-            }
+                error_details: dict | None = self._parse_error_response(response)
 
-            message = str(e)
-            if error_details is not None and isinstance(error_details, dict):
-                if error_details.get('errorMessages', []):
-                    message = error_details.get('errorMessages', [])[0]
-                extra.update(**error_details)
+                extra = {
+                    'url': url,
+                    'status_code': response.status_code,
+                }
 
-            self.logger.error(message, extra=extra)
-            if response.status_code == 404:
-                raise ResourceNotFoundException(message, extra=extra) from e
-            if response.status_code == 401:
-                raise AuthorizationException(message, extra=extra) from e
-            if response.status_code == 403:
-                raise PermissionException(message, extra=extra) from e
-            raise ServiceInvalidRequestException(message, extra=extra) from e
+                message = str(e)
+                if error_details is not None and isinstance(error_details, dict):
+                    if error_details.get('errorMessages', []):
+                        message = error_details.get('errorMessages', [])[0]
+                    extra.update(**error_details)
 
-        if response.status_code == 204:
-            return self._empty_response(response)
+                self.logger.error(message, extra=build_log_extra(extra))
+                if response.status_code == 404:
+                    raise ResourceNotFoundException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 401:
+                    raise AuthorizationException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 403:
+                    raise PermissionException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                raise ServiceInvalidRequestException(
+                    message,
+                    context={'url': url, 'status_code': response.status_code},
+                    remote_payload=error_details,
+                ) from e
 
-        try:
-            return self._parse_response(response)
-        except Exception as e:
-            if response.status_code == 201:
+            if response.status_code == 204:
                 return self._empty_response(response)
-            log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
-            raise ServiceInvalidResponseException(log_msg, extra={}) from e
+
+            try:
+                return self._parse_response(response)
+            except Exception as e:
+                if response.status_code == 201:
+                    return self._empty_response(response)
+                log_msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(
+                    log_msg,
+                    extra=build_log_extra({'url': url, 'status_code': response.status_code}),
+                )
+                raise ServiceInvalidResponseException(
+                    log_msg, context={'url': url, 'status_code': response.status_code}
+                ) from e
 
     @staticmethod
     def _parse_error_response(response: httpx.Response) -> dict | None:
@@ -177,13 +237,22 @@ class JiraClient:
     def __init__(
         self,
         base_url: str,
-        api_username: str,
-        api_token: str,
+        api_email: str | None,
+        api_token: str | None,
         configuration: ApplicationConfiguration,
+        bearer_token: str | None = None,
+        token_refresh_callback: Callable[[], str | None] | None = None,
     ):
         ssl_certificate_settings: SSLCertificateSettings = _setup_ssl_certificates(configuration)
         self.base_url: str = base_url.rstrip('/')
-        self.authentication = httpx.BasicAuth(api_username, api_token.strip())
+        self.authentication = (
+            httpx.BasicAuth(api_email, api_token.strip())
+            if api_email is not None and api_token is not None
+            else None
+        )
+        self.default_headers: dict[str, str] = {}
+        if bearer_token is not None:
+            self.default_headers['Authorization'] = f'Bearer {bearer_token.strip()}'
         timeout = httpx.Timeout(60.0, connect=10.0, read=60.0, write=30.0)
         self.client: httpx.Client = httpx.Client(
             verify=ssl_certificate_settings.verify_ssl,
@@ -191,18 +260,25 @@ class JiraClient:
             timeout=timeout,
         )
         self.logger = logging.getLogger(LOGGER_NAME)
+        self.token_refresh_callback = token_refresh_callback
 
-    @staticmethod
-    def set_headers(headers: dict | None = None) -> dict:
+    def set_headers(self, headers: dict | None = None) -> dict:
         default_headers = {
             'Accept': 'application/json',
         }
+        default_headers.update(self.default_headers)
         if headers:
             default_headers.update(headers)
         return default_headers
 
     def get_resource_url(self, resource: str) -> str:
         return f'{self.base_url}/{resource}'
+
+    def set_bearer_token(self, bearer_token: str | None) -> None:
+        if bearer_token is None:
+            self.default_headers.pop('Authorization', None)
+        else:
+            self.default_headers['Authorization'] = f'Bearer {bearer_token.strip()}'
 
     def make_request(
         self,
@@ -212,57 +288,104 @@ class JiraClient:
         timeout: int = 55,
         **kwargs,
     ) -> dict | list | None:
-        headers = self.set_headers(headers)
         url = self.get_resource_url(url)
+        retry_after_refresh = True
+        while True:
+            request_headers = self.set_headers(headers)
 
-        try:
-            response: httpx.Response = method(
-                url, headers=headers, timeout=timeout, auth=self.authentication, **kwargs
-            )
-        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
-            msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(msg, extra={'url': url})
-            raise ServiceUnavailableException(msg, extra={'url': url}) from e
+            try:
+                response: httpx.Response = method(
+                    url,
+                    headers=request_headers,
+                    timeout=timeout,
+                    auth=self.authentication,
+                    **kwargs,
+                )
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
+                msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(msg, extra=build_log_extra({'url': url}))
+                raise ServiceUnavailableException(msg, context={'url': url}) from e
 
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            error_details: dict | None = self._parse_error_response(response)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if (
+                    response.status_code == 401
+                    and retry_after_refresh
+                    and self.authentication is None
+                    and 'Authorization' in self.default_headers
+                    and self.token_refresh_callback is not None
+                ):
+                    retry_after_refresh = False
+                    try:
+                        refreshed_token = self.token_refresh_callback()
+                    except Exception as refresh_error:
+                        self.logger.warning(
+                            'OAuth2 token refresh failed',
+                            extra=build_log_extra({'url': url, 'error': str(refresh_error)}),
+                        )
+                    else:
+                        if refreshed_token:
+                            self.set_bearer_token(refreshed_token)
+                            continue
 
-            extra = {
-                'url': url,
-                'status_code': response.status_code,
-            }
+                error_details: dict | None = self._parse_error_response(response)
 
-            message = str(e)
-            if error_details is not None and isinstance(error_details, dict):
-                if error_details.get('errorMessages', []):
-                    message = error_details.get('errorMessages', [])[0]
-                extra.update(**error_details)
+                extra = {
+                    'url': url,
+                    'status_code': response.status_code,
+                }
 
-            self.logger.error(message, extra=extra)
-            if response.status_code == 404:
-                raise ResourceNotFoundException(message, extra=extra) from e
-            if response.status_code == 401:
-                raise AuthorizationException(message, extra=extra) from e
-            if response.status_code == 403:
-                raise PermissionException(message, extra=extra) from e
-            raise ServiceInvalidRequestException(message, extra=extra) from e
+                message = str(e)
+                if error_details is not None and isinstance(error_details, dict):
+                    if error_details.get('errorMessages', []):
+                        message = error_details.get('errorMessages', [])[0]
+                    extra.update(**error_details)
 
-        if response.status_code == 204:
-            return {}
+                self.logger.error(message, extra=build_log_extra(extra))
+                if response.status_code == 404:
+                    raise ResourceNotFoundException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 401:
+                    raise AuthorizationException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 403:
+                    raise PermissionException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                raise ServiceInvalidRequestException(
+                    message,
+                    context={'url': url, 'status_code': response.status_code},
+                    remote_payload=error_details,
+                ) from e
 
-        try:
-            response_json = response.json()
-        except Exception as e:
-            if response.status_code == 201:
+            if response.status_code == 204:
                 return {}
 
-            log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': url, 'status_code': response.status_code})
-            raise ServiceInvalidResponseException(log_msg, extra={}) from e
+            try:
+                response_json = response.json()
+            except Exception as e:
+                if response.status_code == 201:
+                    return {}
 
-        return response_json
+                log_msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(
+                    log_msg,
+                    extra=build_log_extra({'url': url, 'status_code': response.status_code}),
+                )
+                raise ServiceInvalidResponseException(
+                    log_msg, context={'url': url, 'status_code': response.status_code}
+                ) from e
+
+            return response_json
 
     @staticmethod
     def _parse_error_response(response: httpx.Response) -> dict | None:
@@ -275,12 +398,12 @@ class JiraClient:
 class AsyncJiraClient(AsyncHTTPClient):
     """Async JSON client for the Jira REST API."""
 
-    @staticmethod
-    def set_headers(headers: dict | None = None) -> dict:
+    def set_headers(self, headers: dict | None = None) -> dict:
         default_headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         }
+        default_headers.update(self.default_headers)
         if headers:
             default_headers.update(headers)
         return default_headers
@@ -306,59 +429,102 @@ class AsyncJiraClient(AsyncHTTPClient):
         timeout: int = 55,
         **kwargs,
     ) -> Any | None:
-        headers = self.set_headers(headers)
         full_url = self.get_resource_url(url)
+        retry_after_refresh = True
+        while True:
+            request_headers = self.set_headers(headers)
 
-        try:
-            response: httpx.Response = await method(
-                self.client,
-                full_url,
-                headers=headers,
-                timeout=timeout,
-                auth=self.authentication,
-                **kwargs,
-            )
-        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
-            msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(msg, extra={'url': url})
-            raise ServiceUnavailableException(msg, extra={'url': url}) from e
+            try:
+                response: httpx.Response = await method(
+                    self.client,
+                    full_url,
+                    headers=request_headers,
+                    timeout=timeout,
+                    auth=self.authentication,
+                    **kwargs,
+                )
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as e:
+                msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(msg, extra=build_log_extra({'url': url}))
+                raise ServiceUnavailableException(msg, context={'url': url}) from e
 
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            error_details: dict | None = self._parse_error_response(response)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if (
+                    response.status_code == 401
+                    and retry_after_refresh
+                    and self.authentication is None
+                    and 'Authorization' in self.default_headers
+                    and self.token_refresh_callback is not None
+                ):
+                    retry_after_refresh = False
+                    try:
+                        refreshed_token = self.token_refresh_callback()
+                    except Exception as refresh_error:
+                        self.logger.warning(
+                            'OAuth2 token refresh failed',
+                            extra=build_log_extra({'url': full_url, 'error': str(refresh_error)}),
+                        )
+                    else:
+                        if refreshed_token:
+                            self.set_bearer_token(refreshed_token)
+                            continue
 
-            extra = {
-                'url': url,
-                'status_code': response.status_code,
-            }
+                error_details: dict | None = self._parse_error_response(response)
 
-            message = str(e)
-            if error_details is not None and isinstance(error_details, dict):
-                if error_details.get('errorMessages', []):
-                    message = error_details.get('errorMessages', [])[0]
-                extra.update(**error_details)
+                extra = {
+                    'url': url,
+                    'status_code': response.status_code,
+                }
 
-            self.logger.error(message, extra=extra)
-            if response.status_code == 404:
-                raise ResourceNotFoundException(message, extra=extra) from e
-            if response.status_code == 401:
-                raise AuthorizationException(message, extra=extra) from e
-            if response.status_code == 403:
-                raise PermissionException(message, extra=extra) from e
-            raise ServiceInvalidRequestException(message, extra=extra) from e
+                message = str(e)
+                if error_details is not None and isinstance(error_details, dict):
+                    if error_details.get('errorMessages', []):
+                        message = error_details.get('errorMessages', [])[0]
+                    extra.update(**error_details)
 
-        if response.status_code == 204:
-            return self._empty_response(response)
+                self.logger.error(message, extra=build_log_extra(extra))
+                if response.status_code == 404:
+                    raise ResourceNotFoundException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 401:
+                    raise AuthorizationException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                if response.status_code == 403:
+                    raise PermissionException(
+                        message,
+                        context={'url': url, 'status_code': response.status_code},
+                        remote_payload=error_details,
+                    ) from e
+                raise ServiceInvalidRequestException(
+                    message,
+                    context={'url': url, 'status_code': response.status_code},
+                    remote_payload=error_details,
+                ) from e
 
-        try:
-            return self._parse_response(response)
-        except Exception as e:
-            if response.status_code == 201:
+            if response.status_code == 204:
                 return self._empty_response(response)
-            log_msg = f'{e.__class__.__name__}: {e}.'
-            self.logger.error(log_msg, extra={'url': full_url, 'status_code': response.status_code})
-            raise ServiceInvalidResponseException(log_msg, extra={}) from e
+
+            try:
+                return self._parse_response(response)
+            except Exception as e:
+                if response.status_code == 201:
+                    return self._empty_response(response)
+                log_msg = f'{e.__class__.__name__}: {e}.'
+                self.logger.error(
+                    log_msg,
+                    extra=build_log_extra({'url': full_url, 'status_code': response.status_code}),
+                )
+                raise ServiceInvalidResponseException(
+                    log_msg, context={'url': full_url, 'status_code': response.status_code}
+                ) from e
 
     async def get_label_suggestions(self, query: str = '') -> Any | None:
         """Get label suggestions from Jira.

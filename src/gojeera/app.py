@@ -42,6 +42,7 @@ from gojeera.constants import (
     TITLE,
 )
 from gojeera.files import get_log_file, get_themes_directory
+from gojeera.logging_utils import build_log_extra
 from gojeera.models import (
     Attachment,
     WorkItemSearchResult,
@@ -430,7 +431,10 @@ class MainScreen(Screen):
     async def on_mount(self) -> None:
         if self.user_info:
             account_id = self.user_info.account_id
-            self.logger.info(f'Using pre-authenticated account ID: {account_id}')
+            self.logger.info(
+                'Using pre-authenticated account ID',
+                extra=build_log_extra({'account_id': account_id}),
+            )
             self.unified_search_bar.post_message(self.unified_search_bar.AccountIdReady(account_id))
 
         if CONFIGURATION.get().jumper.enabled:
@@ -504,7 +508,10 @@ class MainScreen(Screen):
 
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
         self.user_info = user_info
-        self.logger.info(f'Using authenticated account ID: {user_info.account_id}')
+        self.logger.info(
+            'Using authenticated account ID',
+            extra=build_log_extra({'account_id': user_info.account_id}),
+        )
         self.unified_search_bar.post_message(
             self.unified_search_bar.AccountIdReady(user_info.account_id)
         )
@@ -1741,9 +1748,15 @@ class JiraApp(App):
             directory_themes = load_themes_from_directory(themes_dir)
             for theme in directory_themes:
                 self.register_theme(theme)
-                self.logger.info(f'Registered custom theme from directory: {theme.name}')
+                self.logger.info(
+                    'Registered custom theme from directory',
+                    extra=build_log_extra({'theme_name': theme.name}),
+                )
         except Exception as e:
-            self.logger.warning(f'Error loading themes from directory: {str(e)}')
+            self.logger.warning(
+                'Error loading themes from directory',
+                extra=build_log_extra({'error': str(e)}),
+            )
 
     def _setup_theme(self, user_theme: str | None = None) -> None:
         if input_theme := (user_theme or CONFIGURATION.get().theme):
@@ -1751,7 +1764,10 @@ class JiraApp(App):
                 self.theme = input_theme
             except InvalidThemeError:
                 self.logger.warning(
-                    f'Unknown theme {input_theme}. Using the default theme: {self.DEFAULT_THEME}'
+                    'Unknown theme, using default theme',
+                    extra=build_log_extra(
+                        {'requested_theme': input_theme, 'default_theme': self.DEFAULT_THEME}
+                    ),
                 )
                 self.theme = self.DEFAULT_THEME
         else:
@@ -1784,13 +1800,22 @@ class JiraApp(App):
             user_info_result = None
 
         if isinstance(server_info_result, Exception):
-            self.logger.warning(f'Failed to fetch server info: {server_info_result}')
+            self.logger.warning(
+                'Failed to fetch server info',
+                extra=build_log_extra({'error': str(server_info_result)}),
+            )
         elif server_info_result.success and server_info_result.result:
             server_info = server_info_result.result
             self.server_info = server_info
-            self.logger.info(f'Fetched server info: {server_info.base_url}')
+            self.logger.info(
+                'Fetched server info',
+                extra=build_log_extra({'base_url': server_info.base_url}),
+            )
         else:
-            self.logger.warning(f'Failed to fetch server info: {server_info_result.error}')
+            self.logger.warning(
+                'Failed to fetch server info',
+                extra=build_log_extra({'error': server_info_result.error}),
+            )
 
         if user_info_result is None:
             return
@@ -1810,7 +1835,10 @@ class JiraApp(App):
 
     def _handle_startup_auth_failure(self, error_message: str | None) -> None:
         message = error_message or 'Please check your credentials.'
-        self.logger.warning(f'Authentication failed during startup: {message}')
+        self.logger.warning(
+            'Authentication failed during startup',
+            extra=build_log_extra({'error': message}),
+        )
         self.exit(message=f'Authentication failed: {message}')
 
     async def action_help(self) -> None:
@@ -1839,8 +1867,7 @@ class JiraApp(App):
 
             await self.push_screen(QuitScreen())
         else:
-            await self.api.api.client.close_async_client()
-            await self.api.api.async_http_client.close_async_client()
+            await self.api.close()
             self.app.exit()
 
     def action_command_palette(self) -> None:
@@ -1867,7 +1894,10 @@ class JiraApp(App):
         try:
             fh = logging.FileHandler(log_file, encoding='utf-8', delay=True)
         except Exception as e:
-            self.logger.warning(f'Failed to create log file handler: {e}')
+            self.logger.warning(
+                'Failed to create log file handler',
+                extra=build_log_extra({'error': str(e)}),
+            )
         else:
             fh.setLevel(CONFIGURATION.get().log_level or logging.WARNING)
             fh.setFormatter(
@@ -1905,8 +1935,7 @@ if __name__ == '__main__':
                 response = await api.myself()
 
                 try:
-                    await api.api.client.close_async_client()
-                    await api.api.async_http_client.close_async_client()
+                    await api.close()
                 except Exception:  # nosec B110
                     # Silently ignore errors when closing clients at module level
                     pass

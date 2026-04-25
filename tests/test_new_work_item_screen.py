@@ -1,20 +1,23 @@
-import asyncio
 import json
 from pathlib import Path
 
 from httpx import Response
 import respx
-from textual.widgets import Button
 
 from gojeera.app import JiraApp
-from gojeera.components import new_work_item_screen as new_work_item_screen_module
-from gojeera.components.new_work_item_screen import AddWorkItemScreen
-from gojeera.components.unified_search import UnifiedSearchBar
-from gojeera.utils.widgets_factory_utils import DynamicFieldWrapper
-from gojeera.widgets.selection import SelectionWidget
-from gojeera.widgets.work_item_search_results_scroll import WorkItemSearchResultsScroll
+from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
+from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
+from gojeera.widgets.selection.selection import SelectionWidget
 
-from .test_helpers import wait_for_mount, wait_until
+from .test_helpers import (
+    search_for_work_item_key_and_assert_single_result,
+    stage_clipboard_upload,
+    wait_for_mount,
+    wait_for_screen_to_settle,
+    wait_for_worker_idle,
+    wait_until,
+)
 
 ENG_8_SUMMARY = json.loads(
     Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
@@ -27,20 +30,28 @@ ENG_8_WORK_ITEM = json.loads(
 async def open_new_work_item_screen(pilot):
     """Open the new work item screen."""
     await wait_for_mount(pilot)
-    # Press ctrl+n to open new work item screen
     await pilot.press('ctrl+n')
-    await asyncio.sleep(0.5)  # Wait for screen to render
+    await wait_until(lambda: isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
 
 
 async def open_and_select_project(pilot):
     """Open new work item screen and select a project."""
     await open_new_work_item_screen(pilot)
-    # Project selector is focused on mount.
-    await pilot.press('enter')  # Open dropdown
-    await asyncio.sleep(0.3)
-    await pilot.press('down', 'enter')  # Select first project
-    await asyncio.sleep(0.5)
-    await pilot.app.workers.wait_for_complete()
+    screen = pilot.app.screen
+    assert isinstance(screen, AddWorkItemScreen)
+
+    await wait_until(
+        lambda: screen.project_selector.prompt == 'Select a project',
+        timeout=3.0,
+    )
+    await pilot.press('enter')
+    await pilot.pause()
+    await pilot.press('down', 'enter')
+    await wait_until(
+        lambda: screen.project_selector.value != screen.project_selector.BLANK, timeout=3.0
+    )
+    await wait_until(lambda: screen._selected_project_key is not None, timeout=3.0)
+    await wait_for_worker_idle(pilot)
 
 
 async def fill_required_fields(pilot):
@@ -48,38 +59,36 @@ async def fill_required_fields(pilot):
     await open_and_select_project(pilot)
 
     # Select work item type
-    await pilot.press('tab')  # Tab to type selector
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')  # Open dropdown
-    await asyncio.sleep(0.3)
-    await pilot.press('down', 'enter')  # Select first type
-    await asyncio.sleep(1.0)  # Wait longer for create metadata to load
-    await pilot.app.workers.wait_for_complete()  # Wait for create metadata API call
-
-    # Reporter should be auto-selected to current user, so skip it
-    await pilot.press('tab')  # Tab past reporter selector
-    await asyncio.sleep(0.2)
-
-    # Skip assignee (optional)
-    await pilot.press('tab')
-    await asyncio.sleep(0.2)
-
-    # Fill summary
-    await pilot.press('tab')  # Tab to summary field
-    await asyncio.sleep(0.2)
-    await pilot.press(*ENG_8_SUMMARY)
-    await asyncio.sleep(0.3)
-
-    # Navigate to description field to blur summary and trigger validation
-    await pilot.press('tab')
-    await asyncio.sleep(0.3)
-
-    # Directly interact with Priority field (required dynamic field)
-    # Get the screen - it's a modal screen, so use screen instead of query_one
     screen = pilot.app.screen
     assert isinstance(screen, AddWorkItemScreen), f'Expected AddWorkItemScreen, got {type(screen)}'
 
-    # Find the priority widget through the dynamic fields container
+    await pilot.press('tab')
+    await pilot.pause()
+    await pilot.press('enter')
+    await pilot.pause()
+    await pilot.press('down', 'enter')
+    await wait_until(
+        lambda: screen.work_item_type_selector.value != screen.work_item_type_selector.BLANK,
+        timeout=3.0,
+    )
+    await wait_until(lambda: not screen.dynamic_fields_container.loading, timeout=3.0)
+    await wait_until(lambda: screen._metadata_loaded_for is not None, timeout=3.0)
+    await wait_for_worker_idle(pilot)
+
+    await pilot.press('tab')
+    await pilot.pause()
+
+    await pilot.press('tab')
+    await pilot.pause()
+
+    await pilot.press('tab')
+    await pilot.pause()
+    await pilot.press(*ENG_8_SUMMARY)
+    await wait_until(lambda: screen.summary_field.value == ENG_8_SUMMARY, timeout=3.0)
+
+    await pilot.press('tab')
+    await pilot.pause()
+
     priority_widget = None
     for wrapper in screen.dynamic_fields_container.query(DynamicFieldWrapper):
         selection_widgets = wrapper.query(SelectionWidget)
@@ -92,14 +101,12 @@ async def fill_required_fields(pilot):
 
     assert priority_widget is not None, 'Priority widget not found'
 
-    priority_widget.value = '1'  # Set to 'Highest' (id='1')
-    await asyncio.sleep(0.3)
+    priority_widget.value = '1'
+    await wait_until(lambda: priority_widget.value == '1', timeout=3.0)
 
-    # Trigger validation and update save button state
     screen.save_button.disabled = not screen._validate_required_fields()
-    await asyncio.sleep(0.3)
+    await wait_until(lambda: not screen.save_button.disabled, timeout=3.0)
 
-    # Verify all required fields are filled before snapshot
     pending_fields = screen._get_pending_dynamic_fields()
     assert len(pending_fields) == 0, f'Required fields still pending: {pending_fields}'
 
@@ -108,22 +115,17 @@ async def fill_and_save_work_item(pilot):
     """Fill required fields and press the Save button."""
     await fill_required_fields(pilot)
 
-    # Get the screen and press Save button
     screen = pilot.app.screen
     assert isinstance(screen, AddWorkItemScreen), f'Expected AddWorkItemScreen, got {type(screen)}'
 
-    # Verify save button is enabled
     assert not screen.save_button.disabled, 'Save button should be enabled before pressing'
 
-    # Press the Save button
     screen.save_button.press()
+    await wait_until(lambda: not isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
+    await wait_for_screen_to_settle(pilot)
 
-    # Wait for save operation and screen dismissal
-    await asyncio.sleep(1.5)
-
-    # Screen should be dismissed back to MainScreen
     assert not isinstance(pilot.app.screen, AddWorkItemScreen), (
-        f'Expected to return to MainScreen, but still on {type(pilot.app.screen)}'
+        f'Expected to return to the workspace, but still on {type(pilot.app.screen)}'
     )
 
 
@@ -131,54 +133,11 @@ async def fill_save_and_search_work_item(pilot):
     """Fill required fields, save, open unified search, and search for the created work item."""
     await fill_and_save_work_item(pilot)
 
-    # Open unified search with Ctrl+J
-    await pilot.press('ctrl+j')
-    await asyncio.sleep(0.3)
-
-    # Verify unified search bar is visible
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    assert search_bar is not None, 'Unified search bar should be visible'
-    assert search_bar.search_mode == 'basic', f'Expected basic mode, got {search_bar.search_mode}'
-
-    assert search_bar.set_initial_work_item_key('ENG-8')
-    await asyncio.sleep(0.2)
-
-    # Press the search button directly
-    search_button = search_bar.query_one('#unified-search-button', Button)
-    search_button.press()
-    await asyncio.sleep(1.5)  # Wait for search to complete and results to load
-
-    # Verify search results appear
-    search_results_list = pilot.app.screen.query_one(WorkItemSearchResultsScroll)
-    assert search_results_list is not None, 'Search results list should be visible'
-    assert search_results_list.work_item_search_results is not None, (
-        'Search results should be populated'
+    await search_for_work_item_key_and_assert_single_result(
+        pilot,
+        work_item_key='ENG-8',
+        expected_summary=ENG_8_SUMMARY,
     )
-
-    # Verify the newly created work item appears in results
-    search_results = search_results_list.work_item_search_results
-    assert search_results.work_items is not None, 'Search results should have work_items'
-    assert len(search_results.work_items) == 1, (
-        f'Expected 1 work item in results, got {len(search_results.work_items)}'
-    )
-
-    work_item = search_results.work_items[0]
-    assert work_item.key == 'ENG-8', f'Expected work item key "ENG-8", got "{work_item.key}"'
-    assert work_item.summary == ENG_8_SUMMARY, (
-        f'Expected summary "{ENG_8_SUMMARY}", got "{work_item.summary}"'
-    )
-
-
-async def paste_clipboard_attachment_into_new_work_item(pilot):
-    await open_new_work_item_screen(pilot)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, AddWorkItemScreen)
-
-    await screen.action_paste_clipboard_attachment()
-    await asyncio.sleep(0.3)
-
-    assert '<!-- gojeera:staged-clipboard-attachment -->' in screen.description_field.text
 
 
 async def fill_save_and_upload_clipboard_attachment(pilot):
@@ -188,10 +147,11 @@ async def fill_save_and_upload_clipboard_attachment(pilot):
     assert isinstance(screen, AddWorkItemScreen)
 
     await screen.action_paste_clipboard_attachment()
-    await asyncio.sleep(0.3)
+    await pilot.pause()
 
     screen.save_button.press()
-    await asyncio.sleep(1.5)
+    await wait_until(lambda: not isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
+    await wait_for_screen_to_settle(pilot)
 
     assert not isinstance(pilot.app.screen, AddWorkItemScreen)
 
@@ -199,17 +159,20 @@ async def fill_save_and_upload_clipboard_attachment(pilot):
 async def fill_save_and_open_created_work_item_attachments(pilot):
     await fill_save_and_upload_clipboard_attachment(pilot)
 
-    await pilot.app.screen.fetch_work_items('ENG-8')
-    await pilot.app.workers.wait_for_complete()
-    await wait_until(lambda: pilot.app.screen.current_loaded_work_item_key == 'ENG-8', timeout=3.0)
+    await pilot.app.load_work_item('ENG-8')
+    await wait_for_worker_idle(pilot)
+    await wait_until(lambda: pilot.app.current_loaded_work_item_key == 'ENG-8', timeout=3.0)
 
-    pilot.app.screen.tabs.active = 'tab-attachments'
-    pilot.app.screen.information_panel.set_active_tab('tab-attachments')
+    pilot.app.tabs.active = 'tab-attachments'
+    pilot.app.information_panel.set_active_tab('tab-attachments')
     await wait_until(
-        lambda: pilot.app.screen.work_item_attachments_widget.attachments_table is not None,
+        lambda: pilot.app.work_item_attachments_widget.record_list is not None,
         timeout=3.0,
     )
-    await asyncio.sleep(0.3)
+    await wait_until(
+        lambda: not pilot.app.work_item_attachments_widget.is_loading,
+        timeout=3.0,
+    )
 
 
 class TestNewWorkItemScreen:
@@ -256,11 +219,7 @@ class TestNewWorkItemScreen:
         staged_upload_file,
         mock_attachment_upload,
     ):
-        monkeypatch.setattr(
-            new_work_item_screen_module,
-            'stage_clipboard_attachments',
-            lambda: [staged_upload_file],
-        )
+        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
 
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         created_work_item = json.loads(json.dumps(ENG_8_WORK_ITEM))

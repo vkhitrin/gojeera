@@ -1,0 +1,1838 @@
+from datetime import datetime, timezone
+import re
+from typing import Literal, cast, overload
+from urllib.parse import quote, urljoin, urlparse
+
+from atlas_doc_parser.api import parse_node
+from markdown_it import MarkdownIt
+from mdit_py_plugins.tasklists import tasklists_plugin
+
+from gojeera.internal.store.config import CONFIGURATION
+from gojeera.utils.system.text_sanitization import strip_terminal_control_sequences
+
+GOJEERA_DATE_MARKER_PREFIX = '__GOJEERA_DATE_START__'
+GOJEERA_DATE_MARKER_SUFFIX = '__GOJEERA_DATE_END__'
+GOJEERA_STATUS_MARKER_PREFIX = '__GOJEERA_STATUS_START_'
+GOJEERA_STATUS_MARKER_SUFFIX = '__GOJEERA_STATUS_END__'
+GOJEERA_DECISION_MARKER_PREFIX = '__GOJEERA_DECISION_START_'
+GOJEERA_DECISION_MARKER_SUFFIX = '__GOJEERA_DECISION_END__'
+
+
+def _text_node_with_marks(source_node: dict, text: str) -> dict[str, object]:
+    text_node: dict[str, object] = {'type': 'text', 'text': text}
+    if 'marks' in source_node:
+        text_node['marks'] = source_node['marks']
+    return text_node
+
+
+def _marker_or_fallback_text_node(
+    source_node: dict,
+    *,
+    marker_prefix: str,
+    marker_suffix: str,
+    marker_code: str,
+    marker_text: str,
+    fallback_code: str,
+    fallback_text: str,
+) -> dict[str, object]:
+    marker_body = marker_text if marker_text else fallback_text
+    code = marker_code if marker_text else fallback_code
+    return _text_node_with_marks(
+        source_node,
+        f'{marker_prefix}{code}__{marker_body}{marker_suffix}',
+    )
+
+
+def sanitize_adf_text_content(node: dict | list | str) -> dict | list | str:
+    """Recursively sanitize ADF text nodes before Markdown conversion."""
+    if isinstance(node, str):
+        return strip_terminal_control_sequences(node)
+
+    if isinstance(node, list):
+        return [sanitize_adf_text_content(item) for item in node]
+
+    sanitized_node = dict(node)
+    if sanitized_node.get('type') == 'text' and isinstance(sanitized_node.get('text'), str):
+        sanitized_node['text'] = strip_terminal_control_sequences(sanitized_node['text'])
+    if 'content' in sanitized_node:
+        sanitized_node['content'] = sanitize_adf_text_content(sanitized_node['content'])
+    return sanitized_node
+
+
+def _build_attachment_url_from_rendered_href(
+    href: str,
+    filename: str,
+    base_url: str | None,
+) -> str | None:
+    if not href or not filename:
+        return None
+
+    parsed_href = urlparse(href)
+    content_match = re.search(r'/attachment/content/([^/?#]+)', parsed_href.path)
+    resolved_base_url = base_url or CONFIGURATION.get().jira.api_base_url
+    if content_match and resolved_base_url:
+        attachment_id = content_match.group(1)
+        return (
+            f'{resolved_base_url.rstrip("/")}/secure/attachment/{attachment_id}/{quote(filename)}'
+        )
+
+    if parsed_href.scheme and parsed_href.netloc:
+        return href
+
+    if resolved_base_url:
+        return urljoin(f'{resolved_base_url.rstrip("/")}/', href.lstrip('/'))
+
+    return None
+
+
+def extract_media_attachment_details(
+    rendered_body: str | None,
+    base_url: str | None = None,
+) -> dict[str, tuple[str, str | None]]:
+    """Extract Jira media-service-id to attachment details mappings from rendered HTML."""
+    if not rendered_body:
+        return {}
+
+    mappings: dict[str, tuple[str, str | None]] = {}
+    anchor_pattern = re.compile(
+        r'<a\b(?P<attrs>[^>]*)>(?P<inner>.*?)</a>', re.IGNORECASE | re.DOTALL
+    )
+    img_pattern = re.compile(r'<img\b(?P<attrs>[^>]*)>', re.IGNORECASE)
+    media_id_pattern = re.compile(r'data-media-services-id="([^"]+)"')
+    attachment_name_pattern = re.compile(r'data-attachment-name="([^"]+)"')
+    href_pattern = re.compile(r'href="([^"]+)"')
+
+    for match in anchor_pattern.finditer(rendered_body):
+        anchor_attrs = match.group('attrs')
+        anchor_inner = match.group('inner')
+        media_id_match = media_id_pattern.search(anchor_attrs)
+        attachment_name_match = attachment_name_pattern.search(anchor_attrs)
+
+        if not media_id_match or not attachment_name_match:
+            if img_match := img_pattern.search(anchor_inner):
+                img_attrs = img_match.group('attrs')
+                media_id_match = media_id_match or media_id_pattern.search(img_attrs)
+                attachment_name_match = attachment_name_match or attachment_name_pattern.search(
+                    img_attrs
+                )
+
+        if not media_id_match or not attachment_name_match:
+            continue
+
+        filename = attachment_name_match.group(1)
+        href_match = href_pattern.search(anchor_attrs)
+        href = href_match.group(1) if href_match else ''
+        mappings[media_id_match.group(1)] = (
+            filename,
+            _build_attachment_url_from_rendered_href(href, filename, base_url),
+        )
+
+    return mappings
+
+
+def merge_media_attachment_details(
+    primary: dict[str, tuple[str, str | None]],
+    fallback: dict[str, tuple[str, str | None]],
+) -> dict[str, tuple[str, str | None]]:
+    """Merge attachment detail mappings, preferring primary entries."""
+    merged = dict(fallback)
+    merged.update(primary)
+    return merged
+
+
+def replace_media_with_text(
+    adf: dict,
+    rendered_body: str | None = None,
+    base_url: str | None = None,
+    media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+    ordered_attachment_details: list[tuple[str, str | None]] | None = None,
+) -> dict:
+    """Replace mediaSingle nodes with inline text nodes showing attachment reference.
+
+    Args:
+        adf: ADF document structure
+
+    Returns:
+        Modified ADF with mediaSingle replaced by text nodes
+    """
+    ordered_attachment_details = ordered_attachment_details or []
+    used_attachment_filenames: set[str] = set()
+    fallback_attachment_index = 0
+
+    def resolve_attachment_reference(
+        attrs: dict,
+        default_filename: str,
+    ) -> tuple[str, str | None]:
+        nonlocal fallback_attachment_index
+
+        filename = attrs.get('alt') or default_filename
+        attachment_url = None
+        if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):
+            filename, attachment_url = media_details
+        elif media_details := resolved_media_attachment_details.get(filename):
+            filename, attachment_url = media_details
+        else:
+            while fallback_attachment_index < len(ordered_attachment_details):
+                fallback_filename, fallback_url = ordered_attachment_details[
+                    fallback_attachment_index
+                ]
+                fallback_attachment_index += 1
+                if fallback_filename not in used_attachment_filenames:
+                    filename, attachment_url = fallback_filename, fallback_url
+                    break
+
+        if filename:
+            used_attachment_filenames.add(filename)
+        return filename, attachment_url
+
+    def build_attachment_paragraph(attrs: dict, default_filename: str) -> dict:
+        filename, attachment_url = resolve_attachment_reference(attrs, default_filename)
+
+        return {
+            'type': 'paragraph',
+            'content': [
+                {
+                    'type': 'text',
+                    'text': f'[{filename}]({attachment_url or filename})',
+                }
+            ],
+        }
+
+    resolved_media_attachment_details = merge_media_attachment_details(
+        extract_media_attachment_details(rendered_body, base_url),
+        media_attachment_details or {},
+    )
+
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for node in adf['content']:
+            if node.get('type') == 'mediaSingle':
+                media_content = node.get('content', [])
+                for media in media_content:
+                    if isinstance(media, dict) and media.get('type') == 'media':
+                        attrs = media.get('attrs', {})
+                        new_content.append(build_attachment_paragraph(attrs, 'unknown'))
+                        break
+            elif node.get('type') == 'mediaGroup':
+                media_content = node.get('content', [])
+                for media in media_content:
+                    if isinstance(media, dict) and media.get('type') == 'media':
+                        attrs = media.get('attrs', {})
+                        new_content.append(build_attachment_paragraph(attrs, 'Attachment'))
+            elif node.get('type') == 'mediaInline':
+                attrs = node.get('attrs', {})
+                filename, attachment_url = resolve_attachment_reference(attrs, 'Attachment')
+                attachment_text = f'[{filename}]({attachment_url or filename})'
+                new_content.append(
+                    {
+                        'type': 'text',
+                        'text': attachment_text,
+                    }
+                )
+            else:
+                new_content.append(
+                    replace_media_with_text(
+                        node,
+                        rendered_body=rendered_body,
+                        base_url=base_url,
+                        media_attachment_details=resolved_media_attachment_details,
+                        ordered_attachment_details=ordered_attachment_details,
+                    )
+                )
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def replace_mentions_with_links(adf: dict, base_url: str | None) -> dict:
+    """Replace mention nodes with text nodes containing Markdown links.
+    Args:
+        adf: ADF document structure
+        base_url: Base URL of Jira instance (e.g., 'https://example.atlassian.net')
+                  Used to construct the full profile URL
+
+    Returns:
+        Modified ADF with mention nodes replaced by text nodes with Markdown link syntax
+    """
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for node in adf['content']:
+            if node.get('type') == 'mention':
+                attrs = node.get('attrs', {})
+                account_id = attrs.get('id', '')
+
+                text = attrs.get('text') or attrs.get('displayName', '')
+
+                if account_id and text:
+                    if base_url:
+                        url = f'{base_url.rstrip("/")}/jira/people/{account_id}'
+                    else:
+                        url = f'/jira/people/{account_id}'
+
+                    markdown_link = f'[{text}]({url})'
+                    text_node = {
+                        'type': 'text',
+                        'text': markdown_link,
+                    }
+
+                    if 'marks' in node:
+                        text_node['marks'] = node['marks']
+
+                    new_content.append(text_node)
+                else:
+                    new_content.append(replace_mentions_with_links(node, base_url))
+            else:
+                new_content.append(replace_mentions_with_links(node, base_url))
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def fix_adf_text_with_marks(adf: dict) -> dict:
+    """Preprocess ADF to fix atlas_doc_parser issues.
+
+    Args:
+        adf: ADF structure (dict or any type)
+
+    Returns:
+        Fixed ADF structure with trailing spaces removed from marked text
+    """
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for i, node in enumerate(adf['content']):
+            if not isinstance(node, dict):
+                new_content.append(node)
+                continue
+
+            node = fix_adf_text_with_marks(node)
+
+            if node.get('type') == 'text' and 'marks' in node and 'text' in node:
+                marks = node.get('marks', [])
+                has_strong_or_em = any(
+                    m.get('type') in ('strong', 'em') for m in marks if isinstance(m, dict)
+                )
+
+                if has_strong_or_em:
+                    original_text = node['text']
+                    stripped_text = original_text.strip()
+                    had_trailing_space = original_text.endswith(' ')
+                    had_leading_space = original_text.startswith(' ')
+
+                    if stripped_text != original_text:
+                        node = node.copy()
+                        node['text'] = stripped_text
+
+                        if had_leading_space and i > 0:
+                            new_content.append({'type': 'text', 'text': ' '})
+
+                        new_content.append(node)
+
+                        if had_trailing_space and i < len(adf['content']) - 1:
+                            new_content.append({'type': 'text', 'text': ' '})
+                        continue
+
+            new_content.append(node)
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def fix_codeblock_in_list(adf: dict) -> dict:
+    """Fix codeBlock nodes nested inside listItem nodes due to atlas_doc_parser issues.
+    Args:
+        adf: ADF document structure
+
+    Returns:
+        Modified ADF with codeBlocks extracted from listItems and empty items removed
+    """
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+        extracted_codeblocks = []
+
+        for node in adf['content']:
+            node = fix_codeblock_in_list(node)
+
+            if node.get('type') in ('bulletList', 'orderedList'):
+                list_items = node.get('content', [])
+                new_list_items = []
+
+                for item in list_items:
+                    if item.get('type') == 'listItem':
+                        item_content = item.get('content', [])
+                        new_item_content = []
+                        has_codeblock = False
+
+                        for child in item_content:
+                            if child.get('type') == 'codeBlock':
+                                has_codeblock = True
+
+                                extracted_codeblocks.append(child)
+                            else:
+                                new_item_content.append(child)
+
+                        if not has_codeblock or new_item_content:
+                            item = item.copy()
+                            item['content'] = new_item_content
+                            new_list_items.append(item)
+                    else:
+                        new_list_items.append(item)
+
+                if new_list_items:
+                    node = node.copy()
+                    node['content'] = new_list_items
+                    new_content.append(node)
+            else:
+                new_content.append(node)
+
+            new_content.extend(extracted_codeblocks)
+            extracted_codeblocks = []
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def render_task_checkboxes(text: str) -> str:
+    """Replace GFM task list markers with UTF-8 checkbox characters.
+    Args:
+        text: Markdown text with task list markers
+
+    Returns:
+        Text with task list markers replaced by UTF-8 checkboxes in separate paragraphs
+    """
+
+    text = re.sub(r'([^\n\s-])(-\s+\[[ xX]\])', r'\1\n    \2', text)
+
+    text = re.sub(r'([^\n\s-])(-\s+(?!\[))', r'\1\n    \2', text)
+
+    lines = text.split('\n')
+    fixed_lines = []
+    in_nested_context = False
+    previous_line = ''
+
+    for line in lines:
+        is_unindented_bullet = re.match(r'^-\s+', line)
+
+        is_root_ordered = re.match(r'^\d+\.\s+', line)
+
+        is_already_indented = line.startswith(' ')
+
+        if is_unindented_bullet:
+            if in_nested_context:
+                fixed_lines.append('    ' + line)
+                previous_line = line
+                continue
+            elif re.match(r'^\d+\.\s+', previous_line):
+                in_nested_context = True
+                fixed_lines.append('    ' + line)
+                previous_line = line
+                continue
+        elif is_root_ordered:
+            in_nested_context = False
+        elif not is_already_indented and line.strip() == '':
+            pass
+        elif not is_already_indented and line.strip() != '' and not is_unindented_bullet:
+            in_nested_context = False
+
+        fixed_lines.append(line)
+        previous_line = line
+    text = '\n'.join(fixed_lines)
+
+    lines = text.split('\n')
+    result_lines = []
+
+    for i, line in enumerate(lines):
+        match = re.match(r'^(\s*)-\s+\[([ xX])\](.*)$', line)
+        if match:
+            indent, checkbox_state, rest = match.groups()
+
+            if checkbox_state == ' ':
+                result_lines.append(f'{indent}☐{rest}')
+            else:
+                result_lines.append(f'{indent}☑{rest}')
+
+            if i < len(lines) - 1:
+                result_lines.append('')
+        else:
+            result_lines.append(line)
+
+    return '\n'.join(result_lines)
+
+
+def _convert_status_markers_to_inline_code(markdown: str) -> str:
+    """Convert internal status markers to inline code format.
+
+    Args:
+        markdown: Markdown text with internal status markers
+
+    Returns:
+        Markdown with status markers converted to inline code format
+    """
+
+    def replace_match(match):
+        color_code = match.group(1)
+        status_text = match.group(2)
+        return f'`[status:{color_code}]{status_text}`'
+
+    pattern = re.compile(
+        rf'{re.escape(GOJEERA_STATUS_MARKER_PREFIX)}([nrbgypt])__(.+?)'
+        rf'{re.escape(GOJEERA_STATUS_MARKER_SUFFIX)}'
+    )
+    return pattern.sub(replace_match, markdown)
+
+
+def _convert_date_markers_to_inline_code(markdown: str) -> str:
+    """Convert internal date markers to inline code format.
+
+    Args:
+        markdown: Markdown text with internal date markers
+
+    Returns:
+        Markdown with date markers converted to inline code format
+    """
+
+    def replace_match(match):
+        date_text = match.group(1)
+        return f'`[date]{date_text}`'
+
+    pattern = re.compile(
+        rf'{re.escape(GOJEERA_DATE_MARKER_PREFIX)}(.+?)'
+        rf'{re.escape(GOJEERA_DATE_MARKER_SUFFIX)}'
+    )
+    return pattern.sub(replace_match, markdown)
+
+
+def _convert_decision_markers_to_inline_code(markdown: str) -> str:
+    """Convert internal decision markers to inline code format with ⤷ prefix.
+
+    Args:
+        markdown: Markdown text with internal decision markers
+
+    Returns:
+        Markdown with decision markers converted to inline code format
+    """
+
+    def replace_match(match):
+        state_code = match.group(1)
+        decision_text = match.group(2)
+        return f'`[decision:{state_code}]{decision_text}`'
+
+    pattern = re.compile(
+        rf'{re.escape(GOJEERA_DECISION_MARKER_PREFIX)}([dau])__(.+?)'
+        rf'{re.escape(GOJEERA_DECISION_MARKER_SUFFIX)}'
+    )
+    return pattern.sub(replace_match, markdown)
+
+
+def _convert_panels_to_alerts(markdown: str) -> str:
+    """Convert atlas_doc_parser panel blockquotes to alert blockquotes.
+
+    Args:
+        markdown: Markdown text potentially containing panel blockquotes
+
+    Returns:
+        Markdown with panels converted to alert format
+    """
+
+    panel_to_alert = {
+        'INFO': 'NOTE',
+        'SUCCESS': 'TIP',
+        'NOTE': 'IMPORTANT',
+        'WARNING': 'WARNING',
+        'ERROR': 'CAUTION',
+    }
+
+    lines = markdown.split('\n')
+    result_lines = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        match = re.match(r'^>\s*\*\*(INFO|SUCCESS|NOTE|WARNING|ERROR)\*\*\s*$', line)
+        if match:
+            panel_type = match.group(1)
+            alert_type = panel_to_alert.get(panel_type, 'NOTE')
+
+            result_lines.append(f'> [!{alert_type}]')
+
+            next_lines = lines[i + 1 : i + 2]
+            if next_lines and re.match(r'^>\s*$', next_lines[0]):
+                i += 1
+
+            i += 1
+            continue
+
+        result_lines.append(line)
+        i += 1
+
+    return '\n'.join(result_lines)
+
+
+def _normalize_single_cell_tables(markdown: str) -> str:
+    """Normalize single-row/single-cell tables to a parseable compact format.
+
+    atlas_doc_parser renders a table with one row and one cell as:
+
+    | A<br> |
+
+    which markdown-it parses as a paragraph, not as a table. This workaround
+    rewrites that shape to:
+
+    | A |
+    |-|
+
+    so Markdown->ADF parsing can recover a table node.
+
+    Args:
+        markdown: Markdown text potentially containing table output from atlas_doc_parser
+
+    Returns:
+        Markdown with single-row/single-cell table rows normalized
+    """
+
+    row_pattern = re.compile(r'^(?P<indent>\s*)\|\s*(?P<cell>(?:\\\||[^|\n])*)\s*<br>\s*\|\s*$')
+    separator_pattern = re.compile(r'^\s*\|\s*-+\s*\|\s*$')
+    table_like_pattern = re.compile(r'^\s*\|.*\|\s*$')
+
+    lines = markdown.split('\n')
+    normalized_lines = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        match = row_pattern.match(line)
+
+        if not match:
+            normalized_lines.append(line)
+            i += 1
+            continue
+
+        previous_lines = lines[i - 1 : i]
+        next_lines = lines[i + 1 : i + 2]
+        previous_line = previous_lines[0] if previous_lines else ''
+        next_line = next_lines[0] if next_lines else ''
+
+        previous_is_table_like = bool(table_like_pattern.match(previous_line))
+        next_is_table_like = bool(table_like_pattern.match(next_line))
+        next_is_separator = bool(separator_pattern.match(next_line))
+
+        indent = match.group('indent')
+        cell_text = match.group('cell').strip()
+
+        if next_is_separator and not previous_is_table_like:
+            following_lines = lines[i + 2 : i + 3]
+            next_after_separator = following_lines[0] if following_lines else ''
+            normalized_lines.append(f'{indent}| {cell_text} |')
+            normalized_lines.append(f'{indent}|-|')
+            if next_after_separator.strip() != '':
+                normalized_lines.append('')
+            i += 2
+            continue
+
+        if not previous_is_table_like and not next_is_table_like:
+            normalized_lines.append(f'{indent}| {cell_text} |')
+            normalized_lines.append(f'{indent}|-|')
+            if next_line.strip() != '':
+                normalized_lines.append('')
+            i += 1
+            continue
+
+        normalized_lines.append(line)
+        i += 1
+
+    return '\n'.join(normalized_lines)
+
+
+def fix_ordered_list_attrs(adf: dict) -> dict:
+    """Add missing attrs to orderedList elements.
+
+    Args:
+        adf: ADF structure (dict or any type)
+
+    Returns:
+        Fixed ADF structure with attrs added to orderedList elements
+    """
+    if adf.get('type') == 'orderedList' and 'attrs' not in adf:
+        adf['attrs'] = {}
+
+    if 'content' in adf and isinstance(adf['content'], list):
+        adf['content'] = [fix_ordered_list_attrs(node) for node in adf['content']]
+
+    return adf
+
+
+def replace_status_with_colored_text(adf: dict) -> dict:
+    """Replace status nodes with text nodes that will be styled with color-specific backgrounds.
+
+    Args:
+        adf: ADF document structure
+
+    Returns:
+        Modified ADF with status nodes replaced by marked text nodes
+    """
+    color_map = {
+        'neutral': 'n',
+        'red': 'r',
+        'blue': 'b',
+        'green': 'g',
+        'yellow': 'y',
+        'purple': 'p',
+        'teal': 't',
+    }
+
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for node in adf['content']:
+            if node.get('type') == 'status':
+                attrs = node.get('attrs', {})
+                status_text = attrs.get('text', '')
+                status_color = attrs.get('color', 'neutral')
+
+                new_content.append(
+                    _marker_or_fallback_text_node(
+                        node,
+                        marker_prefix=GOJEERA_STATUS_MARKER_PREFIX,
+                        marker_suffix=GOJEERA_STATUS_MARKER_SUFFIX,
+                        marker_code=color_map.get(status_color, 'n'),
+                        marker_text=status_text,
+                        fallback_code='n',
+                        fallback_text='[no status]',
+                    )
+                )
+            else:
+                new_content.append(replace_status_with_colored_text(node))
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def replace_date_with_colored_text(adf: dict) -> dict:
+    """Replace date nodes with text nodes that will be styled with background.
+
+    Args:
+        adf: ADF document structure
+
+    Returns:
+        Modified ADF with date nodes replaced by marked text nodes
+    """
+    from datetime import datetime
+
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for node in adf['content']:
+            if node.get('type') == 'date':
+                attrs = node.get('attrs', {})
+                timestamp_ms = attrs.get('timestamp')
+
+                if timestamp_ms:
+                    try:
+                        timestamp_s = int(timestamp_ms) / 1000
+                        date_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d')
+                        new_content.append(
+                            _text_node_with_marks(
+                                node,
+                                (
+                                    f'{GOJEERA_DATE_MARKER_PREFIX}'
+                                    f'{date_str}'
+                                    f'{GOJEERA_DATE_MARKER_SUFFIX}'
+                                ),
+                            )
+                        )
+                    except (ValueError, OSError, OverflowError):
+                        new_content.append(
+                            _text_node_with_marks(
+                                node,
+                                (
+                                    f'{GOJEERA_DATE_MARKER_PREFIX}[invalid date]'
+                                    f'{GOJEERA_DATE_MARKER_SUFFIX}'
+                                ),
+                            )
+                        )
+                else:
+                    new_content.append(
+                        _text_node_with_marks(
+                            node,
+                            f'{GOJEERA_DATE_MARKER_PREFIX}[no date]{GOJEERA_DATE_MARKER_SUFFIX}',
+                        )
+                    )
+            else:
+                new_content.append(replace_date_with_colored_text(node))
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def replace_decision_with_styled_text(adf: dict) -> dict:
+    """Replace decisionItem nodes with text nodes marked with ⤷ prefix.
+
+    Args:
+        adf: ADF document structure
+
+    Returns:
+        Modified ADF with decisionItem nodes replaced by marked text nodes
+        and decisionList nodes converted to blockquote
+    """
+    state_map = {
+        'DECIDED': 'd',
+        'ACKNOWLEDGED': 'a',
+        'UP_FOR_DISCUSSION': 'u',
+    }
+
+    if adf.get('type') == 'decisionList':
+        decision_items = adf.get('content', [])
+        paragraphs = []
+
+        for item in decision_items:
+            if item.get('type') == 'decisionItem':
+                attrs = item.get('attrs', {})
+                state = attrs.get('state', 'DECIDED')
+                state_code = state_map.get(state, 'd')
+
+                decision_content = item.get('content', [])
+                decision_text = ''
+
+                for subitem in decision_content:
+                    if subitem.get('type') == 'text':
+                        decision_text += subitem.get('text', '')
+                    elif isinstance(subitem, dict) and 'content' in subitem:
+                        for nested in subitem.get('content', []):
+                            if nested.get('type') == 'text':
+                                decision_text += nested.get('text', '')
+
+                if decision_text:
+                    paragraph = {
+                        'type': 'paragraph',
+                        'content': [
+                            {
+                                'type': 'text',
+                                'text': (
+                                    f'{GOJEERA_DECISION_MARKER_PREFIX}{state_code}__'
+                                    f'{decision_text.strip()}'
+                                    f'{GOJEERA_DECISION_MARKER_SUFFIX}'
+                                ),
+                            }
+                        ],
+                    }
+                    paragraphs.append(paragraph)
+
+        return {'type': 'blockquote', 'content': paragraphs}
+
+    if 'content' in adf and isinstance(adf['content'], list):
+        new_content = []
+
+        for node in adf['content']:
+            if node.get('type') == 'decisionItem':
+                attrs = node.get('attrs', {})
+                state = attrs.get('state', 'DECIDED')
+                state_code = state_map.get(state, 'd')
+
+                decision_content = node.get('content', [])
+                decision_text = ''
+
+                for item in decision_content:
+                    if item.get('type') == 'text':
+                        decision_text += item.get('text', '')
+                    elif isinstance(item, dict) and 'content' in item:
+                        for subitem in item.get('content', []):
+                            if subitem.get('type') == 'text':
+                                decision_text += subitem.get('text', '')
+
+                new_content.append(
+                    _marker_or_fallback_text_node(
+                        node,
+                        marker_prefix=GOJEERA_DECISION_MARKER_PREFIX,
+                        marker_suffix=GOJEERA_DECISION_MARKER_SUFFIX,
+                        marker_code=state_code,
+                        marker_text=decision_text.strip(),
+                        fallback_code='d',
+                        fallback_text='[no decision]',
+                    )
+                )
+            else:
+                new_content.append(replace_decision_with_styled_text(node))
+
+        adf = adf.copy()
+        adf['content'] = new_content
+
+    return adf
+
+
+def convert_adf_to_markdown(
+    value: dict,
+    base_url: str | None = None,
+    rendered_body: str | None = None,
+    media_attachment_details: dict[str, tuple[str, str | None]] | None = None,
+    ordered_attachment_details: list[tuple[str, str | None]] | None = None,
+) -> str:
+    """Convert Atlassian Document Format (ADF) to Markdown.
+
+    Args:
+        value: The value to convert - can be ADF dict, string, or None
+        base_url: Optional base URL of Jira instance for formatting mentions as links
+                  (e.g., 'https://example.atlassian.net')
+                  Note: base_url is stored in invisible markers and used by the
+                  mdit_adf_mentions plugin during rendering
+
+    Returns:
+        Markdown string representation with visual checkboxes for task lists
+        and invisible mention markers that will be converted to links during rendering
+    """
+
+    fixed_value = replace_media_with_text(
+        value,
+        rendered_body=rendered_body,
+        base_url=base_url,
+        media_attachment_details=media_attachment_details,
+        ordered_attachment_details=ordered_attachment_details,
+    )
+    fixed_value = cast(dict, sanitize_adf_text_content(fixed_value))
+    fixed_value = fix_adf_text_with_marks(fixed_value)
+    fixed_value = fix_codeblock_in_list(fixed_value)
+    fixed_value = fix_ordered_list_attrs(fixed_value)
+    fixed_value = replace_mentions_with_links(fixed_value, base_url)
+    fixed_value = replace_date_with_colored_text(fixed_value)
+    fixed_value = replace_status_with_colored_text(fixed_value)
+    fixed_value = replace_decision_with_styled_text(fixed_value)
+    markdown = parse_node(fixed_value).to_markdown(ignore_error=True)
+
+    markdown = re.sub(r'(```\w*\n.*?)\n\n```', r'\1\n```', markdown, flags=re.DOTALL)
+
+    markdown = markdown.lstrip('\n')
+
+    markdown = _convert_status_markers_to_inline_code(markdown)
+
+    markdown = _convert_date_markers_to_inline_code(markdown)
+
+    markdown = _convert_decision_markers_to_inline_code(markdown)
+
+    markdown = render_task_checkboxes(markdown)
+
+    markdown = _convert_panels_to_alerts(markdown)
+
+    markdown = _normalize_single_cell_tables(markdown)
+
+    return markdown
+
+
+def _is_task_list(tokens: list, start_index: int) -> bool:
+    """Check if a bullet list is a task list using tasklists plugin attributes.
+
+    The tasklists plugin adds 'class="contains-task-list"' attribute to
+    bullet_list_open tokens that contain task list items.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        start_index: Index of bullet_list_open token
+
+    Returns:
+        True if the list is a task list (has contains-task-list class)
+    """
+    if start_index < len(tokens):
+        token = tokens[start_index]
+        if token.type == 'bullet_list_open':
+            class_attr = token.attrGet('class')
+            return class_attr == 'contains-task-list'
+    return False
+
+
+def _convert_task_list_tokens(
+    tokens: list, start_index: int, track_warnings: bool = False
+) -> tuple[list[dict], int] | tuple[list[dict], int, list[str]]:
+    """Convert markdown task list tokens to ADF taskItem nodes.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        start_index: Starting index in tokens list
+        track_warnings: If True, returns tuple of (task_items, end_index, warnings)
+
+    Returns:
+        Tuple of (task_items, end_index), or (task_items, end_index, warnings) if track_warnings=True
+    """
+    task_items = []
+    warnings: list[str] = []
+    i = start_index + 1
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == 'bullet_list_close':
+            break
+        elif token.type == 'list_item_open':
+            class_attr = token.attrGet('class')
+            if class_attr != 'task-list-item':
+                i += 1
+                depth = 1
+                while i < len(tokens) and depth > 0:
+                    if tokens[i].type == 'list_item_open':
+                        depth += 1
+                    elif tokens[i].type == 'list_item_close':
+                        depth -= 1
+                    i += 1
+                continue
+
+            i += 1
+            item_content = []
+            task_state = 'TODO'
+
+            while i < len(tokens) and tokens[i].type != 'list_item_close':
+                inner_token = tokens[i]
+
+                if inner_token.type == 'paragraph_open':
+                    i += 1
+                    inline_token = tokens[i]
+
+                    if inline_token.children and len(inline_token.children) > 0:
+                        first_child = inline_token.children[0]
+                        if first_child.type == 'html_inline':
+                            if 'checked="checked"' in first_child.content:
+                                task_state = 'DONE'
+                            else:
+                                task_state = 'TODO'
+
+                            text_children = inline_token.children[1:]
+                        else:
+                            text_children = inline_token.children
+                    else:
+                        text_children = []
+
+                    if text_children:
+                        if track_warnings:
+                            inline_result = cast(
+                                tuple[list[dict], list[str]],
+                                _convert_inline_tokens(text_children, track_warnings=True),
+                            )
+                            para_content, inline_warnings = inline_result
+                            warnings.extend(inline_warnings)
+                        else:
+                            para_content = _convert_inline_tokens(text_children)
+
+                        if para_content:
+                            item_content.extend(para_content)
+
+                    i += 2
+
+                else:
+                    i += 1
+
+            task_items.append(
+                {
+                    'type': 'taskItem',
+                    'attrs': {'localId': '', 'state': task_state},
+                    'content': item_content,
+                }
+            )
+            i += 1
+
+        else:
+            i += 1
+
+    if track_warnings:
+        return (task_items, i + 1, warnings)
+    else:
+        return (task_items, i + 1)
+
+
+def _convert_blockquote_tokens(
+    tokens: list, start_index: int, track_warnings: bool = False
+) -> tuple[dict, int] | tuple[dict, int, list[str]]:
+    """Convert markdown blockquote tokens to ADF blockquote or panel nodes.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        start_index: Starting index in tokens list
+        track_warnings: If True, returns tuple of (node, end_index, warnings)
+
+    Returns:
+        Tuple of (blockquote_node, end_index), or (node, end_index, warnings) if track_warnings=True
+    """
+    warnings: list[str] = []
+    i = start_index + 1
+    blockquote_content = []
+
+    is_alert = False
+    alert_type = None
+    alert_content_starts_at = -1
+
+    temp_i = i
+    while temp_i < len(tokens):
+        token = tokens[temp_i]
+        if token.type == 'blockquote_close':
+            break
+        if token.type == 'paragraph_open':
+            next_tokens = tokens[temp_i + 1 : temp_i + 2]
+            if next_tokens and next_tokens[0].type == 'inline':
+                inline_content = next_tokens[0].content.strip()
+
+                alert_match = re.match(r'\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]', inline_content)
+                if alert_match:
+                    is_alert = True
+                    alert_type_text = alert_match.group(1)
+
+                    alert_type_map = {
+                        'NOTE': 'info',
+                        'TIP': 'success',
+                        'IMPORTANT': 'note',
+                        'WARNING': 'warning',
+                        'CAUTION': 'error',
+                    }
+                    alert_type = alert_type_map.get(alert_type_text, 'info')
+                    alert_content_starts_at = temp_i
+                    break
+        temp_i += 1
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == 'blockquote_close':
+            break
+
+        if is_alert and i == alert_content_starts_at and token.type == 'paragraph_open':
+            i += 1
+            inline_token = tokens[i]
+
+            if inline_token.children:
+                filtered_children = []
+                skip_next_softbreak = False
+
+                for child in inline_token.children:
+                    if child.type == 'text' and child.content.strip().startswith('[!'):
+                        skip_next_softbreak = True
+                        continue
+                    if skip_next_softbreak and child.type == 'softbreak':
+                        skip_next_softbreak = False
+                        continue
+                    filtered_children.append(child)
+
+                if filtered_children:
+                    if track_warnings:
+                        inline_result = cast(
+                            tuple[list[dict], list[str]],
+                            _convert_inline_tokens(filtered_children, track_warnings=True),
+                        )
+                        para_content, inline_warnings = inline_result
+                        warnings.extend(inline_warnings)
+                    else:
+                        para_content = _convert_inline_tokens(filtered_children)
+
+                    if para_content:
+                        blockquote_content.append({'type': 'paragraph', 'content': para_content})
+
+            i += 2
+            continue
+
+        if token.type in (
+            'paragraph_open',
+            'heading_open',
+            'bullet_list_open',
+            'ordered_list_open',
+            'fence',
+            'blockquote_open',
+        ):
+            if track_warnings:
+                nested_result = cast(
+                    tuple[list[dict], list[str]],
+                    _convert_tokens_to_adf([token] + tokens[i + 1 : i + 100], track_warnings=True),
+                )
+                nested_content, nested_warnings = nested_result
+                warnings.extend(nested_warnings)
+                if nested_content:
+                    blockquote_content.extend(nested_content)
+            else:
+                nested_content = _convert_tokens_to_adf([token] + tokens[i + 1 : i + 100])
+                if nested_content:
+                    blockquote_content.extend(nested_content)
+
+            if token.type == 'paragraph_open':
+                i += 3
+            else:
+                i += 1
+        else:
+            i += 1
+
+    if is_alert:
+        node = {'type': 'panel', 'attrs': {'panelType': alert_type}, 'content': blockquote_content}
+    else:
+        node = {'type': 'blockquote', 'content': blockquote_content}
+
+    if track_warnings:
+        return (node, i + 1, warnings)
+    else:
+        return (node, i + 1)
+
+
+def _convert_table_tokens(
+    tokens: list, start_index: int, track_warnings: bool = False
+) -> tuple[dict, int] | tuple[dict, int, list[str]]:
+    """Convert markdown table tokens to ADF table nodes.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        start_index: Starting index in tokens list
+        track_warnings: If True, returns tuple of (table_node, end_index, warnings)
+
+    Returns:
+        Tuple of (table_node, end_index), or (table_node, end_index, warnings) if track_warnings=True
+    """
+    warnings: list[str] = []
+    i = start_index + 1
+    table_rows = []
+
+    def convert_table_cell(inline_token) -> tuple[list[dict], list[str]]:
+        return _convert_inline_token_children(inline_token, track_warnings=track_warnings)
+
+    def build_table_cell_node(cell_type: str, cell_content: list[dict]) -> dict:
+        return {
+            'type': cell_type,
+            'content': [{'type': 'paragraph', 'content': cell_content}] if cell_content else [],
+        }
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == 'table_close':
+            break
+
+        if token.type == 'thead_open':
+            i += 1
+            i += 1
+            header_cells = []
+
+            while i < len(tokens) and tokens[i].type != 'tr_close':
+                if tokens[i].type == 'th_open':
+                    i += 1
+                    inline_token = tokens[i]
+                    cell_content, cell_warnings = convert_table_cell(inline_token)
+                    warnings.extend(cell_warnings)
+                    header_cells.append(build_table_cell_node('tableHeader', cell_content))
+                    i += 2
+                else:
+                    i += 1
+
+            if header_cells:
+                table_rows.append({'type': 'tableRow', 'content': header_cells})
+            i += 2
+
+        elif token.type == 'tbody_open':
+            i += 1
+
+            while i < len(tokens) and tokens[i].type != 'tbody_close':
+                if tokens[i].type == 'tr_open':
+                    i += 1
+                    row_cells = []
+
+                    while i < len(tokens) and tokens[i].type != 'tr_close':
+                        if tokens[i].type == 'td_open':
+                            i += 1
+                            inline_token = tokens[i]
+                            cell_content, cell_warnings = convert_table_cell(inline_token)
+                            warnings.extend(cell_warnings)
+                            row_cells.append(build_table_cell_node('tableCell', cell_content))
+                            i += 2
+                        else:
+                            i += 1
+
+                    if row_cells:
+                        table_rows.append({'type': 'tableRow', 'content': row_cells})
+                    i += 1
+                else:
+                    i += 1
+
+            i += 1
+        else:
+            i += 1
+
+    table_node = {'type': 'table', 'content': table_rows}
+
+    if track_warnings:
+        return (table_node, i + 1, warnings)
+    else:
+        return (table_node, i + 1)
+
+
+def _detect_malformed_markdown(_text: str, tokens: list) -> list[str]:
+    """Detect malformed Markdown by analyzing what markdown-it-py parsed as plain text.
+
+    Args:
+        text: The Markdown text to check
+        tokens: Already-parsed tokens from markdown-it-py
+
+    Returns:
+        List of warning messages for detected malformed syntax
+    """
+    warnings = []
+
+    for token in tokens:
+        if token.type == 'inline' and token.content:
+            line_num = token.map[0] + 1 if token.map else None
+
+            if hasattr(token, 'children') and token.children:
+                for child in token.children:
+                    if child.type == 'text' and child.content:
+                        text_content = child.content
+
+                        if '**' in text_content:
+                            count = text_content.count('**')
+                            if count % 2 != 0:
+                                if line_num:
+                                    warnings.append(
+                                        f'Line {line_num}: Unclosed bold marker (**) in "{text_content[:50]}"'
+                                    )
+
+                        if text_content.count('`') % 2 != 0:
+                            if line_num:
+                                warnings.append(
+                                    f'Line {line_num}: Unclosed code marker (`) in "{text_content[:50]}"'
+                                )
+
+                        if re.search(r'!\[[^\]]*$', text_content):
+                            if line_num:
+                                warnings.append(
+                                    f'Line {line_num}: Incomplete image syntax in "{text_content[:50]}"'
+                                )
+
+                        if re.search(r'\[[^\]]+\](?!\()', text_content):
+                            is_task_marker = re.match(
+                                r'^-?\s*\[([ xX])\](\s|$)', text_content.strip()
+                            )
+
+                            is_alert_marker = re.search(
+                                r'\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]', text_content
+                            )
+
+                            is_decision_marker = re.search(r'\[decision:[dau]\]', text_content)
+
+                            if (
+                                not is_task_marker
+                                and not is_alert_marker
+                                and not is_decision_marker
+                                and line_num
+                            ):
+                                warnings.append(
+                                    f'Line {line_num}: Incomplete link syntax - missing URL in "{text_content[:50]}"'
+                                )
+
+        if token.type == 'paragraph_open':
+            idx = tokens.index(token)
+            next_tokens = tokens[idx + 1 : idx + 2]
+            if next_tokens and next_tokens[0].type == 'inline':
+                inline_content = next_tokens[0].content.strip()
+
+                if re.match(r'^(-{3,}|_{3,}|\*{3,})[^\s\-_*]', inline_content):
+                    line_num = token.map[0] + 1 if token.map else None
+                    if line_num:
+                        warnings.append(
+                            f'Line {line_num}: Malformed horizontal rule - "{inline_content}" '
+                            f'(should be "---", "***", or "___" alone on a line)'
+                        )
+
+    return warnings
+
+
+@overload
+def text_to_adf(text: str, track_warnings: Literal[False] = False) -> dict: ...
+
+
+@overload
+def text_to_adf(text: str, track_warnings: Literal[True]) -> tuple[dict, list[str]]: ...
+
+
+def text_to_adf(text: str, track_warnings: bool = False) -> dict | tuple[dict, list[str]]:
+    """Convert markdown text to ADF (Atlassian Document Format).
+
+    Uses markdown-it-py with GitHub Flavored Markdown (GFM) preset to parse markdown into an AST,
+    then converts to ADF structure.
+
+    Args:
+        text: Markdown or plain text string
+        track_warnings: If True, returns tuple of (adf_dict, warnings_list)
+
+    Returns:
+        ADF document structure, or tuple of (ADF document, list of warning messages) if track_warnings=True
+    """
+    if not text or not text.strip():
+        result = build_empty_adf_document()
+        return (result, []) if track_warnings else result
+
+    md = MarkdownIt('gfm-like')
+    md.use(tasklists_plugin)
+    tokens = md.parse(text)
+
+    malformed_warnings = []
+    if track_warnings:
+        malformed_warnings = _detect_malformed_markdown(text, tokens)
+
+    if track_warnings:
+        result = _convert_tokens_to_adf(tokens, track_warnings=True)
+
+        if isinstance(result, tuple):
+            content, conversion_warnings = result
+
+            all_warnings = malformed_warnings + conversion_warnings
+            return {'type': 'doc', 'version': 1, 'content': content}, all_warnings
+        else:
+            return {'type': 'doc', 'version': 1, 'content': result}, malformed_warnings
+    else:
+        content = _convert_tokens_to_adf(tokens)
+        return {'type': 'doc', 'version': 1, 'content': content}
+
+
+def build_empty_adf_document(with_empty_paragraph: bool = False) -> dict:
+    """Build an empty ADF document, optionally with a single empty paragraph."""
+    return {
+        'type': 'doc',
+        'version': 1,
+        'content': [{'type': 'paragraph', 'content': []}] if with_empty_paragraph else [],
+    }
+
+
+def _convert_tokens_to_adf(
+    tokens: list, track_warnings: bool = False
+) -> list[dict] | tuple[list[dict], list[str]]:
+    """Convert markdown-it tokens to ADF content nodes.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        track_warnings: If True, returns tuple of (content, warnings)
+
+    Returns:
+        List of ADF content nodes, or tuple of (content, warnings) if track_warnings=True
+    """
+    content = []
+    warnings: list[str] = []
+    unsupported_types = set()
+    i = 0
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == 'heading_open':
+            level = int(token.tag[1])
+            i += 1
+            inline_token = tokens[i]
+            if track_warnings:
+                heading_content, inline_warnings = _convert_inline_token_children(
+                    inline_token,
+                    track_warnings=True,
+                )
+                warnings.extend(inline_warnings)
+            else:
+                heading_content, _ = _convert_inline_token_children(inline_token)
+            content.append(
+                {'type': 'heading', 'attrs': {'level': level}, 'content': heading_content}
+            )
+            i += 2
+
+        elif token.type == 'paragraph_open':
+            i += 1
+            _append_paragraph_from_inline_token(
+                tokens[i],
+                target_content=content,
+                warnings=warnings,
+                track_warnings=track_warnings,
+            )
+            i += 2
+
+        elif token.type == 'blockquote_open':
+            if track_warnings:
+                blockquote_result = cast(
+                    tuple[dict, int, list[str]],
+                    _convert_blockquote_tokens(tokens, i, track_warnings=True),
+                )
+                blockquote_node, i, blockquote_warnings = blockquote_result
+                warnings.extend(blockquote_warnings)
+            else:
+                blockquote_result = cast(tuple[dict, int], _convert_blockquote_tokens(tokens, i))
+                blockquote_node, i = blockquote_result
+            content.append(blockquote_node)
+
+        elif token.type == 'hr':
+            content.append({'type': 'rule'})
+            i += 1
+
+        elif token.type == 'bullet_list_open':
+            is_task_list = _is_task_list(tokens, i)
+
+            if is_task_list:
+                if track_warnings:
+                    list_result = cast(
+                        tuple[list[dict], int, list[str]],
+                        _convert_task_list_tokens(tokens, i, track_warnings=True),
+                    )
+                    list_content, i, list_warnings = list_result
+                    warnings.extend(list_warnings)
+                else:
+                    list_result = cast(tuple[list[dict], int], _convert_task_list_tokens(tokens, i))
+                    list_content, i = list_result
+                content.append(
+                    {'type': 'taskList', 'attrs': {'localId': ''}, 'content': list_content}
+                )
+            else:
+                if track_warnings:
+                    list_result = cast(
+                        tuple[list[dict], int, list[str]],
+                        _convert_list_tokens(tokens, i, 'bulletList', track_warnings=True),
+                    )
+                    list_content, i, list_warnings = list_result
+                    warnings.extend(list_warnings)
+                else:
+                    list_result = cast(
+                        tuple[list[dict], int], _convert_list_tokens(tokens, i, 'bulletList')
+                    )
+                    list_content, i = list_result
+                content.append({'type': 'bulletList', 'content': list_content})
+
+        elif token.type == 'ordered_list_open':
+            if track_warnings:
+                list_result = cast(
+                    tuple[list[dict], int, list[str]],
+                    _convert_list_tokens(tokens, i, 'orderedList', track_warnings=True),
+                )
+                list_content, i, list_warnings = list_result
+                warnings.extend(list_warnings)
+            else:
+                list_result = cast(
+                    tuple[list[dict], int], _convert_list_tokens(tokens, i, 'orderedList')
+                )
+                list_content, i = list_result
+            content.append({'type': 'orderedList', 'content': list_content})
+
+        elif token.type == 'fence':
+            attrs: dict[str, str] = {}
+
+            if token.info:
+                attrs['language'] = token.info
+            code_node = {
+                'type': 'codeBlock',
+                'attrs': attrs,
+                'content': [{'type': 'text', 'text': token.content}],
+            }
+            content.append(code_node)
+            i += 1
+
+        elif token.type == 'table_open':
+            if track_warnings:
+                table_result = cast(
+                    tuple[dict, int, list[str]],
+                    _convert_table_tokens(tokens, i, track_warnings=True),
+                )
+                table_node, i, table_warnings = table_result
+                warnings.extend(table_warnings)
+            else:
+                table_result = cast(tuple[dict, int], _convert_table_tokens(tokens, i))
+                table_node, i = table_result
+            content.append(table_node)
+
+        else:
+            if track_warnings and token.type not in [
+                'inline',
+                'paragraph_close',
+                'heading_close',
+                'bullet_list_close',
+                'ordered_list_close',
+                'list_item_close',
+                'blockquote_close',
+                'softbreak',
+                'hardbreak',
+            ]:
+                type_name = (
+                    token.type.replace('_', ' ').replace('open', '').replace('close', '').strip()
+                )
+                if type_name and type_name not in unsupported_types:
+                    unsupported_types.add(type_name)
+                    warnings.append(f'Unsupported markdown element: {type_name}')
+            i += 1
+
+    return (content, warnings) if track_warnings else content
+
+
+def _convert_nested_list_tokens(
+    tokens: list,
+    index: int,
+    list_type: str,
+    *,
+    track_warnings: bool,
+) -> tuple[list[dict], int, list[str]]:
+    if track_warnings:
+        nested_result = cast(
+            tuple[list[dict], int, list[str]],
+            _convert_list_tokens(tokens, index, list_type, track_warnings=True),
+        )
+        nested_content, next_index, nested_warnings = nested_result
+        return nested_content, next_index, nested_warnings
+
+    nested_result = cast(
+        tuple[list[dict], int],
+        _convert_list_tokens(tokens, index, list_type),
+    )
+    nested_content, next_index = nested_result
+    return nested_content, next_index, []
+
+
+def _convert_paragraph_inline_content(
+    inline_token: object, *, track_warnings: bool
+) -> tuple[list[dict], list[str]]:
+    if track_warnings:
+        para_content, inline_warnings = _convert_inline_token_children(
+            inline_token,
+            track_warnings=True,
+        )
+        return para_content, inline_warnings
+
+    para_content, _ = _convert_inline_token_children(inline_token)
+    return para_content, []
+
+
+def _append_paragraph_from_inline_token(
+    inline_token: object,
+    *,
+    target_content: list[dict],
+    warnings: list[str],
+    track_warnings: bool,
+) -> None:
+    para_content, inline_warnings = _convert_paragraph_inline_content(
+        inline_token,
+        track_warnings=track_warnings,
+    )
+    warnings.extend(inline_warnings)
+    if para_content:
+        target_content.append({'type': 'paragraph', 'content': para_content})
+
+
+def _convert_list_tokens(
+    tokens: list, start_index: int, list_type: str, track_warnings: bool = False
+) -> tuple[list[dict], int] | tuple[list[dict], int, list[str]]:
+    """Convert markdown list tokens to ADF list items.
+
+    Args:
+        tokens: List of markdown-it Token objects
+        start_index: Starting index in tokens list
+        list_type: 'bulletList' or 'orderedList'
+        track_warnings: If True, returns tuple of (list_items, end_index, warnings)
+
+    Returns:
+        Tuple of (list_items, end_index), or (list_items, end_index, warnings) if track_warnings=True
+    """
+    list_items = []
+    warnings: list[str] = []
+    i = start_index + 1
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == f'{list_type.replace("List", "")}_list_close':
+            break
+        elif token.type == 'list_item_open':
+            i += 1
+            item_content = []
+
+            while i < len(tokens) and tokens[i].type != 'list_item_close':
+                inner_token = tokens[i]
+
+                if inner_token.type == 'paragraph_open':
+                    i += 1
+                    _append_paragraph_from_inline_token(
+                        tokens[i],
+                        target_content=item_content,
+                        warnings=warnings,
+                        track_warnings=track_warnings,
+                    )
+                    i += 2
+
+                elif inner_token.type == 'bullet_list_open':
+                    nested_content, i, nested_warnings = _convert_nested_list_tokens(
+                        tokens,
+                        i,
+                        'bulletList',
+                        track_warnings=track_warnings,
+                    )
+                    warnings.extend(nested_warnings)
+                    item_content.append({'type': 'bulletList', 'content': nested_content})
+
+                elif inner_token.type == 'ordered_list_open':
+                    nested_content, i, nested_warnings = _convert_nested_list_tokens(
+                        tokens,
+                        i,
+                        'orderedList',
+                        track_warnings=track_warnings,
+                    )
+                    warnings.extend(nested_warnings)
+                    item_content.append({'type': 'orderedList', 'content': nested_content})
+
+                else:
+                    i += 1
+
+            list_items.append({'type': 'listItem', 'content': item_content})
+            i += 1
+
+        else:
+            i += 1
+
+    if track_warnings:
+        return (list_items, i + 1, warnings)
+    else:
+        return (list_items, i + 1)
+
+
+def _convert_inline_tokens(
+    tokens: list, track_warnings: bool = False
+) -> list[dict] | tuple[list[dict], list[str]]:
+    """Convert markdown-it inline tokens to ADF text nodes with marks.
+
+    Args:
+        tokens: List of markdown-it inline Token objects
+        track_warnings: If True, returns tuple of (content, warnings)
+
+    Returns:
+        List of ADF text nodes, or tuple of (content, warnings) if track_warnings=True
+    """
+    if not tokens:
+        return ([], []) if track_warnings else []
+
+    content = []
+    warnings: list[str] = []
+    unsupported_types = set()
+    i = 0
+    active_marks = []
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.type == 'text':
+            text_node = {'type': 'text', 'text': token.content}
+            if active_marks:
+                text_node['marks'] = [{'type': mark} for mark in active_marks]
+            content.append(text_node)
+            i += 1
+
+        elif token.type == 'strong_open':
+            active_marks.append('strong')
+            i += 1
+        elif token.type == 'strong_close':
+            if 'strong' in active_marks:
+                active_marks.remove('strong')
+            i += 1
+
+        elif token.type == 'em_open':
+            active_marks.append('em')
+            i += 1
+        elif token.type == 'em_close':
+            if 'em' in active_marks:
+                active_marks.remove('em')
+            i += 1
+
+        elif token.type == 'code_inline':
+            if date_match := re.fullmatch(r'\[date\](\d{4}-\d{2}-\d{2})', token.content):
+                try:
+                    timestamp_ms = str(
+                        int(
+                            datetime.strptime(date_match.group(1), '%Y-%m-%d')
+                            .replace(tzinfo=timezone.utc)
+                            .timestamp()
+                            * 1000
+                        )
+                    )
+                    date_node: dict = {'type': 'date', 'attrs': {'timestamp': timestamp_ms}}
+                    if active_marks:
+                        date_node['marks'] = [{'type': mark} for mark in active_marks]
+                    content.append(date_node)
+                except ValueError:
+                    text_node = {
+                        'type': 'text',
+                        'text': token.content,
+                        'marks': [{'type': 'code'}],
+                    }
+                    content.append(text_node)
+            else:
+                text_node = {'type': 'text', 'text': token.content, 'marks': [{'type': 'code'}]}
+                content.append(text_node)
+            i += 1
+
+        elif token.type == 'link_open':
+            href = token.attrGet('href')
+            i += 1
+
+            link_text = ''
+            while i < len(tokens) and tokens[i].type != 'link_close':
+                if tokens[i].type == 'text':
+                    link_text += tokens[i].content
+                i += 1
+
+            mention_match = re.search(r'/jira/people/([^/]+)$', href or '')
+            if mention_match:
+                account_id = mention_match.group(1)
+                mention_node = {
+                    'type': 'mention',
+                    'attrs': {
+                        'id': account_id,
+                        'text': link_text,
+                    },
+                }
+                content.append(mention_node)
+            else:
+                text_node = {
+                    'type': 'text',
+                    'text': link_text,
+                    'marks': [{'type': 'link', 'attrs': {'href': href}}],
+                }
+                content.append(text_node)
+            i += 1
+
+        elif token.type == 's_open':
+            active_marks.append('strike')
+            i += 1
+        elif token.type == 's_close':
+            if 'strike' in active_marks:
+                active_marks.remove('strike')
+            i += 1
+
+        else:
+            if track_warnings and token.type not in ['softbreak', 'hardbreak']:
+                type_name = (
+                    token.type.replace('_', ' ').replace('open', '').replace('close', '').strip()
+                )
+                if type_name and type_name not in unsupported_types:
+                    unsupported_types.add(type_name)
+                    warnings.append(f'Unsupported inline markdown: {type_name}')
+            i += 1
+
+    return (content, warnings) if track_warnings else content
+
+
+def _convert_inline_token_children(
+    inline_token,
+    *,
+    track_warnings: bool = False,
+) -> tuple[list[dict], list[str]]:
+    if track_warnings:
+        return cast(
+            tuple[list[dict], list[str]],
+            _convert_inline_tokens(
+                inline_token.children if inline_token.children else [],
+                track_warnings=True,
+            ),
+        )
+
+    return (
+        cast(
+            list[dict],
+            _convert_inline_tokens(inline_token.children) if inline_token.children else [],
+        ),
+        [],
+    )

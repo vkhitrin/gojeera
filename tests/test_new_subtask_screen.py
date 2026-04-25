@@ -1,26 +1,13 @@
 import asyncio
 
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
 
-from gojeera.app import JiraApp
-from gojeera.components.new_work_item_screen import AddWorkItemScreen
-
-from .test_helpers import load_work_item_from_search, wait_until
+from .test_helpers import focus_work_item_tab, wait_until, with_snapshot_assertion
 
 
 async def open_add_subtask_screen(pilot):
     """Navigate to work item and open Add Work Item screen as a subtask."""
-    await load_work_item_from_search(pilot, 'ENG-4')
-
-    # Navigate to Subtasks tab
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')  # Move to Attachments tab
-    await asyncio.sleep(0.2)
-    await pilot.press('right')  # Move to Subtasks tab
-    await asyncio.sleep(0.5)  # Wait for subtasks to load
+    await focus_work_item_tab(pilot, work_item_key='ENG-4', right_presses=2)
 
     # Trigger new subtask action (ctrl+n when Subtasks tab is active)
     await pilot.press('ctrl+n')  # Open Add Work Item screen as subtask
@@ -101,13 +88,8 @@ async def fill_required_fields_and_verify_save_enabled(pilot):
 class TestNewSubtaskScreen:
     """Snapshot tests to verify AddWorkItemScreen appearance when creating subtasks."""
 
-    def test_new_subtask_screen_initial_state(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
+    @with_snapshot_assertion(open_add_subtask_screen)
+    def test_new_subtask_screen_initial_state(self):
         """Snapshot: Add Work Item screen opened from Subtasks tab (creating a subtask).
 
         Verifies:
@@ -116,25 +98,12 @@ class TestNewSubtaskScreen:
         - Reporter is auto-selected to current user
         - Save button is disabled (no summary yet)
         """
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_add_subtask_screen)
 
-    def test_new_subtask_screen_with_filled_fields(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
+    @with_snapshot_assertion(fill_required_fields_and_verify_save_enabled)
+    def test_new_subtask_screen_with_filled_fields(self):
         """Snapshot: Add Work Item screen with all required fields filled.
 
         Verifies:
         - Required fields (project, issue type, reporter, summary) are filled
         - Save button becomes enabled after filling summary
         """
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=fill_required_fields_and_verify_save_enabled,
-        )

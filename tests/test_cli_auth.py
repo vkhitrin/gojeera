@@ -3,13 +3,61 @@ from types import SimpleNamespace
 
 from click.testing import CliRunner
 
-from gojeera.auth_profiles import BasicAuthProfile, OAuth2AuthProfile
-from gojeera.auth_service import AuthProfileStatus, AuthValidationResult
 from gojeera.cli import cli
+from gojeera.internal.auth.oauth2 import OAUTH2_SCOPES
+from gojeera.internal.auth.profiles import BasicAuthProfile, OAuth2AuthProfile
+from gojeera.internal.auth.service import AuthProfileStatus, AuthValidationResult
+
+
+def _runner() -> CliRunner:
+    return CliRunner()
+
+
+def _basic_profile(
+    *,
+    name: str = 'work',
+    site: str = 'https://example.atlassian.acme.net',
+    email: str = 'testuser@example.com',
+) -> BasicAuthProfile:
+    return BasicAuthProfile(name=name, site=site, email=email)
+
+
+def _oauth2_profile(
+    *,
+    name: str = 'work',
+    site: str = 'https://example.atlassian.net',
+    cloud_id: str = 'cloud-123',
+    account_id: str = '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+    client_id: str = 'client-123',
+    display_name: str | None = None,
+) -> OAuth2AuthProfile:
+    return OAuth2AuthProfile(
+        name=name,
+        site=site,
+        cloud_id=cloud_id,
+        account_id=account_id,
+        client_id=client_id,
+        display_name=display_name,
+    )
+
+
+def _capture_upserted_profile(storage: dict):
+    def mock_upsert_profile(profile_name, **kwargs):
+        storage['name'] = profile_name
+        storage['data'] = kwargs
+
+    return mock_upsert_profile
+
+
+def _single_basic_profile_listing():
+    return (
+        'work',
+        {'work': _basic_profile()},
+    )
 
 
 def test_auth_login_stores_environment_secrets(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
 
     stored = {}
     profile = {}
@@ -42,25 +90,17 @@ def test_auth_login_stores_environment_secrets(monkeypatch):
         ),
     )
 
-    def mock_set_jira_api_token(base_url, api_email, api_token):
-        stored['jira'] = (base_url, api_email, api_token)
+    def mock_set_jira_api_token(api_email, api_token):
+        stored['jira'] = (api_email, api_token)
 
-    def mock_upsert_profile(profile_name, **kwargs):
-        profile['name'] = profile_name
-        profile['data'] = kwargs
-
-    monkeypatch.setattr('gojeera.cli.upsert_profile', mock_upsert_profile)
+    monkeypatch.setattr('gojeera.cli.upsert_profile', _capture_upserted_profile(profile))
     monkeypatch.setattr('gojeera.cli.set_jira_api_token', mock_set_jira_api_token)
 
     result = runner.invoke(cli, ['auth', 'login'])
 
     assert result.exit_code == 0
     assert 'Created profile work.' in result.output
-    assert stored['jira'] == (
-        'https://example.atlassian.acme.net',
-        'testuser@example.com',
-        'env-token',
-    )
+    assert stored['jira'] == ('testuser@example.com', 'env-token')
     assert profile['name'] == 'work'
     assert profile['data']['auth_type'] == 'basic'
     assert profile['data']['client_id'] is None
@@ -68,7 +108,7 @@ def test_auth_login_stores_environment_secrets(monkeypatch):
 
 
 def test_auth_login_requires_basic_credentials(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
     prompt_values = iter(
         [
             'work',
@@ -89,25 +129,13 @@ def test_auth_login_requires_basic_credentials(monkeypatch):
 
 
 def test_auth_logout_removes_profile_and_stored_secrets(monkeypatch):
-    runner = CliRunner()
-    monkeypatch.setattr(
-        'gojeera.cli.list_profiles',
-        lambda: (
-            'work',
-            {
-                'work': BasicAuthProfile(
-                    name='work',
-                    instance_url='https://example.atlassian.acme.net',
-                    email='testuser@example.com',
-                )
-            },
-        ),
-    )
+    runner = _runner()
+    monkeypatch.setattr('gojeera.cli.list_profiles', _single_basic_profile_listing)
 
     removed = {'profile': None}
 
-    def mock_delete_jira_api_token(base_url, api_email):
-        removed['jira'] = (base_url, api_email)
+    def mock_delete_jira_api_token(api_email):
+        removed['jira'] = api_email
         return True
 
     def mock_remove_profile(profile_name):
@@ -121,25 +149,13 @@ def test_auth_logout_removes_profile_and_stored_secrets(monkeypatch):
 
     assert result.exit_code == 0
     assert result.output == ''
-    assert removed['jira'] == ('https://example.atlassian.acme.net', 'testuser@example.com')
+    assert removed['jira'] == 'testuser@example.com'
     assert removed['profile'] == 'work'
 
 
 def test_auth_logout_uses_interactive_profile_selection(monkeypatch):
-    runner = CliRunner()
-    monkeypatch.setattr(
-        'gojeera.cli.list_profiles',
-        lambda: (
-            'work',
-            {
-                'work': BasicAuthProfile(
-                    name='work',
-                    instance_url='https://example.atlassian.acme.net',
-                    email='testuser@example.com',
-                )
-            },
-        ),
-    )
+    runner = _runner()
+    monkeypatch.setattr('gojeera.cli.list_profiles', _single_basic_profile_listing)
     monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: 'work')
     monkeypatch.setattr('gojeera.cli.delete_jira_api_token', lambda *args, **kwargs: True)
     monkeypatch.setattr('gojeera.cli.remove_profile', lambda profile_name: {'auth_type': 'basic'})
@@ -151,7 +167,7 @@ def test_auth_logout_uses_interactive_profile_selection(monkeypatch):
 
 
 def test_auth_status_reports_no_profiles_when_empty(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
     monkeypatch.setattr('gojeera.cli.list_profiles', lambda: (None, {}))
 
     result = runner.invoke(cli, ['auth', 'status'])
@@ -161,7 +177,7 @@ def test_auth_status_reports_no_profiles_when_empty(monkeypatch):
 
 
 def test_cli_profile_option_selects_auth_profile(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
     captured = {}
 
     class DummySettings:
@@ -183,7 +199,7 @@ def test_cli_profile_option_selects_auth_profile(monkeypatch):
         def run(self):
             return None
 
-    monkeypatch.setattr('gojeera.config.ApplicationConfiguration', DummySettings)
+    monkeypatch.setattr('gojeera.internal.store.config.ApplicationConfiguration', DummySettings)
     monkeypatch.setitem(sys.modules, 'gojeera.app', SimpleNamespace(JiraApp=DummyApp))
 
     result = runner.invoke(cli, ['--profile', 'work'])
@@ -193,7 +209,7 @@ def test_cli_profile_option_selects_auth_profile(monkeypatch):
 
 
 def test_cli_profile_option_reports_unknown_profile(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
 
     class DummyJiraSettings:
         def __init__(self):
@@ -205,7 +221,7 @@ def test_cli_profile_option_reports_unknown_profile(monkeypatch):
             self.jira = DummyJiraSettings()
             self.search_on_startup = False
 
-    monkeypatch.setattr('gojeera.config.ApplicationConfiguration', DummySettings)
+    monkeypatch.setattr('gojeera.internal.store.config.ApplicationConfiguration', DummySettings)
 
     result = runner.invoke(cli, ['--profile', 'missing'])
 
@@ -213,21 +229,61 @@ def test_cli_profile_option_reports_unknown_profile(monkeypatch):
     assert 'Authentication profile not found: missing' in result.output
 
 
-def test_auth_status_reports_profiles_and_keyring_state(monkeypatch):
-    runner = CliRunner()
+def test_cli_reports_missing_auth_configuration(monkeypatch):
+    runner = _runner()
+
+    class MissingAuthSettings:
+        def __init__(self):
+            raise ValueError(
+                'No Jira authentication is configured. '
+                'Use `gojeera auth login` to configure your credentials.'
+            )
+
     monkeypatch.setattr(
-        'gojeera.cli.list_profiles',
-        lambda: (
-            'work',
-            {
-                'work': BasicAuthProfile(
-                    name='work',
-                    instance_url='https://example.atlassian.acme.net',
-                    email='testuser@example.com',
-                )
-            },
-        ),
+        'gojeera.internal.store.config.ApplicationConfiguration', MissingAuthSettings
     )
+
+    result = runner.invoke(cli, [], color=True)
+
+    assert result.exit_code == 1
+    assert '\x1b[31m' in result.output
+    assert (
+        'No Jira credentials are configured. '
+        'Use `gojeera auth login` to configure your credentials.' in result.output
+    )
+    assert (
+        'Configuration validation error. Make sure your config file is correct.'
+        not in result.output
+    )
+    assert 'Configuration error:' not in result.output
+    assert 'jira.api_base_url is required for basic authentication.' not in result.output
+
+
+def test_cli_reports_configuration_validation_errors_in_red(monkeypatch):
+    runner = _runner()
+
+    class InvalidConfigSettings:
+        def __init__(self):
+            raise ValueError('jira.api_base_url is required for basic authentication.')
+
+    monkeypatch.setattr(
+        'gojeera.internal.store.config.ApplicationConfiguration', InvalidConfigSettings
+    )
+
+    result = runner.invoke(cli, [], color=True)
+
+    assert result.exit_code == 1
+    assert '\x1b[31m' in result.output
+    assert 'Configuration validation error. Make sure your config file is correct.' in result.output
+    assert (
+        'Configuration error: jira.api_base_url is required for basic authentication.'
+        in result.output
+    )
+
+
+def test_auth_status_reports_profiles_and_keyring_state(monkeypatch):
+    runner = _runner()
+    monkeypatch.setattr('gojeera.cli.list_profiles', _single_basic_profile_listing)
     monkeypatch.setattr(
         'gojeera.cli.auth_service',
         SimpleNamespace(
@@ -257,21 +313,14 @@ def test_auth_status_reports_profiles_and_keyring_state(monkeypatch):
 
 
 def test_auth_status_refreshes_expired_oauth2_access_token(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
     status_calls = {}
 
     monkeypatch.setattr(
         'gojeera.cli.list_profiles',
         lambda: (
             'work',
-            {
-                'work': OAuth2AuthProfile(
-                    name='work',
-                    instance_url='https://example.atlassian.net',
-                    cloud_id='cloud-123',
-                    client_id='client-123',
-                )
-            },
+            {'work': _oauth2_profile()},
         ),
     )
 
@@ -283,8 +332,9 @@ def test_auth_status_refreshes_expired_oauth2_access_token(monkeypatch):
                     {
                         'profile_name': profile_name,
                         'active_profile_name': active_profile_name,
-                        'instance_url': profile.instance_url,
+                        'site': profile.site,
                         'cloud_id': profile.cloud_id,
+                        'account_id': profile.account_id,
                         'client_id': profile.client_id,
                     }
                 ),
@@ -307,14 +357,15 @@ def test_auth_status_refreshes_expired_oauth2_access_token(monkeypatch):
     assert status_calls == {
         'profile_name': 'work',
         'active_profile_name': 'work',
-        'instance_url': 'https://example.atlassian.net',
+        'site': 'https://example.atlassian.net',
         'cloud_id': 'cloud-123',
+        'account_id': '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
         'client_id': 'client-123',
     }
 
 
 def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
-    runner = CliRunner()
+    runner = _runner()
 
     stored = {}
     profile = {}
@@ -366,7 +417,11 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     monkeypatch.setattr(
         'gojeera.cli.auth_service',
         SimpleNamespace(
-            validate_profile=lambda profile, **kwargs: AuthValidationResult(True, 'OAuth User'),
+            validate_profile=lambda profile, **kwargs: AuthValidationResult(
+                True,
+                'OAuth User',
+                account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+            ),
             get_oauth2_client_secret=lambda profile, **kwargs: None,
         ),
     )
@@ -375,14 +430,14 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
         profile['name'] = profile_name
         profile['data'] = kwargs
 
-    def mock_set_jira_oauth2_access_token(base_url, cloud_id, access_token):
-        stored['oauth2'] = (base_url, cloud_id, access_token)
+    def mock_set_jira_oauth2_access_token(account_id, access_token):
+        stored['oauth2'] = (account_id, access_token)
 
-    def mock_set_jira_oauth2_refresh_token(base_url, cloud_id, refresh_token):
-        stored['refresh'] = (base_url, cloud_id, refresh_token)
+    def mock_set_jira_oauth2_refresh_token(account_id, refresh_token):
+        stored['refresh'] = (account_id, refresh_token)
 
-    def mock_set_jira_oauth2_client_secret(base_url, cloud_id, client_secret):
-        stored['client_secret'] = (base_url, cloud_id, client_secret)
+    def mock_set_jira_oauth2_client_secret(account_id, client_secret):
+        stored['client_secret'] = (account_id, client_secret)
 
     monkeypatch.setattr('gojeera.cli.upsert_profile', mock_upsert_profile)
     monkeypatch.setattr(
@@ -398,50 +453,104 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     result = runner.invoke(cli, ['auth', 'login'])
 
     assert result.exit_code == 0
-    assert stored['oauth2'] == (
-        'https://example.atlassian.net',
-        'cloud-123',
-        'oauth-access-token',
-    )
+    assert stored['oauth2'] == ('712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857', 'oauth-access-token')
     assert stored['refresh'] == (
-        'https://example.atlassian.net',
-        'cloud-123',
+        '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
         'oauth-refresh-token',
     )
     assert stored['client_secret'] == (
-        'https://example.atlassian.net',
-        'cloud-123',
+        '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
         'secret-123',
     )
     assert profile['data']['auth_type'] == 'oauth2'
     assert profile['data']['cloud_id'] == 'cloud-123'
+    assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
     assert profile['data']['client_id'] == 'client-123'
-    assert profile['data']['scopes'] == [
-        'read:jira-user',
-        'read:jira-work',
-        'write:jira-work',
-        'manage:jira-data-provider',
-        'read:servicedesk-request',
-        'read:servicemanagement-insight-objects',
-        'offline_access',
-        'read:me',
-        'read:account',
-    ]
+    assert 'scopes' not in profile['data']
     assert selector_calls == [('Authentication type', ['basic', 'oauth2'])]
     assert flow_calls == {
         'client_id': 'client-123',
         'client_secret': 'secret-123',
-        'scopes': [
-            'read:jira-user',
-            'read:jira-work',
-            'write:jira-work',
-            'manage:jira-data-provider',
-            'read:servicedesk-request',
-            'read:servicemanagement-insight-objects',
-            'offline_access',
-            'read:me',
-            'read:account',
-        ],
+        'scopes': OAUTH2_SCOPES,
         'redirect_uri': 'http://127.0.0.1:49152/callback',
         'authorization_url': 'https://auth.atlassian.com/authorize',
     }
+
+
+def test_auth_edit_oauth2_profile_skips_browser_flow_when_credentials_unchanged(monkeypatch):
+    runner = _runner()
+
+    profile = {}
+    flow_calls = {}
+    prompt_values = iter(['client-123', ''])
+
+    monkeypatch.setattr(
+        'gojeera.cli.list_profiles',
+        lambda: (
+            'work',
+            {'work': _oauth2_profile(display_name='OAuth User')},
+        ),
+    )
+    monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
+    monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        'gojeera.cli._resolve_existing_profile_selection',
+        lambda: (
+            'work',
+            _oauth2_profile(display_name='OAuth User'),
+            True,
+        ),
+    )
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: 'oauth2')
+    monkeypatch.setattr(
+        'gojeera.cli._run_oauth2_login_flow',
+        lambda **kwargs: flow_calls.update(kwargs),
+    )
+
+    monkeypatch.setattr('gojeera.cli.upsert_profile', _capture_upserted_profile(profile))
+
+    result = runner.invoke(cli, ['auth', 'login'])
+
+    assert result.exit_code == 0
+    assert flow_calls == {}
+    assert profile['name'] == 'work'
+    assert profile['data']['site'] == 'https://example.atlassian.net'
+    assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
+    assert profile['data']['display_name'] == 'OAuth User'
+
+
+def test_auth_edit_basic_profile_skips_validation_when_credentials_unchanged(monkeypatch):
+    runner = _runner()
+
+    profile = {}
+    validate_calls = {}
+    prompt_values = iter(['https://example.atlassian.acme.net', 'testuser@example.com', ''])
+
+    monkeypatch.setattr(
+        'gojeera.cli._resolve_existing_profile_selection',
+        lambda: (
+            'work',
+            _basic_profile(),
+            True,
+        ),
+    )
+    monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
+    monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: 'basic')
+    monkeypatch.setattr(
+        'gojeera.cli.auth_service',
+        SimpleNamespace(
+            validate_profile=lambda *args, **kwargs: validate_calls.update(called=True),
+            get_basic_api_token=lambda *args, **kwargs: 'existing-token',
+        ),
+    )
+
+    monkeypatch.setattr('gojeera.cli.upsert_profile', _capture_upserted_profile(profile))
+
+    result = runner.invoke(cli, ['auth', 'login'])
+
+    assert result.exit_code == 0
+    assert validate_calls == {}
+    assert profile['name'] == 'work'
+    assert profile['data']['site'] == 'https://example.atlassian.acme.net'
+    assert profile['data']['email'] == 'testuser@example.com'

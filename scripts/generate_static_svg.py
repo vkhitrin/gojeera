@@ -31,9 +31,7 @@ class StaticSvgScenario:
     source: str
     source_kind: str
     template: str | None
-    test: str | None
     widget: str
-    note: str = ''
     crop_start_line: int | None = None
     crop_line_count: int | None = None
     crop_min_x: float | None = None
@@ -47,9 +45,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_unified_search/TestUnifiedSearch.test_unified_search_basic_mode_initial.svg',
         source_kind='snapshot',
         template='static/unified_search_basic_mode.svg',
-        test='tests/test_unified_search.py::TestUnifiedSearch::test_unified_search_basic_mode_initial',
         widget='src/gojeera/components/unified_search.py',
-        note='Unified search widget in BASIC mode.',
         crop_start_line=1,
         crop_line_count=1,
     ),
@@ -59,9 +55,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_unified_search/TestUnifiedSearch.test_unified_search_text_with_query.svg',
         source_kind='snapshot',
         template='static/unified_search_text_mode.svg',
-        test='tests/test_unified_search.py::TestUnifiedSearch::test_unified_search_text_with_query',
         widget='src/gojeera/components/unified_search.py',
-        note='Unified search widget in TEXT mode with a query.',
         crop_start_line=1,
         crop_line_count=1,
     ),
@@ -71,9 +65,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_unified_search/TestUnifiedSearch.test_set_initial_jql_filter.svg',
         source_kind='snapshot',
         template='static/unified_search_jql_mode.svg',
-        test='tests/test_unified_search.py::TestUnifiedSearch::test_set_initial_jql_filter',
         widget='src/gojeera/components/unified_search.py',
-        note='Unified search widget in JQL mode with a query.',
         crop_start_line=1,
         crop_line_count=1,
     ),
@@ -83,9 +75,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_unified_search/TestUnifiedSearch.test_unified_search_jql_with_filters.svg',
         source_kind='snapshot',
         template='static/unified_search_filters_view.svg',
-        test='tests/test_unified_search.py::TestUnifiedSearch::test_unified_search_jql_with_filters',
         widget='src/gojeera/components/unified_search.py',
-        note='Unified search JQL autocomplete/filter view.',
         crop_start_line=1,
         crop_line_count=3,
     ),
@@ -95,9 +85,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_description/TestWorkItemDescription.test_wrapped_link_snapshot.svg',
         source_kind='snapshot',
         template='static/work_item_description_tab.svg',
-        test='tests/test_work_item_description.py::TestWorkItemDescription::test_wrapped_link_snapshot',
         widget='src/gojeera/components/work_item_description.py',
-        note='Summary/description tab view.',
         crop_start_line=6,
         crop_line_count=13,
         crop_min_x=24.4,
@@ -109,9 +97,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_attachments/TestWorkItemAttachments.test_work_item_attachments_row_highlighted.svg',
         source_kind='snapshot',
         template='static/work_item_attachments_tab.svg',
-        test='tests/test_work_item_attachments.py::TestWorkItemAttachments::test_work_item_attachments_row_highlighted',
         widget='src/gojeera/components/work_item_attachments.py',
-        note='Attachments tab with a highlighted row.',
         crop_start_line=6,
         crop_line_count=4,
         crop_min_x=24.4,
@@ -123,9 +109,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='static/work_item_attachment_screen.svg',
         source_kind='legacy-static',
         template='static/work_item_attachment_screen.svg',
-        test=None,
         widget='src/gojeera/components/view_attachment_screen.py',
-        note='Legacy static asset. No matching snapshot test is currently registered.',
     ),
     'work_item_subtasks_tab': StaticSvgScenario(
         name='work_item_subtasks_tab',
@@ -133,9 +117,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_subtasks/TestWorkItemSubtasks.test_work_item_subtasks_row_highlighted.svg',
         source_kind='snapshot',
         template='static/work_item_subtasks_tab.svg',
-        test='tests/test_work_item_subtasks.py::TestWorkItemSubtasks::test_work_item_subtasks_row_highlighted',
         widget='src/gojeera/components/work_item_subtasks.py',
-        note='Subtasks tab with a highlighted row.',
         crop_start_line=6,
         crop_line_count=5,
         crop_min_x=24.4,
@@ -147,9 +129,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_app_appearance/TestAppAppearance.test_app_with_default_theme.svg',
         source_kind='snapshot',
         template='static/work_item_search_results.svg',
-        test='tests/test_app_appearance.py::TestAppAppearance::test_app_with_default_theme',
         widget='src/gojeera/widgets/work_item_search_results_scroll.py',
-        note='Full search results pane with controls, results area, and footer.',
         crop_start_line=3,
         crop_line_count=36,
         crop_min_x=0.0,
@@ -161,9 +141,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_web_links/TestWorkItemWebLinks.test_work_item_web_links_row_highlighted.svg',
         source_kind='snapshot',
         template='static/work_item_web_links_tab.svg',
-        test='tests/test_work_item_web_links.py::TestWorkItemWebLinks::test_work_item_web_links_row_highlighted',
         widget='src/gojeera/components/work_item_web_links.py',
-        note='Web links tab with a highlighted row.',
         crop_start_line=6,
         crop_line_count=9,
         crop_min_x=24.4,
@@ -175,9 +153,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_comments/TestWorkItemComments.test_comments_display.svg',
         source_kind='snapshot',
         template='static/work_item_comments_tab.svg',
-        test='tests/test_work_item_comments.py::TestWorkItemComments::test_comments_display',
         widget='src/gojeera/components/work_item_comments.py',
-        note='Comments tab display state.',
         crop_start_line=6,
         crop_line_count=13,
         crop_min_x=24.4,
@@ -189,9 +165,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_log_screen/TestLogWorkScreen.test_log_work_screen_valid_fields.svg',
         source_kind='snapshot',
         template='static/log_work_screen.svg',
-        test='tests/test_work_log_screen.py::TestLogWorkScreen::test_log_work_screen_valid_fields',
         widget='src/gojeera/components/work_log_screen.py',
-        note='Log work screen with populated valid fields.',
         crop_start_line=7,
         crop_line_count=26,
         crop_min_x=317.2,
@@ -203,9 +177,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_work_item_fields/TestWorkItemFields.test_work_item_fields_initial_state.svg',
         source_kind='snapshot',
         template='static/fields_panel.svg',
-        test='tests/test_work_item_fields.py::TestWorkItemFields::test_work_item_fields_initial_state',
         widget='src/gojeera/components/work_item_fields.py',
-        note='Work item fields panel initial state.',
         crop_start_line=8,
         crop_line_count=30,
         crop_min_x=963.0,
@@ -217,9 +189,7 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         source='tests/__snapshots__/test_new_work_item_screen/TestNewWorkItemScreen.test_new_work_item_all_required_filled.svg',
         source_kind='snapshot',
         template='static/new_work_item_screen.svg',
-        test='tests/test_new_work_item_screen.py::TestNewWorkItemScreen::test_new_work_item_all_required_filled',
         widget='src/gojeera/components/new_work_item_screen.py',
-        note='New work item screen with required fields filled.',
         crop_start_line=2,
         crop_line_count=36,
         crop_min_x=207.4,
@@ -263,15 +233,6 @@ def extract_text_spans(root: ET.Element) -> list[TextSpan]:
     return spans
 
 
-def extract_plain_text(root: ET.Element) -> str:
-    spans = sorted(extract_text_spans(root), key=lambda item: (item.line_index, item.x))
-    by_line: dict[int, list[str]] = {}
-    for span in spans:
-        by_line.setdefault(span.line_index, []).append(span.text)
-    lines = [''.join(by_line[index]).rstrip() for index in sorted(by_line)]
-    return '\n'.join(lines).rstrip() + '\n'
-
-
 def _extract_text_lines(root: ET.Element) -> list[str]:
     spans = sorted(extract_text_spans(root), key=lambda item: (item.line_index, item.x))
     by_line: dict[int, list[str]] = {}
@@ -282,20 +243,6 @@ def _extract_text_lines(root: ET.Element) -> list[str]:
 
 def _normalize_line(line: str) -> str:
     return line.replace('\xa0', ' ').rstrip()
-
-
-def list_scenarios() -> int:
-    for scenario in STATIC_SVG_SCENARIOS.values():
-        test = scenario.test or '<missing>'
-        sys.stdout.write(f'{scenario.name}\n')
-        sys.stdout.write(f'  output:   {scenario.output}\n')
-        sys.stdout.write(f'  source:   {scenario.source}\n')
-        sys.stdout.write(f'  kind:     {scenario.source_kind}\n')
-        sys.stdout.write(f'  test:     {test}\n')
-        sys.stdout.write(f'  widget:   {scenario.widget}\n')
-        if scenario.note:
-            sys.stdout.write(f'  note:     {scenario.note}\n')
-    return 0
 
 
 def _read_origin_main_file(path: str) -> str:

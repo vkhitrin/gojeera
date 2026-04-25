@@ -1,46 +1,31 @@
 import asyncio
 
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.widgets.layout.record_list import RecordList
 
-from gojeera.app import JiraApp
-from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.components.work_item_attachments import AttachmentsDataTable
-
-from .test_helpers import load_work_item_from_search
+from .test_helpers import assert_confirmation_screen, assert_snapshot_matches, focus_work_item_tab
 
 
 async def open_confirmation_screen_via_delete_attachment(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=1)
 
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
-
-    table = pilot.app.screen.query_one(AttachmentsDataTable)
-    table.focus()
+    record_list = pilot.app.screen.query_one(RecordList)
+    record_list.focus()
     await asyncio.sleep(0.3)
 
     await pilot.press('ctrl+d')
     await asyncio.sleep(0.5)
 
-    screen = pilot.app.screen
-    assert isinstance(screen, ConfirmationScreen), (
-        f'Expected ConfirmationScreen, got {type(screen)}'
-    )
+    screen = assert_confirmation_screen(pilot.app.screen)
     assert screen.message == 'Are you sure you want to delete the file?', (
         f'Expected delete file message, got: {screen.message}'
     )
+
+
+OPEN = open_confirmation_screen_via_delete_attachment
 
 
 class TestConfirmationScreen:
     def test_confirmation_screen_via_delete_attachment(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=open_confirmation_screen_via_delete_attachment,
-        )
+        assert_snapshot_matches(snap_compare, mock_configuration, mock_user_info, OPEN)

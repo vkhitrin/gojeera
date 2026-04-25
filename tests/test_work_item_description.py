@@ -2,31 +2,82 @@ import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
-from gojeera.app import JiraApp
-from gojeera.components.work_item_attachments import AttachmentsDataTable
-from gojeera.models import Attachment, JiraUser
-from gojeera.utils.adf_helpers import extract_media_attachment_details, replace_media_with_text
-from gojeera.widgets.gojeera_markdown import (
+import pytest
+
+from gojeera.internal.models.jira import (
+    Attachment,
+    JiraUser,
+)
+from gojeera.utils.markdown.adf_helpers import (
+    extract_media_attachment_details,
+    replace_media_with_text,
+)
+from gojeera.widgets.layout.record_list import RecordList
+from gojeera.widgets.markdown.gojeera_markdown import (
     ATTACHMENT_BROWSER_OPEN_HINT,
     AttachmentTooltipProvider,
-    ExtendedMarkdownParagraph,
     GojeeraMarkdownFence,
     build_attachment_tooltip,
-    get_markdown_link_href,
 )
 
-from .test_helpers import load_work_item_from_search, wait_for_mount, wait_until
+from .test_helpers import (
+    find_markdown_link_offset,
+    load_work_item_from_search,
+    wait_for_markdown_paragraph_containing_text,
+    wait_for_mount,
+    wait_until,
+    with_snapshot_assertion,
+)
 
 
-def _find_link_offset(paragraph: ExtendedMarkdownParagraph, href_substring: str) -> tuple[int, int]:
-    return next(
-        (x, y)
-        for y in range(paragraph.size.height)
-        for x in range(paragraph.size.width)
-        if (
-            (href := get_markdown_link_href(paragraph.get_style_at(x, y))) is not None
-            and href_substring in href
-        )
+def media_attachment_details(
+    attachment_id: str,
+    attachment_name: str,
+    attachment_url: str | None,
+) -> dict[str, tuple[str, str | None]]:
+    return {attachment_id: (attachment_name, attachment_url)}
+
+
+def attachment_url(attachment_name: str) -> str:
+    return f'https://example.atlassian.acme.net/secure/attachment/1/{attachment_name}'
+
+
+def build_adf_doc(*content: dict) -> dict:
+    return {'type': 'doc', 'version': 1, 'content': list(content)}
+
+
+def assert_replaced_media_text(
+    adf: dict,
+    *,
+    text_node_index: int,
+    attachment_id: str,
+    attachment_name: str,
+    attachment_url: str,
+) -> None:
+    replaced = replace_media_with_text(
+        adf,
+        media_attachment_details=media_attachment_details(
+            attachment_id,
+            attachment_name,
+            attachment_url,
+        ),
+    )
+    text_node = replaced['content'][0]['content'][text_node_index]
+    assert text_node['text'] == f'[{attachment_name}]({attachment_url})'
+
+
+def assert_default_attachment_media_text(
+    adf: dict,
+    *,
+    text_node_index: int,
+    attachment_name: str,
+) -> None:
+    assert_replaced_media_text(
+        adf,
+        text_node_index=text_node_index,
+        attachment_id='1',
+        attachment_name=attachment_name,
+        attachment_url=attachment_url(attachment_name),
     )
 
 
@@ -34,55 +85,39 @@ async def open_description_and_hover_internal_link(pilot):
     await wait_for_mount(pilot)
     await load_work_item_from_search(pilot, 'ENG-8')
 
-    await pilot.app.workers.wait_for_complete()
-    await wait_until(
-        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
-        timeout=3.0,
+    internal_link_paragraph = await wait_for_markdown_paragraph_containing_text(
+        pilot,
+        'Depends on motion alert validation in',
     )
-    await asyncio.sleep(0.3)
-
-    paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
-    internal_link_paragraph = next(
-        paragraph
-        for paragraph in paragraphs
-        if 'Depends on motion alert validation in' in paragraph.content.plain
-    )
-    link_offset = _find_link_offset(internal_link_paragraph, '/browse/ENG-7')
+    link_offset = find_markdown_link_offset(internal_link_paragraph, '/browse/ENG-7')
     await pilot.hover(internal_link_paragraph, offset=link_offset)
     await pilot.pause(1.0)
 
     await pilot.app.workers.wait_for_complete()
-    await wait_until(lambda: pilot.app.screen.focused_work_item_link_key == 'ENG-7', timeout=3.0)
+    await wait_until(lambda: pilot.app.focused_work_item_link_key == 'ENG-7', timeout=3.0)
     await asyncio.sleep(0.3)
 
 
 async def load_focused_internal_jira_link_from_keybind(pilot):
     await open_description_and_hover_internal_link(pilot)
-    assert pilot.app.screen.focused_work_item_link_key == 'ENG-7'
+    assert pilot.app.focused_work_item_link_key == 'ENG-7'
 
     await pilot.press('ctrl+g')
     await pilot.app.workers.wait_for_complete()
-    await wait_until(lambda: pilot.app.screen.current_loaded_work_item_key == 'ENG-7', timeout=3.0)
+    await wait_until(lambda: pilot.app.current_loaded_work_item_key == 'ENG-7', timeout=3.0)
 
-    assert pilot.app.screen.current_loaded_work_item_key == 'ENG-7'
+    assert pilot.app.current_loaded_work_item_key == 'ENG-7'
 
 
 async def open_description_and_hover_wrapped_link(pilot):
     await wait_for_mount(pilot)
     await load_work_item_from_search(pilot, 'ENG-8')
 
-    await pilot.app.workers.wait_for_complete()
-    await wait_until(
-        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
-        timeout=3.0,
+    wrapped_link_paragraph = await wait_for_markdown_paragraph_containing_text(
+        pilot,
+        'Nightly checklist URL:',
     )
-    await asyncio.sleep(0.3)
-
-    paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
-    wrapped_link_paragraph = next(
-        paragraph for paragraph in paragraphs if 'Nightly checklist URL:' in paragraph.content.plain
-    )
-    link_offset = _find_link_offset(
+    link_offset = find_markdown_link_offset(
         wrapped_link_paragraph,
         '/animatronics/release-playbook/nightly-checklist',
     )
@@ -94,24 +129,18 @@ async def click_attachment_link_and_open_attachments_tab(pilot):
     await wait_for_mount(pilot)
     await load_work_item_from_search(pilot, 'ENG-1')
 
-    await pilot.app.workers.wait_for_complete()
-    await wait_until(
-        lambda: bool(list(pilot.app.screen.query(ExtendedMarkdownParagraph))),
-        timeout=3.0,
-    )
-    await asyncio.sleep(0.3)
-
-    paragraphs = list(pilot.app.screen.query(ExtendedMarkdownParagraph))
-    attachment_paragraph = next(
-        paragraph
-        for paragraph in paragraphs
-        if 'image-20260205-112310.png' in paragraph.content.plain
+    attachment_paragraph = await wait_for_markdown_paragraph_containing_text(
+        pilot,
+        'image-20260205-112310.png',
     )
     attachment_paragraph.action_attachment('image-20260205-112310.png')
 
-    await wait_until(lambda: pilot.app.screen.tabs.active == 'tab-attachments', timeout=3.0)
+    await wait_until(lambda: pilot.app.tabs.active == 'tab-attachments', timeout=3.0)
     await wait_until(
-        lambda: pilot.app.screen.query_one(AttachmentsDataTable).cursor_row == 0,
+        lambda: (
+            (record_list := pilot.app.screen.query_one(RecordList)).selected_record is not None
+            and record_list.selected_record.title.startswith('image-20260205-112310.png')
+        ),
         timeout=3.0,
     )
     await asyncio.sleep(0.3)
@@ -192,67 +221,54 @@ class TestWorkItemDescription:
             == f'Attachment\n\nClick to open attachments tab\n{ATTACHMENT_BROWSER_OPEN_HINT}'
         )
 
-    def test_media_reference_is_not_emitted_as_markdown_link(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'mediaSingle',
-                    'content': [
-                        {
-                            'type': 'media',
-                            'attrs': {'type': 'file', 'id': '1', 'alt': 'native-click.png'},
-                        }
-                    ],
-                }
-            ],
-        }
-
-        replaced = replace_media_with_text(
+    @pytest.mark.parametrize(
+        ('adf', 'text_node_index', 'attachment_name'),
+        [
+            (
+                build_adf_doc(
+                    {
+                        'type': 'mediaSingle',
+                        'content': [
+                            {
+                                'type': 'media',
+                                'attrs': {
+                                    'type': 'file',
+                                    'id': '1',
+                                    'alt': 'native-click.png',
+                                },
+                            }
+                        ],
+                    }
+                ),
+                0,
+                'native-click.png',
+            ),
+            (
+                build_adf_doc(
+                    {
+                        'type': 'paragraph',
+                        'content': [
+                            {'type': 'text', 'text': 'End result:'},
+                            {'type': 'hardBreak'},
+                            {'type': 'mediaInline', 'attrs': {'type': 'file', 'id': '1'}},
+                        ],
+                    }
+                ),
+                2,
+                'Attachment',
+            ),
+        ],
+    )
+    def test_media_references_are_emitted_as_attachment_text(
+        self,
+        adf: dict,
+        text_node_index: int,
+        attachment_name: str,
+    ):
+        assert_default_attachment_media_text(
             adf,
-            media_attachment_details={
-                '1': (
-                    'native-click.png',
-                    'https://example.atlassian.acme.net/secure/attachment/1/native-click.png',
-                )
-            },
-        )
-        text_node = replaced['content'][0]['content'][0]
-        assert (
-            text_node['text']
-            == '[native-click.png](https://example.atlassian.acme.net/secure/attachment/1/native-click.png)'
-        )
-
-    def test_media_inline_without_filename_is_emitted_as_generic_attachment_text(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [
-                        {'type': 'text', 'text': 'End result:'},
-                        {'type': 'hardBreak'},
-                        {'type': 'mediaInline', 'attrs': {'type': 'file', 'id': '1'}},
-                    ],
-                }
-            ],
-        }
-
-        replaced = replace_media_with_text(
-            adf,
-            media_attachment_details={
-                '1': (
-                    'Attachment',
-                    'https://example.atlassian.acme.net/secure/attachment/1/Attachment',
-                )
-            },
-        )
-        text_node = replaced['content'][0]['content'][2]
-        assert (
-            text_node['text']
-            == '[Attachment](https://example.atlassian.acme.net/secure/attachment/1/Attachment)'
+            text_node_index=text_node_index,
+            attachment_name=attachment_name,
         )
 
     def test_extract_media_attachment_details_from_rendered_body(self):
@@ -275,63 +291,20 @@ class TestWorkItemDescription:
             )
         }
 
-    def test_wrapped_link_snapshot(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(80, 40),
-            run_before=open_description_and_hover_wrapped_link,
-        )
+    @with_snapshot_assertion(open_description_and_hover_wrapped_link, terminal_size=(80, 40))
+    def test_wrapped_link_snapshot(self): ...
 
-    def test_internal_jira_link_tooltip_snapshot(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        app._disable_tooltips = False
+    @with_snapshot_assertion(
+        open_description_and_hover_internal_link,
+        configure_app=lambda app: setattr(app, '_disable_tooltips', False),
+    )
+    def test_internal_jira_link_tooltip_snapshot(self): ...
 
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=open_description_and_hover_internal_link,
-        )
+    @with_snapshot_assertion(
+        load_focused_internal_jira_link_from_keybind,
+        configure_app=lambda app: setattr(app, '_disable_tooltips', False),
+    )
+    def test_loads_focused_internal_jira_link_from_keybind(self): ...
 
-    def test_loads_focused_internal_jira_link_from_keybind(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        app._disable_tooltips = False
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=load_focused_internal_jira_link_from_keybind,
-        )
-
-    def test_attachment_link_opens_attachments_tab(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=click_attachment_link_and_open_attachments_tab,
-        )
+    @with_snapshot_assertion(click_attachment_link_and_open_attachments_tab)
+    def test_attachment_link_opens_attachments_tab(self): ...

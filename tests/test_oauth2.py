@@ -4,8 +4,9 @@ import httpx
 import pytest
 import respx
 
-from gojeera.oauth2 import (
+from gojeera.internal.auth.oauth2 import (
     ATLASSIAN_ACCESSIBLE_RESOURCES_URL,
+    OAUTH2_SCOPES,
     build_atlassian_authorization_url,
     exchange_atlassian_authorization_code,
     get_atlassian_accessible_resources,
@@ -14,18 +15,31 @@ from gojeera.oauth2 import (
 )
 
 
+def _mock_token_response(
+    *,
+    access_token: str,
+    refresh_token: str,
+    expires_in: int,
+    scope: str | None = None,
+):
+    payload = {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'expires_in': expires_in,
+        'token_type': 'Bearer',
+    }
+    if scope is not None:
+        payload['scope'] = scope
+
+    return respx.post('https://auth.atlassian.com/oauth/token').mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+
+
 def test_build_atlassian_authorization_url_uses_default_redirect_uri():
     url = build_atlassian_authorization_url(
         client_id='client-123',
-        scopes=[
-            'read:jira-user',
-            'read:jira-work',
-            'write:jira-work',
-            'read:servicedesk-request',
-            'offline_access',
-            'read:me',
-            'read:account',
-        ],
+        scopes=OAUTH2_SCOPES,
         state='state-123',
     )
 
@@ -40,26 +54,17 @@ def test_build_atlassian_authorization_url_uses_default_redirect_uri():
     assert query['redirect_uri'] == ['http://127.0.0.1:49152/callback']
     assert query['response_type'] == ['code']
     assert query['prompt'] == ['consent']
-    assert query['scope'] == [
-        'read:jira-user read:jira-work write:jira-work read:servicedesk-request '
-        'offline_access read:me read:account'
-    ]
+    assert query['scope'] == [' '.join(OAUTH2_SCOPES)]
     assert query['state'] == ['state-123']
 
 
 @respx.mock
 def test_exchange_atlassian_authorization_code():
-    route = respx.post('https://auth.atlassian.com/oauth/token').mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                'access_token': 'access-token',
-                'refresh_token': 'refresh-token',
-                'expires_in': 3600,
-                'scope': 'read:jira-user read:jira-work',
-                'token_type': 'Bearer',
-            },
-        )
+    route = _mock_token_response(
+        access_token='access-token',
+        refresh_token='refresh-token',
+        expires_in=3600,
+        scope='read:jira-user read:jira-work',
     )
 
     response = exchange_atlassian_authorization_code(
@@ -76,16 +81,10 @@ def test_exchange_atlassian_authorization_code():
 
 @respx.mock
 def test_refresh_atlassian_oauth2_token():
-    route = respx.post('https://auth.atlassian.com/oauth/token').mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                'access_token': 'fresh-access-token',
-                'refresh_token': 'fresh-refresh-token',
-                'expires_in': 7200,
-                'token_type': 'Bearer',
-            },
-        )
+    route = _mock_token_response(
+        access_token='fresh-access-token',
+        refresh_token='fresh-refresh-token',
+        expires_in=7200,
     )
 
     response = refresh_atlassian_oauth2_token(
@@ -138,11 +137,11 @@ def test_get_atlassian_accessible_resources_requires_list_payload():
 
 def test_run_atlassian_oauth2_authorization_flow(monkeypatch):
     monkeypatch.setattr(
-        'gojeera.oauth2.wait_for_atlassian_oauth2_callback',
+        'gojeera.internal.auth.oauth2.wait_for_atlassian_oauth2_callback',
         lambda **kwargs: type('CallbackResult', (), {'code': 'code-123', 'state': 'state-123'})(),
     )
     monkeypatch.setattr(
-        'gojeera.oauth2.exchange_atlassian_authorization_code',
+        'gojeera.internal.auth.oauth2.exchange_atlassian_authorization_code',
         lambda **kwargs: type(
             'TokenResponse',
             (),
@@ -153,15 +152,7 @@ def test_run_atlassian_oauth2_authorization_flow(monkeypatch):
     response = run_atlassian_oauth2_authorization_flow(
         client_id='client-123',
         client_secret='secret-123',
-        scopes=[
-            'read:jira-user',
-            'read:jira-work',
-            'write:jira-work',
-            'read:servicedesk-request',
-            'offline_access',
-            'read:me',
-            'read:account',
-        ],
+        scopes=OAUTH2_SCOPES,
     )
 
     assert response.access_token == 'access-token'

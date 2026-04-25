@@ -19,6 +19,20 @@ def register_binding_in_command_palette(
     return replace(binding, id=f'{COMMAND_PALETTE_BINDING_ID_PREFIX}{binding_id}')
 
 
+def build_toggle_footer_binding() -> Binding:
+    """Create the shared footer toggle binding used by app and modal screens."""
+
+    return register_binding_in_command_palette(
+        Binding(
+            key='f11',
+            action='toggle_footer_visibility',
+            description='Toggle Footer',
+            tooltip='Show or hide the footer',
+            show=False,
+        )
+    )
+
+
 class RegisteredBindingCommandProvider(Provider):
     """Expose explicitly-registered active bindings in the command palette."""
 

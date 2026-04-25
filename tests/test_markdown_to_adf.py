@@ -1,5 +1,5 @@
-from gojeera.utils.adf_helpers import text_to_adf
-from gojeera.utils.mappings import get_nested
+from gojeera.utils.data.mappings import get_nested
+from gojeera.utils.markdown.adf_helpers import text_to_adf
 
 
 class TestMarkdownToAdfConversion:

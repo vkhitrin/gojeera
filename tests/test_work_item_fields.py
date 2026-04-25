@@ -2,10 +2,15 @@ import asyncio
 
 from textual.widgets import Select
 
-from gojeera.app import JiraApp
-from gojeera.components.work_item_fields import WorkItemFields
+from gojeera.components.work_item.work_item_fields import WorkItemFields
 
-from .test_helpers import load_work_item_from_search, wait_until
+from .test_helpers import (
+    choose_select_option,
+    load_work_item_from_search,
+    wait_until,
+    with_snapshot_assertion,
+    with_snapshot_assertion_fixture,
+)
 
 
 async def open_work_item_and_view_fields(pilot):
@@ -44,12 +49,7 @@ async def modify_priority_field(pilot):
 
     priority_selector.focus()
     await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.2)
-    await pilot.press('down')
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.3)
+    await choose_select_option(pilot)
 
     status_selector.focus()
     await asyncio.sleep(0.2)
@@ -99,51 +99,61 @@ async def modify_due_date_field(pilot):
     await asyncio.sleep(0.5)
 
 
+async def save_priority_field_and_verify_applied(pilot):
+    await open_work_item_and_view_fields(pilot)
+
+    fields_widget = pilot.app.screen.query_one(WorkItemFields)
+
+    priority_selector = fields_widget.priority_selector
+    status_selector = fields_widget.work_item_status_selector
+
+    await wait_until(
+        lambda: bool(priority_selector.value) and priority_selector.selection is not None,
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.2)
+
+    priority_selector.focus()
+    await asyncio.sleep(0.2)
+    priority_selector.value = '2'
+    await asyncio.sleep(0.3)
+
+    await wait_until(lambda: fields_widget.has_pending_changes, timeout=3.0)
+    fields_widget.action_save_work_item()
+
+    await wait_until(lambda: not fields_widget._save_in_progress, timeout=3.0)
+    await pilot.app.workers.wait_for_complete()
+    await wait_until(
+        lambda: priority_selector.original_value == '2' and priority_selector.value == '2',
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.3)
+
+    status_selector.focus()
+    await asyncio.sleep(0.2)
+
+
 class TestWorkItemFields:
-    def test_work_item_fields_initial_state(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    @with_snapshot_assertion(open_work_item_and_view_fields, terminal_size=(120, 60))
+    def test_work_item_fields_initial_state(self):
+        pass
 
-        assert snap_compare(app, terminal_size=(120, 60), run_before=open_work_item_and_view_fields)
+    @with_snapshot_assertion(modify_priority_field, terminal_size=(120, 50))
+    def test_work_item_fields_with_pending_priority_change(self):
+        pass
 
-    def test_work_item_fields_with_pending_priority_change(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    @with_snapshot_assertion(modify_assignee_field, terminal_size=(120, 50))
+    def test_work_item_fields_with_pending_assignee_change(self):
+        pass
 
-        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_priority_field)
+    @with_snapshot_assertion(modify_due_date_field, terminal_size=(120, 50))
+    def test_work_item_fields_with_pending_due_date_change(self):
+        pass
 
-    def test_work_item_fields_with_pending_assignee_change(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_assignee_field)
-
-    def test_work_item_fields_with_pending_due_date_change(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 50), run_before=modify_due_date_field)
+    @with_snapshot_assertion_fixture(
+        save_priority_field_and_verify_applied,
+        fixture_name='mock_jira_api_with_saved_work_item_field_update',
+        terminal_size=(120, 50),
+    )
+    def test_work_item_fields_with_saved_priority_change_applied(self):
+        pass

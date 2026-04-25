@@ -1,8 +1,6 @@
 import asyncio
 
-from gojeera.app import JiraApp
-
-from .test_helpers import wait_for_mount
+from .test_helpers import assert_snapshot_matches, wait_for_mount, with_snapshot_assertion
 
 
 async def perform_default_search(pilot):
@@ -20,14 +18,6 @@ async def perform_search_navigate_mixed(pilot):
 
     await pilot.press('down')
     await asyncio.sleep(0.3)
-
-
-async def perform_search_navigate_and_select(pilot):
-    await perform_default_search(pilot)
-    await pilot.press('down')
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
 
 
 async def perform_search_navigate_mixed_in_light_theme(pilot):
@@ -51,62 +41,29 @@ async def perform_search_navigate_mixed_then_switch_to_dark_theme(pilot):
 
 
 class TestWorkItemResult:
-    def test_work_item_results_navigation(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        config = mock_configuration
+    @with_snapshot_assertion(perform_search_navigate_mixed)
+    def test_work_item_results_navigation(self): ...
 
-        app = JiraApp(settings=config, user_info=mock_user_info)
+    @with_snapshot_assertion(
+        perform_search_navigate_mixed_in_light_theme,
+        configure_configuration=lambda config: setattr(config, 'theme', 'textual-light'),
+    )
+    def test_work_item_results_navigation_light_theme(self): ...
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=perform_search_navigate_mixed)
+    @with_snapshot_assertion(perform_search_navigate_mixed_then_switch_to_light_theme)
+    def test_work_item_results_navigation_start_with_dark_theme_switch_theme_to_light(self): ...
 
-    def test_work_item_results_navigation_light_theme(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        config = mock_configuration
-        config.theme = 'textual-light'
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=perform_search_navigate_mixed_in_light_theme,
-        )
-
-    def test_work_item_results_navigation_start_with_dark_theme_switch_theme_to_light(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        config = mock_configuration
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=perform_search_navigate_mixed_then_switch_to_light_theme,
-        )
-
-    def test_work_item_results_navigation_start_with_light_theme_switch_theme_to_dark(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        config = mock_configuration
-
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=perform_search_navigate_mixed_then_switch_to_dark_theme,
-        )
+    @with_snapshot_assertion(perform_search_navigate_mixed_then_switch_to_dark_theme)
+    def test_work_item_results_navigation_start_with_light_theme_switch_theme_to_dark(self): ...
 
     def test_work_item_results_search_on_startup(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
     ):
-        config = mock_configuration
-
-        config.search_on_startup = True
-
-        app = JiraApp(settings=config, user_info=mock_user_info, focus_item_on_startup=1)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=wait_for_mount)
+        assert_snapshot_matches(
+            snap_compare,
+            mock_configuration,
+            mock_user_info,
+            wait_for_mount,
+            configure_configuration=lambda config: setattr(config, 'search_on_startup', True),
+            configure_app=lambda app: setattr(app, 'focus_item_on_startup', 1),
+        )

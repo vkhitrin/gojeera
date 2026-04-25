@@ -1,6 +1,6 @@
 import pytest
 
-from gojeera.utils import clipboard as clipboard_module
+from gojeera.utils.system import clipboard as clipboard_module
 
 
 def test_stage_clipboard_attachments_prefers_image_payload(monkeypatch, tmp_path):

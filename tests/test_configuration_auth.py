@@ -1,18 +1,39 @@
 from pydantic import SecretStr, ValidationError
 import pytest
 
-from gojeera.config import ApplicationConfiguration
+from gojeera.internal.store.config import ApplicationConfiguration
 
 
-def test_keyring_token_is_used_when_env_token_is_missing(monkeypatch, tmp_path):
+def _set_profile_registry_env(monkeypatch, profiles_file, tmp_path) -> None:
+    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(profiles_file))
+    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
+    monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET', raising=False)
+
+
+def _set_runtime_secrets_provider(monkeypatch, provider) -> None:
+    monkeypatch.setattr('gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets', provider)
+
+
+def _write_auth_profiles_file(profiles_file, *lines: str) -> None:
+    profiles_file.write_text('\n'.join(lines))
+
+
+def _set_basic_auth_env(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
     monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
     monkeypatch.setenv('GOJEERA_JIRA__API_EMAIL', 'testuser@example.com')
     monkeypatch.setenv('GOJEERA_JIRA__API_BASE_URL', 'https://example.atlassian.acme.net')
+
+
+def test_keyring_token_is_used_when_env_token_is_missing(monkeypatch, tmp_path):
+    _set_basic_auth_env(monkeypatch, tmp_path)
     monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
 
     monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {'api_token': 'keyring-token'},
     )
 
@@ -22,14 +43,11 @@ def test_keyring_token_is_used_when_env_token_is_missing(monkeypatch, tmp_path):
 
 
 def test_env_token_overrides_keyring(monkeypatch, tmp_path):
-    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
-    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
-    monkeypatch.setenv('GOJEERA_JIRA__API_EMAIL', 'testuser@example.com')
-    monkeypatch.setenv('GOJEERA_JIRA__API_BASE_URL', 'https://example.atlassian.acme.net')
+    _set_basic_auth_env(monkeypatch, tmp_path)
     monkeypatch.setenv('GOJEERA_JIRA__API_TOKEN', 'env-token')
 
     monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {'api_token': 'keyring-token'},
     )
 
@@ -39,17 +57,35 @@ def test_env_token_overrides_keyring(monkeypatch, tmp_path):
 
 
 def test_missing_token_raises_configuration_error(monkeypatch, tmp_path):
-    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
-    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
-    monkeypatch.setenv('GOJEERA_JIRA__API_EMAIL', 'testuser@example.com')
-    monkeypatch.setenv('GOJEERA_JIRA__API_BASE_URL', 'https://example.atlassian.acme.net')
+    _set_basic_auth_env(monkeypatch, tmp_path)
     monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
     monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {},
     )
 
     with pytest.raises(Exception, match='jira.api_token is required'):
+        ApplicationConfiguration()
+
+
+def test_missing_auth_configuration_raises_actionable_error(monkeypatch, tmp_path):
+    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
+    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
+    monkeypatch.delenv('GOJEERA_JIRA__AUTH_TYPE', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__API_EMAIL', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__API_BASE_URL', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__CLOUD_ID', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_ID', raising=False)
+    monkeypatch.setattr(
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
+        lambda profile, **kwargs: {},
+    )
+
+    with pytest.raises(Exception, match='No Jira authentication is configured'):
         ApplicationConfiguration()
 
 
@@ -71,7 +107,7 @@ def test_yaml_jira_authentication_is_ignored(monkeypatch, tmp_path):
     monkeypatch.delenv('GOJEERA_JIRA__API_BASE_URL', raising=False)
     monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
     monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {},
     )
 
@@ -85,11 +121,11 @@ def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
         '\n'.join(
             [
                 'jira:',
-                '  active_profile: "work"',
+                '  current_profile: "work"',
                 '  profiles:',
-                '    work:',
+                '    - name: "work"',
                 '      auth_type: "oauth2"',
-                '      instance_url: "https://example.atlassian.net"',
+                '      site: "https://example.atlassian.net"',
                 '      cloud_id: "cloud-123"',
             ]
         )
@@ -101,7 +137,7 @@ def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
     monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
     monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
     monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+        'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {
             'oauth2_access_token': 'access-token',
             'oauth2_refresh_token': 'refresh-token',
@@ -117,30 +153,22 @@ def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
 
 def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
-    profiles_file.write_text(
-        '\n'.join(
-            [
-                'active_profile: oauth',
-                'profiles:',
-                '  oauth:',
-                '    auth_type: "oauth2"',
-                '    instance_url: "https://example.atlassian.net"',
-                '    cloud_id: "cloud-123"',
-                '  basic:',
-                '    auth_type: "basic"',
-                '    instance_url: "https://example.atlassian.acme.net"',
-                '    email: "basic@example.com"',
-            ]
-        )
+    _write_auth_profiles_file(
+        profiles_file,
+        'current_profile: oauth',
+        'profiles:',
+        '  - name: "oauth"',
+        '    auth_type: "oauth2"',
+        '    site: "https://example.atlassian.net"',
+        '    cloud_id: "cloud-123"',
+        '  - name: "basic"',
+        '    auth_type: "basic"',
+        '    site: "https://example.atlassian.acme.net"',
+        '    email: "basic@example.com"',
     )
-    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(profiles_file))
-    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
-    monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET', raising=False)
-    monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
+    _set_runtime_secrets_provider(
+        monkeypatch,
         lambda profile, **kwargs: (
             {
                 'oauth2_access_token': 'oauth-access-token',
@@ -169,28 +197,20 @@ def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monke
 
 def test_profiles_require_active_profile_when_registry_exists(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
-    profiles_file.write_text(
-        '\n'.join(
-            [
-                'active_profile: null',
-                'profiles:',
-                '  default:',
-                '    auth_type: "oauth2"',
-                '    instance_url: "https://example.atlassian.net"',
-                '    cloud_id: "cloud-123"',
-            ]
-        )
+    _write_auth_profiles_file(
+        profiles_file,
+        'current_profile: null',
+        'profiles:',
+        '  - name: "default"',
+        '    auth_type: "oauth2"',
+        '    site: "https://example.atlassian.net"',
+        '    cloud_id: "cloud-123"',
     )
-    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(profiles_file))
-    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
-    monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET', raising=False)
-    monkeypatch.setattr(
-        'gojeera.config.AUTH_SERVICE.get_runtime_secrets',
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
+    _set_runtime_secrets_provider(
+        monkeypatch,
         lambda profile, **kwargs: {'oauth2_access_token': 'oauth-access-token'},
     )
 
-    with pytest.raises(Exception, match='jira.active_profile is required'):
+    with pytest.raises(Exception, match='jira.current_profile is required'):
         ApplicationConfiguration()

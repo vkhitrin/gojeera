@@ -1,21 +1,22 @@
 import asyncio
+from contextlib import asynccontextmanager
 import copy
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from textual.widgets import Button, Input
 
-from gojeera.api_controller.controller import APIControllerResponse
-from gojeera.api_controller.factories import WorkItemFactory
 from gojeera.app import JiraApp
-from gojeera.components.unified_search import UnifiedSearchBar
-from gojeera.models import JiraWorkItemSearchResponse
-from gojeera.widgets.vim_select import VimSelect
+from gojeera.components.search.unified_search import UnifiedSearchBar
+from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.jira.factories import WorkItemFactory
+from gojeera.internal.models.work_items import JiraWorkItemSearchResponse
+from gojeera.widgets.selection.vim_select import VimSelect
 
-from .test_helpers import wait_for_mount, wait_until
+from .test_helpers import choose_select_option, wait_for_mount, wait_until
 
 if TYPE_CHECKING:
-    from gojeera.app import MainScreen
+    from gojeera.app import JiraApp
 
 
 SORTABLE_PRIORITY_RANK = {
@@ -27,19 +28,14 @@ SORTABLE_PRIORITY_RANK = {
 }
 
 
-def get_main_screen(app: JiraApp) -> 'MainScreen':
-    return cast('MainScreen', app.screen)
+def get_main_screen(app: JiraApp) -> 'JiraApp':
+    return app
 
 
 async def switch_to_text_search(pilot):
     await wait_for_mount(pilot)
 
-    await pilot.press('enter')
-    await asyncio.sleep(0.2)
-    await pilot.press('down')
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.3)
+    await choose_select_option(pilot)
 
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
     assert search_bar.search_mode == 'text', (
@@ -50,14 +46,7 @@ async def switch_to_text_search(pilot):
 async def switch_to_jql_search(pilot):
     await wait_for_mount(pilot)
 
-    await pilot.press('enter')
-    await asyncio.sleep(0.2)
-    await pilot.press('down')
-    await asyncio.sleep(0.1)
-    await pilot.press('down')
-    await asyncio.sleep(0.2)
-    await pilot.press('enter')
-    await asyncio.sleep(0.3)
+    await choose_select_option(pilot, steps=2)
 
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
     assert search_bar.search_mode == 'jql', (
@@ -68,25 +57,33 @@ async def switch_to_jql_search(pilot):
 async def fill_text_search(pilot):
     await switch_to_text_search(pilot)
 
-    await pilot.press('tab')
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    search_input = search_bar.query_one('#unified-search-input', Input)
+    search_input.focus()
     await asyncio.sleep(0.1)
 
     for char in 'test search query':
-        await pilot.press(char)
+        await pilot.press(char if char != ' ' else 'space')
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.2)
+
+    assert search_input.value == 'test search query'
 
 
 async def fill_jql_search(pilot):
     await switch_to_jql_search(pilot)
 
-    await pilot.press('tab')
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    search_input = search_bar.query_one('#unified-search-input', Input)
+    search_input.focus()
     await asyncio.sleep(0.1)
 
     for char in 'project = ENG':
         await pilot.press(char if char != ' ' else 'space')
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.2)
+
+    assert search_input.value == 'project = ENG'
 
 
 async def open_project_selector(pilot):
@@ -99,7 +96,12 @@ async def open_project_selector(pilot):
     await asyncio.sleep(0.5)
 
 
-async def open_assignee_selector(pilot):
+async def open_dependent_filter_selector(
+    pilot,
+    *,
+    tabs_to_target: tuple[str, ...],
+    wait_for_workers: bool = False,
+):
     await wait_for_mount(pilot)
 
     await pilot.press('tab', 'tab')
@@ -111,49 +113,30 @@ async def open_assignee_selector(pilot):
     await pilot.press('enter')
     await asyncio.sleep(0.5)
 
-    await pilot.press('tab')
+    await pilot.press(*tabs_to_target)
     await asyncio.sleep(0.1)
     await pilot.press('enter')
     await asyncio.sleep(0.5)
+
+    if wait_for_workers:
+        await pilot.app.workers.wait_for_complete()
+        await asyncio.sleep(0.3)
+
+
+async def open_assignee_selector(pilot):
+    await open_dependent_filter_selector(pilot, tabs_to_target=('tab',))
 
 
 async def open_type_selector(pilot):
-    await wait_for_mount(pilot)
-
-    await pilot.press('tab', 'tab')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-    await pilot.press('down')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.press('tab', 'tab')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
+    await open_dependent_filter_selector(pilot, tabs_to_target=('tab', 'tab'))
 
 
 async def open_status_selector(pilot):
-    await wait_for_mount(pilot)
-
-    await pilot.press('tab', 'tab')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-    await pilot.press('down')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.press('tab', 'tab', 'tab')
-    await asyncio.sleep(0.1)
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.3)
+    await open_dependent_filter_selector(
+        pilot,
+        tabs_to_target=('tab', 'tab', 'tab'),
+        wait_for_workers=True,
+    )
 
 
 async def open_jql_filters_dropdown(pilot):
@@ -206,6 +189,30 @@ async def switch_mode(pilot, mode: str) -> UnifiedSearchBar:
     mode_selector.value = mode
     await asyncio.sleep(0.2)
     return search_bar
+
+
+def assert_first_result_key(app: JiraApp, expected_key: str) -> list[str]:
+    result_keys = get_result_keys(app)
+    assert result_keys
+    assert result_keys[0] == expected_key
+    return result_keys
+
+
+async def change_search_order_and_wait(pilot, order_value: str) -> list[str]:
+    order_by = pilot.app.screen.query_one('#search-results-order-by', VimSelect)
+    order_by.value = order_value
+    await wait_for_search_and_results(pilot)
+    result_keys = get_result_keys(cast(JiraApp, pilot.app))
+    assert result_keys
+    return result_keys
+
+
+async def assert_ctrl_j_keeps_empty_search_idle(pilot, search_button: Button) -> None:
+    await pilot.press('ctrl+j')
+    await asyncio.sleep(0.2)
+
+    assert not get_main_screen(cast(JiraApp, pilot.app)).is_search_request_in_progress
+    assert search_button.disabled
 
 
 def install_sortable_search_api(app: JiraApp, search_payload: dict) -> None:
@@ -290,32 +297,12 @@ def install_sortable_search_api(app: JiraApp, search_payload: dict) -> None:
             offset=0,
         )
 
-    async def mock_search_work_items(
-        self,
-        project_key: str | None = None,
-        created_from=None,
-        created_until=None,
-        status: int | None = None,
-        assignee: str | None = None,
-        work_item_type: int | None = None,
-        search_in_active_sprint: bool = False,
-        jql_query: str | None = None,
-        next_page_token: str | None = None,
-        limit: int | None = None,
-        fields: list[str] | None = None,
-    ) -> APIControllerResponse:
+    async def mock_search_work_items(self, **kwargs: Any) -> APIControllerResponse:
+        jql_query = cast(str | None, kwargs.get('jql_query'))
         return APIControllerResponse(success=True, result=build_search_response_payload(jql_query))
 
-    async def mock_count_work_items(
-        self,
-        project_key: str | None = None,
-        created_from=None,
-        created_until=None,
-        status: int | None = None,
-        assignee: str | None = None,
-        work_item_type: int | None = None,
-        jql_query: str | None = None,
-    ) -> APIControllerResponse:
+    async def mock_count_work_items(self, **kwargs: Any) -> APIControllerResponse:
+        jql_query = cast(str | None, kwargs.get('jql_query'))
         return APIControllerResponse(
             success=True,
             result=len(filter_issues(jql_query)),
@@ -324,6 +311,90 @@ def install_sortable_search_api(app: JiraApp, search_payload: dict) -> None:
     app_api = cast(Any, app.api)
     app_api.search_work_items = mock_search_work_items.__get__(app.api, type(app.api))
     app_api.count_work_items = mock_count_work_items.__get__(app.api, type(app.api))
+
+
+def build_sortable_search_app(
+    configuration,
+    user_info,
+    search_payload: dict,
+) -> JiraApp:
+    app = JiraApp(settings=configuration, user_info=user_info)
+    install_sortable_search_api(app, search_payload)
+    return app
+
+
+@asynccontextmanager
+async def run_search_pilot(
+    app: JiraApp,
+    *,
+    perform_basic_search: bool,
+):
+    async with app.run_test() as pilot:
+        await wait_for_mount(pilot)
+        if perform_basic_search:
+            await perform_basic_search_and_wait(pilot)
+        yield pilot
+
+
+@asynccontextmanager
+async def run_sortable_search_test(
+    configuration,
+    user_info,
+    *,
+    search_payload: dict,
+    perform_basic_search: bool,
+):
+    app = build_sortable_search_app(configuration, user_info, search_payload)
+    async with run_search_pilot(app, perform_basic_search=perform_basic_search) as pilot:
+        yield pilot
+
+
+@asynccontextmanager
+async def run_search_test(
+    configuration,
+    user_info,
+    *,
+    perform_basic_search: bool = False,
+):
+    app = JiraApp(settings=configuration, user_info=user_info)
+    async with run_search_pilot(app, perform_basic_search=perform_basic_search) as pilot:
+        yield pilot
+
+
+@asynccontextmanager
+async def run_basic_sortable_search_test(
+    configuration,
+    user_info,
+    search_payload: dict,
+):
+    async with run_sortable_search_test(
+        configuration,
+        user_info,
+        search_payload=search_payload,
+        perform_basic_search=True,
+    ) as pilot:
+        yield pilot
+
+
+def with_basic_sortable_search_pilot():
+    def decorator(test):
+        async def wrapper(
+            self,
+            mock_configuration,
+            mock_jira_api_with_search_results,
+            mock_jira_search_with_results,
+            mock_user_info,
+        ):
+            async with run_basic_sortable_search_test(
+                mock_configuration,
+                mock_user_info,
+                mock_jira_search_with_results,
+            ) as pilot:
+                await test(self, pilot)
+
+        return wrapper
+
+    return decorator
 
 
 def get_result_keys(app: JiraApp) -> list[str]:
@@ -458,11 +529,7 @@ class TestUnifiedSearch:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-
+        async with run_search_test(mock_configuration, mock_user_info) as pilot:
             search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
             search_button = search_bar.query_one('#unified-search-button', Button)
             assert not search_button.disabled
@@ -483,113 +550,62 @@ class TestUnifiedSearch:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-            await perform_basic_search_and_wait(pilot)
-
+        async with run_search_test(
+            mock_configuration,
+            mock_user_info,
+            perform_basic_search=True,
+        ) as pilot:
             search_bar = await switch_mode(pilot, 'text')
             search_button = search_bar.query_one('#unified-search-button', Button)
 
             assert search_bar.search_mode == 'text'
             assert search_button.disabled
 
-            await pilot.press('ctrl+j')
-            await asyncio.sleep(0.2)
-
-            assert not get_main_screen(cast(JiraApp, pilot.app)).is_search_request_in_progress
-            assert search_button.disabled
+            await assert_ctrl_j_keeps_empty_search_idle(pilot, search_button)
 
     @pytest.mark.asyncio
+    @with_basic_sortable_search_pilot()
     async def test_basic_search_then_jql_mode_disables_empty_search_and_results_controls(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_jira_search_with_results,
-        mock_user_info,
+        self, pilot
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        install_sortable_search_api(app, mock_jira_search_with_results)
+        search_bar = await switch_mode(pilot, 'jql')
+        search_button = search_bar.query_one('#unified-search-button', Button)
+        order_by = pilot.app.screen.query_one('#search-results-order-by', VimSelect)
+        order_direction = pilot.app.screen.query_one(
+            '#search-results-order-direction-button', Button
+        )
+        refresh_button = pilot.app.screen.query_one('#search-results-refresh-button', Button)
 
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-            await perform_basic_search_and_wait(pilot)
+        assert search_bar.search_mode == 'jql'
+        assert search_button.disabled
+        assert order_by.display
+        assert order_direction.display
+        assert refresh_button.display
+        assert order_by.disabled
+        assert order_direction.disabled
+        assert refresh_button.disabled
 
-            search_bar = await switch_mode(pilot, 'jql')
-            search_button = search_bar.query_one('#unified-search-button', Button)
-            order_by = pilot.app.screen.query_one('#search-results-order-by', VimSelect)
-            order_direction = pilot.app.screen.query_one(
-                '#search-results-order-direction-button', Button
-            )
-            refresh_button = pilot.app.screen.query_one('#search-results-refresh-button', Button)
-
-            assert search_bar.search_mode == 'jql'
-            assert search_button.disabled
-            assert order_by.display
-            assert order_direction.display
-            assert refresh_button.display
-            assert order_by.disabled
-            assert order_direction.disabled
-            assert refresh_button.disabled
-
-            await pilot.press('ctrl+j')
-            await asyncio.sleep(0.2)
-
-            assert not get_main_screen(cast(JiraApp, pilot.app)).is_search_request_in_progress
-            assert search_button.disabled
+        await assert_ctrl_j_keeps_empty_search_idle(pilot, search_button)
 
     @pytest.mark.asyncio
-    async def test_basic_search_sort_change_updates_first_result(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_jira_search_with_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        install_sortable_search_api(app, mock_jira_search_with_results)
-
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-            await perform_basic_search_and_wait(pilot)
-
-            initial_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert initial_keys
-            assert initial_keys[0] == 'ENG-8'
-
-            order_by = pilot.app.screen.query_one('#search-results-order-by', VimSelect)
-            order_by.value = 'priority'
-            await wait_for_search_and_results(pilot)
-
-            sorted_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert sorted_keys
-            assert sorted_keys[0] != 'ENG-8'
+    @with_basic_sortable_search_pilot()
+    async def test_basic_search_sort_change_updates_first_result(self, pilot):
+        assert_first_result_key(cast(JiraApp, pilot.app), 'ENG-8')
+        sorted_keys = await change_search_order_and_wait(pilot, 'priority')
+        assert sorted_keys[0] != 'ENG-8'
 
     @pytest.mark.asyncio
-    async def test_basic_search_refresh_keeps_results_unchanged(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_jira_search_with_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        install_sortable_search_api(app, mock_jira_search_with_results)
+    @with_basic_sortable_search_pilot()
+    async def test_basic_search_refresh_keeps_results_unchanged(self, pilot):
+        initial_keys = get_result_keys(cast(JiraApp, pilot.app))
+        assert initial_keys
 
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-            await perform_basic_search_and_wait(pilot)
+        refresh_button = pilot.app.screen.query_one('#search-results-refresh-button', Button)
+        refresh_button.press()
+        await wait_for_search_and_results(pilot)
 
-            initial_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert initial_keys
-
-            refresh_button = pilot.app.screen.query_one('#search-results-refresh-button', Button)
-            refresh_button.press()
-            await wait_for_search_and_results(pilot)
-
-            refreshed_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert refreshed_keys == initial_keys
+        refreshed_keys = get_result_keys(cast(JiraApp, pilot.app))
+        assert refreshed_keys == initial_keys
 
     @pytest.mark.asyncio
     async def test_text_search_sort_change_updates_to_latest_updated_issue(
@@ -599,12 +615,12 @@ class TestUnifiedSearch:
         mock_jira_search_with_results,
         mock_user_info,
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        install_sortable_search_api(app, mock_jira_search_with_results)
-
-        async with app.run_test() as pilot:
-            await wait_for_mount(pilot)
-
+        async with run_sortable_search_test(
+            mock_configuration,
+            mock_user_info,
+            search_payload=mock_jira_search_with_results,
+            perform_basic_search=False,
+        ) as pilot:
             search_bar = await switch_mode(pilot, 'text')
             search_input = search_bar.query_one('#unified-search-input', Input)
             search_input.value = 'monster'
@@ -613,14 +629,6 @@ class TestUnifiedSearch:
             await pilot.press('ctrl+j')
             await wait_for_search_and_results(pilot)
 
-            initial_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert initial_keys
-            assert initial_keys[0] == 'ENG-8'
-
-            order_by = pilot.app.screen.query_one('#search-results-order-by', VimSelect)
-            order_by.value = 'updated'
-            await wait_for_search_and_results(pilot)
-
-            updated_keys = get_result_keys(cast(JiraApp, pilot.app))
-            assert updated_keys
+            assert_first_result_key(cast(JiraApp, pilot.app), 'ENG-8')
+            updated_keys = await change_search_order_and_wait(pilot, 'updated')
             assert updated_keys[0] == 'ENG-1'

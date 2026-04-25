@@ -36,6 +36,21 @@ export GOJEERA_JIRA__OAUTH2_CLIENT_SECRET="your-client-secret"
 
 Environment variables override the operating system keyring.
 
+### OAuth2 Scope Requirements
+
+gojeera's default OAuth2 flow requests Jira platform scopes and Jira Software
+Agile scopes. The Agile scopes are required for sprint selection and board /
+sprint discovery:
+
+- `read:project:jira`
+- `read:board-scope:jira-software`
+- `read:sprint:jira-software`
+- `write:sprint:jira-software`
+
+If you update the OAuth2 scopes for an existing profile, you must run
+`gojeera auth login` again and complete the browser consent flow to obtain a
+new token with the updated scopes.
+
 ## Configuration via Environment Variables
 
 All configuration options can be set via environment variables using the

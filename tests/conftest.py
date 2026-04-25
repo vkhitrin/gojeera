@@ -3,6 +3,7 @@ import copy
 import inspect
 import json
 from pathlib import Path
+from typing import Any, Callable
 
 from httpx import Response
 from pydantic import SecretStr
@@ -15,8 +16,9 @@ from textual.app import App
 from textual.pilot import Pilot
 from textual.widgets import Input, TextArea
 
-from gojeera.cache import get_cache
-from gojeera.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
+from gojeera.internal.auth.profiles import BasicAuthProfile
+from gojeera.internal.store.cache import get_cache
+from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
 
 pytest_textual_snapshot.SVGImageExtension.file_extension = 'svg'
 
@@ -58,11 +60,20 @@ def disable_input_cursor_blink(monkeypatch):
     monkeypatch.setattr(TextArea, '_restart_blink', patched_text_area_restart_blink)
 
 
-def _snapshot_loading_in_progress(app: App) -> bool:
-    screen = app.screen
+@pytest.fixture(autouse=True)
+def enable_color_snapshots(monkeypatch):
+    """Ensure Textual apps are created with color support during tests."""
 
-    if screen.__class__.__name__ == 'MainScreen':
+    monkeypatch.delenv('NO_COLOR', raising=False)
+
+
+def _main_screen_loading_in_progress(screen) -> bool:
+    if hasattr(screen, 'search_results_container'):
         if bool(getattr(screen, '_active_work_item_load_key', None)):
+            return True
+        if bool(getattr(screen, 'is_loading', False)):
+            return True
+        if bool(getattr(getattr(screen, 'details_container', None), 'loading', False)):
             return True
         if bool(getattr(getattr(screen, 'unified_search_bar', None), 'search_in_progress', False)):
             return True
@@ -74,7 +85,12 @@ def _snapshot_loading_in_progress(app: App) -> bool:
             )
         ):
             return True
-        return False
+    return False
+
+
+def _screen_loading_in_progress(screen) -> bool:
+    if _main_screen_loading_in_progress(screen):
+        return True
 
     for node in screen.walk_children(with_self=True):
         if not bool(getattr(node, 'display', True)) or not bool(getattr(node, 'visible', True)):
@@ -83,6 +99,14 @@ def _snapshot_loading_in_progress(app: App) -> bool:
             if bool(getattr(node, attribute_name, False)):
                 return True
     return False
+
+
+def _snapshot_loading_in_progress(app: App) -> bool:
+    for screen in app.screen_stack:
+        if _screen_loading_in_progress(screen):
+            return True
+
+    return _screen_loading_in_progress(app.screen)
 
 
 async def wait_for_snapshot_stability(
@@ -105,6 +129,43 @@ async def wait_for_snapshot_stability(
             raise AssertionError('Timed out waiting for snapshot state to settle')
 
         await asyncio.sleep(interval)
+
+
+def build_test_configuration() -> ApplicationConfiguration:
+    jira_config = JiraConfig(
+        current_profile='default',
+        profiles={
+            'default': BasicAuthProfile(
+                name='default',
+                site='https://example.atlassian.acme.net',
+                email='testuser@example.com',
+            )
+        },
+        api_email='testuser@example.com',
+        api_token=SecretStr('test-token'),
+        api_base_url='https://example.atlassian.acme.net',
+    )
+
+    return ApplicationConfiguration(
+        jira=jira_config,
+        enable_sprint_selection=True,
+        show_work_item_web_links=True,
+        ignore_users_without_email=True,
+        jql_filters=None,
+        jql_filter_label_for_work_items_search=None,
+        search_results_per_page=20,
+        search_results_truncate_work_item_summary=None,
+        log_file=None,
+        log_level='WARNING',
+        confirm_before_quit=True,
+        theme=None,
+        enable_advanced_full_text_search=True,
+        search_on_startup=False,
+        enable_updating_additional_fields=False,
+        update_additional_fields_ignore_ids=None,
+        enable_creating_additional_fields=False,
+        create_additional_fields_ignore_ids=None,
+    )
 
 
 @pytest.fixture
@@ -206,33 +267,7 @@ def clear_global_cache():
 
 @pytest.fixture(autouse=True)
 def mock_configuration():
-    jira_config = JiraConfig(
-        api_email_override='testuser@example.com',
-        api_token=SecretStr('test-token'),
-        api_base_url_override='https://example.atlassian.acme.net',
-    )
-
-    config = ApplicationConfiguration(
-        jira=jira_config,
-        enable_sprint_selection=True,
-        show_work_item_web_links=True,
-        ignore_users_without_email=True,
-        jql_filters=None,
-        jql_filter_label_for_work_items_search=None,
-        search_results_per_page=20,
-        search_results_truncate_work_item_summary=None,
-        log_file=None,
-        log_level='WARNING',
-        confirm_before_quit=True,
-        theme=None,
-        enable_advanced_full_text_search=True,
-        search_on_startup=False,
-        enable_updating_additional_fields=False,
-        update_additional_fields_ignore_ids=None,
-        enable_creating_additional_fields=False,
-        create_additional_fields_ignore_ids=None,
-    )
-
+    config = build_test_configuration()
     token = CONFIGURATION.set(config)
 
     yield config
@@ -243,33 +278,7 @@ def mock_configuration():
 @pytest.fixture
 def mock_configuration_with_sprints():
     """Configuration with sprint selection enabled for sprint-related tests."""
-    jira_config = JiraConfig(
-        api_email_override='testuser@example.com',
-        api_token=SecretStr('test-token'),
-        api_base_url_override='https://example.atlassian.acme.net',
-    )
-
-    config = ApplicationConfiguration(
-        jira=jira_config,
-        enable_sprint_selection=True,
-        show_work_item_web_links=True,
-        ignore_users_without_email=True,
-        jql_filters=None,
-        jql_filter_label_for_work_items_search=None,
-        search_results_per_page=20,
-        search_results_truncate_work_item_summary=None,
-        log_file=None,
-        log_level='WARNING',
-        confirm_before_quit=True,
-        theme=None,
-        enable_advanced_full_text_search=True,
-        search_on_startup=False,
-        enable_updating_additional_fields=False,
-        update_additional_fields_ignore_ids=None,
-        enable_creating_additional_fields=False,
-        create_additional_fields_ignore_ids=None,
-    )
-
+    config = build_test_configuration()
     token = CONFIGURATION.set(config)
 
     yield config
@@ -354,6 +363,59 @@ def mock_approximate_count(count):
     )
 
 
+def mock_issue_creation(issue_id: str, issue_key: str) -> None:
+    respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(
+        return_value=Response(201, json=build_created_issue(issue_id, issue_key))
+    )
+
+
+def mock_search_results_context(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_search_with_results: dict,
+) -> None:
+    mock_server_info(mock_jira_server_info)
+    mock_myself(mock_jira_myself)
+    mock_search_with_results(mock_jira_search_with_results)
+    mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+
+
+def mock_search_results_agile_context(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_search_with_results: dict,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
+) -> None:
+    mock_search_results_context(
+        mock_jira_server_info,
+        mock_jira_myself,
+        mock_jira_search_with_results,
+    )
+    mock_agile_endpoints_for_example_project(
+        mock_jira_engineering_agile_boards,
+        mock_jira_engineering_agile_sprints,
+    )
+
+
+def mock_dynamic_approximate_count(
+    *,
+    default_count: int,
+    count_for_jql: Callable[[str], int | None],
+) -> None:
+    def handler(request):
+        body = json.loads(request.content)
+        jql = body.get('jql', '')
+        count = count_for_jql(jql)
+        if count is None:
+            count = default_count
+        return Response(200, json=build_count_results(count))
+
+    respx.post('https://example.atlassian.acme.net/rest/api/3/search/approximate-count').mock(
+        side_effect=handler
+    )
+
+
 def mock_projects_search(mock_jira_projects):
     respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
         return_value=Response(200, json=mock_jira_projects)
@@ -388,6 +450,27 @@ def mock_assignable_users_single_project(mock_jira_users):
     respx.get('https://example.atlassian.acme.net/rest/api/3/user/assignable/search').mock(
         return_value=Response(200, json=mock_jira_users)
     )
+
+
+def mock_subtask_creation_metadata(
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+    mock_jira_projects=None,
+    mock_project_issue_types=None,
+) -> None:
+    if mock_jira_projects is not None and mock_project_issue_types is not None:
+        mock_projects_search(mock_jira_projects)
+        mock_project_endpoint('ENG', mock_jira_projects, mock_project_issue_types)
+
+        mock_issue_types([])
+        mock_statuses([])
+
+    mock_assignable_users(mock_jira_users)
+    mock_assignable_users_single_project(mock_jira_users)
+    mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
+    mock_jql_validation()
+    mock_work_item_link_types(mock_jira_work_item_link_types)
 
 
 def get_project_by_key(mock_jira_projects, project_key):
@@ -495,6 +578,519 @@ def mock_engineering_project_createmeta(mock_engineering_createmeta_fields):
     ).mock(side_effect=handler)
 
 
+def build_project_metadata_args(
+    **kwargs: Any,
+) -> dict[str, Any]:
+    keys = (
+        'mock_jira_projects',
+        'mock_project_issue_types',
+        'mock_jira_issue_types',
+        'mock_jira_statuses',
+        'mock_jira_users',
+        'mock_engineering_createmeta_fields',
+    )
+    return {key: kwargs[key] for key in keys}
+
+
+def mock_project_metadata_bundle(metadata_args: dict[str, Any]) -> None:
+    mock_projects_search(metadata_args['mock_jira_projects'])
+    project_key = metadata_args['mock_jira_projects']['values'][0]['key']
+    mock_project_endpoint(
+        project_key,
+        metadata_args['mock_jira_projects'],
+        metadata_args['mock_project_issue_types'],
+    )
+    mock_issue_types(metadata_args['mock_jira_issue_types'])
+    mock_statuses(metadata_args['mock_jira_statuses'])
+    mock_assignable_users_single_project(metadata_args['mock_jira_users'])
+    mock_assignable_users(metadata_args['mock_jira_users'])
+    mock_engineering_project_createmeta(metadata_args['mock_engineering_createmeta_fields'])
+    mock_jql_validation()
+
+
+def mock_issue_detail_bundle(
+    issue: dict,
+    transitions_data: dict,
+    *,
+    issue_response: dict | None = None,
+    issue_side_effect: list[Response] | None = None,
+    comments_response: list[dict] | None = None,
+    comments_side_effect: list[Response] | None = None,
+    remote_links_response: list[dict] | None = None,
+    remote_links_side_effect: list[Response] | None = None,
+    worklogs_response: dict | None = None,
+    worklogs_side_effect: list[Response] | None = None,
+    remote_links_regex: bool = True,
+) -> None:
+    issue_key = issue.get('key')
+    if not issue_key:
+        return
+
+    issue_url_regex = (
+        rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?|$).*'
+    )
+    issue_route = respx.get(url__regex=issue_url_regex)
+    if issue_side_effect is not None:
+        issue_route.mock(side_effect=issue_side_effect)
+    else:
+        issue_route.mock(return_value=Response(200, json=issue_response or issue))
+
+    comments = comments_response
+    if comments is None:
+        comments = issue.get('fields', {}).get('comment', {}).get('comments', [])
+
+    comments_route = respx.get(
+        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/comment.*'
+    )
+    if comments_side_effect is not None:
+        comments_route.mock(side_effect=comments_side_effect)
+    else:
+        comments_route.mock(
+            return_value=Response(200, json=build_comments_page(issue_key, comments))
+        )
+
+    remote_links = remote_links_response
+    if remote_links is None:
+        remote_links = issue.get('fields', {}).get('remotelink', [])
+
+    remote_link_route = respx.get(
+        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
+    )
+    if remote_links_side_effect is not None:
+        remote_link_route.mock(side_effect=remote_links_side_effect)
+    else:
+        remote_link_route.mock(return_value=Response(200, json=remote_links))
+
+    if remote_links_regex and remote_links_side_effect is None:
+        respx.get(
+            url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/remotelink.*'
+        ).mock(return_value=Response(200, json=remote_links))
+
+    worklogs = worklogs_response
+    if worklogs is None:
+        worklogs = build_worklogs_page(
+            issue.get('fields', {}).get('worklog', {}).get('worklogs', [])
+        )
+
+    worklog_route = respx.get(
+        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/worklog'
+    )
+    if worklogs_side_effect is not None:
+        worklog_route.mock(side_effect=worklogs_side_effect)
+    else:
+        worklog_route.mock(return_value=Response(200, json=worklogs))
+
+    respx.get(f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions').mock(
+        return_value=Response(200, json=transitions_data)
+    )
+
+
+def mock_search_results_issue_details(
+    mock_jira_search_with_results: dict,
+    transitions_data: dict,
+    *,
+    overrides: dict[str, dict[str, Any]] | None = None,
+) -> None:
+    issue_overrides = overrides or {}
+    for issue in mock_jira_search_with_results.get('issues', []):
+        override = issue_overrides.get(issue.get('key', ''), {})
+        mock_issue_detail_bundle(issue, transitions_data, **override)
+
+
+def mock_search_results_base(
+    mock_jira_server_info,
+    mock_jira_search_with_results: dict,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
+    *,
+    mock_jira_myself=None,
+    mock_jira_fields=None,
+    mock_jira_fields_search=None,
+) -> None:
+    mock_server_info(mock_jira_server_info)
+    if mock_jira_myself is not None:
+        mock_myself(mock_jira_myself)
+    mock_search_with_results(mock_jira_search_with_results)
+    mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+    if mock_jira_fields is not None and mock_jira_fields_search is not None:
+        mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
+    mock_agile_endpoints_for_example_project(
+        mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
+    )
+
+
+def mock_work_item_link_types(mock_jira_work_item_link_types) -> None:
+    respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
+        return_value=Response(200, json=mock_jira_work_item_link_types)
+    )
+
+
+def mock_project_issue_types_metadata(metadata_args: dict[str, Any]) -> None:
+    mock_project_metadata_bundle(metadata_args)
+
+
+def mock_project_endpoint_and_statuses(
+    project_key: str,
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_statuses,
+    mock_jira_support_issue_types=None,
+    mock_jira_support_statuses=None,
+) -> None:
+    mock_project_endpoint(
+        project_key,
+        mock_jira_projects,
+        mock_jira_issue_types,
+        mock_jira_support_issue_types,
+    )
+    mock_project_statuses(
+        project_key,
+        mock_jira_statuses,
+        mock_jira_issue_types,
+        mock_jira_support_statuses,
+        mock_jira_support_issue_types,
+    )
+
+
+def build_standard_transitions(
+    *, todo_description: str = 'Work waiting to be started'
+) -> dict[str, Any]:
+    return build_transitions_payload(
+        [
+            {
+                'id': '11',
+                'name': 'To Do',
+                'to': {
+                    'id': '10000',
+                    'name': 'To Do',
+                    'description': todo_description,
+                    'statusCategory': {'key': 'new', 'colorName': 'blue-gray'},
+                },
+            },
+            {
+                'id': '21',
+                'name': 'In Progress',
+                'to': {
+                    'id': '10001',
+                    'name': 'In Progress',
+                    'description': 'Work is being actively worked on',
+                    'statusCategory': {
+                        'key': 'indeterminate',
+                        'colorName': 'yellow',
+                    },
+                },
+            },
+            {
+                'id': '31',
+                'name': 'Done',
+                'to': {
+                    'id': '10002',
+                    'name': 'Done',
+                    'description': 'Work has been completed',
+                    'statusCategory': {'key': 'done', 'colorName': 'green'},
+                },
+            },
+        ]
+    )
+
+
+def mock_eng_creation_project_setup(
+    mock_jira_projects,
+    mock_project_issue_types,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+) -> None:
+    mock_eng_project_search_setup(
+        mock_jira_projects,
+        mock_project_issue_types,
+        mock_jira_users,
+        mock_jira_work_item_link_types,
+    )
+    mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
+
+
+def mock_eng_new_work_item_setup(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_statuses,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    *,
+    mock_jira_engineering_agile_boards: dict | None = None,
+    mock_jira_engineering_agile_sprints: dict | None = None,
+) -> None:
+    mock_server_info(mock_jira_server_info)
+    mock_myself(mock_jira_myself)
+    mock_projects_search(mock_jira_projects)
+    mock_project_endpoint('ENG', mock_jira_projects, mock_jira_issue_types)
+
+    # Mock users assignable to project (correct endpoint)
+    respx.get(
+        'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
+    ).mock(return_value=Response(200, json=mock_jira_users))
+
+    if (
+        mock_jira_engineering_agile_boards is not None
+        and mock_jira_engineering_agile_sprints is not None
+    ):
+        mock_agile_boards(mock_jira_engineering_agile_boards, project_key='ENG')
+        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=1)
+        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=2)
+
+    mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
+
+    respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
+        return_value=Response(200, json=mock_jira_statuses)
+    )
+    respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
+        return_value=Response(200, json=mock_jira_issue_types)
+    )
+
+    mock_jql_validation()
+    mock_search_empty_results()
+
+
+def mock_eng_filtered_project_setup(
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+    *,
+    issue_type_ids: set[str],
+) -> None:
+    mock_projects_search(mock_jira_projects)
+    project_key = mock_jira_projects['values'][0]['key']
+    respx.get(f'https://example.atlassian.acme.net/rest/api/3/project/{project_key}').mock(
+        return_value=Response(
+            200,
+            json=build_project_detail(
+                mock_jira_projects['values'][0],
+                [
+                    issue_type
+                    for issue_type in mock_jira_issue_types
+                    if issue_type['id'] in issue_type_ids
+                ],
+            ),
+        )
+    )
+    mock_issue_types([])
+    mock_statuses([])
+    mock_assignable_users_single_project(mock_jira_users)
+    mock_assignable_users(mock_jira_users)
+    mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
+    mock_jql_validation()
+    mock_work_item_link_types(mock_jira_work_item_link_types)
+
+
+def mock_search_results_project_fixture(
+    fixture_args: dict[str, Any],
+    *,
+    eng_3_override: dict[str, Any],
+) -> None:
+    mock_search_results_base(**fixture_args['mock_search_results_base_with_fields_args'])
+    mock_search_results_issue_details(
+        fixture_args['mock_jira_search_with_results'],
+        fixture_args['mock_transitions_data'],
+        overrides={'ENG-3': eng_3_override},
+    )
+    mock_project_issue_types_metadata(
+        build_project_metadata_args(
+            mock_jira_projects=fixture_args['mock_jira_projects'],
+            mock_project_issue_types=fixture_args['mock_project_issue_types'],
+            mock_jira_issue_types=fixture_args['mock_jira_issue_types'],
+            mock_jira_statuses=fixture_args['mock_jira_statuses'],
+            mock_jira_users=fixture_args['mock_jira_users'],
+            mock_engineering_createmeta_fields=fixture_args['mock_engineering_createmeta_fields'],
+        )
+    )
+    mock_work_item_link_types(fixture_args['mock_jira_work_item_link_types'])
+
+
+def mock_search_results_eng_3_issue_versions(
+    mock_search_results_project_fixture_args: dict[str, Any],
+    initial_issue: dict[str, Any],
+    updated_issue: dict[str, Any],
+) -> None:
+    mock_search_results_project_fixture(
+        mock_search_results_project_fixture_args,
+        eng_3_override={
+            'issue_side_effect': [
+                Response(200, json=initial_issue),
+                Response(200, json=updated_issue),
+            ]
+        },
+    )
+
+
+def build_eng_project_setup_args(
+    *,
+    mock_jira_projects,
+    issue_types_key: str,
+    issue_types_value,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+) -> dict[str, Any]:
+    return {
+        'mock_jira_projects': mock_jira_projects,
+        issue_types_key: issue_types_value,
+        'mock_jira_users': mock_jira_users,
+        'mock_engineering_createmeta_fields': mock_engineering_createmeta_fields,
+        'mock_jira_work_item_link_types': mock_jira_work_item_link_types,
+    }
+
+
+@pytest.fixture
+def mock_search_results_base_with_fields_args(
+    mock_jira_server_info,
+    mock_jira_search_with_results,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
+    mock_jira_myself,
+    mock_jira_fields,
+    mock_jira_fields_search,
+) -> dict[str, Any]:
+    return {
+        'mock_jira_server_info': mock_jira_server_info,
+        'mock_jira_search_with_results': mock_jira_search_with_results,
+        'mock_jira_engineering_agile_boards': mock_jira_engineering_agile_boards,
+        'mock_jira_engineering_agile_sprints': mock_jira_engineering_agile_sprints,
+        'mock_jira_myself': mock_jira_myself,
+        'mock_jira_fields': mock_jira_fields,
+        'mock_jira_fields_search': mock_jira_fields_search,
+    }
+
+
+@pytest.fixture
+def mock_search_results_agile_context_args(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_search_with_results,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
+) -> dict[str, Any]:
+    return {
+        'mock_jira_server_info': mock_jira_server_info,
+        'mock_jira_myself': mock_jira_myself,
+        'mock_jira_search_with_results': mock_jira_search_with_results,
+        'mock_jira_engineering_agile_boards': mock_jira_engineering_agile_boards,
+        'mock_jira_engineering_agile_sprints': mock_jira_engineering_agile_sprints,
+    }
+
+
+@pytest.fixture
+def mock_search_results_project_fixture_args(
+    mock_transitions_data,
+    mock_jira_projects,
+    mock_project_issue_types,
+    mock_jira_issue_types,
+    mock_jira_statuses,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+    mock_search_results_base_with_fields_args,
+) -> dict[str, Any]:
+    return {
+        **mock_search_results_base_with_fields_args,
+        'mock_transitions_data': mock_transitions_data,
+        **build_project_metadata_args(
+            mock_jira_projects=mock_jira_projects,
+            mock_project_issue_types=mock_project_issue_types,
+            mock_jira_issue_types=mock_jira_issue_types,
+            mock_jira_statuses=mock_jira_statuses,
+            mock_jira_users=mock_jira_users,
+            mock_engineering_createmeta_fields=mock_engineering_createmeta_fields,
+        ),
+        'mock_jira_work_item_link_types': mock_jira_work_item_link_types,
+        'mock_search_results_base_with_fields_args': mock_search_results_base_with_fields_args,
+    }
+
+
+@pytest.fixture
+def mock_support_common_mocks_args(
+    mock_jira_server_info,
+    mock_jira_myself,
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_statuses,
+    mock_jira_support_issue_types,
+    mock_jira_support_statuses,
+    mock_support_transitions_data,
+    mock_support_createmeta_fields,
+) -> dict[str, Any]:
+    return {
+        'mock_jira_server_info': mock_jira_server_info,
+        'mock_jira_myself': mock_jira_myself,
+        'mock_jira_projects': mock_jira_projects,
+        'mock_jira_issue_types': mock_jira_issue_types,
+        'mock_jira_statuses': mock_jira_statuses,
+        'mock_jira_support_issue_types': mock_jira_support_issue_types,
+        'mock_jira_support_statuses': mock_jira_support_statuses,
+        'mock_support_transitions_data': mock_support_transitions_data,
+        'mock_support_createmeta_fields': mock_support_createmeta_fields,
+    }
+
+
+@pytest.fixture
+def mock_eng_creation_project_setup_args(
+    mock_jira_projects,
+    mock_project_issue_types,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+) -> dict[str, Any]:
+    return build_eng_project_setup_args(
+        mock_jira_projects=mock_jira_projects,
+        issue_types_key='mock_project_issue_types',
+        issue_types_value=mock_project_issue_types,
+        mock_jira_users=mock_jira_users,
+        mock_engineering_createmeta_fields=mock_engineering_createmeta_fields,
+        mock_jira_work_item_link_types=mock_jira_work_item_link_types,
+    )
+
+
+@pytest.fixture
+def mock_subtask_creation_metadata_args(
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+    mock_jira_projects,
+    mock_project_issue_types,
+) -> dict[str, Any]:
+    return {
+        'mock_jira_users': mock_jira_users,
+        'mock_engineering_createmeta_fields': mock_engineering_createmeta_fields,
+        'mock_jira_work_item_link_types': mock_jira_work_item_link_types,
+        'mock_jira_projects': mock_jira_projects,
+        'mock_project_issue_types': mock_project_issue_types,
+    }
+
+
+@pytest.fixture
+def mock_eng_filtered_project_setup_args(
+    mock_jira_projects,
+    mock_jira_issue_types,
+    mock_jira_users,
+    mock_engineering_createmeta_fields,
+    mock_jira_work_item_link_types,
+) -> dict[str, Any]:
+    return {
+        **build_eng_project_setup_args(
+            mock_jira_projects=mock_jira_projects,
+            issue_types_key='mock_jira_issue_types',
+            issue_types_value=mock_jira_issue_types,
+            mock_jira_users=mock_jira_users,
+            mock_engineering_createmeta_fields=mock_engineering_createmeta_fields,
+            mock_jira_work_item_link_types=mock_jira_work_item_link_types,
+        ),
+        'issue_type_ids': {'10008', '10002'},
+    }
+
+
 def mock_empty_comments(work_item_key: str):
     respx.get(f'https://example.atlassian.acme.net/rest/api/3/issue/{work_item_key}/comment').mock(
         return_value=Response(200, json=build_comments_page(work_item_key, []))
@@ -563,6 +1159,22 @@ def build_project_detail(project: dict, issue_types: list[dict]) -> dict:
 
 def get_issue_by_key(issues: list[dict], issue_key: str) -> dict:
     return copy.deepcopy(next(issue for issue in issues if issue['key'] == issue_key))
+
+
+def mock_eng_project_search_setup(
+    mock_jira_projects,
+    mock_project_issue_types,
+    mock_jira_users,
+    mock_jira_work_item_link_types,
+) -> None:
+    mock_projects_search(mock_jira_projects)
+    mock_project_endpoint('ENG', mock_jira_projects, mock_project_issue_types)
+    mock_issue_types([])
+    mock_statuses([])
+    mock_assignable_users_single_project(mock_jira_users)
+    mock_assignable_users(mock_jira_users)
+    mock_jql_validation()
+    mock_work_item_link_types(mock_jira_work_item_link_types)
 
 
 def build_issue_response(issue: dict, field_ids: list[str] | None = None) -> dict:
@@ -644,18 +1256,13 @@ def setup_common_mocks(
             mock_jira_support_issue_types is None or mock_jira_support_statuses is None
         ):
             continue
-        mock_project_endpoint(
+        mock_project_endpoint_and_statuses(
             project_key,
             mock_jira_projects,
             mock_jira_issue_types,
-            mock_jira_support_issue_types,
-        )
-        mock_project_statuses(
-            project_key,
             mock_jira_statuses,
-            mock_jira_issue_types,
-            mock_jira_support_statuses,
             mock_jira_support_issue_types,
+            mock_jira_support_statuses,
         )
     if mock_jira_support_issue_types is not None and mock_support_createmeta_fields is not None:
         mock_support_project_createmeta(
@@ -963,166 +1570,71 @@ def mock_jira_fields_search():
 
 @pytest.fixture
 async def mock_jira_api_sync(
-    mock_jira_server_info,
-    mock_jira_myself,
     mock_jira_search_empty,
-    mock_jira_projects,
-    mock_jira_issue_types,
-    mock_jira_support_issue_types,
-    mock_jira_statuses,
-    mock_jira_support_statuses,
-    mock_support_transitions_data,
     mock_jira_configuration,
-    mock_support_createmeta_fields,
     mock_jira_users,
+    mock_support_common_mocks_args,
 ):
     async with respx.mock:
-        setup_common_mocks(
-            mock_jira_server_info,
-            mock_jira_myself,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_statuses,
-            mock_jira_support_issue_types,
-            mock_jira_support_statuses,
-            mock_support_transitions_data,
-            mock_support_createmeta_fields,
-        )
+        setup_common_mocks(**mock_support_common_mocks_args)
         mock_search_empty(mock_jira_search_empty)
         mock_approximate_count_empty()
         mock_configuration_endpoint(mock_jira_configuration)
 
-        project_key = mock_jira_projects['values'][0]['key']
-        mock_project_endpoint(
-            project_key,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_support_issue_types,
-        )
         mock_assignable_users(mock_jira_users)
-        mock_project_statuses(
-            project_key,
-            mock_jira_statuses,
-            mock_jira_issue_types,
-            mock_jira_support_statuses,
-            mock_jira_support_issue_types,
-        )
 
         yield
 
 
 @pytest.fixture
 async def mock_jira_api_with_attachment_upload(
-    mock_jira_server_info,
-    mock_jira_myself,
     mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_jira_issue_types,
-    mock_jira_support_issue_types,
-    mock_jira_statuses,
-    mock_jira_support_statuses,
-    mock_transitions_data,
-    mock_project_issue_types,
-    mock_engineering_createmeta_fields,
-    mock_support_transitions_data,
-    mock_support_createmeta_fields,
     mock_jira_new_attachment,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
+    mock_search_results_project_fixture_args,
+    mock_support_common_mocks_args,
 ):
     async with respx.mock:
-        setup_common_mocks(
-            mock_jira_server_info,
-            mock_jira_myself,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_statuses,
-            mock_jira_support_issue_types,
-            mock_jira_support_statuses,
-            mock_support_transitions_data,
-            mock_support_createmeta_fields,
+        setup_common_mocks(**mock_support_common_mocks_args)
+
+        eng_3_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        updated_eng_3_issue = copy.deepcopy(eng_3_issue)
+        updated_eng_3_issue['fields']['attachment'].append(mock_jira_new_attachment)
+        mock_search_results_eng_3_issue_versions(
+            mock_search_results_project_fixture_args,
+            eng_3_issue,
+            updated_eng_3_issue,
         )
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
+        respx.post('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/attachments').mock(
+            return_value=Response(200, json=[mock_jira_new_attachment])
         )
 
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                if issue_key == 'ENG-3':
-                    initial_work_item = copy.deepcopy(issue)
-                    updated_work_item = copy.deepcopy(issue)
+        yield
 
-                    new_attachment = mock_jira_new_attachment
 
-                    updated_work_item['fields']['attachment'].append(new_attachment)
+@pytest.fixture
+async def mock_jira_api_with_saved_work_item_field_update(
+    mock_jira_search_with_results,
+    mock_jira_priorities,
+    mock_search_results_project_fixture_args,
+):
+    async with respx.mock:
+        initial_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        updated_issue = copy.deepcopy(initial_issue)
 
-                    # Mock POST /issue/ENG-3/attachments
-                    respx.post(
-                        'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/attachments'
-                    ).mock(return_value=Response(200, json=[new_attachment]))
+        updated_priority = next(
+            priority for priority in mock_jira_priorities if priority.get('id') == '2'
+        )
+        updated_issue['fields']['priority'] = updated_priority
 
-                    # Mock GET /issue/ENG-3 with side_effect for state changes
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(
-                        side_effect=[
-                            Response(200, json=initial_work_item),  # Before upload: 1 attachment
-                            Response(200, json=updated_work_item),  # After upload: 2 attachments
-                        ]
-                    )
-                else:
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(return_value=Response(200, json=issue))
-                # Mock remote links endpoint for each work item
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/remotelink.*'
-                ).mock(return_value=Response(200, json=remote_links))
-                # Mock status transitions endpoint
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_transitions_data))
-
-        # Mock projects, issue types, and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
+        mock_search_results_eng_3_issue_versions(
+            mock_search_results_project_fixture_args,
+            initial_issue,
+            updated_issue,
         )
 
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        mock_project_endpoint(project_key, mock_jira_projects, mock_project_issue_types)
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
-        )
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        respx.put(
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-3\?returnIssue=true$'
+        ).mock(return_value=Response(200, json=updated_issue))
 
         yield
 
@@ -1170,13 +1682,7 @@ async def mock_jira_api_with_issue_link_deletion(
             return_value=Response(204)
         )
 
-        initial_work_item = copy.deepcopy(
-            next(
-                issue
-                for issue in mock_jira_search_with_results['issues']
-                if issue['key'] == 'ENG-3'
-            )
-        )
+        initial_work_item = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
         updated_work_item = copy.deepcopy(initial_work_item)
 
         updated_work_item['fields']['issuelinks'] = [
@@ -1193,19 +1699,12 @@ async def mock_jira_api_with_issue_link_deletion(
             ]
         )
 
+        eng_2_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-2')
+
         # Mock GET work item endpoint for ENG-2 (related work item)
         respx.get(
             url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-2(?:\?|$)'
-        ).mock(
-            return_value=Response(
-                200,
-                json=next(
-                    issue
-                    for issue in mock_jira_search_with_results['issues']
-                    if issue['key'] == 'ENG-2'
-                ),
-            )
-        )
+        ).mock(return_value=Response(200, json=eng_2_issue))
 
         # Mock other required endpoints
         remote_links_19539 = initial_work_item.get('fields', {}).get('remotelink', [])
@@ -1213,7 +1712,10 @@ async def mock_jira_api_with_issue_link_deletion(
             return_value=Response(200, json=remote_links_19539)
         )
 
-        mock_empty_comments('ENG-3')
+        eng_3_comments = initial_work_item.get('fields', {}).get('comment', {}).get('comments', [])
+        respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/comment').mock(
+            return_value=Response(200, json=build_comments_page('ENG-3', eng_3_comments))
+        )
 
         respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/worklog').mock(
             return_value=Response(200, json=build_worklogs_page([]))
@@ -1223,30 +1725,18 @@ async def mock_jira_api_with_issue_link_deletion(
         mock_empty_transitions('ENG-3')
 
         # Extract remote links for ENG-2
-        remote_links_19540 = (
-            next(
-                issue
-                for issue in mock_jira_search_with_results['issues']
-                if issue['key'] == 'ENG-2'
-            )
-            .get('fields', {})
-            .get('remotelink', [])
-        )
+        remote_links_19540 = eng_2_issue.get('fields', {}).get('remotelink', [])
         respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-2/remotelink').mock(
             return_value=Response(200, json=remote_links_19540)
         )
 
-        mock_empty_comments('ENG-2')
+        eng_2_comments = eng_2_issue.get('fields', {}).get('comment', {}).get('comments', [])
+        respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-2/comment').mock(
+            return_value=Response(200, json=build_comments_page('ENG-2', eng_2_comments))
+        )
 
         respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-2').mock(
-            return_value=Response(
-                200,
-                json=next(
-                    issue
-                    for issue in mock_jira_search_with_results['issues']
-                    if issue['key'] == 'ENG-2'
-                ),
-            )
+            return_value=Response(200, json=eng_2_issue)
         )
 
         # Mock priority endpoint
@@ -1308,108 +1798,20 @@ async def mock_jira_api_with_issue_link_deletion(
 
 @pytest.fixture
 async def mock_jira_api_with_attachment_deletion(
-    mock_jira_server_info,
-    mock_jira_myself,
     mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_jira_issue_types,
-    mock_jira_statuses,
-    mock_transitions_data,
-    mock_project_issue_types,
-    mock_engineering_createmeta_fields,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
+    mock_search_results_project_fixture_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
+        eng_3_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        updated_eng_3_issue = copy.deepcopy(eng_3_issue)
+        updated_eng_3_issue['fields']['attachment'] = []
+        mock_search_results_eng_3_issue_versions(
+            mock_search_results_project_fixture_args,
+            eng_3_issue,
+            updated_eng_3_issue,
         )
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
-        )
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
-
-        # Mock DELETE attachment endpoint
         respx.delete('https://example.atlassian.acme.net/rest/api/3/attachment/66811').mock(
             return_value=Response(204)
-        )
-
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                if issue_key == 'ENG-3':
-                    issue_with_attachment = copy.deepcopy(issue)
-
-                    issue_without_attachment = copy.deepcopy(issue)
-                    issue_without_attachment['fields']['attachment'] = []
-
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?|$).*'
-                    ).mock(
-                        side_effect=[
-                            Response(200, json=issue_with_attachment),
-                            Response(200, json=issue_without_attachment),
-                        ]
-                    )
-                else:
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(return_value=Response(200, json=issue))
-
-                # Mock remote links endpoint for each work item
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/remotelink.*'
-                ).mock(return_value=Response(200, json=remote_links))
-
-                # Mock status transitions endpoint
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_transitions_data))
-
-        # Mock projects, issue types, and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
-        )
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        mock_project_endpoint(project_key, mock_jira_projects, mock_project_issue_types)
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
-        )
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
         )
 
         yield
@@ -1417,236 +1819,51 @@ async def mock_jira_api_with_attachment_deletion(
 
 @pytest.fixture
 async def mock_jira_api_with_web_link_deletion(
-    mock_jira_server_info,
-    mock_jira_myself,
     mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_jira_issue_types,
-    mock_jira_statuses,
-    mock_transitions_data,
-    mock_project_issue_types,
-    mock_engineering_createmeta_fields,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
+    mock_search_results_project_fixture_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
+        eng_3_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        initial_remote_links = copy.deepcopy(eng_3_issue.get('fields', {}).get('remotelink', []))
+        updated_remote_links = [link for link in initial_remote_links if link['id'] != 10050]
+        mock_search_results_project_fixture(
+            mock_search_results_project_fixture_args,
+            eng_3_override={
+                'remote_links_side_effect': [
+                    Response(200, json=initial_remote_links),
+                    Response(200, json=updated_remote_links),
+                ]
+            },
         )
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
-
-        # Mock DELETE remote link endpoint
         respx.delete(
             'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/remotelink/10050'
         ).mock(return_value=Response(204))
-
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=issue))
-
-                if issue_key == 'ENG-3':
-                    import copy
-
-                    remote_links = issue.get('fields', {}).get('remotelink', [])
-
-                    # Initial state: 6 remote links
-                    initial_remote_links = copy.deepcopy(remote_links)
-
-                    # Updated state: 5 remote links (remove the first one with ID 10050)
-                    updated_remote_links = copy.deepcopy(remote_links)
-                    updated_remote_links = [
-                        link for link in updated_remote_links if link['id'] != 10050
-                    ]
-
-                    # Mock remotelink endpoint with side_effect for state changes
-                    respx.get(
-                        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                    ).mock(
-                        side_effect=[
-                            Response(200, json=initial_remote_links),
-                            Response(200, json=updated_remote_links),
-                        ]
-                    )
-                else:
-                    # Mock remote links endpoint for other work items
-                    remote_links = issue.get('fields', {}).get('remotelink', [])
-                    respx.get(
-                        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                    ).mock(return_value=Response(200, json=remote_links))
-
-                # Mock status transitions endpoint
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_transitions_data))
-
-        # Mock projects, issue types, and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
-        )
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        mock_project_endpoint(project_key, mock_jira_projects, mock_project_issue_types)
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
-        )
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
 
         yield
 
 
 @pytest.fixture
 async def mock_jira_api_with_comment_deletion(
-    mock_jira_server_info,
-    mock_jira_myself,
     mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_jira_issue_types,
-    mock_jira_statuses,
-    mock_transitions_data,
-    mock_project_issue_types,
-    mock_engineering_createmeta_fields,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
+    mock_search_results_project_fixture_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
-        )
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
-
         # Mock DELETE comment endpoint
         respx.delete(
             'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/comment/231668'
         ).mock(return_value=Response(204))
 
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=issue))
-
-                if issue_key == 'ENG-3':
-                    comments_data = issue.get('fields', {}).get('comment', {})
-                    comments_list = comments_data.get('comments', [])
-
-                    # Updated state: 0 comments (after deletion)
-                    updated_comments = []
-
-                    # Mock GET comments endpoint with side_effect for state changes.
-                    # The widget fetches comments on initial load, then refetches after deletion.
-                    respx.get(
-                        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/comment'
-                    ).mock(
-                        side_effect=[
-                            Response(200, json=build_comments_page(issue_key, comments_list)),
-                            Response(200, json=build_comments_page(issue_key, updated_comments)),
-                            Response(200, json=build_comments_page(issue_key, updated_comments)),
-                        ]
-                    )
-                else:
-                    # Mock comments endpoint for other work items
-                    comments_data = issue.get('fields', {}).get('comment', {})
-                    comments_list = comments_data.get('comments', [])
-                    respx.get(
-                        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/comment'
-                    ).mock(
-                        return_value=Response(
-                            200, json=build_comments_page(issue_key, comments_list)
-                        )
-                    )
-
-                # Mock remote links endpoint for each work item
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-
-                # Mock status transitions endpoint
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_transitions_data))
-
-        # Mock projects, issue types, and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
-        )
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        respx.get(f'https://example.atlassian.acme.net/rest/api/3/project/{project_key}').mock(
-            return_value=Response(
-                200,
-                json=build_project_detail(
-                    mock_jira_projects['values'][0], mock_project_issue_types
-                ),
-            )
-        )
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
-        )
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
+        eng_3_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        comments_list = eng_3_issue.get('fields', {}).get('comment', {}).get('comments', [])
+        mock_search_results_project_fixture(
+            mock_search_results_project_fixture_args,
+            eng_3_override={
+                'comments_side_effect': [
+                    Response(200, json=build_comments_page('ENG-3', comments_list)),
+                    Response(200, json=build_comments_page('ENG-3', [])),
+                    Response(200, json=build_comments_page('ENG-3', [])),
+                ]
+            },
         )
 
         yield
@@ -1658,16 +1875,24 @@ async def mock_jira_api_with_worklog_deletion(
     mock_jira_server_info,
     mock_jira_myself,
     mock_jira_search_with_results,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
     mock_jira_projects,
     mock_jira_users,
     mock_jira_work_item_link_types,
     mock_transitions_data,
     mock_project_issue_types,
+    mock_engineering_createmeta_fields,
+    mock_eng_creation_project_setup_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
+        mock_search_results_base(
+            mock_jira_server_info,
+            mock_jira_search_with_results,
+            mock_jira_engineering_agile_boards,
+            mock_jira_engineering_agile_sprints,
+            mock_jira_myself=mock_jira_myself,
+        )
 
         # Mock DELETE worklog endpoint
         respx.delete(
@@ -1684,60 +1909,19 @@ async def mock_jira_api_with_worklog_deletion(
         ]
         updated_worklogs['total'] = len(updated_worklogs['worklogs'])
 
-        # Mock GET worklogs endpoint with side_effect for multiple calls
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/worklog').mock(
-            side_effect=[
-                Response(200, json=initial_worklogs),
-                Response(200, json=updated_worklogs),
-            ]
+        mock_search_results_issue_details(
+            mock_jira_search_with_results,
+            mock_transitions_data,
+            overrides={
+                'ENG-3': {
+                    'worklogs_side_effect': [
+                        Response(200, json=initial_worklogs),
+                        Response(200, json=updated_worklogs),
+                    ]
+                }
+            },
         )
-
-        # Mock all issues in the search results with basic data
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue['key']
-            respx.get(
-                url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-            ).mock(return_value=Response(200, json=issue))
-
-            # Mock transitions endpoint for each issue
-            respx.get(
-                f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-            ).mock(return_value=Response(200, json=mock_transitions_data))
-
-        # Mock projects endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
-        )
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        respx.get(f'https://example.atlassian.acme.net/rest/api/3/project/{project_key}').mock(
-            return_value=Response(
-                200,
-                json=build_project_detail(
-                    mock_jira_projects['values'][0], mock_project_issue_types
-                ),
-            )
-        )
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=[])
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=[])
-        )
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_eng_creation_project_setup(**mock_eng_creation_project_setup_args)
 
         yield
 
@@ -1748,23 +1932,15 @@ async def mock_jira_api_with_worklog_creation(
     mock_jira_server_info,
     mock_jira_myself,
     mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_project_issue_types,
     mock_jira_new_worklog,
-    mock_engineering_createmeta_fields,
+    mock_eng_creation_project_setup_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+        mock_search_results_context(
+            mock_jira_server_info,
+            mock_jira_myself,
+            mock_jira_search_with_results,
+        )
 
         # Create updated worklog response with new worklog
         # Initial state has 2 worklogs (from fixture)
@@ -1801,69 +1977,18 @@ async def mock_jira_api_with_worklog_creation(
 
             # Mock transitions endpoint for each issue
             if issue_key != 'ENG-3':
-                transitions_data = build_transitions_payload(
-                    [
-                        {
-                            'id': '11',
-                            'name': 'To Do',
-                            'to': {
-                                'id': '10000',
-                                'name': 'To Do',
-                                'description': 'Work that needs to be done',
-                                'statusCategory': {
-                                    'key': 'new',
-                                    'colorName': 'blue-gray',
-                                },
-                            },
-                        },
-                        {
-                            'id': '21',
-                            'name': 'In Progress',
-                            'to': {
-                                'id': '10001',
-                                'name': 'In Progress',
-                                'description': 'Work is being actively worked on',
-                                'statusCategory': {
-                                    'key': 'indeterminate',
-                                    'colorName': 'yellow',
-                                },
-                            },
-                        },
-                        {
-                            'id': '31',
-                            'name': 'Done',
-                            'to': {
-                                'id': '10002',
-                                'name': 'Done',
-                                'description': 'Work has been completed',
-                                'statusCategory': {'key': 'done', 'colorName': 'green'},
-                            },
-                        },
-                    ]
-                )
                 respx.get(
                     f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=transitions_data))
+                ).mock(
+                    return_value=Response(
+                        200,
+                        json=build_standard_transitions(
+                            todo_description='Work that needs to be done'
+                        ),
+                    )
+                )
 
-        mock_projects_search(mock_jira_projects)
-        mock_project_endpoint('ENG', mock_jira_projects, mock_project_issue_types)
-        mock_issue_types([])
-        mock_statuses([])
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_eng_creation_project_setup(**mock_eng_creation_project_setup_args)
 
         yield
 
@@ -1884,6 +2009,7 @@ async def mock_jira_api_with_search_results(
     mock_jira_fields_search,
     mock_project_issue_types,
     mock_engineering_createmeta_fields,
+    mock_subtask_creation_metadata_args,
 ):
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
@@ -1924,42 +2050,22 @@ async def mock_jira_api_with_search_results(
         )
 
         # Mock approximate count with custom handler
-        def count_handler(request):
-            body = json.loads(request.content)
-            jql = body.get('jql', '')
+        def count_for_jql(jql: str) -> int | None:
             if jql.startswith('parent='):
                 parent_key = jql.removeprefix('parent=').strip()
                 subtasks_for_jql = subtasks_by_parent.get(parent_key, [])
-                return Response(200, json=build_count_results(len(subtasks_for_jql)))
-            return Response(
-                200, json=build_count_results(len(mock_jira_search_with_results.get('issues', [])))
-            )
+                return len(subtasks_for_jql)
+            return None
 
-        respx.post('https://example.atlassian.acme.net/rest/api/3/search/approximate-count').mock(
-            side_effect=count_handler
+        mock_dynamic_approximate_count(
+            default_count=len(mock_jira_search_with_results.get('issues', [])),
+            count_for_jql=count_for_jql,
         )
 
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=issue))
-                comments = issue.get('fields', {}).get('comment', {}).get('comments', [])
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/comment.*'
-                ).mock(return_value=Response(200, json=build_comments_page(issue_key, comments)))
-                # Mock remote links endpoint for each work item
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-                # Mock status transitions endpoint with available transitions
-                transitions_data = mock_jira_engineering_transitions
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=transitions_data))
+        mock_search_results_issue_details(
+            mock_jira_search_with_results,
+            mock_jira_engineering_transitions,
+        )
 
         eng_2 = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-2')
         eng_9 = copy.deepcopy(eng_2)
@@ -1971,49 +2077,14 @@ async def mock_jira_api_with_search_results(
             url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-9(?:\?.*)?$'
         ).mock(return_value=Response(200, json=eng_9))
 
-        # Mock projects, issue types, and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/project/search').mock(
-            return_value=Response(200, json=mock_jira_projects)
-        )
-
-        # Mock get single project endpoint with issue types (for creating subtasks)
-        project_key = mock_jira_projects['values'][0]['key']
-        mock_project_endpoint(project_key, mock_jira_projects, mock_project_issue_types)
-
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=[])
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=[])
-        )
-
-        # Mock assignable users endpoint (returns users for work item assignable queries)
-        respx.get('https://example.atlassian.acme.net/rest/api/3/user/assignable/search').mock(
-            return_value=Response(200, json=mock_jira_users)
-        )
-
-        # Mock user assignable multi project search endpoint (for creating subtasks)
-        respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock create metadata endpoint (for creating subtasks - issue type 10002)
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_subtask_creation_metadata(**mock_subtask_creation_metadata_args)
 
         yield
 
 
 @pytest.fixture
 def mock_user_info(mock_jira_myself):
-    from gojeera.models import JiraMyselfInfo
+    from gojeera.internal.models.jira import JiraMyselfInfo
 
     return JiraMyselfInfo(
         account_type=mock_jira_myself['accountType'],
@@ -2093,59 +2164,51 @@ async def mock_jira_api_with_new_work_item(
     mock_jira_myself,
     mock_jira_search_with_results,
     mock_jira_users,
+    mock_jira_engineering_transitions,
+    mock_jira_fields,
+    mock_jira_fields_search,
 ):
     async with respx.mock:
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-        mock_projects_search(mock_jira_projects)
-        mock_project_endpoint('ENG', mock_jira_projects, mock_jira_issue_types)
-
-        # Mock users assignable to project (correct endpoint)
+        mock_eng_new_work_item_setup(
+            mock_jira_server_info,
+            mock_jira_myself,
+            mock_jira_projects,
+            mock_jira_issue_types,
+            mock_jira_statuses,
+            mock_jira_users,
+            mock_engineering_createmeta_fields,
+        )
+        mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
         respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock create metadata endpoint (for specific project and issue type)
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
+            'https://example.atlassian.acme.net/rest/agile/1.0/board',
+            params={'projectKeyOrId': 'ENG', 'type': 'scrum', 'startAt': 0, 'maxResults': 50},
+        ).mock(
+            return_value=Response(
+                200, json={'isLast': True, 'maxResults': 50, 'startAt': 0, 'values': []}
+            )
         )
-
-        # Mock issue types
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
+        respx.get(
+            'https://example.atlassian.acme.net/rest/agile/1.0/board',
+            params={'type': 'scrum', 'startAt': 0, 'maxResults': 50},
+        ).mock(
+            return_value=Response(
+                200, json={'isLast': True, 'maxResults': 50, 'startAt': 0, 'values': []}
+            )
         )
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock search endpoint (empty results for initial state)
-        mock_search_empty_results()
 
         # Mock search for ENG-8 (newly created work item)
         # Use the full work item fixture so follow-up edit flows have editmeta available.
         created_work_item = load_fixture('jira_work_items/ENG-8.json')
-        respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8(?:\?.*)?$'
-        ).mock(
-            return_value=Response(
-                200,
-                json=created_work_item,
-            )
+        mock_issue_detail_bundle(
+            created_work_item,
+            mock_jira_engineering_transitions,
         )
 
         # Mock approximate count endpoint
         mock_approximate_count_empty()
 
         # Mock POST /issue endpoint (create work item)
-        respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(
-            return_value=Response(
-                201,
-                json=build_created_issue('10000', 'ENG-8'),
-            )
-        )
+        mock_issue_creation('10000', 'ENG-8')
 
         yield
 
@@ -2157,47 +2220,19 @@ async def mock_jira_api_with_new_work_item(
 
 @pytest.fixture
 async def mock_jira_api_with_clone_work_item(
-    mock_jira_server_info,
     mock_jira_projects,
     mock_jira_issue_types,
-    mock_jira_support_issue_types,
-    mock_jira_statuses,
-    mock_jira_support_statuses,
-    mock_support_transitions_data,
-    mock_support_createmeta_fields,
-    mock_jira_myself,
     mock_jira_search_with_results,
     mock_jira_users,
+    mock_support_common_mocks_args,
 ):
     async with respx.mock:
-        setup_common_mocks(
-            mock_jira_server_info,
-            mock_jira_myself,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_statuses,
-            mock_jira_support_issue_types,
-            mock_jira_support_statuses,
-            mock_support_transitions_data,
-            mock_support_createmeta_fields,
-        )
+        setup_common_mocks(**mock_support_common_mocks_args)
         mock_assignable_users(mock_jira_users)
         mock_project_endpoint('ENG', mock_jira_projects, mock_jira_issue_types)
 
-        original_work_item = copy.deepcopy(
-            next(
-                issue
-                for issue in mock_jira_search_with_results['issues']
-                if issue['key'] == 'ENG-3'
-            )
-        )
-        cloned_work_item = copy.deepcopy(
-            next(
-                issue
-                for issue in mock_jira_search_with_results['issues']
-                if issue['key'] == 'ENG-8'
-            )
-        )
+        original_work_item = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        cloned_work_item = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-8')
 
         original_work_item['fields']['description'] = {
             'type': 'doc',
@@ -2252,61 +2287,27 @@ async def mock_jira_api_with_clone_work_item(
         )
 
         # Mock POST /issue endpoint (create cloned work item)
-        respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(
-            return_value=Response(
-                201,
-                json=build_created_issue('10002', 'ENG-9'),
-            )
-        )
+        mock_issue_creation('10002', 'ENG-9')
 
         yield
 
 
 @pytest.fixture
 async def mock_jira_api_with_related_work_item_link(
-    mock_jira_server_info,
-    mock_jira_myself,
-    mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
     mock_jira_work_item_link_types,
-    mock_jira_issue_types,
     mock_jira_engineering_transitions,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
-    mock_engineering_createmeta_fields,
+    mock_search_results_agile_context_args,
+    mock_eng_filtered_project_setup_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
-
-        # Mock Agile API endpoints used by sprint picker workers
-        mock_agile_boards(mock_jira_engineering_agile_boards, project_key='ENG')
-        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=1)
-        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=2)
-        # Fallback matchers for agile requests where query params differ in order/shape
-        respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/agile/1\.0/board\?.*'
-        ).mock(return_value=Response(200, json=mock_jira_engineering_agile_boards))
-        respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/agile/1\.0/board/1/sprint\?.*'
-        ).mock(return_value=Response(200, json=mock_jira_engineering_agile_sprints))
-        respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/agile/1\.0/board/2/sprint\?.*'
-        ).mock(return_value=Response(200, json=mock_jira_engineering_agile_sprints))
+        mock_search_results_agile_context(**mock_search_results_agile_context_args)
+        search_results = mock_search_results_agile_context_args['mock_jira_search_with_results']
 
         # Mock GET work item endpoint with updated issuelinks field for ENG-3
         # This MUST be registered BEFORE the general loop below to take priority
         # The application uses 'issuelinks' as the field name in the query
-        eng_3_with_new_link = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
-        eng_8_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-8')
+        eng_3_with_new_link = get_issue_by_key(search_results['issues'], 'ENG-3')
+        eng_8_issue = get_issue_by_key(search_results['issues'], 'ENG-8')
         blocks_type = copy.deepcopy(mock_jira_work_item_link_types['issueLinkTypes'][0])
         eng_3_with_new_link['fields']['issuelinks'].append(
             {
@@ -2336,65 +2337,12 @@ async def mock_jira_api_with_related_work_item_link(
             )
         )
 
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=issue))
-                # Mock remote links endpoint
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-                # Mock status transitions endpoint
-                transitions_data = mock_jira_engineering_transitions
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=transitions_data))
-
-        # Mock projects, issue types, and statuses
-        mock_projects_search(mock_jira_projects)
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        respx.get(f'https://example.atlassian.acme.net/rest/api/3/project/{project_key}').mock(
-            return_value=Response(
-                200,
-                json=build_project_detail(
-                    mock_jira_projects['values'][0],
-                    [
-                        issue_type
-                        for issue_type in mock_jira_issue_types
-                        if issue_type['id'] in {'10008', '10002'}
-                    ],
-                ),
-            )
+        mock_search_results_issue_details(
+            search_results,
+            mock_jira_engineering_transitions,
         )
 
-        mock_issue_types([])
-        mock_statuses([])
-
-        # Mock assignable users endpoint
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock user assignable multi project search endpoint
-        respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_eng_filtered_project_setup(**mock_eng_filtered_project_setup_args)
 
         # Mock work item link creation endpoint
         # This endpoint returns nothing (201 Created with empty body)
@@ -2429,20 +2377,13 @@ async def mock_jira_api_with_web_link_creation(
     mock_jira_engineering_agile_boards,
     mock_jira_engineering_agile_sprints,
     mock_engineering_createmeta_fields,
+    mock_jira_fields,
+    mock_jira_fields_search,
+    mock_search_results_base_with_fields_args,
+    mock_eng_filtered_project_setup_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
-        )
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+        mock_search_results_base(**mock_search_results_base_with_fields_args)
 
         # Mock GET remote links endpoint for ENG-3
         # Use side_effect to return different values on first and subsequent calls:
@@ -2481,80 +2422,20 @@ async def mock_jira_api_with_web_link_creation(
                 },
             ]
 
-            # Use side_effect to return different responses on subsequent calls
-            respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/remotelink').mock(
-                side_effect=[
-                    Response(200, json=initial_links),
-                    Response(200, json=updated_links),
-                ]
-            )
-
-        # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                # Skip ENG-3 as we've already mocked remotelink above
-                if issue_key != 'ENG-3':
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(return_value=Response(200, json=issue))
-                    # Mock remote links endpoint
-                    remote_links = issue.get('fields', {}).get('remotelink', [])
-                    respx.get(
-                        f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                    ).mock(return_value=Response(200, json=remote_links))
-                else:
-                    # For ENG-3, mock the GET issue endpoint
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(return_value=Response(200, json=issue))
-                # Mock status transitions endpoint
-                transitions_data = mock_jira_engineering_transitions
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=transitions_data))
-
-        # Mock projects, issue types, and statuses
-        mock_projects_search(mock_jira_projects)
-
-        # Mock get single project endpoint
-        project_key = mock_jira_projects['values'][0]['key']
-        respx.get(f'https://example.atlassian.acme.net/rest/api/3/project/{project_key}').mock(
-            return_value=Response(
-                200,
-                json=build_project_detail(
-                    mock_jira_projects['values'][0],
-                    [
-                        issue_type
-                        for issue_type in mock_jira_issue_types
-                        if issue_type['id'] in {'10008', '10002'}
-                    ],
-                ),
-            )
+        mock_search_results_issue_details(
+            mock_jira_search_with_results,
+            mock_jira_engineering_transitions,
+            overrides={
+                'ENG-3': {
+                    'remote_links_side_effect': [
+                        Response(200, json=initial_links),
+                        Response(200, json=updated_links),
+                    ]
+                }
+            },
         )
 
-        mock_issue_types([])
-        mock_statuses([])
-
-        # Mock assignable users endpoints
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock user assignable multi project search endpoint
-        respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_eng_filtered_project_setup(**mock_eng_filtered_project_setup_args)
 
         # Mock web link creation endpoint
         respx.post('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/remotelink').mock(
@@ -2566,32 +2447,14 @@ async def mock_jira_api_with_web_link_creation(
 
 @pytest.fixture
 async def mock_jira_api_with_comment_creation(
-    mock_jira_server_info,
-    mock_jira_myself,
-    mock_jira_search_with_results,
-    mock_jira_projects,
-    mock_jira_users,
-    mock_jira_work_item_link_types,
-    mock_project_issue_types,
     mock_jira_initial_comment,
     mock_jira_new_comment,
-    mock_jira_engineering_agile_boards,
-    mock_jira_engineering_agile_sprints,
-    mock_engineering_createmeta_fields,
+    mock_search_results_agile_context_args,
+    mock_eng_creation_project_setup_args,
 ):
     async with respx.mock:
-        # Mock server info and myself endpoints
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-
-        # Mock search endpoint with results
-        mock_search_with_results(mock_jira_search_with_results)
-        mock_agile_endpoints_for_example_project(
-            mock_jira_engineering_agile_boards, mock_jira_engineering_agile_sprints
-        )
-
-        # Mock approximate count endpoint
-        mock_approximate_count(len(mock_jira_search_with_results.get('issues', [])))
+        mock_search_results_agile_context(**mock_search_results_agile_context_args)
+        search_results = mock_search_results_agile_context_args['mock_jira_search_with_results']
 
         # TODO: (vkhitrin) revisit this comment.
         # Mock GET comments endpoint for ENG-3
@@ -2635,19 +2498,13 @@ async def mock_jira_api_with_comment_creation(
         ).mock(side_effect=create_comment_response)
 
         # Mock get specific work items for each issue in the search results
-        for issue in mock_jira_search_with_results.get('issues', []):
+        for issue in search_results.get('issues', []):
             issue_key = issue.get('key')
             if issue_key:
                 if issue_key != 'ENG-3':
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                    ).mock(return_value=Response(200, json=issue))
-                    # Mock comments endpoint with paginated structure
-                    comments = issue.get('fields', {}).get('comment', {}).get('comments', [])
-                    respx.get(
-                        url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}/comment.*'
-                    ).mock(
-                        return_value=Response(200, json=build_comments_page(issue_key, comments))
+                    mock_issue_detail_bundle(
+                        issue,
+                        build_standard_transitions(),
                     )
                 else:
                     respx.get(
@@ -2659,72 +2516,11 @@ async def mock_jira_api_with_comment_creation(
                         f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
                     ).mock(return_value=Response(200, json=remote_links))
                 # Mock status transitions endpoint
-                transitions_data = build_transitions_payload(
-                    [
-                        {
-                            'id': '11',
-                            'name': 'To Do',
-                            'to': {
-                                'id': '10000',
-                                'name': 'To Do',
-                                'description': 'Work waiting to be started',
-                                'statusCategory': {'key': 'new', 'colorName': 'blue-gray'},
-                            },
-                        },
-                        {
-                            'id': '21',
-                            'name': 'In Progress',
-                            'to': {
-                                'id': '10001',
-                                'name': 'In Progress',
-                                'description': 'Work is being actively worked on',
-                                'statusCategory': {
-                                    'key': 'indeterminate',
-                                    'colorName': 'yellow',
-                                },
-                            },
-                        },
-                        {
-                            'id': '31',
-                            'name': 'Done',
-                            'to': {
-                                'id': '10002',
-                                'name': 'Done',
-                                'description': 'Work has been completed',
-                                'statusCategory': {'key': 'done', 'colorName': 'green'},
-                            },
-                        },
-                    ]
-                )
                 respx.get(
                     f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=transitions_data))
+                ).mock(return_value=Response(200, json=build_standard_transitions()))
 
-        # Mock projects endpoint
-        mock_projects_search(mock_jira_projects)
-        mock_project_endpoint('ENG', mock_jira_projects, mock_project_issue_types)
-        mock_issue_types([])
-        mock_statuses([])
-
-        # Mock assignable users endpoints
-        mock_assignable_users_single_project(mock_jira_users)
-        mock_assignable_users(mock_jira_users)
-
-        # Mock user assignable multi project search endpoint
-        respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock create metadata endpoint
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_eng_creation_project_setup(**mock_eng_creation_project_setup_args)
 
         yield {'comment_create_route': comment_create_route}
 
@@ -2742,6 +2538,7 @@ async def mock_jira_api_with_subtask_creation(
     mock_jira_engineering_agile_boards,
     mock_jira_engineering_agile_sprints,
     mock_engineering_createmeta_fields,
+    mock_subtask_creation_metadata_args,
 ):
     """Mock Jira API for subtask creation testing.
 
@@ -2830,29 +2627,20 @@ async def mock_jira_api_with_subtask_creation(
         )
 
         # Mock approximate count
-        def count_handler(request):
-            body = json.loads(request.content)
-            jql = body.get('jql', '')
+        def count_for_jql(jql: str) -> int | None:
             if 'parent=ENG-4' in jql:
                 if search_call_count[0] <= 1:
-                    return Response(200, json=build_count_results(len(initial_subtasks)))
-                else:
-                    return Response(200, json=build_count_results(len(initial_subtasks) + 1))
-            return Response(
-                200, json=build_count_results(len(mock_jira_search_with_results.get('issues', [])))
-            )
+                    return len(initial_subtasks)
+                return len(initial_subtasks) + 1
+            return None
 
-        respx.post('https://example.atlassian.acme.net/rest/api/3/search/approximate-count').mock(
-            side_effect=count_handler
+        mock_dynamic_approximate_count(
+            default_count=len(mock_jira_search_with_results.get('issues', [])),
+            count_for_jql=count_for_jql,
         )
 
         # Mock POST /issue endpoint (for creating the subtask)
-        respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(
-            return_value=Response(
-                201,
-                json=build_created_issue('94272', 'ENG-7'),
-            )
-        )
+        mock_issue_creation('94272', 'ENG-7')
 
         # Mock GET for newly created subtask
         respx.get('https://example.atlassian.acme.net/rest/api/3/issue/ENG-7').mock(
@@ -2865,61 +2653,20 @@ async def mock_jira_api_with_subtask_creation(
             return_value=Response(200, json=mock_jira_engineering_transitions)
         )
 
-        # Mock get specific work items
-        for issue in mock_jira_search_with_results.get('issues', []):
-            issue_key = issue.get('key')
-            if issue_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{issue_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=issue))
-                remote_links = issue.get('fields', {}).get('remotelink', [])
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/remotelink'
-                ).mock(return_value=Response(200, json=remote_links))
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{issue_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_jira_engineering_transitions))
+        mock_search_results_issue_details(
+            mock_jira_search_with_results,
+            mock_jira_engineering_transitions,
+        )
 
         # Mock get individual subtasks
         for subtask in initial_subtasks:
-            subtask_key = subtask.get('key')
-            if subtask_key:
-                respx.get(
-                    url__regex=rf'https://example\.atlassian\.acme\.net/rest/api/3/issue/{subtask_key}(?:\?.*)?$'
-                ).mock(return_value=Response(200, json=subtask))
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{subtask_key}/remotelink'
-                ).mock(return_value=Response(200, json=[]))
-                respx.get(
-                    f'https://example.atlassian.acme.net/rest/api/3/issue/{subtask_key}/transitions'
-                ).mock(return_value=Response(200, json=mock_jira_engineering_transitions))
+            mock_issue_detail_bundle(
+                subtask,
+                mock_jira_engineering_transitions,
+                remote_links_response=[],
+            )
 
-        # Mock projects endpoint
-        mock_projects_search(mock_jira_projects)
-        mock_project_endpoint('ENG', mock_jira_projects, mock_project_issue_types)
-
-        # Mock issue types and statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=[])
-        )
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=[])
-        )
-
-        # Mock assignable users endpoints
-        mock_assignable_users(mock_jira_users)
-        mock_assignable_users_single_project(mock_jira_users)
-
-        # Mock create metadata endpoint (for Sub-task type)
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock work item link types endpoint
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
-            return_value=Response(200, json=mock_jira_work_item_link_types)
-        )
+        mock_subtask_creation_metadata(**mock_subtask_creation_metadata_args)
 
         yield
 
@@ -2938,48 +2685,19 @@ async def mock_jira_api_with_sprints(
 ):
     """Mock Jira API with sprint selection enabled."""
     async with respx.mock:
-        mock_server_info(mock_jira_server_info)
-        mock_myself(mock_jira_myself)
-        mock_projects_search(mock_jira_projects)
-        mock_project_endpoint('ENG', mock_jira_projects, mock_jira_issue_types)
-
-        # Mock users assignable to project
-        respx.get(
-            'https://example.atlassian.acme.net/rest/api/3/user/assignable/multiProjectSearch'
-        ).mock(return_value=Response(200, json=mock_jira_users))
-
-        # Mock Agile API endpoints for sprints
-        mock_agile_boards(mock_jira_engineering_agile_boards, project_key='ENG')
-        # Mock sprints for board 1
-        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=1)
-        # Mock sprints for board 2 (same sprints for simplicity)
-        mock_agile_sprints(mock_jira_engineering_agile_sprints, board_id=2)
-
-        # Mock create metadata endpoint with sprint field
-        mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
-
-        # Mock statuses
-        respx.get('https://example.atlassian.acme.net/rest/api/3/status').mock(
-            return_value=Response(200, json=mock_jira_statuses)
+        mock_eng_new_work_item_setup(
+            mock_jira_server_info,
+            mock_jira_myself,
+            mock_jira_projects,
+            mock_jira_issue_types,
+            mock_jira_statuses,
+            mock_jira_users,
+            mock_engineering_createmeta_fields,
+            mock_jira_engineering_agile_boards=mock_jira_engineering_agile_boards,
+            mock_jira_engineering_agile_sprints=mock_jira_engineering_agile_sprints,
         )
-
-        # Mock issue types
-        respx.get('https://example.atlassian.acme.net/rest/api/3/issuetype').mock(
-            return_value=Response(200, json=mock_jira_issue_types)
-        )
-
-        # Mock JQL validation endpoint
-        mock_jql_validation()
-
-        # Mock search endpoint (empty results for initial state)
-        mock_search_empty_results()
 
         # Mock issue creation endpoint
-        respx.post('https://example.atlassian.acme.net/rest/api/3/issue').mock(
-            return_value=Response(
-                201,
-                json=build_created_issue('10001', 'ENG-8'),
-            )
-        )
+        mock_issue_creation('10001', 'ENG-8')
 
         yield

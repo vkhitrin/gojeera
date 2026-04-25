@@ -1,4 +1,4 @@
-from gojeera.api.api import JiraAPI
+from gojeera.internal.jira.api import JiraAPI
 
 
 def test_build_payload_to_add_comment_uses_normal_text_conversion():

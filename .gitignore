@@ -77,3 +77,9 @@ venv.bak/
 
 # pytest-textual-snapshot
 snapshot_report.html
+
+# pyinstrument
+.pyinstrument/
+
+# pytest profiler
+prof/

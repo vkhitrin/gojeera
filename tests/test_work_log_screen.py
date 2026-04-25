@@ -1,7 +1,9 @@
 import asyncio
 
 from gojeera.app import JiraApp
-from gojeera.components.work_log_screen import LogWorkScreen
+from gojeera.components.screens.work_log_screen import LogWorkScreen
+
+from .test_helpers import wait_until
 
 
 async def open_log_work_screen_empty(pilot):
@@ -23,7 +25,7 @@ async def open_log_work_screen_with_valid_fields(pilot):
     assert isinstance(screen, LogWorkScreen)
 
     screen.time_spent_input.value = '2h'
-    await asyncio.sleep(0.1)
+    await wait_until(lambda: not screen.save_button.disabled, timeout=2.0)
 
     assert not screen.save_button.disabled, 'Save button should be enabled with valid time spent'
     assert screen.time_spent_input.value == '2h', (

@@ -1,22 +1,13 @@
 import asyncio
 from pathlib import Path
 
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.components.screens.new_attachment_screen import AddAttachmentScreen
 
-from gojeera.app import JiraApp
-from gojeera.components.new_attachment_screen import AddAttachmentScreen
-
-from .test_helpers import load_work_item_from_search
+from .test_helpers import assert_snapshot_matches, focus_work_item_tab
 
 
 async def open_add_attachment_screen(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=1)
 
     await pilot.press('ctrl+n')
     await asyncio.sleep(0.5)
@@ -51,19 +42,17 @@ async def open_add_attachment_screen_with_file_selected(pilot):
     )
 
 
+OPEN = open_add_attachment_screen
+OPEN_SELECTED = open_add_attachment_screen_with_file_selected
+
+
 class TestNewAttachmentScreen:
     def test_new_attachment_screen_initial_state(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_add_attachment_screen)
+        assert_snapshot_matches(snap_compare, mock_configuration, mock_user_info, OPEN)
 
     def test_new_attachment_screen_file_selected(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=open_add_attachment_screen_with_file_selected,
-        )
+        assert_snapshot_matches(snap_compare, mock_configuration, mock_user_info, OPEN_SELECTED)

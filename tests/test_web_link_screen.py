@@ -1,29 +1,14 @@
 import asyncio
 
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.components.screens.web_link_screen import RemoteLinkScreen
+from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
 
-from gojeera.app import JiraApp
-from gojeera.components.web_link_screen import RemoteLinkScreen
-from gojeera.components.work_item_web_links import WorkItemRemoteLinksWidget
-
-from .test_helpers import load_work_item_from_search
+from .test_helpers import focus_work_item_tab, with_snapshot_assertion
 
 
 async def open_add_web_link_screen(pilot):
     """Navigate to work item and open Add Web Link screen."""
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=4)
 
     web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
     web_links_widget.focus()
@@ -76,26 +61,14 @@ async def fill_web_link_fields_and_verify_save_enabled(pilot):
 
 async def open_edit_web_link_screen(pilot):
     """Navigate to work item, select a web link, and open Edit Web Link screen."""
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=4)
 
     web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
-    if table := web_links_widget.data_table:
-        table.focus()
+    if table := web_links_widget.record_list:
+        table.select_index(0, scroll_into_view=True, focus=True)
         await asyncio.sleep(0.2)
 
-        await pilot.press('e')
+        await web_links_widget.action_edit_remote_link()
         await asyncio.sleep(0.5)
 
         screen = pilot.app.screen
@@ -118,13 +91,8 @@ async def open_edit_web_link_screen(pilot):
 class TestWebLinkScreen:
     """Snapshot tests to verify RemoteLinkScreen appearance in add and edit modes."""
 
-    def test_web_link_screen_add_mode_initial_state(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
+    @with_snapshot_assertion(open_add_web_link_screen)
+    def test_web_link_screen_add_mode_initial_state(self):
         """Snapshot: Add Web Link screen with empty fields.
 
         Verifies:
@@ -133,16 +101,9 @@ class TestWebLinkScreen:
         - Title field empty with placeholder
         - Save button disabled (no fields filled yet)
         """
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_add_web_link_screen)
 
-    def test_web_link_screen_add_mode_with_filled_fields(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
+    @with_snapshot_assertion(fill_web_link_fields_and_verify_save_enabled)
+    def test_web_link_screen_add_mode_with_filled_fields(self):
         """Snapshot: Add Web Link screen with all required fields filled.
 
         Verifies:
@@ -150,20 +111,9 @@ class TestWebLinkScreen:
         - Title entered: Example Documentation
         - Save button becomes enabled after filling both fields
         """
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=fill_web_link_fields_and_verify_save_enabled,
-        )
 
-    def test_web_link_screen_edit_mode_with_existing_link(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
+    @with_snapshot_assertion(open_edit_web_link_screen)
+    def test_web_link_screen_edit_mode_with_existing_link(self):
         """Snapshot: Edit Web Link screen with existing link data pre-filled.
 
         Verifies:
@@ -172,9 +122,3 @@ class TestWebLinkScreen:
         - Title field pre-filled from existing link
         - Save button enabled (fields already have valid data)
         """
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=open_edit_web_link_screen,
-        )

@@ -3,11 +3,15 @@ import asyncio
 from textual.widgets import Button, Input
 from textual.widgets._tabbed_content import ContentTabs
 
-from gojeera.app import JiraApp
-from gojeera.components import edit_work_item_info_screen as edit_work_item_info_screen_module
-from gojeera.components.edit_work_item_info_screen import EditWorkItemInfoScreen
+from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
+from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
 
-from .test_helpers import load_work_item_from_search
+from .test_helpers import (
+    assert_snapshot_matches,
+    load_work_item_from_search,
+    stage_clipboard_upload,
+    with_snapshot_assertion,
+)
 
 
 async def open_work_item_and_edit(pilot):
@@ -47,14 +51,7 @@ async def open_edit_screen_and_modify_fields(pilot):
 
 
 async def open_edit_screen_and_clear_summary(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-
-    await pilot.press('ctrl+e')
-    await asyncio.sleep(0.5)
+    await open_work_item_and_edit(pilot)
 
     screen = pilot.app.screen
     summary_input = screen.query_one('#edit-work-item-summary', Input)
@@ -81,27 +78,14 @@ async def paste_clipboard_attachment_into_edit_work_item(pilot):
 
 
 class TestEditWorkItemInfoScreen:
-    def test_edit_work_item_info_screen_initial_state(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_work_item_and_edit)
+    @with_snapshot_assertion(open_work_item_and_edit)
+    def test_edit_work_item_info_screen_initial_state(self): ...
 
-    def test_edit_work_item_info_screen_fields_modified(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app, terminal_size=(120, 40), run_before=open_edit_screen_and_modify_fields
-        )
+    @with_snapshot_assertion(open_edit_screen_and_modify_fields)
+    def test_edit_work_item_info_screen_fields_modified(self): ...
 
-    def test_edit_work_item_info_screen_empty_summary(
-        self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app, terminal_size=(120, 40), run_before=open_edit_screen_and_clear_summary
-        )
+    @with_snapshot_assertion(open_edit_screen_and_clear_summary)
+    def test_edit_work_item_info_screen_empty_summary(self): ...
 
     def test_edit_work_item_info_screen_with_clipboard_attachment(
         self,
@@ -112,15 +96,10 @@ class TestEditWorkItemInfoScreen:
         mock_user_info,
         staged_upload_file,
     ):
-        monkeypatch.setattr(
-            edit_work_item_info_screen_module,
-            'stage_clipboard_attachments',
-            lambda: [staged_upload_file],
-        )
-
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=paste_clipboard_attachment_into_edit_work_item,
+        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
+        assert_snapshot_matches(
+            snap_compare,
+            mock_configuration,
+            mock_user_info,
+            paste_clipboard_attachment_into_edit_work_item,
         )

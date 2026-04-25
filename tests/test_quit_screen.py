@@ -1,7 +1,7 @@
 import asyncio
 
 from gojeera.app import JiraApp
-from gojeera.components.quit_screen import QuitScreen
+from gojeera.components.screens.quit_screen import QuitScreen
 
 
 async def open_quit_screen(pilot):

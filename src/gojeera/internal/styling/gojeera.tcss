@@ -1,0 +1,1836 @@
+* {
+  scrollbar-size-vertical: 1;
+  scrollbar-background: $surface;
+  scrollbar-background-hover: $surface-lighten-1;
+  scrollbar-background-active: $surface-lighten-1;
+  scrollbar-color: $primary-darken-2;
+  scrollbar-color-hover: $primary;
+  scrollbar-color-active: $primary-lighten-1;
+}
+
+LoadingIndicator {
+  background: $background;
+  color: $accent;
+}
+
+#modal_footer LoadingIndicator {
+  background: $surface;
+  color: $accent;
+}
+
+ModalScreen {
+  background: $background 80%;
+}
+
+ModalScreen * {
+  scrollbar-background: $surface-lighten-2;
+  scrollbar-background-hover: $surface-lighten-3;
+  scrollbar-background-active: $surface-lighten-3;
+}
+
+ModalScreen ExtendedMarkdownParagraph > .gojeera-inline-code {
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+Footer {
+  background: $surface;
+}
+
+Footer FooterKey {
+  background: transparent;
+}
+
+Footer FooterKey > .footer-key--key {
+  color: $accent;
+  background: transparent;
+  text-style: bold;
+}
+
+Footer FooterKey > .footer-key--description {
+  color: $text-muted;
+  background: transparent;
+}
+
+#main-container {
+  height: auto;
+  padding: 1 1;
+}
+
+UnifiedSearchBar {
+  height: auto;
+  max-height: 1;
+  layout: grid;
+  grid-size: 7;
+  grid-columns: auto 3 1fr 1fr 1fr 1fr 8;
+  grid-gutter: 1;
+  height: auto;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: hidden hidden;
+}
+
+UnifiedSearchBar > Select#search-mode-selector {
+  column-span: 1;
+  width: 9;
+  min-width: 9;
+  margin: 0;
+}
+
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent {
+  background: $primary-muted;
+}
+
+UnifiedSearchBar
+  > Select#search-mode-selector
+  > SelectCurrent.-has-value
+  > Static#label {
+  color: $text-primary;
+  text-style: bold;
+  padding: 0 0 0 1;
+}
+
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent > Static#label {
+  color: $text-primary;
+  text-style: bold;
+  padding: 0 0 0 1;
+}
+
+UnifiedSearchBar > Select#search-mode-selector > SelectCurrent > .arrow {
+  color: $text-primary;
+  text-style: bold;
+}
+
+OptionList > .option-list--option-highlighted,
+AutoCompleteList > .option-list--option-highlighted {
+  background: $primary-muted;
+  color: $text-primary;
+}
+
+OptionList > .option-list--option:hover,
+AutoCompleteList > .option-list--option:hover {
+  background: $primary-muted;
+  color: $text-primary;
+}
+
+UnifiedSearchBar.mode-basic > Select#basic-project-selector {
+  column-span: 1;
+  width: 100%;
+}
+
+UnifiedSearchBar.mode-basic > Select#basic-assignee-selector {
+  column-span: 1;
+  width: 100%;
+}
+
+UnifiedSearchBar.mode-basic > Select#basic-type-selector {
+  column-span: 1;
+  width: 100%;
+}
+
+UnifiedSearchBar.mode-basic > Select#basic-status-selector {
+  column-span: 1;
+  width: 100%;
+}
+
+UnifiedSearchBar.mode-text > Input#unified-search-input,
+UnifiedSearchBar.mode-jql > Input#unified-search-input {
+  column-span: 4;
+  width: 100%;
+}
+
+UnifiedSearchBar > Button#unified-search-new-work-item-button {
+  width: 3;
+  min-width: 3;
+  padding: 0;
+}
+
+UnifiedSearchBar > Input#unified-search-input {
+  &.-invalid {
+    background: $error 40%;
+  }
+
+  &.-invalid > .input--placeholder {
+    color: $error-lighten-3;
+  }
+}
+
+JQLAutoComplete {
+  background: $surface;
+  border: none;
+  padding: 0;
+  max-height: 10;
+}
+
+JQLAutoComplete > AutoCompleteList {
+  background: $surface;
+  color: $text;
+  border: none;
+  padding: 0;
+  scrollbar-size-vertical: 1;
+}
+
+JQLAutoComplete > AutoCompleteList > .option-list--option {
+  background: $surface;
+  color: $text;
+  padding: 0 1;
+  height: 1;
+}
+
+JQLAutoComplete > AutoCompleteList > .option-list--option-highlighted {
+  text-style: bold;
+  padding: 0 1;
+}
+
+JQLAutoComplete > AutoCompleteList > .option-list--option:hover {
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button {
+  column-span: 1;
+  width: 100%;
+  min-width: 8;
+  margin: 0;
+  padding: 0;
+  background: $primary-muted;
+  color: $text-primary;
+  text-align: center;
+  content-align: center middle;
+}
+
+UnifiedSearchBar > Button > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button:hover {
+  background: $primary;
+  color: $text;
+}
+
+UnifiedSearchBar > Button:hover > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button:disabled {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+UnifiedSearchBar > Button:disabled > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button:disabled:hover {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+UnifiedSearchBar > Button:disabled:hover > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+UnifiedSearchBar > Button:focus {
+  background: $primary-muted;
+  color: $text-primary;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+UnifiedSearchBar > Button:focus > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
+#main-container > Horizontal {
+  height: 1fr;
+  margin-top: 0;
+}
+
+#three-split-layout {
+  height: 1fr;
+  width: 100%;
+  padding: 0;
+  padding-right: 0;
+}
+
+#three-split-layout.-search-inactive > #search-results-container {
+  display: none;
+}
+
+#three-split-layout.-search-inactive > #details-container {
+  width: 100%;
+}
+
+#search-results-container {
+  width: 25%;
+  border: none;
+  border-subtitle-align: center;
+  border-subtitle-style: bold;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  padding: 0;
+  padding-bottom: 0;
+  layout: vertical;
+  height: 1fr;
+}
+
+#details-container {
+  width: 75%;
+  height: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+#details-breadcrumb-row {
+  height: auto;
+  margin: 0;
+  padding: 0 0 0 1;
+}
+
+#details-work-item-summary {
+  padding: 0 1 1 0;
+  margin: 0;
+}
+
+#details-tabs-row {
+  height: 2;
+  margin: 0;
+  padding: 0 0 0 1;
+}
+
+#details-switch-loading-indicator {
+  width: auto;
+  height: 1;
+  margin: 0 1 0 0;
+  align: right middle;
+}
+
+#details-content-row {
+  height: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+#details-footer-row {
+  width: 100%;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  align: right middle;
+}
+
+#details-pending-changes-label {
+  width: auto;
+  height: 1;
+  margin: 0;
+  padding: 0 1;
+  color: $warning;
+  text-style: bold;
+  background: $warning 20%;
+  text-align: center;
+}
+
+#search-results-container > VerticalGroup {
+  padding: 0;
+  margin: 0;
+  height: 1fr;
+}
+
+#search-results-container > Center {
+  height: 1fr;
+}
+
+#search-results-container > VerticalGroup > * {
+  margin: 0;
+}
+
+#work-item-information-container {
+  width: 2fr;
+  border: none;
+  border-subtitle-align: left;
+  border-subtitle-style: bold;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  padding-left: 1;
+  padding-bottom: 0;
+}
+
+#work-item-information-switcher {
+  width: 100%;
+  height: 1fr;
+}
+
+#work-item-information-switcher > * {
+  width: 100%;
+  height: 1fr;
+}
+
+.work-item-tab-pane {
+  padding: 0;
+}
+
+#work-item-information-switcher > * > * {
+  width: 100%;
+  height: 1fr;
+}
+
+#work-item-fields-container {
+  width: 1fr;
+  height: 1fr;
+  border: none;
+  border-subtitle-align: left;
+  border-subtitle-style: bold;
+  margin-top: 0;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+#work-item-fields-container.pending-changes {
+  border: none;
+  border-subtitle-align: center;
+  border-subtitle-color: $warning;
+  border-subtitle-style: bold;
+}
+
+#main-container > #three-split-layout {
+  height: 1fr;
+  margin-top: 0;
+  padding-bottom: 0;
+}
+
+#unified-search-bar {
+  margin: 0 0 1 0;
+  padding: 0;
+}
+
+#main-container > HorizontalGroup {
+  margin: 0;
+  padding: 0;
+  height: auto;
+}
+
+#main-container > ItemGrid {
+  margin: 0;
+  height: auto;
+}
+
+#tabs-information {
+  width: 1fr;
+  height: 2;
+}
+
+#tabs-information > ContentTabs {
+  height: 2;
+}
+
+#tabs-information > ContentSwitcher {
+  display: none;
+  height: 0;
+}
+
+#work-items-page-footer {
+  width: 100%;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  color: $text-muted;
+  text-align: center;
+  background: transparent;
+}
+
+#work_item_search_results {
+  background: transparent;
+  height: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+.tab-content-container {
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.tab-scroll-surface {
+  width: 100%;
+  height: 1fr;
+  margin: 0;
+  padding: 0 0 2 0;
+  overflow-y: auto;
+  scrollbar-size-vertical: 1;
+}
+
+.tab-scroll-surface--persistent {
+  overflow-y: scroll;
+}
+
+.tab-table-content {
+  width: 100%;
+  height: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+.tab-content-container > #work_item_search_results {
+  height: 1fr;
+  margin: 0;
+  padding: 0;
+}
+
+.work-items-section-spacer {
+  height: 1;
+  background: transparent;
+}
+
+#work-item-fields-pending-changes-container {
+  width: 100%;
+  height: auto;
+  margin: 1 0 0 0;
+  padding: 0;
+  align: center middle;
+  dock: bottom;
+}
+
+#work-item-fields-pending-changes-indicator {
+  width: 100%;
+  height: 1;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  background: transparent;
+  border: none;
+}
+
+#work-item-fields-pending-changes-button {
+  width: 100%;
+  height: 1;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  color: $primary;
+  background: $primary-muted;
+  text-style: bold;
+  border: none;
+}
+
+#work-item-fields-form > StaticFieldsWidgets > .field-row-slot,
+#work-item-fields-form > DynamicFieldsWidgets > .field-row-slot,
+#work-item-fields-form > DateMetadata > .field-row-slot {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: auto;
+}
+
+#work-item-fields-form Horizontal {
+  height: auto;
+  width: 100%;
+  align: left middle;
+}
+
+#work-item-fields-form Horizontal > .field_label {
+  width: 20%;
+  min-width: 12;
+  max-width: 24;
+  height: auto;
+  margin-right: 1;
+  text-style: bold;
+}
+
+#work-item-fields-form Horizontal > .field_control {
+  width: 1fr;
+  min-width: 10;
+}
+
+#work-item-fields-form > DynamicFieldsWidgets .field_control {
+  border: none;
+}
+
+#work-item-fields-form > DynamicFieldsWidgets .field-control-input {
+  border: none;
+  padding: 0 0;
+  margin-right: 0;
+}
+
+#work-item-fields-form > DynamicFieldsWidgets .field-control-select {
+  margin-right: 0;
+}
+
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-select
+  > SelectCurrent {
+  border: none;
+  padding: 0 0;
+}
+
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-select
+  > SelectCurrent
+  > .arrow {
+  padding-right: 1;
+}
+
+#work-item-fields-form
+  > StaticFieldsWidgets
+  .field-control-select
+  > SelectCurrent {
+  border: none;
+  padding: 0 0;
+}
+
+#work-item-fields-form
+  > StaticFieldsWidgets
+  .field-control-select
+  > SelectCurrent
+  > .arrow {
+  padding-right: 1;
+}
+
+#work-item-fields-form > DynamicFieldsWidgets .field-control-tags {
+  border: none;
+  padding: 0 0;
+  margin-right: 0;
+}
+
+#work-item-fields-form > DynamicFieldsWidgets .field-control-tags > TagInput,
+#work-item-fields-form
+  > DynamicFieldsWidgets
+  .field-control-tags
+  > TagAutoComplete
+  > Input {
+  border: none;
+  padding: 0 0;
+}
+
+#work-item-fields-form Horizontal > WorkItemStatusSelectionInput,
+#work-item-fields-form Horizontal > UserSelectionInput,
+#work-item-fields-form Horizontal > SelectionWidget {
+  height: 1;
+}
+
+#time-tracking-container {
+  width: 100%;
+  height: auto;
+  padding: 0 2 0 0;
+  margin: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+WorkItemCreatedDateField ReadOnlyField,
+WorkItemUpdatedDateField ReadOnlyField,
+WorkItemResolutionDateField ReadOnlyField,
+WorkItemResolutionField ReadOnlyField,
+ProjectIDField ReadOnlyField,
+ReporterField ReadOnlyField,
+WorkItemSprintField ReadOnlyField,
+WorkItemKeyField ReadOnlyField,
+WorkItemTypeField ReadOnlyField {
+  border: none;
+  height: 1;
+  padding: 0 0;
+}
+
+WorkItemComponentsScreen {
+  align: center middle;
+  background: $background;
+}
+
+WorkItemComponentsScreen > SelectionList {
+  width: 60%;
+  height: 50%;
+  padding: 0 1;
+
+  & > TextArea {
+    margin-top: 1;
+    scrollbar-size-vertical: 1;
+  }
+
+  & > ItemGrid {
+    margin-top: 1;
+  }
+
+  background: transparent;
+  scrollbar-size-vertical: 1;
+}
+
+HelpScreen #modal_outer {
+  width: 90%;
+  max-width: 120;
+  height: 90%;
+  max-height: 50;
+}
+
+HelpScreen MarkdownViewer,
+HelpScreen ExtendedMarkdownViewer {
+  height: 1fr;
+  background: $surface;
+  padding: 0 1 1 1;
+  scrollbar-size-vertical: 1;
+  border: none;
+}
+
+CustomTitle {
+  layout: vertical;
+  height: auto;
+  align: center middle;
+}
+
+CustomTitle > Rule {
+  color: $primary;
+}
+
+CustomTitle > Rule.-horizontal {
+  height: 1;
+  margin: 0 0;
+  width: 1fr;
+  padding: 0 0;
+}
+
+QuitScreen #modal_outer {
+  width: 34;
+  max-width: 34;
+  height: auto;
+  max-height: 15;
+}
+
+QuitScreen #modal_message {
+  width: 100%;
+  padding: 0 1 1 1;
+}
+
+QuitScreen #modal_footer {
+  width: 100%;
+  padding: 0 1;
+}
+
+CommentScreen #modal_outer {
+  width: 70%;
+  max-width: 100;
+  height: 80%;
+  max-height: 50;
+}
+
+CommentScreen Input,
+CommentScreen TextArea,
+RemoteLinkScreen Input,
+AddWorkItemRelationshipScreen Input,
+EditWorkItemInfoScreen Input,
+EditWorkItemInfoScreen TextArea,
+AddWorkItemScreen Input,
+AddWorkItemScreen TextArea,
+AddAttachmentScreen Input,
+SaveAttachmentScreen Input,
+LogWorkScreen Input,
+LogWorkScreen TextArea,
+QuickNavigationScreen Input,
+ParentWorkItemScreen Input,
+CloneWorkItemScreen Input {
+  background: $surface-lighten-1;
+}
+
+CommentScreen #modal-form-scroll > *,
+EditWorkItemInfoScreen #modal-form-scroll > *,
+AddWorkItemScreen #modal-form-scroll > *,
+LogWorkScreen #modal-form-scroll > * {
+  margin-bottom: 0;
+}
+
+CommentScreen #modal-form-scroll {
+  padding: 0 2 1 2;
+}
+
+CommentScreen #comment-field-container {
+  height: auto;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.modal-footer-spaced {
+  margin-bottom: 1;
+}
+
+.modal-form {
+  width: 100%;
+  height: auto;
+  background: $surface;
+  padding: 0 1;
+  scrollbar-size-vertical: 1;
+}
+
+.modal-form > Vertical {
+  width: 100%;
+  height: auto;
+}
+
+.modal-form > Vertical > Label {
+  margin: 0;
+}
+
+.modal-form--fields > Vertical > Input,
+.modal-form--fields > Vertical > Select {
+  margin-bottom: 1;
+}
+
+.modal-action-button {
+  width: auto;
+  color: $text;
+}
+
+.modal-action-button > Static,
+.dialog-button > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.modal-action-button:hover > Static,
+.modal-action-button:focus > Static,
+.dialog-button:hover > Static,
+.dialog-button:focus > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.modal-action-button--confirm {
+  margin-right: 1;
+  background: $success-darken-2;
+  color: $text;
+}
+
+.modal-action-button--confirm:hover,
+.modal-action-button--confirm:focus {
+  background: $success;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.modal-action-button--danger {
+  background: $error-darken-1;
+  color: $text;
+}
+
+.modal-action-button--danger:hover,
+.modal-action-button--danger:focus {
+  background: $error-lighten-1;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.modal-action-button--browse {
+  margin-left: 1;
+  background: $accent-darken-3;
+  color: $text;
+}
+
+.modal-action-button--browse:hover,
+.modal-action-button--browse:focus {
+  background: $primary;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button {
+  width: auto;
+  color: $text;
+}
+
+.dialog-button--secondary {
+  margin-right: 1;
+  background: $primary-darken-2;
+  color: $text;
+}
+
+.dialog-button--secondary:hover,
+.dialog-button--secondary:focus {
+  background: $primary;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button--danger {
+  background: $error-darken-1;
+  color: $text;
+}
+
+.dialog-button--danger:hover,
+.dialog-button--danger:focus {
+  background: $error;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.dialog-button--danger-soft {
+  background: $error-darken-1;
+  color: $text;
+}
+
+.dialog-button--danger-soft:hover,
+.dialog-button--danger-soft:focus {
+  background: $error-lighten-1;
+  color: $text;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+RemoteLinkScreen #modal_outer {
+  width: 50%;
+  max-width: 70;
+  height: auto;
+  max-height: 15;
+}
+
+QuickNavigationScreen #modal_outer {
+  width: 45%;
+  min-width: 48;
+  max-width: 64;
+  height: auto;
+  max-height: 15;
+}
+
+ParentWorkItemScreen #modal_outer {
+  width: 45%;
+  min-width: 52;
+  max-width: 64;
+  height: auto;
+  max-height: 15;
+}
+
+ParentWorkItemScreen Select > SelectCurrent {
+  padding: 0;
+  margin: 0;
+}
+
+ParentWorkItemScreen Select > SelectCurrent > Static#label {
+  padding: 0;
+  margin: 0;
+}
+
+ParentWorkItemScreen Select > SelectCurrent > .arrow {
+  margin-right: 1;
+}
+
+ParentWorkItemScreen Select > SelectOverlay > OptionList > .option-list--option,
+ParentWorkItemScreen
+  Select
+  > SelectOverlay
+  > OptionList
+  > .option-list--option-highlighted {
+  padding: 0 0 0 0;
+  margin: 0;
+}
+
+#parent-work-item-button-apply {
+  min-width: 0;
+  margin: 0 1 0 0;
+  padding: 0 1;
+  text-align: center;
+  content-align: center middle;
+}
+
+#parent-work-item-button-cancel {
+  min-width: 0;
+  margin: 0;
+  padding: 0 1;
+  text-align: center;
+  content-align: center middle;
+}
+
+RemoteLinkNameInputWidget {
+  box_sizing: content-box;
+  height: 1;
+  width: 100%;
+  margin: 0 0;
+  padding: 0 1;
+  background: $background;
+}
+
+RemoteLinkURLInputWidget {
+  box_sizing: content-box;
+  height: 1;
+  width: 100%;
+  margin: 0 0;
+  padding: 0 1;
+  background: $background;
+}
+
+AddWorkItemRelationshipScreen #modal_outer {
+  width: 50%;
+  max-width: 70;
+  height: auto;
+  max-height: 15;
+}
+
+EditWorkItemInfoScreen #modal_outer {
+  width: 74%;
+  max-width: 110;
+  height: 80%;
+  max-height: 44;
+}
+
+EditWorkItemInfoScreen #modal_title {
+  padding: 1 1 0 1;
+}
+
+EditWorkItemInfoScreen #edit-work-item-body {
+  width: 100%;
+  height: 1fr;
+  min-height: 0;
+  padding: 0 1;
+}
+
+EditWorkItemInfoScreen #summary-field-container {
+  height: auto;
+  margin-top: 1;
+  margin-bottom: 0;
+}
+
+EditWorkItemInfoScreen #description-field-container {
+  height: 1fr;
+  min-height: 0;
+  margin-top: 1;
+  margin-bottom: 1;
+}
+
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TabbedContent,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TabPane {
+  height: 1fr;
+  min-height: 0;
+  max-height: 999;
+}
+
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea TextArea,
+EditWorkItemInfoScreen ExtendedADFMarkdownTextArea VerticalScroll {
+  height: 1fr;
+  min-height: 0;
+  max-height: 999;
+}
+
+EditWorkItemInfoScreen #modal_footer {
+  padding: 0 1;
+}
+
+AddWorkItemScreen #modal_outer {
+  width: 72%;
+  max-width: 120;
+  height: 8;
+  max-height: 90%;
+}
+
+AddWorkItemScreen #modal_title {
+  padding: 1 1 0 1;
+}
+
+AddWorkItemScreen #modal-form-scroll {
+  padding: 0 1 1 1;
+}
+
+AddWorkItemScreen StaticFieldsWidgets {
+  margin: 0;
+  padding: 0;
+  height: auto;
+}
+
+AddWorkItemScreen StaticFieldsWidgets > Vertical {
+  height: auto;
+  margin: 0;
+}
+
+AddWorkItemScreen #work-item-type-field-container,
+AddWorkItemScreen #reporter-field-container,
+AddWorkItemScreen #assignee-field-container,
+AddWorkItemScreen #sprint-field-container,
+AddWorkItemScreen #summary-field-container,
+AddWorkItemScreen #description-field-container,
+AddWorkItemScreen DynamicFieldsWidgets > * {
+  height: auto;
+  margin: 1 0 0 0;
+}
+
+AddWorkItemScreen DynamicFieldsWidgets {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+AddWorkItemScreen DynamicFieldsWidgets > DynamicFieldWrapper {
+  layout: vertical;
+  align: left top;
+  height: auto;
+  width: 100%;
+}
+
+AddWorkItemScreen DynamicFieldsWidgets > DynamicFieldWrapper > * {
+  width: 100%;
+  height: auto;
+}
+
+AddWorkItemScreen DynamicFieldsWidgets > DynamicFieldWrapper > Label {
+  padding-right: 0;
+}
+
+#additional_fields {
+  height: auto;
+  background: $surface;
+}
+
+#required-fields-tracker {
+  width: 100%;
+  text-align: center;
+  padding: 0 2;
+  height: 1;
+  margin-top: 1;
+  background: $surface-darken-2;
+  color: $text;
+  text-style: bold;
+}
+
+#required-fields-tracker.pending {
+  background: $warning-darken-2;
+  color: $text;
+  text-style: bold;
+}
+
+#required-fields-tracker.complete {
+  background: $success-darken-2;
+  color: $text;
+  text-style: bold;
+}
+
+ParentWorkItemScreen Select > SelectCurrent,
+AddWorkItemRelationshipScreen Select > SelectCurrent,
+UserMentionPickerScreen Select > SelectCurrent,
+DecisionPickerScreen Select > SelectCurrent,
+PanelPickerScreen Select > SelectCurrent {
+  background: $surface-lighten-1;
+}
+
+ParentWorkItemScreen Select > SelectOverlay,
+ParentWorkItemScreen Select > SelectOverlay > OptionList,
+AddWorkItemRelationshipScreen Select > SelectOverlay,
+UserMentionPickerScreen Select > SelectOverlay,
+DecisionPickerScreen Select > SelectOverlay,
+PanelPickerScreen Select > SelectOverlay {
+  background: $surface-lighten-1;
+}
+
+.surface-input-select > SelectCurrent {
+  background: $surface-lighten-1;
+}
+
+.surface-input-select > SelectOverlay,
+.surface-input-select > SelectOverlay > OptionList {
+  background: $surface-lighten-1;
+}
+
+.surface-input-select > SelectOverlay > OptionList > .option-list--option {
+  background: $surface-lighten-1;
+}
+
+.surface-input-tags,
+.surface-input-tags > TagAutoComplete,
+.surface-input-tags > TagAutoComplete > Input,
+.surface-input-tags > TagAutoComplete > AutoCompleteList,
+.surface-input-tags > TagInput {
+  background: $surface-lighten-1;
+}
+
+.surface-input-float {
+  box-sizing: content-box;
+  height: 1;
+  width: 20;
+  margin: 0 0;
+  padding: 0 1;
+  background: $surface-lighten-1;
+}
+
+.create-work-item-float-input {
+  width: 100%;
+}
+
+.surface-input-float.-invalid {
+  background: $error 40%;
+}
+
+ConfirmationScreen #modal_outer {
+  width: 50%;
+  max-width: 60;
+  height: auto;
+  max-height: 15;
+}
+
+AddAttachmentScreen #modal_outer,
+SaveAttachmentScreen #modal_outer,
+CloneWorkItemScreen #modal_outer {
+  width: 50%;
+  max-width: 70;
+  height: auto;
+  max-height: 25;
+}
+
+.modal-form--tight > * {
+  margin-bottom: 0;
+}
+
+.modal-form-section {
+  height: auto;
+  margin-top: 0;
+  margin-bottom: 1;
+}
+
+.modal-form-input-row {
+  width: 100%;
+  height: auto;
+  margin-bottom: 1;
+}
+
+.modal-form > Vertical > Label.modal-form-hint {
+  margin-top: 1;
+  margin-bottom: 0;
+  color: $text-muted;
+}
+
+.modal-form > Vertical > Label.modal-form-warning {
+  margin-top: 1;
+  margin-bottom: 0;
+  color: $warning;
+}
+
+AddAttachmentScreen Input,
+SaveAttachmentScreen Input {
+  width: 1fr;
+  height: auto;
+}
+
+ServerInfoScreen {
+  align: center middle;
+  background: $background;
+}
+
+ServerInfoScreen > VerticalScroll {
+  width: 60%;
+  height: 100%;
+  border: round $foreground;
+  padding: 0 1;
+  scrollbar-size-vertical: 1;
+}
+
+ServerInfoScreen > VerticalScroll > DataTable {
+  background: transparent;
+}
+
+ConfigFileScreen {
+  align: center middle;
+  background: $background;
+}
+
+ConfigFileScreen > Vertical {
+  width: 70%;
+  height: 100%;
+  border: round $foreground;
+  padding: 0 1;
+}
+
+ConfigFileScreen > Vertical > DataTable {
+  background: transparent;
+  height: 50%;
+  scrollbar-size-vertical: 1;
+  margin-top: 1;
+}
+
+DebugInfoScreen #modal_outer {
+  width: 90%;
+  max-width: 120;
+  height: 90%;
+  max-height: 40;
+}
+
+DebugInfoScreen #debug_tabs {
+  width: 100%;
+  height: 1fr;
+  background: $surface;
+}
+
+DebugInfoScreen #debug_tabs > ContentSwitcher {
+  background: $surface;
+  padding: 1 1;
+}
+
+DebugInfoScreen #debug_tabs VerticalScroll {
+  background: $surface;
+  scrollbar-size-vertical: 1;
+}
+
+DebugInfoScreen #modal_footer {
+  width: 100%;
+  height: auto;
+  padding: 1;
+  background: $surface;
+  text-align: center;
+  color: $text-muted;
+  text-style: dim;
+}
+
+DebugInfoScreen Markdown {
+  background: $surface;
+  margin: 0;
+  padding: 0;
+}
+
+DebugInfoScreen Markdown H3 {
+  color: $text;
+  text-style: bold underline;
+  margin-top: 1;
+}
+
+DebugInfoScreen Markdown Strong {
+  color: $text;
+  text-style: bold;
+}
+
+DebugInfoScreen Markdown Code {
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+DebugInfoScreen Markdown CodeBlock {
+  background: $surface-lighten-1;
+  margin: 1 0;
+  padding: 1;
+}
+
+ChildWorkItemCollapsible {
+  border: round $accent;
+  background: transparent;
+  padding-bottom: 0;
+
+  & > Contents {
+    padding: 1 0 0 3;
+  }
+}
+
+RelatedWorkItemCollapsible {
+  border: round $primary;
+  background: transparent;
+  padding: 0 0 0 0;
+
+  & > Contents {
+    padding: 1 0 0 3;
+  }
+}
+
+ListView {
+  background: $background;
+  padding: 0;
+  margin: 0;
+}
+
+ListView:focus {
+  background: $background;
+}
+
+ListView > ListItem {
+  background: $background;
+  padding: 0;
+  margin: 0;
+  height: auto;
+  min-height: 1;
+  max-height: 999;
+}
+
+ListView > ListItem:hover {
+  background: $background;
+}
+
+ListView > ListItem.-highlight {
+  background: $background;
+}
+
+ListView > ListItem:focus {
+  background: $background;
+}
+
+ListView > ListItem:focus-within {
+  background: $background;
+}
+
+.comment-item-inner {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.comment-header-row {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-author {
+  color: $foreground;
+  text-style: bold;
+  margin: 0;
+  padding: 0;
+  width: 1fr;
+}
+
+.comment-header {
+  color: $text-muted;
+  text-style: bold;
+  margin: 0;
+  padding: 0;
+  width: 1fr;
+}
+
+.comment-metadata {
+  height: auto;
+  width: 100%;
+  color: $text-muted;
+  text-style: dim;
+  margin: 0;
+  padding: 0;
+  border-bottom: solid $surface-lighten-1;
+}
+
+.comment-body {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-body Markdown {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-body Markdown > * {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.comment-body Link {
+  color: $accent;
+  text-style: underline;
+}
+
+.comment-body Link:focus {
+  background: $accent-darken-2;
+  text-style: bold underline;
+}
+
+.comment-error {
+  color: $warning;
+  text-style: italic;
+  margin: 0;
+}
+
+WorkItemRemoteLinkCollapsible {
+  border: round $accent;
+  background: transparent;
+  padding-bottom: 0;
+
+  & > Contents {
+    padding: 1 0 0 3;
+  }
+}
+
+JQLEditorScreen {
+  align: center middle;
+}
+
+JQLEditorScreen > Vertical {
+  width: 60%;
+  height: 70%;
+  border: round $foreground;
+  background: $background 70%;
+  padding: 0 1;
+}
+
+MarkdownFence {
+  background: $surface-lighten-1;
+}
+
+DataTableSearchInput {
+  border: solid $primary;
+  background: transparent;
+  padding: 0 1 0 1;
+  box_sizing: border-box;
+}
+
+LogWorkScreen #modal_outer {
+  width: 56%;
+  max-width: 96;
+  height: auto;
+  max-height: 50;
+}
+
+LogWorkScreen #modal-form-scroll {
+  height: auto;
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+  padding: 0 1 0 1;
+}
+
+LogWorkScreen #time-fields-grid {
+  grid-size: 2 1;
+  grid-columns: 50% 50%;
+  grid-gutter: 1;
+  height: auto;
+  margin-top: 0;
+  margin-bottom: 1;
+}
+
+LogWorkScreen #time-spent-container,
+LogWorkScreen #time-remaining-container {
+  height: auto;
+}
+
+LogWorkScreen #datetime-container,
+LogWorkScreen #description-container {
+  height: auto;
+  margin-top: 0;
+}
+
+LogWorkScreen #datetime-container {
+  margin-bottom: 0;
+}
+
+LogWorkScreen #description-container {
+  margin-bottom: 1;
+}
+
+LogWorkScreen #time-hint {
+  margin-top: 0;
+  margin-bottom: 1;
+}
+
+LogWorkScreen #modal_footer {
+  padding: 0 1;
+}
+
+TimeSpentInput,
+TimeRemainingInput {
+  width: 100%;
+  height: auto;
+}
+
+LogDateTimeInput {
+  width: 100%;
+  height: auto;
+}
+
+LogWorkScreen ExtendedADFMarkdownTextArea {
+  height: auto;
+  min-height: 10;
+  max-height: 25;
+}
+
+LogWorkScreen #work_description-tabs,
+LogWorkScreen #work_description-edit-tab,
+LogWorkScreen #work_description-preview-tab {
+  padding: 0 1;
+}
+
+LogWorkScreen #work_description-textarea,
+LogWorkScreen #work_description-preview-scroll,
+LogWorkScreen #work_description-markdown {
+  padding: 0;
+}
+
+FlagWorkItemScreen {
+  align: center middle;
+  background: $background;
+}
+
+FlagWorkItemScreen > Vertical {
+  width: 55%;
+  height: 40%;
+  border: round $foreground;
+  background: transparent;
+  padding: 1 1;
+  scrollbar-size-vertical: 1;
+
+  & > TextArea {
+    background: transparent;
+    border: round $primary;
+    height: 10;
+  }
+}
+
+WorkItemFlagField {
+  min-width: 10;
+  max-width: 10;
+  content-align: center middle;
+}
+
+SelectionsScreen {
+  align: center middle;
+  background: $background;
+}
+
+SelectionsScreen > SelectionList {
+  width: 60%;
+  height: 50%;
+  padding: 0 1;
+
+  & > TextArea {
+    margin-top: 1;
+    scrollbar-size-vertical: 1;
+  }
+
+  & > ItemGrid {
+    margin-top: 1;
+  }
+
+  border: round $primary-lighten-3;
+  background: transparent;
+}
+
+AddWorkItemScreen #sprint {
+  background: $surface-lighten-1;
+}
+
+AddWorkItemScreen #sprint LoadingIndicator,
+AddWorkItemScreen #sprint LoadingIndicator.-textual-loading-indicator {
+  background: $surface-lighten-1;
+  color: $accent;
+}
+
+MultiSelect {
+  border: none;
+  padding: 0 0;
+  height: auto;
+  min-height: 1;
+  width: 100%;
+  background: $background;
+  scrollbar-size-vertical: 1;
+
+  &.required {
+    border: none;
+  }
+
+  &:focus {
+    border: none;
+  }
+}
+
+MultiSelect > TagAutoComplete {
+  width: 100%;
+  max-height: 12;
+  height: auto;
+}
+
+MultiSelect > TagAutoComplete > Input {
+  width: 100%;
+}
+
+MultiSelect > Tag,
+WorkItemLabels > Tag {
+  background: transparent;
+  color: $text;
+}
+
+MultiSelect > ExtendedTag,
+WorkItemLabels > ExtendedTag {
+  background: transparent;
+  color: $text-primary;
+
+  & > .extended-tag--chip,
+  & > .extended-tag--close,
+  & > .extended-tag--close-hover {
+    background: $primary-muted;
+    color: $text-primary;
+  }
+
+  &:hover > .extended-tag--chip,
+  &:focus > .extended-tag--chip,
+  &:hover > .extended-tag--close,
+  &:focus > .extended-tag--close,
+  &:hover > .extended-tag--close-hover,
+  &:focus > .extended-tag--close-hover {
+    background: $primary-darken-2;
+  }
+}
+
+MultiSelect > TagInput {
+  width: auto;
+  min-width: 1fr;
+  background: $surface;
+}
+
+MultiSelect > TagInput.-hide-arrow {
+  color: $foreground;
+}
+
+MultiSelect > TagAutoComplete > AutoCompleteList {
+  max-height: 12;
+  height: auto;
+}
+
+WorkItemLabels {
+  border: none;
+  padding: 0 0;
+  height: auto;
+  min-height: 1;
+  max-height: 12;
+  background: $background;
+  scrollbar-size-vertical: 1;
+
+  &.required {
+    border: none;
+  }
+
+  &:focus {
+    border: none;
+  }
+}
+
+WorkItemLabels > TagAutoComplete {
+  max-height: 12;
+  height: auto;
+
+  & > AutoCompleteList {
+    max-height: 12;
+    height: auto;
+  }
+}
+
+Select {
+  border: none;
+}
+
+LazySelect {
+  border: none;
+}
+
+CloneWorkItemScreen Input {
+  width: 100%;
+  height: auto;
+}
+
+.field_label {
+  text-style: bold;
+}
+
+.pending_field_label {
+  color: $warning;
+  text-style: bold;
+}
+
+CommandPalette {
+  background: $background 60%;
+}
+
+CommandPalette > Vertical {
+  margin-top: 1;
+  width: 70vw;
+  max-height: 50vh;
+  padding: 0;
+}
+
+CommandPalette #--input {
+  border: none;
+  height: auto;
+  padding: 1 0;
+  margin: 0;
+  background: $panel;
+}
+
+CommandPalette #--input CommandInput {
+  height: 1;
+  padding: 0 1;
+  border: none;
+  margin: 0;
+  background: $panel;
+  color: $text;
+}
+
+CommandPalette #--input SearchIcon {
+  display: none;
+}
+
+CommandPalette #--input Label {
+  display: none;
+}
+
+CommandPalette #--input Button {
+  display: none;
+}
+
+CommandPalette CommandList {
+  border: none;
+  max-height: 40vh;
+  padding: 0;
+  margin: 0;
+}
+
+CommandPalette CommandList > .option-list--option {
+  padding: 0 1;
+  height: 1;
+  min-height: 1;
+  margin: 0;
+}
+
+CommandPalette CommandList > .option-list--option .command-palette--help-text {
+  display: none;
+}
+
+CommandPalette LoadingIndicator {
+  border: none;
+  margin: 0;
+  padding: 0;
+  color: $accent;
+}
+
+UserMentionPickerScreen #modal_outer,
+DecisionPickerScreen #modal_outer,
+PanelPickerScreen #modal_outer {
+  width: 42%;
+  max-width: 60;
+  height: auto;
+  max-height: 15;
+}

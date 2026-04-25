@@ -1,78 +1,46 @@
 import asyncio
 
-from textual.widgets import Button
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
 
-from gojeera.app import JiraApp, MainScreen
-from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
-from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
+from .test_helpers import (
+    accept_confirmation,
+    assert_main_screen,
+    assert_snapshot_matches,
+    create_related_work_item_link,
+    focus_work_item_tab,
+    prepare_related_work_items_widget,
+    with_snapshot_assertion_fixture,
+)
 
-from .test_helpers import load_work_item_from_search
+
+async def open_related_widget(pilot):
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=3)
+    return pilot.app.screen.query_one(RelatedWorkItemsWidget)
+
+
+async def prepare_related_widget(pilot):
+    return await prepare_related_work_items_widget(pilot)
 
 
 async def select_work_item_and_highlight_related_work_item(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
-
-    related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
-    related_widget.data_table.focus()
+    related_widget = await open_related_widget(pilot)
+    related_widget.record_list.focus()
     await asyncio.sleep(0.3)
 
 
 async def delete_issue_link_and_verify(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
-
-    related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
-
-    await asyncio.sleep(0.5)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.3)
-
+    related_widget = await prepare_related_widget(pilot)
     initial_count = related_widget.displayed_count
     assert initial_count > 0, f'Expected related work items, got {initial_count}'
 
-    table = related_widget.data_table
-    table.focus()
+    table = related_widget.record_list
+    table.select_index(0, scroll_into_view=True, focus=True)
     await asyncio.sleep(0.2)
 
     await related_widget.action_unlink_work_item()
     await asyncio.sleep(0.3)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, ConfirmationScreen), (
-        f'Expected ConfirmationScreen, got {type(screen)}'
-    )
-
-    screen.query_one('#confirmation-button-accept', Button).press()
-
-    await asyncio.sleep(1.0)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    main_screen = pilot.app.screen
-    assert isinstance(main_screen, MainScreen), (
-        f'Expected to return to MainScreen, got {type(main_screen)}'
-    )
+    await accept_confirmation(pilot, wait_after=0.5)
+    main_screen = assert_main_screen(pilot.app)
 
     related_widget = main_screen.query_one(RelatedWorkItemsWidget)
 
@@ -84,69 +52,12 @@ async def delete_issue_link_and_verify(pilot):
 
 
 async def create_issue_link_and_verify(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
-
-    related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
-
-    await asyncio.sleep(0.5)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.3)
-
+    related_widget = await prepare_related_widget(pilot)
     initial_count = related_widget.displayed_count
 
-    related_widget.focus()
-    await asyncio.sleep(0.2)
+    await create_related_work_item_link(pilot, related_widget=related_widget)
 
-    await related_widget.action_link_work_item()
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.8)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, AddWorkItemRelationshipScreen), (
-        f'Expected AddWorkItemRelationshipScreen, got {type(screen)}'
-    )
-
-    work_item_key_field = screen.linked_work_item_key
-    work_item_key_field.focus()
-    await asyncio.sleep(0.1)
-
-    await pilot.press(*'ENG-8')
-    await asyncio.sleep(0.3)
-
-    link_type_selector = screen.relationship_type
-    link_type_selector.value = '10000:outward'
-    await asyncio.sleep(0.3)
-
-    assert not screen.save_button.disabled, 'Save button should be enabled'
-
-    screen.save_button.press()
-
-    await asyncio.sleep(1.5)
-
-    assert not isinstance(pilot.app.screen, AddWorkItemRelationshipScreen), (
-        f'Expected to leave AddWorkItemRelationshipScreen, got {type(pilot.app.screen)}'
-    )
-
-    await asyncio.sleep(1.0)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    main_screen = pilot.app.screen
-    assert isinstance(main_screen, MainScreen), (
-        f'Expected to return to MainScreen, got {type(main_screen)}'
-    )
+    main_screen = assert_main_screen(pilot.app)
 
     related_widget = main_screen.query_one(RelatedWorkItemsWidget)
     final_count = related_widget.displayed_count
@@ -163,33 +74,22 @@ async def create_issue_link_and_verify(pilot):
     )
 
 
+HIGHLIGHT = select_work_item_and_highlight_related_work_item
+DELETE = delete_issue_link_and_verify
+CREATE = create_issue_link_and_verify
+
+
 class TestWorkItemRelatedWorkItems:
     def test_work_item_related_work_items_row_highlighted(
         self, snap_compare, mock_configuration, mock_jira_api_with_search_results, mock_user_info
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=select_work_item_and_highlight_related_work_item,
-        )
+        assert_snapshot_matches(snap_compare, mock_configuration, mock_user_info, HIGHLIGHT)
 
-    def test_delete_issue_link_and_verify_in_table(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_issue_link_deletion,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=delete_issue_link_and_verify)
+    @with_snapshot_assertion_fixture(DELETE, fixture_name='mock_jira_api_with_issue_link_deletion')
+    def test_delete_issue_link(self): ...
 
-    def test_create_issue_link_and_verify_in_table(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_related_work_item_link,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=create_issue_link_and_verify)
+    @with_snapshot_assertion_fixture(
+        CREATE,
+        fixture_name='mock_jira_api_with_related_work_item_link',
+    )
+    def test_create_issue_link(self): ...

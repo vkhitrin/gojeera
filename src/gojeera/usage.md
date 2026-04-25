@@ -66,6 +66,8 @@ gojeera always uses the `Extended + User Identity` scope set.
 
 The application requests the following oauth2 scopes:
 `read:jira-user`, `read:jira-work`, `write:jira-work`,
+`read:project:jira`, `read:board-scope:jira-software`,
+`read:sprint:jira-software`, `write:sprint:jira-software`,
 `manage:jira-data-provider`, `read:servicedesk-request`, `read:servicemanagement-insi
 ght-objects`, `offline_access`, `read:me`, `read:account`
 

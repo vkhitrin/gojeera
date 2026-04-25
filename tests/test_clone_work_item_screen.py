@@ -1,26 +1,16 @@
 import asyncio
 
 from gojeera.app import JiraApp
-from gojeera.components.clone_work_item_screen import CloneWorkItemScreen
+
+from .test_helpers import open_clone_work_item_screen as open_clone_work_item_screen_helper
 
 
-async def open_clone_work_item_screen(pilot):
-    work_item_key = 'ENG-3'
-    original_summary = 'Update documentation for merge approval process'
-
-    # NOTE: (vkhitrin) we directly "enter" the screen without navigating
-    #       the UI.
-    screen = CloneWorkItemScreen(work_item_key=work_item_key, original_summary=original_summary)
-    await pilot.app.push_screen(screen)
-    await asyncio.sleep(0.3)
-
-    assert isinstance(pilot.app.screen, CloneWorkItemScreen)
-    assert pilot.app.screen.work_item_key == work_item_key
-    assert pilot.app.screen.original_summary == original_summary
+async def open_clone_work_item_screen_snapshot(pilot):
+    await open_clone_work_item_screen_helper(pilot)
 
 
 async def open_and_clear_summary(pilot):
-    await open_clone_work_item_screen(pilot)
+    await open_clone_work_item_screen_helper(pilot)
 
     summary_input = pilot.app.screen.summary_input
     summary_input.value = ''
@@ -31,7 +21,7 @@ async def open_and_clear_summary(pilot):
 
 
 async def open_and_modify_summary(pilot):
-    await open_clone_work_item_screen(pilot)
+    await open_clone_work_item_screen_helper(pilot)
 
     summary_input = pilot.app.screen.summary_input
     summary_input.value = 'New custom summary for cloned work item'
@@ -40,29 +30,25 @@ async def open_and_modify_summary(pilot):
     assert not pilot.app.screen.clone_button.disabled
 
 
+def with_clone_work_item_snapshot(run_before):
+    def decorator(_):
+        def wrapper(self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info):
+            app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+            assert snap_compare(app, terminal_size=(120, 40), run_before=run_before)
+
+        return wrapper
+
+    return decorator
+
+
 class TestCloneWorkItemScreen:
     """Snapshot tests to verify clone work item screen display and interactions."""
 
-    def test_clone_work_item_screen_initial_state(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-        app = JiraApp(settings=config, user_info=mock_user_info)
+    @with_clone_work_item_snapshot(open_clone_work_item_screen_snapshot)
+    def test_clone_work_item_screen_initial_state(self): ...
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_clone_work_item_screen)
+    @with_clone_work_item_snapshot(open_and_clear_summary)
+    def test_clone_work_item_screen_with_empty_summary(self): ...
 
-    def test_clone_work_item_screen_with_empty_summary(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_and_clear_summary)
-
-    def test_clone_work_item_screen_with_modified_summary(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        config = mock_configuration
-        app = JiraApp(settings=config, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_and_modify_summary)
+    @with_clone_work_item_snapshot(open_and_modify_summary)
+    def test_clone_work_item_screen_with_modified_summary(self): ...

@@ -1,19 +1,20 @@
 import asyncio
 
-from gojeera.app import JiraApp
-from gojeera.components.quick_navigation_screen import QuickNavigationScreen
-from gojeera.components.work_item_comments import CommentsScrollView
-from gojeera.utils.urls import (
+from gojeera.components.screens.quick_navigation_screen import QuickNavigationScreen
+from gojeera.components.work_item.work_item_comments import CommentsScrollView
+from gojeera.utils.jira.reference import parse_work_item_reference
+from gojeera.utils.jira.urls import (
     extract_focused_comment_id,
     extract_focused_work_log_id,
     extract_work_item_key,
 )
-from gojeera.utils.work_item_reference import parse_work_item_reference
-from gojeera.widgets.gojeera_markdown import (
+from gojeera.widgets.markdown.gojeera_markdown import (
     build_markdown_link_style,
     get_markdown_link_tooltip,
     get_markdown_link_work_item_key,
 )
+
+from .test_helpers import with_snapshot_assertion
 
 
 async def open_quick_navigation_screen(pilot):
@@ -26,10 +27,15 @@ async def open_quick_navigation_screen(pilot):
     assert pilot.app.screen.open_button.disabled
 
 
-async def quick_navigation_load_valid_work_item(pilot):
+async def load_work_item_via_quick_navigation(
+    pilot,
+    *,
+    reference: str,
+    expected_key: str,
+):
     await open_quick_navigation_screen(pilot)
 
-    await pilot.press(*'ENG-1')
+    await pilot.press(*reference)
     await asyncio.sleep(0.2)
 
     await pilot.press('enter')
@@ -38,44 +44,35 @@ async def quick_navigation_load_valid_work_item(pilot):
     await pilot.app.workers.wait_for_complete()
     await asyncio.sleep(0.5)
 
-    main_screen = pilot.app.screen
-    assert main_screen.current_loaded_work_item_key == 'ENG-1'
+    main_screen = pilot.app
+    assert main_screen.current_loaded_work_item_key == expected_key
     assert main_screen.information_panel.work_item is not None
-    assert main_screen.information_panel.work_item.key == 'ENG-1'
+    assert main_screen.information_panel.work_item.key == expected_key
+    return main_screen
+
+
+async def quick_navigation_load_valid_work_item(pilot):
+    await load_work_item_via_quick_navigation(
+        pilot,
+        reference='ENG-1',
+        expected_key='ENG-1',
+    )
 
 
 async def quick_navigation_loads_work_item_from_url(pilot):
-    await open_quick_navigation_screen(pilot)
-
-    await pilot.press(*'https://example.atlassian.acme.net/browse/ENG-1')
-    await asyncio.sleep(0.2)
-
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    main_screen = pilot.app.screen
-    assert main_screen.current_loaded_work_item_key == 'ENG-1'
-    assert main_screen.information_panel.work_item is not None
-    assert main_screen.information_panel.work_item.key == 'ENG-1'
+    await load_work_item_via_quick_navigation(
+        pilot,
+        reference='https://example.atlassian.acme.net/browse/ENG-1',
+        expected_key='ENG-1',
+    )
 
 
 async def quick_navigation_loads_focused_comment_from_url(pilot):
-    await open_quick_navigation_screen(pilot)
-
-    await pilot.press(*'https://example.atlassian.acme.net/browse/ENG-3?focusedCommentId=231668')
-    await asyncio.sleep(0.2)
-
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    main_screen = pilot.app.screen
-    assert main_screen.current_loaded_work_item_key == 'ENG-3'
+    main_screen = await load_work_item_via_quick_navigation(
+        pilot,
+        reference='https://example.atlassian.acme.net/browse/ENG-3?focusedCommentId=231668',
+        expected_key='ENG-3',
+    )
     assert main_screen.tabs.active == 'tab-comments'
 
     comments_scroll = main_screen.query_one(CommentsScrollView)
@@ -124,55 +121,17 @@ class TestQuickNavigationScreen:
         assert get_markdown_link_work_item_key(browse_style) == 'ENG-1'
         assert get_markdown_link_tooltip(regular_style) is None
 
-    def test_quick_navigation_screen_initial_state(
-        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    @with_snapshot_assertion(open_quick_navigation_screen, terminal_size=(120, 40))
+    def test_quick_navigation_screen_initial_state(self): ...
 
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=open_quick_navigation_screen,
-        )
+    @with_snapshot_assertion(quick_navigation_load_valid_work_item, terminal_size=(120, 40))
+    def test_quick_navigation_loads_valid_work_item(self): ...
 
-    def test_quick_navigation_loads_valid_work_item(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=quick_navigation_load_valid_work_item,
-        )
+    @with_snapshot_assertion(quick_navigation_loads_work_item_from_url, terminal_size=(120, 40))
+    def test_quick_navigation_loads_work_item_from_url(self): ...
 
-    def test_quick_navigation_loads_work_item_from_url(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=quick_navigation_loads_work_item_from_url,
-        )
-
-    def test_quick_navigation_loads_focused_comment_from_url(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=quick_navigation_loads_focused_comment_from_url,
-        )
+    @with_snapshot_assertion(
+        quick_navigation_loads_focused_comment_from_url,
+        terminal_size=(120, 40),
+    )
+    def test_quick_navigation_loads_focused_comment_from_url(self): ...

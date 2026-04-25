@@ -148,32 +148,41 @@ The conversion from ADF to Markdown follows these steps (in order):
    - ordered attachment fallback from the loaded issue attachments for unresolved
      inline/media nodes
    Jira attachment links render as native attachment chips/actions in the TUI
-3. **`fix_adf_text_with_marks()`** - Fix spacing issues in `strong`/`em` marks
-4. **`fix_codeblock_in_list()`** - Extract `codeBlock` nodes from `listItem` nodes
-5. **`replace_mentions_with_links()`** - Convert `mention` nodes to standard
+3. **`sanitize_adf_text_content()`** - Strip ANSI escape sequences and other
+   non-printing control characters from ADF text nodes while preserving
+   newlines and tabs for multiline code blocks
+4. **`fix_adf_text_with_marks()`** - Fix spacing issues in `strong`/`em` marks
+5. **`fix_codeblock_in_list()`** - Extract `codeBlock` nodes from `listItem` nodes
+6. **`replace_mentions_with_links()`** - Convert `mention` nodes to standard
    Markdown links `[@User](url/jira/people/id)`
-6. **`replace_date_with_colored_text()`** - Add invisible date markers (U+200B)
-7. **`replace_status_with_colored_text()`** - Add invisible status markers
-   (U+200C/U+200D)
-8. **`replace_decision_with_styled_text()`** - Add invisible decision markers
-   (U+200E/U+200F)
-9. **`atlas_doc_parser.parse_node().to_markdown()`** - Core ADF→Markdown
+7. **`replace_date_with_colored_text()`** - Add internal date placeholders
+8. **`replace_status_with_colored_text()`** - Add internal status placeholders
+9. **`replace_decision_with_styled_text()`** - Add internal decision placeholders
+10. **`atlas_doc_parser.parse_node().to_markdown()`** - Core ADF→Markdown
    conversion
-10. **Postprocessing**:
+11. **Postprocessing**:
     - Strip extra blank lines in code blocks
     - Strip leading newlines
-    - **`_convert_status_markers_to_inline_code()`** - Convert invisible status
-      markers to `[status:c]text`
-    - **`_convert_date_markers_to_inline_code()`** - Convert invisible date
-      markers to `[date]text`
-    - **`_convert_decision_markers_to_inline_code()`** - Convert invisible
-      decision markers to `[decision:s]text`
+    - **`_convert_status_markers_to_inline_code()`** - Convert internal status
+      placeholders to `[status:c]text`
+    - **`_convert_date_markers_to_inline_code()`** - Convert internal date
+      placeholders to `[date]text`
+    - **`_convert_decision_markers_to_inline_code()`** - Convert internal
+      decision placeholders to `[decision:s]text`
     - **`_render_task_checkboxes()`** - Replace `- [ ]`/`- [x]` with `☐`/`☑`
     - **`_convert_panels_to_alerts()`** - Convert panel blockquotes to
       GitHub alerts
     - **`_normalize_single_cell_tables()`** - Rewrite single-row/single-cell
       table output from `| A<br> |` to `| A |` + `|-|` so Markdown→ADF parsing
       recognizes it as a table
+
+### Sanitization Notes
+
+- Terminal ANSI escape sequences embedded in Jira ADF text are removed before
+  Markdown conversion.
+- This is especially relevant for pasted logs stored in ADF `codeBlock` nodes.
+- Newlines and tabs are preserved so multiline blocks keep their original
+  structure in the TUI.
 
 ### Markdown → ADF Pipeline
 

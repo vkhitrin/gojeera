@@ -1,88 +1,103 @@
-import asyncio
-
 from httpx import Response
 import pytest
 import respx
-from textual.widgets import Button
 
 from gojeera.app import JiraApp
-from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.components.work_item_work_log_screen import (
-    WorkItemWorkLogScreen,
-    WorkLogListItem,
-    WorkLogListView,
-)
+from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
+from gojeera.widgets.layout.record_list import RecordList
+
+from .test_helpers import accept_confirmation, assert_confirmation_screen, wait_until
+
+
+async def show_worklog_screen(
+    pilot,
+    *,
+    work_item_key: str = 'ENG-3',
+) -> WorkItemWorkLogScreen:
+    screen = WorkItemWorkLogScreen(work_item_key=work_item_key)
+    await pilot.app.push_screen(screen)
+    await wait_until(lambda: isinstance(pilot.app.screen, WorkItemWorkLogScreen), timeout=3.0)
+    await wait_until(lambda: not pilot.app.screen.is_loading, timeout=3.0)
+    await wait_until(
+        lambda: (
+            len(pilot.app.screen.worklog_list_view._records) > 0
+            or pilot.app.screen.worklog_list_view.is_mounted
+        ),
+        timeout=3.0,
+    )
+    pilot.app.screen.set_focus(pilot.app.screen.worklog_list_view)
+    await wait_until(
+        lambda: pilot.app.focused is pilot.app.screen.worklog_list_view,
+        timeout=3.0,
+    )
+    await wait_until(
+        lambda: pilot.app.screen.worklog_list_view.selected_record is not None,
+        timeout=3.0,
+    )
+    await pilot.pause()
+    assert isinstance(pilot.app.screen, WorkItemWorkLogScreen)
+    return pilot.app.screen
 
 
 async def open_worklog_screen(pilot):
-    screen = WorkItemWorkLogScreen(work_item_key='ENG-3')
-    await pilot.app.push_screen(screen)
-    await asyncio.sleep(0.3)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-    assert isinstance(pilot.app.screen, WorkItemWorkLogScreen)
+    await show_worklog_screen(pilot)
 
 
 async def delete_worklog_and_verify(pilot):
-    screen = WorkItemWorkLogScreen(work_item_key='ENG-3')
-    await pilot.app.push_screen(screen)
-    await asyncio.sleep(0.3)
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
-
-    assert isinstance(pilot.app.screen, WorkItemWorkLogScreen)
+    await show_worklog_screen(pilot)
 
     list_view = pilot.app.screen.worklog_list_view
-    initial_count = len(list_view.query(WorkLogListItem))
+    initial_count = len(list_view._records)
 
     assert initial_count > 0, 'Should have at least one worklog to delete'
 
     list_view.focus()
-    await asyncio.sleep(0.2)
+    await pilot.pause()
 
     await pilot.press('ctrl+d')
-    await asyncio.sleep(0.5)
-
-    screen_after_delete = pilot.app.screen
-    assert isinstance(screen_after_delete, ConfirmationScreen), (
-        f'Expected ConfirmationScreen, got {type(screen_after_delete)}'
-    )
-
-    screen_after_delete.query_one('#confirmation-button-accept', Button).press()
-    await asyncio.sleep(1.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(1.0)
+    await wait_until(lambda: assert_confirmation_screen(pilot.app.screen), timeout=3.0)
+    await accept_confirmation(pilot)
+    await wait_until(lambda: isinstance(pilot.app.screen, WorkItemWorkLogScreen), timeout=3.0)
+    await wait_until(lambda: not pilot.app.screen.is_loading, timeout=3.0)
 
     assert isinstance(pilot.app.screen, WorkItemWorkLogScreen)
     list_view = pilot.app.screen.worklog_list_view
-    new_count = len(list_view.query(WorkLogListItem))
+    await wait_until(lambda: len(list_view._records) == initial_count - 1, timeout=3.0)
+    new_count = len(list_view._records)
     assert new_count == initial_count - 1, f'Expected {initial_count - 1} worklogs, got {new_count}'
 
 
 class TestWorkItemWorkLogScreen:
     @pytest.mark.asyncio
     async def test_worklog_screen_empty_worklogs(
-        self, mock_configuration, mock_user_info, mock_jira_worklog_empty
+        self,
+        mock_configuration,
+        mock_user_info,
+        mock_jira_worklog_empty,
+        mock_jira_server_info,
     ):
 
         async def run_test(pilot):
             screen = WorkItemWorkLogScreen(work_item_key='ENG-2')
             await pilot.app.push_screen(screen)
-            await asyncio.sleep(0.3)
-
-            await pilot.app.workers.wait_for_complete()
-            await asyncio.sleep(0.3)
+            await wait_until(
+                lambda: isinstance(pilot.app.screen, WorkItemWorkLogScreen), timeout=3.0
+            )
+            await wait_until(lambda: not pilot.app.screen.is_loading, timeout=3.0)
 
             assert isinstance(pilot.app.screen, WorkItemWorkLogScreen)
 
             list_view = pilot.app.screen.worklog_list_view
-            assert isinstance(list_view, WorkLogListView)
-            assert len(list_view.query(WorkLogListItem)) == 0
+            assert isinstance(list_view, RecordList)
+            assert len(list_view._records) == 0
 
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         async with respx.mock:
+            server_info_route = respx.get(
+                'https://example.atlassian.acme.net/rest/api/3/serverInfo'
+            )
+            server_info_route.mock(return_value=Response(200, json=mock_jira_server_info))
             worklog_route = respx.get(
                 'https://example.atlassian.acme.net/rest/api/3/issue/ENG-2/worklog'
             )
@@ -92,12 +107,21 @@ class TestWorkItemWorkLogScreen:
                 await run_test(pilot)
 
     def test_worklog_screen_initial_state(
-        self, snap_compare, mock_configuration, mock_user_info, mock_jira_worklog
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_user_info,
+        mock_jira_worklog,
+        mock_jira_server_info,
     ):
         """Test worklog screen initial state snapshot."""
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         with respx.mock:
+            server_info_route = respx.get(
+                'https://example.atlassian.acme.net/rest/api/3/serverInfo'
+            )
+            server_info_route.mock(return_value=Response(200, json=mock_jira_server_info))
             worklog_route = respx.get(
                 'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/worklog'
             )
@@ -105,7 +129,7 @@ class TestWorkItemWorkLogScreen:
 
             assert snap_compare(app, terminal_size=(120, 40), run_before=open_worklog_screen)
 
-    def test_delete_worklog_and_verify_in_list(
+    def test_delete_worklog(
         self,
         snap_compare,
         mock_configuration,

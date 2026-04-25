@@ -1,63 +1,21 @@
 import asyncio
 
-from textual.widgets._tabbed_content import ContentTabs
+from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
 
-from gojeera.app import JiraApp
-from gojeera.components.confirmation_screen import ConfirmationScreen
-from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
-from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
-
-from .test_helpers import load_work_item_from_search
+from .test_helpers import (
+    assert_confirmation_screen,
+    create_related_work_item_link,
+    focus_work_item_tab,
+    prepare_related_work_items_widget,
+    with_snapshot_assertion_fixture,
+)
 
 
 async def create_related_work_item_and_verify(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
-
-    related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
+    related_widget = await prepare_related_work_items_widget(pilot)
     initial_count = related_widget.displayed_count
 
-    related_widget.focus()
-    await asyncio.sleep(0.2)
-
-    await related_widget.action_link_work_item()
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.8)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, AddWorkItemRelationshipScreen)
-
-    work_item_key_field = screen.linked_work_item_key
-    work_item_key_field.focus()
-    await asyncio.sleep(0.1)
-
-    await pilot.press(*'ENG-8')
-    await asyncio.sleep(0.3)
-
-    link_type_selector = screen.relationship_type
-    link_type_selector.value = '10000:outward'
-    await asyncio.sleep(0.3)
-
-    assert not screen.save_button.disabled, 'Save button should be enabled'
-
-    screen.save_button.press()
-
-    await asyncio.sleep(1.5)
-
-    assert not isinstance(pilot.app.screen, AddWorkItemRelationshipScreen)
-
-    await asyncio.sleep(1.0)
+    await create_related_work_item_link(pilot, related_widget=related_widget)
 
     related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
     new_count = related_widget.displayed_count
@@ -76,17 +34,7 @@ async def create_related_work_item_and_verify(pilot):
 
 async def delete_issue_link_and_verify(pilot):
     """Delete an issue link and verify it's removed from the table."""
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=3)
 
     related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
 
@@ -98,17 +46,14 @@ async def delete_issue_link_and_verify(pilot):
         f'Expected related work items, got {related_widget.displayed_count}'
     )
 
-    table = related_widget.data_table
-    table.focus()
+    table = related_widget.record_list
+    table.select_index(0, scroll_into_view=True, focus=True)
     await asyncio.sleep(0.2)
 
     await related_widget.action_unlink_work_item()
     await asyncio.sleep(0.3)
 
-    screen = pilot.app.screen
-    assert isinstance(screen, ConfirmationScreen), (
-        f'Expected ConfirmationScreen, got {type(screen)}'
-    )
+    assert_confirmation_screen(pilot.app.screen)
 
     await pilot.press('enter')
 
@@ -118,24 +63,14 @@ async def delete_issue_link_and_verify(pilot):
 
 
 class TestRelatedWorkItem:
-    def test_create_related_work_item_and_verify_in_table(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_related_work_item_link,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app, terminal_size=(120, 40), run_before=create_related_work_item_and_verify
-        )
+    @with_snapshot_assertion_fixture(
+        create_related_work_item_and_verify,
+        fixture_name='mock_jira_api_with_related_work_item_link',
+    )
+    def test_create_related_work_item(self): ...
 
-    def test_delete_issue_link_and_verify_in_table(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_issue_link_deletion,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(app, terminal_size=(120, 40), run_before=delete_issue_link_and_verify)
+    @with_snapshot_assertion_fixture(
+        delete_issue_link_and_verify,
+        fixture_name='mock_jira_api_with_issue_link_deletion',
+    )
+    def test_delete_issue_link(self): ...

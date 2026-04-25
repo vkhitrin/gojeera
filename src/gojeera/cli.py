@@ -1,39 +1,24 @@
+from __future__ import annotations
+
 import logging
 import re
 import sys
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import click
-import httpx
-from prompt_toolkit.application import Application
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Layout, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.styles import Style
-from rich.console import Console
 from rich.prompt import Confirm, Prompt
-from rich.text import Text
 
-from gojeera.auth_profiles import (
+from gojeera.internal.auth.oauth2 import OAUTH2_SCOPES, get_atlassian_accessible_resources
+from gojeera.internal.auth.profiles import (
     ATLASSIAN_OAUTH2_AUTHORIZATION_URL,
     ATLASSIAN_OAUTH2_REDIRECT_URI,
-    AuthProfile,
     BasicAuthProfile,
     OAuth2AuthProfile,
     list_profiles,
     remove_profile,
     upsert_profile,
 )
-from gojeera.auth_service import AuthProfileStatus, AuthService
-from gojeera.constants import LOGGER_NAME
-from gojeera.oauth2 import (
-    EXTENDED_OAUTH2_SCOPES,
-    AtlassianAccessibleResource,
-    OAuth2TokenResponse,
-    get_atlassian_accessible_resources,
-    run_atlassian_oauth2_authorization_flow,
-)
-from gojeera.secret_store import (
+from gojeera.internal.store.secret import (
     SecretStoreError,
     delete_jira_api_token,
     delete_jira_oauth2_access_token,
@@ -44,10 +29,30 @@ from gojeera.secret_store import (
     set_jira_oauth2_client_secret,
     set_jira_oauth2_refresh_token,
 )
-from gojeera.utils.urls import extract_work_item_key
+from gojeera.utils.jira.urls import extract_work_item_key
 
-logger = logging.getLogger(LOGGER_NAME)
-console = Console()
+if TYPE_CHECKING:
+    from rich.console import Console
+
+    from gojeera.internal.auth.oauth2 import AtlassianAccessibleResource, OAuth2TokenResponse
+    from gojeera.internal.auth.profiles import AuthProfile
+    from gojeera.internal.auth.service import AuthProfileStatus
+
+from gojeera.internal.auth.service import AuthService
+
+logger = logging.getLogger('gojeera')
+_console: Console | None = None
+
+
+def _get_console() -> Console:
+    global _console
+    if _console is None:
+        from rich.console import Console
+
+        _console = Console()
+    return _console
+
+
 auth_service = AuthService()
 
 
@@ -80,40 +85,41 @@ def _format_auth_type_label(auth_type: str) -> str:
 def _resolve_oauth2_resource(
     *, access_token: str, instance_url: str | None = None
 ) -> tuple[str, AtlassianAccessibleResource]:
+    import httpx
+
     try:
         resources = get_atlassian_accessible_resources(access_token=access_token)
     except (httpx.HTTPError, ValueError) as exc:
         raise click.ClickException(f'Unable to retrieve Atlassian sites: {exc}') from exc
 
-    matching_resources = resources
-    if instance_url is not None:
-        normalized_instance_url = _normalize_url_for_comparison(instance_url)
-        matching_resources = [
-            resource
-            for resource in resources
-            if _normalize_url_for_comparison(resource.url) == normalized_instance_url
-        ]
-
-    if not matching_resources:
-        if instance_url is not None:
-            raise click.ClickException(
-                f'No Atlassian site matching {instance_url} was found for the provided OAuth2 token.'
-            )
+    if not resources:
         raise click.ClickException('No Atlassian sites were found for the provided OAuth2 token.')
 
-    if len(matching_resources) == 1:
-        selected_resource = matching_resources[0]
-        return selected_resource.id, selected_resource
+    if len(resources) == 1:
+        resource = resources[0]
+        return resource.id, resource
+
+    default_index = 0
+    if instance_url is not None:
+        normalized_instance_url = _normalize_url_for_comparison(instance_url)
+        matching_index = next(
+            (
+                index
+                for index, resource in enumerate(resources)
+                if _normalize_url_for_comparison(resource.url) == normalized_instance_url
+            ),
+            None,
+        )
+        if matching_index is not None:
+            default_index = matching_index
 
     selected_resource_id = _select_option(
         'Atlassian site',
-        [
-            (resource.id, f'{resource.name} {resource.url}'.rstrip())
-            for resource in matching_resources
-        ],
+        [(resource.id, f'{resource.name} {resource.url}'.rstrip()) for resource in resources],
+        default_index=default_index,
     )
     selected_resource = next(
-        resource for resource in matching_resources if resource.id == selected_resource_id
+        resource for resource in resources if resource.id == selected_resource_id
     )
     return selected_resource_id, selected_resource
 
@@ -126,6 +132,8 @@ def _run_oauth2_login_flow(
     redirect_uri: str | None = None,
     authorization_url: str | None = None,
 ) -> OAuth2TokenResponse:
+    from gojeera.internal.auth.oauth2 import run_atlassian_oauth2_authorization_flow
+
     return run_atlassian_oauth2_authorization_flow(
         client_id=client_id,
         client_secret=client_secret,
@@ -142,6 +150,10 @@ def _prompt_profile_name() -> str:
             return profile_name
 
 
+def _prompt_masked_secret(prompt_text: str, *, default: str = '') -> str:
+    return Prompt.ask(prompt_text, password=True, default=default).strip()
+
+
 def _resolve_existing_profile_selection() -> tuple[str, AuthProfile | None, bool]:
     active_profile, profiles = list_profiles()
     if not profiles:
@@ -152,7 +164,7 @@ def _resolve_existing_profile_selection() -> tuple[str, AuthProfile | None, bool
     for profile_name in profile_names:
         profile = profiles[profile_name]
         auth_type = profile.auth_type
-        instance_url = profile.instance_url
+        instance_url = profile.site
         marker = ' (active)' if profile_name == active_profile else ''
         profile_options.append(
             (profile_name, f'{profile_name} [{auth_type}] {instance_url}{marker}'.rstrip())
@@ -167,11 +179,17 @@ def _resolve_existing_profile_selection() -> tuple[str, AuthProfile | None, bool
     if selected_profile == '__new__':
         return _prompt_profile_name(), None, False
     selected_label = next(label for value, label in profile_options if value == selected_profile)
-    console.print(f'[bold]Profile[/bold]: {selected_label}')
+    _get_console().print(f'[bold]Profile[/bold]: {selected_label}')
     return selected_profile, profiles.get(selected_profile), True
 
 
 def _select_option(title: str, options: list[tuple[str, str]], default_index: int = 0) -> str:
+    from prompt_toolkit.application import Application
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.layout import Layout, Window
+    from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.styles import Style
+
     selected_index = default_index
     rendered_line_count = len(title.splitlines()) + len(options) + 1
 
@@ -187,13 +205,13 @@ def _select_option(title: str, options: list[tuple[str, str]], default_index: in
 
     @key_bindings.add('up')
     @key_bindings.add('k')
-    def move_up(event) -> None:
+    def move_up(_event) -> None:
         nonlocal selected_index
         selected_index = (selected_index - 1) % len(options)
 
     @key_bindings.add('down')
     @key_bindings.add('j')
-    def move_down(event) -> None:
+    def move_down(_event) -> None:
         nonlocal selected_index
         selected_index = (selected_index + 1) % len(options)
 
@@ -290,9 +308,12 @@ def cli(
     if theme:
         from textual.theme import BUILTIN_THEMES
 
-        from gojeera.config import ApplicationConfiguration
-        from gojeera.files import get_themes_directory
-        from gojeera.themes import create_themes_from_config, load_themes_from_directory
+        from gojeera.internal.store.config import ApplicationConfiguration
+        from gojeera.internal.store.files import get_themes_directory
+        from gojeera.internal.styling.themes import (
+            create_themes_from_config,
+            load_themes_from_directory,
+        )
 
         valid_themes = set(BUILTIN_THEMES.keys())
 
@@ -300,8 +321,8 @@ def cli(
             themes_dir = get_themes_directory()
             directory_themes = load_themes_from_directory(themes_dir)
             valid_themes.update(t.name for t in directory_themes)
-        except Exception as e:
-            logger.debug(f'Failed to load themes from directory: {e}')
+        except Exception:
+            pass
 
         try:
             settings = ApplicationConfiguration()
@@ -310,8 +331,8 @@ def cli(
                 if custom_themes_attr:
                     config_themes = create_themes_from_config(cast(list[dict], custom_themes_attr))
                     valid_themes.update(t.name for t in config_themes)
-        except Exception as e:
-            logger.debug(f'Failed to load themes from config: {e}')
+        except Exception:
+            pass
 
         if theme not in valid_themes:
             click.echo('The name of the theme you provided is not supported.')
@@ -366,7 +387,7 @@ def cli(
 
     from pydantic import ValidationError
 
-    from gojeera.config import ApplicationConfiguration
+    from gojeera.internal.store.config import ApplicationConfiguration
 
     try:
         settings = ApplicationConfiguration()
@@ -380,32 +401,49 @@ def cli(
         click.echo(str(e))
         sys.exit(1)
     except (ValidationError, ValueError) as e:
+
+        def echo_config_error(message: str) -> None:
+            click.secho(message, fg='red')
+
+        missing_credentials_message = (
+            'No Jira credentials are configured. '
+            'Use `gojeera auth login` to configure your credentials.'
+        )
         if isinstance(e, ValidationError):
             error_messages = [str(_e.get('msg', '')) for _e in e.errors()]
             if (
                 'Value error, jira.active_profile is required when authentication profiles exist.'
                 in error_messages
             ):
-                click.echo(
+                echo_config_error(
                     'No active authentication profile is configured. '
                     'Use `gojeera auth login` to set one active or pass `--profile <name>`.'
                 )
                 sys.exit(1)
+            if any(
+                'Value error, No Jira authentication is configured.' in msg
+                for msg in error_messages
+            ):
+                echo_config_error(missing_credentials_message)
+                sys.exit(1)
         elif str(e) == 'jira.active_profile is required when authentication profiles exist.':
-            click.echo(
+            echo_config_error(
                 'No active authentication profile is configured. '
                 'Use `gojeera auth login` to set one active or pass `--profile <name>`.'
             )
             sys.exit(1)
-        click.echo('Configuration validation error. Make sure your config file is correct.')
+        elif str(e).startswith('No Jira authentication is configured.'):
+            echo_config_error(missing_credentials_message)
+            sys.exit(1)
+        echo_config_error('Configuration validation error. Make sure your config file is correct.')
         if isinstance(e, ValidationError):
             for _e in e.errors():
                 if location := _e.get('loc'):
-                    click.echo(f'Configuration error at {location[0]}: {_e.get("msg")}')
+                    echo_config_error(f'Configuration error at {location[0]}: {_e.get("msg")}')
                 else:
-                    click.echo(f'Configuration error: {_e.get("msg")}')
+                    echo_config_error(f'Configuration error: {_e.get("msg")}')
         else:
-            click.echo(f'Configuration error: {e}')
+            echo_config_error(f'Configuration error: {e}')
         sys.exit(1)
 
     from gojeera.app import JiraApp
@@ -429,6 +467,10 @@ def auth():
 @auth.command('login')
 def auth_login():
     """Create a Jira auth profile and store its secret in the operating system secret store."""
+    from rich.text import Text
+
+    console = _get_console()
+
     try:
         profile_name, existing_profile, is_edit_mode = _resolve_existing_profile_selection()
         existing_auth_type = existing_profile.auth_type if existing_profile is not None else None
@@ -450,123 +492,139 @@ def auth_login():
 
         if auth_type == 'oauth2':
             console.print('[bold magenta]OAuth2 Settings[/bold magenta]')
+            console.print(
+                '[dim]Create or manage your Atlassian OAuth 2.0 app at '
+                'https://developer.atlassian.com/[/dim]'
+            )
             existing_instance_url = (
-                existing_profile.instance_url
-                if isinstance(existing_profile, OAuth2AuthProfile)
-                else None
+                existing_profile.site if isinstance(existing_profile, OAuth2AuthProfile) else None
             )
-            existing_client_id = (
-                existing_profile.client_id
-                if isinstance(existing_profile, OAuth2AuthProfile) and existing_profile.client_id
-                else ''
-            )
-            console.print('[bold]OAuth2 scope mode[/bold]: Extended + User Identity')
+            existing_client_id = existing_profile.existing_client_id() if existing_profile else ''
             client_id = Prompt.ask(
                 '[bold]Atlassian client ID[/bold]', default=existing_client_id
             ).strip()
             authorization_url = ATLASSIAN_OAUTH2_AUTHORIZATION_URL
             redirect_uri = ATLASSIAN_OAUTH2_REDIRECT_URI
-            scopes = EXTENDED_OAUTH2_SCOPES
+            scopes = OAUTH2_SCOPES
             client_secret_prompt = (
                 '[bold]Atlassian client secret[/bold] [dim](leave blank to keep existing)[/dim]'
                 if is_edit_mode
                 else '[bold]Atlassian client secret[/bold]'
             )
-            client_secret = Prompt.ask(client_secret_prompt, password=True, default='').strip()
+            client_secret = _prompt_masked_secret(client_secret_prompt, default='')
             scopes_text = Text('Requested OAuth2 scopes: ', style='cyan')
             scopes_text.append(', '.join(scopes))
             console.print(scopes_text)
-            console.print(
-                '[cyan]Runtime OAuth2 refresh scope:[/cyan] offline_access '
-                '[dim](requested in the authorize URL, not configured in the developer console)[/dim]'
-            )
 
             if not client_id:
                 click.echo('Atlassian client ID is required.')
                 sys.exit(1)
-            if (
-                not client_secret
-                and is_edit_mode
+            skip_oauth_login = (
+                is_edit_mode
                 and isinstance(existing_profile, OAuth2AuthProfile)
-            ):
-                client_secret = (
-                    auth_service.get_oauth2_client_secret(
-                        existing_profile, prefer_environment=False
+                and client_id == existing_client_id
+                and not client_secret
+            )
+            if skip_oauth_login:
+                oauth_site = existing_profile.site
+                oauth_account_id = existing_profile.account_id
+                oauth_display_name = existing_profile.display_name
+                oauth_cloud_id = existing_profile.cloud_id
+                oauth_client_id = existing_profile.client_id
+            else:
+                if (
+                    not client_secret
+                    and is_edit_mode
+                    and isinstance(existing_profile, OAuth2AuthProfile)
+                ):
+                    client_secret = (
+                        auth_service.get_oauth2_client_secret(
+                            existing_profile, prefer_environment=False
+                        )
+                        or ''
                     )
-                    or ''
+                if not client_secret:
+                    click.echo('Atlassian client secret is required.')
+                    sys.exit(1)
+
+                console.print(
+                    '[cyan]Waiting for Atlassian authorization in your browser on '
+                    f'{redirect_uri}[/cyan]'
                 )
-            if not client_secret:
-                click.echo('Atlassian client secret is required.')
-                sys.exit(1)
-
-            console.print(
-                '[cyan]Waiting for Atlassian authorization in your browser on '
-                f'{redirect_uri}[/cyan]'
-            )
-            token_response = _run_oauth2_login_flow(
-                client_id=client_id,
-                client_secret=client_secret,
-                scopes=scopes,
-                redirect_uri=redirect_uri,
-                authorization_url=authorization_url,
-            )
-            access_token = token_response.access_token
-            if not access_token:
-                click.echo('OAuth2 login did not return an access token.')
-                sys.exit(1)
-            if token_response.refresh_token is None:
-                click.echo(
-                    'OAuth2 login did not return a refresh token. Make sure offline_access scope is granted.'
-                )
-                sys.exit(1)
-
-            cloud_id, selected_resource = _resolve_oauth2_resource(
-                access_token=access_token,
-                instance_url=existing_instance_url,
-            )
-            instance_url = selected_resource.url.rstrip('/')
-
-            validation_result = auth_service.validate_profile(
-                OAuth2AuthProfile(
-                    name=profile_name,
-                    instance_url=instance_url,
-                    cloud_id=cloud_id,
+                token_response = _run_oauth2_login_flow(
                     client_id=client_id,
-                    account_display_name=None,
+                    client_secret=client_secret,
                     scopes=scopes,
-                ),
-                access_token=access_token,
-            )
-            if not validation_result.is_valid:
-                click.echo(f'Authentication validation failed: {validation_result.message}')
-                sys.exit(1)
+                    redirect_uri=redirect_uri,
+                    authorization_url=authorization_url,
+                )
+                access_token = token_response.access_token
+                if not access_token:
+                    click.echo('OAuth2 login did not return an access token.')
+                    sys.exit(1)
+                if token_response.refresh_token is None:
+                    click.echo(
+                        'OAuth2 login did not return a refresh token. Make sure offline_access scope is granted.'
+                    )
+                    sys.exit(1)
+
+                cloud_id, selected_resource = _resolve_oauth2_resource(
+                    access_token=access_token,
+                    instance_url=existing_instance_url,
+                )
+                instance_url = selected_resource.url.rstrip('/')
+
+                validation_result = auth_service.validate_profile(
+                    OAuth2AuthProfile(
+                        name=profile_name,
+                        site=instance_url,
+                        cloud_id=cloud_id,
+                        account_id=None,
+                        client_id=client_id,
+                        display_name=None,
+                    ),
+                    access_token=access_token,
+                )
+                if not validation_result.is_valid:
+                    click.echo(f'Authentication validation failed: {validation_result.message}')
+                    sys.exit(1)
+                if validation_result.account_id is None:
+                    click.echo('OAuth2 login did not return an Atlassian account ID.')
+                    sys.exit(1)
+
+                oauth_site = instance_url
+                oauth_account_id = validation_result.account_id
+                oauth_display_name = validation_result.message
+                oauth_cloud_id = cloud_id
+                oauth_client_id = client_id
 
             activate = Confirm.ask('[bold]Set as active profile?[/bold]', default=True)
 
             upsert_profile(
                 profile_name,
                 auth_type='oauth2',
-                instance_url=instance_url,
+                site=oauth_site,
                 email=None,
-                account_display_name=validation_result.message,
-                cloud_id=cloud_id,
-                client_id=client_id,
-                scopes=scopes,
+                account_id=oauth_account_id,
+                display_name=oauth_display_name,
+                cloud_id=oauth_cloud_id,
+                client_id=oauth_client_id,
                 activate=activate,
             )
-            set_jira_oauth2_access_token(instance_url, cloud_id, access_token)
-            set_jira_oauth2_refresh_token(instance_url, cloud_id, token_response.refresh_token)
-            set_jira_oauth2_client_secret(instance_url, cloud_id, client_secret)
+            if not skip_oauth_login:
+                if oauth_account_id is None:
+                    click.echo('OAuth2 login did not return an Atlassian account ID.')
+                    sys.exit(1)
+                refresh_token = cast(str, token_response.refresh_token)
+                set_jira_oauth2_access_token(oauth_account_id, access_token)
+                set_jira_oauth2_refresh_token(oauth_account_id, refresh_token)
+                set_jira_oauth2_client_secret(oauth_account_id, client_secret)
         else:
             console.print('[bold green]Basic Auth Settings[/bold green]')
             existing_instance_url = (
-                existing_profile.instance_url
-                if isinstance(existing_profile, BasicAuthProfile)
-                else ''
+                existing_profile.site if isinstance(existing_profile, BasicAuthProfile) else ''
             )
-            existing_email = (
-                existing_profile.email if isinstance(existing_profile, BasicAuthProfile) else ''
-            )
+            existing_email = existing_profile.existing_email() if existing_profile else ''
             instance_url = (
                 Prompt.ask('[bold]Jira instance URL[/bold]', default=existing_instance_url)
                 .strip()
@@ -586,41 +644,61 @@ def auth_login():
             if not email:
                 click.echo('Email and Jira API token are required.')
                 sys.exit(1)
-            if not api_token and is_edit_mode and isinstance(existing_profile, BasicAuthProfile):
-                api_token = (
-                    auth_service.get_basic_api_token(existing_profile, prefer_environment=False)
-                    or ''
-                )
-            if not api_token:
-                click.echo('Email and Jira API token are required.')
-                sys.exit(1)
-
-            validation_result = auth_service.validate_profile(
-                BasicAuthProfile(
-                    name=profile_name,
-                    instance_url=instance_url,
-                    email=email,
-                ),
-                api_token=api_token,
+            skip_basic_login = (
+                is_edit_mode
+                and isinstance(existing_profile, BasicAuthProfile)
+                and instance_url == existing_instance_url
+                and email == existing_email
+                and not api_token
             )
-            if not validation_result.is_valid:
-                click.echo(f'Authentication validation failed: {validation_result.message}')
-                sys.exit(1)
+            if skip_basic_login:
+                basic_site = existing_profile.site
+                basic_email = existing_profile.email
+            else:
+                if (
+                    not api_token
+                    and is_edit_mode
+                    and isinstance(existing_profile, BasicAuthProfile)
+                ):
+                    api_token = (
+                        auth_service.get_basic_api_token(existing_profile, prefer_environment=False)
+                        or ''
+                    )
+                if not api_token:
+                    click.echo('Email and Jira API token are required.')
+                    sys.exit(1)
+
+                validation_result = auth_service.validate_profile(
+                    BasicAuthProfile(
+                        name=profile_name,
+                        site=instance_url,
+                        email=email,
+                    ),
+                    api_token=api_token,
+                )
+                if not validation_result.is_valid:
+                    click.echo(f'Authentication validation failed: {validation_result.message}')
+                    sys.exit(1)
+
+                basic_site = instance_url
+                basic_email = email
 
             activate = Confirm.ask('[bold]Set as active profile?[/bold]', default=True)
 
             upsert_profile(
                 profile_name,
                 auth_type='basic',
-                instance_url=instance_url,
-                email=email,
-                account_display_name=None,
+                site=basic_site,
+                email=basic_email,
+                account_id=None,
+                display_name=None,
                 cloud_id=None,
                 client_id=None,
-                scopes=None,
                 activate=activate,
             )
-            set_jira_api_token(instance_url, email, api_token)
+
+            if not skip_basic_login:
+                set_jira_api_token(email, api_token)
     except (click.Abort, KeyboardInterrupt):
         sys.exit(1)
     except SecretStoreError as e:
@@ -635,7 +713,6 @@ def auth_login():
 @click.argument('profile_name', required=False)
 def auth_logout(profile_name: str | None):
     """Remove a profile and its stored Jira secrets."""
-
     active_profile, profiles = list_profiles()
     if not profiles:
         click.echo('No profiles configured.')
@@ -646,7 +723,7 @@ def auth_logout(profile_name: str | None):
         profile_options = []
         for current_profile_name, profile in profiles.items():
             auth_type = profile.auth_type
-            instance_url = profile.instance_url
+            instance_url = profile.site
             marker = ' (active)' if current_profile_name == active_profile else ''
             profile_options.append(
                 (
@@ -664,14 +741,14 @@ def auth_logout(profile_name: str | None):
 
     try:
         if isinstance(profile, OAuth2AuthProfile):
-            if delete_jira_oauth2_access_token(profile.instance_url, profile.cloud_id):
+            if profile.account_id and delete_jira_oauth2_access_token(profile.account_id):
                 pass
-            if delete_jira_oauth2_refresh_token(profile.instance_url, profile.cloud_id):
+            if profile.account_id and delete_jira_oauth2_refresh_token(profile.account_id):
                 pass
-            if delete_jira_oauth2_client_secret(profile.instance_url, profile.cloud_id):
+            if profile.account_id and delete_jira_oauth2_client_secret(profile.account_id):
                 pass
         else:
-            if delete_jira_api_token(profile.instance_url, profile.email):
+            if delete_jira_api_token(profile.email):
                 pass
     except SecretStoreError as e:
         click.echo(str(e))
@@ -684,6 +761,7 @@ def auth_logout(profile_name: str | None):
 @click.option('--show-token', is_flag=True, help='Show a truncated token preview.')
 def auth_status(show_token: bool):
     """Show auth profile status."""
+    console = _get_console()
 
     active_profile, profiles = list_profiles()
     if not profiles:
@@ -697,7 +775,7 @@ def auth_status(show_token: bool):
             active_profile_name=active_profile,
         )
 
-        click.echo(status.profile.instance_url or profile_name)
+        click.echo(status.profile.site or profile_name)
         if status.validation.is_valid:
             console.print(
                 f'  [green]\u2713[/green] Logged in as {status.validation.message} ({status.token_source})'
@@ -713,8 +791,8 @@ def auth_status(show_token: bool):
         if show_token:
             click.echo(f'  - Token source: {status.token_source}')
 
-        if isinstance(status.profile, OAuth2AuthProfile) and status.profile.scopes:
-            formatted_scopes = ', '.join(f"'{scope}'" for scope in status.profile.scopes)
+        if scopes := status.profile.oauth_scopes():
+            formatted_scopes = ', '.join(f"'{scope}'" for scope in scopes)
             click.echo(f'  - Token scopes: {formatted_scopes}')
 
         if index < len(profiles) - 1:

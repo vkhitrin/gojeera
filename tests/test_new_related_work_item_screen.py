@@ -1,27 +1,15 @@
 import asyncio
 
 import pytest
-from textual.widgets._tabbed_content import ContentTabs
 
-from gojeera.app import JiraApp
-from gojeera.components.new_related_work_item_screen import AddWorkItemRelationshipScreen
-from gojeera.components.work_item_related_work_items import RelatedWorkItemsWidget
+from gojeera.components.screens.new_related_work_item_screen import AddWorkItemRelationshipScreen
+from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
 
-from .test_helpers import load_work_item_from_search
+from .test_helpers import focus_work_item_tab, with_snapshot_assertion
 
 
 async def open_add_related_work_item_screen(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.2)
-    await pilot.press('right')
-    await asyncio.sleep(0.5)
+    await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=3)
 
     related_widget = pilot.app.screen.query_one(RelatedWorkItemsWidget)
     related_widget.focus()
@@ -93,31 +81,11 @@ async def fill_browse_url_and_verify_save_enabled(pilot):
 
 
 class TestNewRelatedWorkItemScreen:
-    def test_new_related_work_item_screen_initial_state(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app, terminal_size=(120, 40), run_before=open_add_related_work_item_screen
-        )
+    @with_snapshot_assertion(open_add_related_work_item_screen, terminal_size=(120, 40))
+    def test_new_related_work_item_screen_initial_state(self): ...
 
-    def test_new_related_work_item_screen_with_filled_fields(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=fill_required_fields_and_verify_save_enabled,
-        )
+    @with_snapshot_assertion(fill_required_fields_and_verify_save_enabled, terminal_size=(120, 40))
+    def test_new_related_work_item_screen_with_filled_fields(self): ...
 
     @pytest.mark.asyncio
     async def test_new_related_work_item_screen_accepts_browse_url(
@@ -126,6 +94,8 @@ class TestNewRelatedWorkItemScreen:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
+        from gojeera.app import JiraApp
+
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
         async with app.run_test() as pilot:

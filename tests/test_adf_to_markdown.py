@@ -1,4 +1,66 @@
-from gojeera.utils.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
+
+
+def build_adf_doc(*content):
+    return {'type': 'doc', 'version': 1, 'content': list(content)}
+
+
+def build_media_node(media_id: str, *, alt: str | None = None):
+    attrs = {'type': 'file', 'id': media_id}
+    if alt is not None:
+        attrs['alt'] = alt
+    return {'type': 'media', 'attrs': attrs}
+
+
+def build_media_inline_node(media_id: str):
+    return {'type': 'mediaInline', 'attrs': {'id': media_id, 'collection': '', 'type': 'file'}}
+
+
+def build_paragraph(*content):
+    return {'type': 'paragraph', 'content': list(content)}
+
+
+def build_text_node(text: str):
+    return {'type': 'text', 'text': text}
+
+
+def build_single_cell_table_doc(cell_text: str, *trailing_content: dict):
+    return build_adf_doc(
+        {
+            'type': 'table',
+            'content': [
+                {
+                    'type': 'tableRow',
+                    'content': [
+                        {
+                            'type': 'tableCell',
+                            'content': [build_paragraph(build_text_node(cell_text))],
+                        }
+                    ],
+                }
+            ],
+        },
+        *trailing_content,
+    )
+
+
+def build_media_single_doc(media_id: str, *, alt: str | None = None):
+    return build_adf_doc({'type': 'mediaSingle', 'content': [build_media_node(media_id, alt=alt)]})
+
+
+def build_media_group_doc(*media_ids: str):
+    return build_adf_doc(
+        {'type': 'mediaGroup', 'content': [build_media_node(media_id) for media_id in media_ids]}
+    )
+
+
+def build_media_inline_paragraph_doc(prefix_text: str, *media_ids: str):
+    content: list[dict] = [build_text_node(prefix_text), {'type': 'hardBreak'}]
+    for index, media_id in enumerate(media_ids):
+        content.append(build_media_inline_node(media_id))
+        if index < len(media_ids) - 1:
+            content.append(build_text_node(' '))
+    return build_adf_doc(build_paragraph(*content))
 
 
 class TestAdfToMarkdownConversion:
@@ -51,102 +113,24 @@ class TestAdfToMarkdownConversion:
         assert '---' in markdown or '***' in markdown or '___' in markdown
 
     def test_single_row_single_cell_table_renders_parseable_markdown(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'table',
-                    'content': [
-                        {
-                            'type': 'tableRow',
-                            'content': [
-                                {
-                                    'type': 'tableCell',
-                                    'content': [
-                                        {
-                                            'type': 'paragraph',
-                                            'content': [{'type': 'text', 'text': 'A'}],
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
-                }
-            ],
-        }
+        adf = build_single_cell_table_doc('A')
 
         markdown = convert_adf_to_markdown(adf)
 
         assert markdown.strip() == '| A |\n|-|'
 
     def test_single_cell_table_with_escaped_pipe_renders_parseable_markdown(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'table',
-                    'content': [
-                        {
-                            'type': 'tableRow',
-                            'content': [
-                                {
-                                    'type': 'tableCell',
-                                    'content': [
-                                        {
-                                            'type': 'paragraph',
-                                            'content': [
-                                                {
-                                                    'type': 'text',
-                                                    'text': 'Sample field | Sample value',
-                                                }
-                                            ],
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
-                }
-            ],
-        }
+        adf = build_single_cell_table_doc('Sample field | Sample value')
 
         markdown = convert_adf_to_markdown(adf)
 
         assert markdown.strip() == '| Sample field \\| Sample value |\n|-|'
 
     def test_single_cell_table_is_terminated_before_next_paragraph(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'table',
-                    'content': [
-                        {
-                            'type': 'tableRow',
-                            'content': [
-                                {
-                                    'type': 'tableCell',
-                                    'content': [
-                                        {
-                                            'type': 'paragraph',
-                                            'content': [{'type': 'text', 'text': 'A'}],
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
-                },
-                {
-                    'type': 'paragraph',
-                    'content': [{'type': 'text', 'text': 'Follow-up details go here'}],
-                },
-            ],
-        }
+        adf = build_single_cell_table_doc(
+            'A',
+            build_paragraph(build_text_node('Follow-up details go here')),
+        )
 
         markdown = convert_adf_to_markdown(adf)
 
@@ -181,26 +165,30 @@ class TestAdfToMarkdownConversion:
 
         assert markdown.strip() == '[ENG-1](https://example.atlassian.acme.net/browse/ENG-1)'
 
-    def test_media_single_renders_internal_attachment_link(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
+    def test_zero_width_prefixed_link_text_is_not_misparsed_as_date(self):
+        adf = build_adf_doc(
+            build_paragraph(
+                build_text_node('Source: '),
                 {
-                    'type': 'mediaSingle',
-                    'content': [
+                    'type': 'text',
+                    'text': '\u200bhttps://global-services.us1.plainid.io/',
+                    'marks': [
                         {
-                            'type': 'media',
-                            'attrs': {
-                                'type': 'file',
-                                'id': 'attachment-1',
-                                'alt': 'image-20260205-112310.png',
-                            },
+                            'type': 'link',
+                            'attrs': {'href': 'https://global-services.us1.plainid.io/'},
                         }
                     ],
-                }
-            ],
-        }
+                },
+            )
+        )
+
+        markdown = convert_adf_to_markdown(adf)
+
+        assert '[date]https://global-services.us1.plainid.io/' not in markdown
+        assert 'global-services.us1.plainid.io' in markdown
+
+    def test_media_single_renders_internal_attachment_link(self):
+        adf = build_media_single_doc('attachment-1', alt='image-20260205-112310.png')
 
         markdown = convert_adf_to_markdown(
             adf,
@@ -218,23 +206,7 @@ class TestAdfToMarkdownConversion:
         )
 
     def test_media_inline_without_filename_renders_generic_attachment_link(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [
-                        {'type': 'text', 'text': 'End result:'},
-                        {'type': 'hardBreak'},
-                        {
-                            'type': 'mediaInline',
-                            'attrs': {'id': 'media-1', 'collection': '', 'type': 'file'},
-                        },
-                    ],
-                }
-            ],
-        }
+        adf = build_media_inline_paragraph_doc('End result:', 'media-1')
 
         markdown = convert_adf_to_markdown(
             adf,
@@ -252,27 +224,9 @@ class TestAdfToMarkdownConversion:
         )
 
     def test_media_inline_uses_rendered_body_to_resolve_attachment_filename(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [
-                        {'type': 'text', 'text': 'End result:'},
-                        {'type': 'hardBreak'},
-                        {
-                            'type': 'mediaInline',
-                            'attrs': {
-                                'id': 'e2efe69b-4f1f-4ee0-a223-b915c960bbb5',
-                                'collection': '',
-                                'type': 'file',
-                            },
-                        },
-                    ],
-                }
-            ],
-        }
+        adf = build_media_inline_paragraph_doc(
+            'End result:', 'e2efe69b-4f1f-4ee0-a223-b915c960bbb5'
+        )
         rendered_body = (
             '<p>End result:<br/>'
             '<span class="nobr"><a href="/rest/api/3/attachment/content/74914" '
@@ -293,33 +247,7 @@ class TestAdfToMarkdownConversion:
         )
 
     def test_media_group_renders_one_attachment_link_per_media_node(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'mediaGroup',
-                    'content': [
-                        {
-                            'type': 'media',
-                            'attrs': {
-                                'id': 'attachment-1',
-                                'collection': '',
-                                'type': 'file',
-                            },
-                        },
-                        {
-                            'type': 'media',
-                            'attrs': {
-                                'id': 'attachment-2',
-                                'collection': '',
-                                'type': 'file',
-                            },
-                        },
-                    ],
-                }
-            ],
-        }
+        adf = build_media_group_doc('attachment-1', 'attachment-2')
 
         markdown = convert_adf_to_markdown(
             adf,
@@ -341,42 +269,20 @@ class TestAdfToMarkdownConversion:
         )
 
     def test_media_inline_falls_back_to_ordered_attachment_details(self):
-        adf = {
-            'type': 'doc',
-            'version': 1,
-            'content': [
-                {
-                    'type': 'paragraph',
-                    'content': [
-                        {'type': 'text', 'text': 'Please review the logs'},
-                        {'type': 'hardBreak'},
-                        {
-                            'type': 'mediaInline',
-                            'attrs': {'id': 'inline-1', 'collection': '', 'type': 'file'},
-                        },
-                        {'type': 'text', 'text': ' '},
-                        {
-                            'type': 'mediaInline',
-                            'attrs': {'id': 'inline-2', 'collection': '', 'type': 'file'},
-                        },
-                    ],
-                },
-                {
-                    'type': 'mediaSingle',
-                    'attrs': {'layout': 'align-start'},
-                    'content': [
-                        {
-                            'type': 'media',
-                            'attrs': {
-                                'type': 'file',
-                                'id': 'image-1',
-                                'alt': 'image-20260423-145323.png',
-                            },
-                        }
-                    ],
-                },
-            ],
-        }
+        adf = build_adf_doc(
+            build_paragraph(
+                build_text_node('Please review the logs'),
+                {'type': 'hardBreak'},
+                build_media_inline_node('inline-1'),
+                build_text_node(' '),
+                build_media_inline_node('inline-2'),
+            ),
+            {
+                'type': 'mediaSingle',
+                'attrs': {'layout': 'align-start'},
+                'content': [build_media_node('image-1', alt='image-20260423-145323.png')],
+            },
+        )
 
         markdown = convert_adf_to_markdown(
             adf,
@@ -408,3 +314,22 @@ class TestAdfToMarkdownConversion:
             '[pip_0422.zip](https://example.atlassian.acme.net/secure/attachment/10002/pip_0422.zip)\n\n'
             '[image-20260423-145323.png](https://example.atlassian.acme.net/secure/attachment/10003/image-20260423-145323.png)'
         )
+
+    def test_code_block_strips_ansi_escape_sequences_from_adf_text(self):
+        adf = build_adf_doc(
+            {
+                'type': 'codeBlock',
+                'content': [
+                    build_text_node(
+                        'Apr 29 13:23:51.815  \x1b[34mINFO\x1b[0;39m main\n'
+                        'Apr 29 13:23:52.207  \x1b[31mWARN\x1b[0;39m main'
+                    )
+                ],
+            }
+        )
+
+        markdown = convert_adf_to_markdown(adf)
+
+        assert '\x1b' not in markdown
+        assert 'INFO main' in markdown
+        assert 'WARN main' in markdown

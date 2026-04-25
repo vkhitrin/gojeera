@@ -1,27 +1,15 @@
 import asyncio
 
-from textual.widgets import Button, Input
+from gojeera.app import JiraApp
 
-from gojeera.app import JiraApp, MainScreen
-from gojeera.components.clone_work_item_screen import CloneWorkItemScreen
-from gojeera.components.unified_search import UnifiedSearchBar
-from gojeera.widgets.vim_select import VimSelect
-from gojeera.widgets.work_item_search_results_scroll import WorkItemSearchResultsScroll
+from .test_helpers import (
+    open_clone_work_item_screen,
+    search_for_work_item_key_and_assert_single_result,
+)
 
 
 async def clone_and_search_work_item(pilot):
-    work_item_key = 'ENG-3'
-    original_summary = 'Update documentation for merge approval process'
-
-    # NOTE: (vkhitrin) we directly "enter" the screen without navigating
-    #       the UI.
-    screen = CloneWorkItemScreen(work_item_key=work_item_key, original_summary=original_summary)
-    await pilot.app.push_screen(screen)
-    await asyncio.sleep(0.3)
-
-    assert isinstance(pilot.app.screen, CloneWorkItemScreen)
-    assert pilot.app.screen.work_item_key == work_item_key
-    assert pilot.app.screen.original_summary == original_summary
+    screen = await open_clone_work_item_screen(pilot)
 
     assert screen.summary_input.value == 'CLONE - Update documentation for merge approval process'
     assert not screen.clone_button.disabled
@@ -31,40 +19,13 @@ async def clone_and_search_work_item(pilot):
 
     await asyncio.sleep(1.5)
 
-    assert isinstance(pilot.app.screen, MainScreen)
+    assert isinstance(pilot.app, JiraApp)
 
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    assert search_bar is not None, 'Unified search bar should be visible'
-    mode_selector = search_bar.query_one('#search-mode-selector', VimSelect)
-    mode_selector.value = 'jql'
-    await asyncio.sleep(0.3)
-
-    assert search_bar.search_mode == 'jql', f'Expected jql mode, got {search_bar.search_mode}'
-
-    jql_input = search_bar.query_one('#unified-search-input', Input)
-    jql_input.value = 'key = ENG-9'
-    await asyncio.sleep(0.2)
-
-    search_button = search_bar.query_one('#unified-search-button', Button)
-    search_button.press()
-    await asyncio.sleep(1.5)
-
-    search_results_list = pilot.app.screen.query_one(WorkItemSearchResultsScroll)
-    assert search_results_list is not None, 'Search results list should be visible'
-    assert search_results_list.work_item_search_results is not None, (
-        'Search results should be populated'
-    )
-
-    search_results = search_results_list.work_item_search_results
-    assert search_results.work_items is not None, 'Search results should have work_items'
-    assert len(search_results.work_items) == 1, (
-        f'Expected 1 work item in results, got {len(search_results.work_items)}'
-    )
-
-    work_item = search_results.work_items[0]
-    assert work_item.key == 'ENG-9', f'Expected work item key "ENG-9", got "{work_item.key}"'
-    assert work_item.summary == 'CLONE - Update documentation for merge approval process', (
-        f'Expected summary "CLONE - Update documentation for merge approval process", got "{work_item.summary}"'
+    await search_for_work_item_key_and_assert_single_result(
+        pilot,
+        work_item_key='ENG-9',
+        expected_summary='CLONE - Update documentation for merge approval process',
+        mode='jql',
     )
 
 

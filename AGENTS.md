@@ -8,15 +8,13 @@ Atlassian Jira with a focus on cloud instances using API v3.
 - **Language**: Python
 - **Framework**: Textual TUI Framework (<https://textual.textualize.io/>)
 - **Package Manager**: uv (<https://docs.astral.sh/uv/>)
-- **Linting:**: ruff (<https://docs.astral.sh/ruff/>)
-- **Type Checking:**: ty (<https://docs.astral.sh/ty/>)
-- **Deadcode Analysis**: vulture (<https://github.com/jendrikseipp/vulture>)
 
 ## Development Workflow
 
 1. After each change, analyze codebase using `make analyze-codebase` and attempt
    to fix all issues.
 2. Run scoped testing on changed classes using `uv run pytest -n auto $AFFECTED_CLASSES`.
+   **DO NOT RERUN SNAPSHOTS, remind the user it is their responsibility!**
 
 ## Markdown ↔ ADF Conversion
 
@@ -38,9 +36,4 @@ supported features, and implementation details.
 - Async operations for API calls
 - Ensure proper error handling for API failures
 - Respect rate limits when making API calls
-- Use environment variables for sensitive data (API tokens, etc.)
 - Keep the TUI responsive during long operations (do not block UI)
-- Avoid using the following widgets (due to performance issues with mouse
-  events):
-  - `ListView`
-  - `ListItem`

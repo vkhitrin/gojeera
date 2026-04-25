@@ -1,31 +1,22 @@
 import asyncio
 
 from textual.widgets import TextArea
-from textual.widgets._tabbed_content import ContentTabs
 
 from gojeera.app import JiraApp
-from gojeera.components import comment_screen as comment_screen_module
-from gojeera.components.comment_screen import CommentScreen
-from gojeera.components.work_item_comments import CommentsScrollView
+from gojeera.components.screens.comment_screen import CommentScreen
+from gojeera.components.work_item.work_item_comments import CommentsScrollView
+from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
 
-from .test_helpers import load_work_item_from_search, wait_until
+from .test_helpers import (
+    navigate_to_comments_tab,
+    stage_clipboard_upload,
+    wait_until,
+    with_snapshot_assertion,
+)
 
 
 async def open_comments_tab(pilot):
-    await load_work_item_from_search(pilot, 'ENG-3')
-
-    await pilot.app.workers.wait_for_complete()
-    await wait_until(lambda: pilot.app.screen is not None, timeout=2.0)
-
-    tabs = pilot.app.screen.query_one(ContentTabs)
-    tabs.focus()
-    await asyncio.sleep(0.1)
-
-    for _ in range(5):
-        await pilot.press('right')
-        await asyncio.sleep(0.1)
-
-    await asyncio.sleep(0.3)
+    await navigate_to_comments_tab(pilot, 'ENG-3')
 
 
 async def open_add_comment_screen(pilot):
@@ -102,46 +93,19 @@ async def create_comment_with_clipboard_attachment_and_verify(pilot):
     assert not isinstance(pilot.app.screen, CommentScreen)
 
 
+def with_comment_snapshot_assertion(run_before, *, configure_app=None):
+    return with_snapshot_assertion(run_before, configure_app=configure_app)
+
+
 class TestCommentScreen:
-    def test_add_comment_screen_initial_state(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    @with_comment_snapshot_assertion(open_add_comment_screen)
+    def test_add_comment_screen_initial_state(self): ...
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_add_comment_screen)
+    @with_comment_snapshot_assertion(fill_comment_and_verify_save_enabled)
+    def test_add_comment_screen_with_text(self): ...
 
-    def test_add_comment_screen_with_text(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=fill_comment_and_verify_save_enabled,
-        )
-
-    def test_edit_comment_screen_with_existing_text(
-        self,
-        snap_compare,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_edit_comment_screen)
+    @with_comment_snapshot_assertion(open_edit_comment_screen)
+    def test_edit_comment_screen_with_existing_text(self): ...
 
     def test_add_comment_screen_with_clipboard_attachment(
         self,
@@ -153,11 +117,7 @@ class TestCommentScreen:
         mock_jira_api_with_search_results,
         staged_upload_file,
     ):
-        monkeypatch.setattr(
-            comment_screen_module,
-            'stage_clipboard_attachments',
-            lambda: [staged_upload_file],
-        )
+        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
 
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         assert snap_compare(
@@ -176,11 +136,7 @@ class TestCommentScreen:
         staged_upload_file,
         mock_attachment_upload,
     ):
-        monkeypatch.setattr(
-            comment_screen_module,
-            'stage_clipboard_attachments',
-            lambda: [staged_upload_file],
-        )
+        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
 
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         upload_route = mock_attachment_upload('ENG-3')

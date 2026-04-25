@@ -43,7 +43,7 @@ class ProjectClassCss:
 def compile_textual_css(tcss_file: Path, project_css: list[ProjectClassCss]) -> list[str]:
     """Validate project CSS with Textual's stylesheet parser."""
     from gojeera.app import JiraApp
-    from gojeera.config import ApplicationConfiguration, JiraConfig
+    from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
 
     app = JiraApp(
         settings=ApplicationConfiguration.model_construct(
@@ -555,7 +555,7 @@ def find_single_id_default_css_candidates(
 def main() -> int:
     """Main entry point."""
     project_root = Path(__file__).parent.parent
-    tcss_file = project_root / 'src' / 'gojeera' / 'gojeera.tcss'
+    tcss_file = project_root / 'src' / 'gojeera' / 'internal' / 'styling' / 'gojeera.tcss'
     src_dir = project_root / 'src'
 
     if not tcss_file.exists():

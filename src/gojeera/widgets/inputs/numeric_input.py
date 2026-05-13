@@ -10,7 +10,7 @@ from gojeera.utils.data.fields import (
     require_create_mode,
     require_update_mode,
 )
-from gojeera.widgets.inputs.extended_input import ExtendedInput
+from gojeera.widgets.inputs.extended_input import ExtendedInput, allow_digit_only_key_input
 
 
 class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
@@ -66,24 +66,7 @@ class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
         return None
 
     def on_key(self, event: Key) -> None:
-        control_keys = {
-            'backspace',
-            'delete',
-            'left',
-            'right',
-            'home',
-            'end',
-            'tab',
-            'escape',
-            'enter',
-            'up',
-            'down',
-        }
-
-        if event.key in control_keys:
-            return
-
-        if event.character and event.character.isdigit():
+        if allow_digit_only_key_input(event, extra_control_keys={'up', 'down'}):
             return
 
         if event.character == '.':

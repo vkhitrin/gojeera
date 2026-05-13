@@ -177,6 +177,20 @@ __OVERFLOW_SCROLLBAR_CSS__
             show=False,
         ),
         Binding(
+            key='left',
+            action='previous_page',
+            description='←',
+            show=True,
+            tooltip='Load the previous page of results',
+        ),
+        Binding(
+            key='right',
+            action='next_page',
+            description='→',
+            show=True,
+            tooltip='Load the next page of results',
+        ),
+        Binding(
             key='ctrl+o',
             action='open_work_item_in_browser',
             description='Browse',
@@ -743,23 +757,34 @@ __OVERFLOW_SCROLLBAR_CSS__
             work_items_container.is_loading
         )
 
-        if is_loading and action in {'previous_work_items_page', 'next_work_items_page'}:
+        if is_loading and action in {
+            'previous_work_items_page',
+            'next_work_items_page',
+            'previous_page',
+            'next_page',
+        }:
             return False
 
-        if action == 'previous_work_items_page':
+        if action in {'previous_work_items_page', 'previous_page'}:
             return self.page > 1
-        if action == 'next_work_items_page':
+        if action in {'next_work_items_page', 'next_page'}:
             if self.token_by_page.get(self.page + 1):
                 return True
             return self.page < self.total_pages
         return True
 
-    def action_previous_work_items_page(self):
+    def action_previous_page(self) -> None:
         if self.page > 1:
             self._request_work_items_page(self.page - 1)
 
-    def action_next_work_items_page(self):
+    def action_next_page(self) -> None:
         self._request_work_items_page(self.page + 1)
+
+    def action_previous_work_items_page(self) -> None:
+        self.action_previous_page()
+
+    def action_next_work_items_page(self) -> None:
+        self.action_next_page()
 
     def _request_work_items_page(self, requested_page: int) -> None:
         next_page_token = self.token_by_page.get(requested_page)

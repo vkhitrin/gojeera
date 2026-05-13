@@ -208,7 +208,8 @@ After executing a search, gojeera shows a dedicated results pane with:
   - Sort by ascending/descending value of the field.
     By default `Descending` is set.
 - Work items.
-- Pagination and total results returned by search.
+- Buttons for navigating between pages and total results returned by search.
+  An input field is available to quickly navigate to a specific page.
 
 Each work item may contain:
 
@@ -479,6 +480,7 @@ footer can still appear here when they are intentionally registered.
 - **Debug Information**: Open the debug information screen
 - **Quick Navigation**: Jump directly to a work item by key
 - **Contextual Work Item Commands** when a work item is loaded
+- **Navigate to a page** in a search result
 
 ## Jumper Mode
 

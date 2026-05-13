@@ -52,6 +52,73 @@ Footer FooterKey > .footer-key--description {
   background: transparent;
 }
 
+.search-results-action-button {
+  background: $primary-muted;
+  color: $text-primary;
+  text-align: center;
+  content-align: center middle;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.search-results-action-button > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
+.search-results-action-button:hover {
+  background: $primary;
+  color: $text;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.search-results-action-button:hover > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.search-results-action-button:disabled {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+.search-results-action-button:disabled > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+.search-results-action-button:disabled:hover {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+.search-results-action-button:disabled:hover > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+.search-results-action-button:focus {
+  background: $primary-muted;
+  color: $text-primary;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.search-results-action-button:focus > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
 #main-container {
   height: auto;
   padding: 1 1;

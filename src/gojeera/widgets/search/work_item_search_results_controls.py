@@ -38,73 +38,6 @@ class WorkItemSearchResultsControls(Horizontal):
         min-width: 3;
         padding: 0;
     }
-
-    WorkItemSearchResultsControls > Button.-style-default > Static {
-        color: $text-primary;
-        background: transparent;
-        text-style: bold;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default {
-        background: $primary-muted;
-        color: $text-primary;
-        text-align: center;
-        content-align: center middle;
-        border: none;
-        border-top: none;
-        border-bottom: none;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:hover {
-        background: $primary;
-        color: $text;
-        border: none;
-        border-top: none;
-        border-bottom: none;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:hover > Static {
-        color: $text;
-        background: transparent;
-        text-style: bold;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:disabled {
-        background: $primary-darken-3;
-        color: $text-disabled;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:disabled > Static {
-        color: $text-disabled;
-        background: transparent;
-        text-style: bold;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:disabled:hover {
-        background: $primary-darken-3;
-        color: $text-disabled;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:disabled:hover > Static {
-        color: $text-disabled;
-        background: transparent;
-        text-style: bold;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:focus {
-        background: $primary-muted;
-        color: $text-primary;
-        text-style: bold;
-        border: none;
-        border-top: none;
-        border-bottom: none;
-    }
-
-    WorkItemSearchResultsControls > Button.-style-default:focus > Static {
-        color: $text-primary;
-        background: transparent;
-        text-style: bold;
-    }
     """
 
     ORDER_BY_OPTIONS = [
@@ -126,8 +59,18 @@ class WorkItemSearchResultsControls(Horizontal):
             allow_blank=False,
             compact=True,
         )
-        yield Button('⇊', id='search-results-order-direction-button', compact=True)
-        yield Button('↺', id='search-results-refresh-button', compact=True)
+        yield Button(
+            '⇊',
+            id='search-results-order-direction-button',
+            classes='search-results-action-button',
+            compact=True,
+        )
+        yield Button(
+            '↺',
+            id='search-results-refresh-button',
+            classes='search-results-action-button',
+            compact=True,
+        )
 
     @property
     def order_by(self) -> VimSelect:

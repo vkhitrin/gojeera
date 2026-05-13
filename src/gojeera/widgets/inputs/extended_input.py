@@ -1,9 +1,34 @@
+from textual.events import Key
 from textual.widgets import Input
 
 from gojeera.widgets.markdown.external_editor_mixin import (
     EXTERNAL_EDITOR_BINDING,
     ExternalEditorMixin,
 )
+
+
+def allow_digit_only_key_input(
+    event: Key,
+    *,
+    extra_control_keys: set[str] | None = None,
+) -> bool:
+    control_keys = {
+        'backspace',
+        'delete',
+        'left',
+        'right',
+        'home',
+        'end',
+        'tab',
+        'escape',
+        'enter',
+    }
+    if extra_control_keys is not None:
+        control_keys.update(extra_control_keys)
+
+    if event.key in control_keys:
+        return True
+    return bool(event.character and event.character.isdigit())
 
 
 class ExtendedInput(ExternalEditorMixin, Input):

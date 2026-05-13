@@ -852,6 +852,18 @@ class WorkspaceMixin(App):
         if self.focused is self.search_results_list:
             self.query_one('#unified-search-bar', UnifiedSearchBar).focus()
 
+    def action_focus_search_results_page_input(self) -> None:
+        container = self.search_results_container
+        if (
+            not container.search_active
+            or not container.results_loaded
+            or container.is_loading
+            or not container.page_input.display
+            or container.page_input.disabled
+        ):
+            return
+        container.page_input.focus()
+
     def _is_any_select_expanded(self) -> bool:
         for select in self.query(Select):
             if select.expanded:
@@ -1918,7 +1930,12 @@ class JiraApp(WorkspaceMixin, App):
             self.pop_screen()
         else:
             if self.use_command_palette and not ExtendedPalette.is_open(self):
-                self.push_screen(ExtendedPalette(id='--command-palette'))
+                self.push_screen(
+                    ExtendedPalette(
+                        id='--command-palette',
+                        placeholder='Search for commands or type "page N"…',
+                    )
+                )
 
     def action_toggle_footer_visibility(self) -> None:
         self.toggle_footer_visibility()

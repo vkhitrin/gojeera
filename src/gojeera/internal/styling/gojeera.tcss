@@ -598,6 +598,16 @@ UnifiedSearchBar > Button:focus > Static {
   border: none;
 }
 
+#work-item-fields-discard-changes-button {
+  width: 3;
+  min-width: 3;
+  max-width: 3;
+  height: 1;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
 #work-item-fields-form > StaticFieldsWidgets > .field-row-slot,
 #work-item-fields-form > DynamicFieldsWidgets > .field-row-slot,
 #work-item-fields-form > DateMetadata > .field-row-slot {

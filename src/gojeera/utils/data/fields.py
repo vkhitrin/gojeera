@@ -3,9 +3,9 @@ from enum import Enum
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Grid
 from textual.reactive import reactive
-from textual.widgets import Button
+from textual.widgets import Button, Static
 
 from gojeera.utils.data.mappings import get_nested
 
@@ -234,10 +234,11 @@ class ValidationUtils:
         return original != current
 
 
-class PendingChangesWidget(Horizontal, can_focus=False):
-    """Transparent footer widget that exposes a full-width pending-changes button."""
+class PendingChangesWidget(Grid, can_focus=False):
+    """Transparent footer widget exposing save and discard actions for pending changes."""
 
-    PENDING_LABEL = 'Apply Changes'
+    PENDING_LABEL = 'Save'
+    DISCARD_LABEL = '𐄂'
 
     DEFAULT_CSS = """
     PendingChangesWidget {
@@ -247,10 +248,11 @@ class PendingChangesWidget(Horizontal, can_focus=False):
         margin: 0;
         padding: 0;
         align: center middle;
+        grid-size: 3 1;
+        grid-columns: 1fr 1 3;
     }
 
     PendingChangesWidget > Button {
-        width: 1fr;
         height: 1;
         background: transparent;
     }
@@ -265,24 +267,45 @@ class PendingChangesWidget(Horizontal, can_focus=False):
         self.display = True
 
     def compose(self) -> ComposeResult:
-        button = Button(
+        save_button = Button(
             self.PENDING_LABEL,
             id='work-item-fields-pending-changes-button',
         )
-        button.display = False
-        yield button
+        discard_button = Button(
+            self.DISCARD_LABEL,
+            id='work-item-fields-discard-changes-button',
+            classes='modal-action-button modal-action-button--danger',
+        )
+        save_button.display = False
+        discard_button.display = False
+        yield save_button
+        yield Static('', id='work-item-fields-pending-changes-spacer')
+        yield discard_button
 
     @property
     def button(self) -> Button:
-        return self.query_one(Button)
+        return self.save_button
+
+    @property
+    def save_button(self) -> Button:
+        return self.query_one('#work-item-fields-pending-changes-button', expect_type=Button)
+
+    @property
+    def discard_button(self) -> Button:
+        return self.query_one('#work-item-fields-discard-changes-button', expect_type=Button)
+
+    def _update_button_visibility(self, *, is_visible: bool) -> None:
+        self.save_button.display = is_visible
+        self.discard_button.display = is_visible
 
     def watch_has_pending_changes(self, has_pending_changes: bool) -> None:
-        self.button.display = has_pending_changes or self.is_loading
+        self._update_button_visibility(is_visible=has_pending_changes or self.is_loading)
 
     def watch_is_loading(self, is_loading: bool) -> None:
-        self.button.display = self.has_pending_changes or is_loading
-        self.button.disabled = is_loading
-        self.button.label = self.PENDING_LABEL
+        self._update_button_visibility(is_visible=self.has_pending_changes or is_loading)
+        self.save_button.disabled = is_loading
+        self.discard_button.disabled = is_loading
+        self.save_button.label = self.PENDING_LABEL
         self.loading = is_loading
 
 

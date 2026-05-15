@@ -152,6 +152,13 @@ class WorkspaceMixin(App):
             show=True,
         ),
         Binding(
+            key='ctrl+z',
+            action='discard_changes',
+            description='Discard Changes',
+            tooltip='Discard pending field changes',
+            show=True,
+        ),
+        Binding(
             key='ctrl+g',
             action='go_to_parent_work_item',
             description='Go To Parent',
@@ -1202,6 +1209,11 @@ class WorkspaceMixin(App):
         if not self.current_loaded_work_item_key:
             return
         self.work_item_fields_widget.action_save_work_item()
+
+    def action_discard_changes(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        self.work_item_fields_widget.action_discard_pending_changes()
 
     async def action_go_to_parent_work_item(self) -> None:
         if self.focused_work_item_link_key:

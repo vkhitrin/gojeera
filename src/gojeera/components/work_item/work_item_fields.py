@@ -490,6 +490,13 @@ class WorkItemFields(Container, can_focus=False):
         )
 
     @property
+    def discard_changes_button(self) -> Button:
+        return self.query_one(
+            '#work-item-fields-discard-changes-button',
+            expect_type=Button,
+        )
+
+    @property
     def pending_changes_container(self) -> Horizontal:
         return self.query_one('#work-item-fields-pending-changes-container', expect_type=Horizontal)
 
@@ -936,8 +943,9 @@ class WorkItemFields(Container, can_focus=False):
             if hasattr(widget, 'jump_mode'):
                 set_jump_mode(widget, None)
 
-        if hasattr(self.pending_changes_button, 'jump_mode'):
-            set_jump_mode(self.pending_changes_button, None)
+        for button in (self.pending_changes_button, self.discard_changes_button):
+            if hasattr(button, 'jump_mode'):
+                set_jump_mode(button, None)
 
         for widget in content.query('.field_control'):
             if not widget.can_focus:
@@ -948,8 +956,9 @@ class WorkItemFields(Container, can_focus=False):
                 continue
             set_jump_mode(widget, 'focus')
 
-        if self.pending_changes_button.can_focus and not self.pending_changes_button.disabled:
-            set_jump_mode(self.pending_changes_button, 'click')
+        for button in (self.pending_changes_button, self.discard_changes_button):
+            if button.can_focus and not button.disabled:
+                set_jump_mode(button, 'click')
 
     def _update_layout_mode(self) -> None:
         try:
@@ -2244,9 +2253,126 @@ class WorkItemFields(Container, can_focus=False):
         self._update_pending_changes_footer()
         self._save_work_item()
 
+    def action_discard_pending_changes(self) -> None:
+        if self._save_in_progress or not self.work_item:
+            return
+
+        self.run_worker(self._discard_pending_changes_locally(), exclusive=True)
+
     @on(Button.Pressed, '#work-item-fields-pending-changes-button')
     def handle_pending_changes_button_pressed(self) -> None:
         self.action_save_work_item()
+
+    @on(Button.Pressed, '#work-item-fields-discard-changes-button')
+    def handle_discard_changes_button_pressed(self) -> None:
+        self.action_discard_pending_changes()
+
+    async def _discard_pending_changes_locally(self) -> None:
+        if not self.work_item:
+            return
+
+        self._suspend_pending_change_tracking()
+        try:
+            if self._status_has_pending_change():
+                self._reset_status_selection()
+
+            for widget in self._iter_dirty_update_widgets():
+                await self._reset_widget_to_original_value(widget)
+
+            self.has_pending_changes = False
+            self._update_all_field_labels_styling()
+            self._schedule_field_spacing_refresh()
+        finally:
+            self._resume_pending_change_tracking()
+
+    def _status_has_pending_change(self) -> bool:
+        return (
+            self.work_item_status_selector.selection is not None
+            and self.work_item is not None
+            and self.work_item.status is not None
+        )
+
+    def _reset_status_selection(self) -> None:
+        if not self.work_item or not self.work_item.status:
+            return
+        self.work_item_status_selector.original_value = self.work_item.status.id
+        self.work_item_status_selector.value = Select.NULL
+        self.work_item_status_selector.prompt = self.work_item.status.name
+
+    def _iter_dirty_update_widgets(self) -> list[Widget]:
+        widgets: list[Widget] = []
+
+        for widget in (
+            self.priority_selector,
+            self.assignee_selector,
+            self.work_item_due_date_field,
+            self.work_item_labels_widget,
+            self.work_item_components_widget,
+            self.work_item_affects_version_widget,
+            self.work_item_fix_version_widget,
+            self.work_item_story_points_widget,
+            self.sprint_picker_widget,
+        ):
+            if getattr(widget, 'update_enabled', True) and getattr(
+                widget, 'value_has_changed', False
+            ):
+                widgets.append(widget)
+
+        for wrapper in self._iter_dynamic_field_wrappers():
+            if not wrapper.update_enabled or not wrapper.value_has_changed:
+                continue
+            if wrapper.widget is None:
+                continue
+            widgets.append(wrapper.widget)
+
+        return widgets
+
+    async def _reset_widget_to_original_value(self, widget: Widget) -> None:
+        if isinstance(widget, DateInput):
+            widget.set_original_value(widget.original_value)
+            return
+
+        if isinstance(widget, DateTimeInput):
+            widget.value = widget.original_value or ''
+            return
+
+        if isinstance(widget, NumericInput):
+            widget.value = '' if widget.original_value is None else str(widget.original_value)
+            return
+
+        if isinstance(widget, (TextInput, URL)):
+            widget.value = widget.original_value or ''
+            return
+
+        if isinstance(widget, (SelectionWidget, UserPicker, UserSelectionInput)):
+            widget.value = widget.original_value if widget.original_value else Select.NULL
+            if isinstance(widget, UserPicker):
+                widget.pending_value = widget.original_value
+                widget.prompt = next(
+                    (
+                        label
+                        for label, value in getattr(widget, '_options', [])
+                        if value == widget.original_value
+                    ),
+                    'Unassigned',
+                )
+            elif isinstance(widget, UserSelectionInput):
+                widget.prompt = next(
+                    (
+                        label
+                        for label, value in getattr(widget, '_options', [])
+                        if value == widget.original_value
+                    ),
+                    'Unassigned',
+                )
+            return
+
+        if isinstance(widget, (MultiSelect, WorkItemLabels)):
+            await widget.update_options(
+                options=list(widget._name_to_id.items()),
+                original_value=widget.original_value,
+                field_supports_update=widget.update_enabled,
+            )
 
     @work(exclusive=False, group='save-work-item')
     async def _save_work_item(self) -> None:

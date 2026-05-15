@@ -1,7 +1,9 @@
 import asyncio
 
+import pytest
 from textual.widgets import Select
 
+from gojeera.app import JiraApp
 from gojeera.components.work_item.work_item_fields import WorkItemFields
 
 from .test_helpers import (
@@ -133,6 +135,61 @@ async def save_priority_field_and_verify_applied(pilot):
     await asyncio.sleep(0.2)
 
 
+async def discard_priority_field_change_and_verify_restored(
+    pilot, *, assert_local_only: bool = False
+):
+    await open_work_item_and_view_fields(pilot)
+
+    fields_widget = pilot.app.screen.query_one(WorkItemFields)
+    priority_selector = fields_widget.priority_selector
+
+    await wait_until(
+        lambda: bool(priority_selector.value) and priority_selector.selection is not None,
+        timeout=3.0,
+    )
+    await asyncio.sleep(0.2)
+
+    original_value = priority_selector.original_value
+    replacement_value = next(
+        value
+        for _label, value in priority_selector._options
+        if value not in {original_value, Select.NULL}
+    )
+
+    priority_selector.value = replacement_value
+    await wait_until(lambda: fields_widget.has_pending_changes, timeout=3.0)
+    await wait_until(
+        lambda: (
+            fields_widget.discard_changes_button.display
+            and fields_widget.pending_changes_button.display
+        ),
+        timeout=3.0,
+    )
+
+    if assert_local_only:
+
+        async def fail_status_refresh(*_args, **_kwargs):
+            raise AssertionError('Discard should not refresh applicable statuses')
+
+        async def fail_assignable_users_refresh(*_args, **_kwargs):
+            raise AssertionError('Discard should not refresh assignable users')
+
+        fields_widget._retrieve_applicable_status_codes = fail_status_refresh
+        fields_widget._retrieve_users_assignable_to_work_item = fail_assignable_users_refresh
+
+    await pilot.press('ctrl+z')
+
+    await pilot.app.workers.wait_for_complete()
+    await wait_until(
+        lambda: (
+            not fields_widget.has_pending_changes
+            and priority_selector.original_value == original_value
+            and priority_selector.value == original_value
+        ),
+        timeout=3.0,
+    )
+
+
 class TestWorkItemFields:
     @with_snapshot_assertion(open_work_item_and_view_fields, terminal_size=(120, 60))
     def test_work_item_fields_initial_state(self):
@@ -157,3 +214,18 @@ class TestWorkItemFields:
     )
     def test_work_item_fields_with_saved_priority_change_applied(self):
         pass
+
+    @pytest.mark.asyncio
+    async def test_work_item_fields_discard_pending_priority_change(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        async with app.run_test() as pilot:
+            await discard_priority_field_change_and_verify_restored(
+                pilot,
+                assert_local_only=True,
+            )

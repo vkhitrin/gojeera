@@ -128,12 +128,12 @@ def get_jira_oauth2_access_token(account_id: str) -> str | None:
     return _read_oauth2_bundle(account_id).get('access_token')
 
 
+def get_jira_oauth2_credentials(account_id: str) -> dict[str, str]:
+    return _read_oauth2_bundle(account_id)
+
+
 def set_jira_oauth2_access_token(account_id: str, access_token: str) -> None:
     _update_oauth2_bundle_value(account_id, 'access_token', access_token)
-
-
-def get_jira_oauth2_refresh_token(account_id: str) -> str | None:
-    return _read_oauth2_bundle(account_id).get('refresh_token')
 
 
 def set_jira_oauth2_refresh_token(account_id: str, refresh_token: str) -> None:

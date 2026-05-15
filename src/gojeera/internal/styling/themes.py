@@ -1,12 +1,24 @@
+from dataclasses import fields as dataclass_fields
 import logging
 from pathlib import Path
+from typing import Any, Mapping, Sequence
 
+from pydantic import TypeAdapter
 from textual.theme import Theme
 import yaml
 
 from gojeera.utils.system.logging_utils import build_log_extra
 
 logger = logging.getLogger('gojeera')
+THEME_ADAPTER = TypeAdapter(Theme)
+THEME_FIELD_NAMES = {field.name for field in dataclass_fields(Theme)}
+
+
+def find_unexpected_theme_field(config: Mapping[str, Any]) -> str | None:
+    for key in config:
+        if key not in THEME_FIELD_NAMES:
+            return key
+    return None
 
 
 def create_theme_from_config(config: dict) -> Theme:
@@ -21,45 +33,21 @@ def create_theme_from_config(config: dict) -> Theme:
     Raises:
         ValueError: If required fields are missing or invalid.
     """
-    if 'name' not in config:
-        raise ValueError("Theme configuration must include 'name' field")
-    if 'primary' not in config:
-        raise ValueError(f"Theme '{config['name']}' must include 'primary' color")
-
-    kwargs = {
-        'name': config['name'],
-        'primary': config['primary'],
-        'dark': config.get('dark', True),
-    }
-
-    optional_colors = [
-        'secondary',
-        'accent',
-        'foreground',
-        'background',
-        'surface',
-        'panel',
-        'success',
-        'warning',
-        'error',
-        'boost',
-    ]
-    for color in optional_colors:
-        if color in config:
-            kwargs[color] = config[color]
-
-    if 'luminosity_spread' in config:
-        kwargs['luminosity_spread'] = config['luminosity_spread']
-    if 'text_alpha' in config:
-        kwargs['text_alpha'] = config['text_alpha']
-
-    if 'variables' in config:
-        kwargs['variables'] = config['variables']
-
-    return Theme(**kwargs)
+    if unexpected_field := find_unexpected_theme_field(config):
+        raise ValueError(f"Theme configuration contains unexpected field '{unexpected_field}'")
+    try:
+        return THEME_ADAPTER.validate_python(config)
+    except Exception as exc:
+        if 'name' not in config:
+            raise ValueError("Theme configuration must include 'name' field") from exc
+        if 'primary' not in config:
+            raise ValueError(f"Theme '{config['name']}' must include 'primary' color") from exc
+        raise
 
 
-def create_themes_from_config(theme_configs: list[dict] | None) -> list[Theme]:
+def create_themes_from_config(
+    theme_configs: Sequence[Theme] | Sequence[dict[str, Any]] | None,
+) -> list[Theme]:
     """Create Textual Theme objects from configuration dictionaries.
 
     Args:
@@ -77,11 +65,13 @@ def create_themes_from_config(theme_configs: list[dict] | None) -> list[Theme]:
     themes = []
     for config in theme_configs:
         try:
-            themes.append(create_theme_from_config(config))
+            if isinstance(config, Theme):
+                themes.append(config)
+            else:
+                themes.append(create_theme_from_config(config))
         except Exception as e:
-            raise ValueError(
-                f"Invalid theme configuration for '{config.get('name', 'unknown')}': {str(e)}"
-            ) from e
+            theme_name = config.name if isinstance(config, Theme) else config.get('name', 'unknown')
+            raise ValueError(f"Invalid theme configuration for '{theme_name}': {str(e)}") from e
 
     return themes
 
@@ -118,19 +108,10 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
             themes.append(theme)
 
         except yaml.YAMLError as e:
-            logger.error(
-                'Failed to parse theme file',
-                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
-            )
+            raise ValueError(f'Invalid theme file "{yaml_file.name}": failed to parse YAML') from e
         except ValueError as e:
-            logger.error(
-                'Invalid theme definition',
-                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
-            )
+            raise ValueError(f'Invalid theme file "{yaml_file.name}": {str(e)}') from e
         except Exception as e:
-            logger.warning(
-                'Unexpected error loading theme',
-                extra=build_log_extra({'theme_file': yaml_file.name, 'error': str(e)}),
-            )
+            raise ValueError(f'Invalid theme file "{yaml_file.name}": {str(e)}') from e
 
     return themes

@@ -15,6 +15,7 @@ from textual.app import App, ComposeResult, InvalidThemeError
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import Reactive, reactive
+from textual.theme import Theme
 from textual.widgets import Button, Input, Select, Static, TabPane
 from textual.widgets._tabbed_content import ContentTab
 from textual.worker import Worker
@@ -1739,6 +1740,7 @@ class JiraApp(WorkspaceMixin, App):
         self,
         settings: ApplicationConfiguration,
         user_info: JiraMyselfInfo | None = None,
+        directory_themes: list[Theme] | None = None,
         project_key: str | None = None,
         assignee: str | None = None,
         jql_filter: str | None = None,
@@ -1765,6 +1767,7 @@ class JiraApp(WorkspaceMixin, App):
 
         self.focus_item_on_startup: int | None = focus_item_on_startup
         self.server_info: JiraServerInfo | None = None
+        self._directory_themes = directory_themes
         self._init_workspace(
             api=self.api,
             project_key=project_key,
@@ -1816,20 +1819,15 @@ class JiraApp(WorkspaceMixin, App):
         )
 
     def _register_custom_themes(self) -> None:
-        try:
+        directory_themes = self._directory_themes
+        if directory_themes is None:
             themes_dir = get_themes_directory()
             directory_themes = load_themes_from_directory(themes_dir)
-            for theme in directory_themes:
-                self.register_theme(theme)
-                self.logger.info(
-                    'Registered custom theme from directory',
-                    extra=build_log_extra({'theme_name': theme.name}),
-                )
-        except Exception as error:
-            self.logger.warning(
-                'Error loading themes from directory',
-                extra=build_log_extra({'error': str(error)}),
-                exc_info=True,
+        for theme in directory_themes:
+            self.register_theme(theme)
+            self.logger.info(
+                'Registered custom theme from directory',
+                extra=build_log_extra({'theme_name': theme.name}),
             )
 
     def _setup_theme(self, user_theme: str | None = None) -> None:

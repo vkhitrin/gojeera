@@ -4,9 +4,17 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    BaseModel as PydanticModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     InitSettingsSource,
@@ -14,6 +22,7 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
+from textual.theme import Theme
 
 from gojeera.internal.auth.profiles import (
     ATLASSIAN_OAUTH2_AUTHORIZATION_URL,
@@ -27,14 +36,18 @@ from gojeera.internal.auth.profiles import (
     resolve_current_profile,
 )
 from gojeera.internal.auth.service import AuthService
-from gojeera.internal.models.base import BaseModel
+from gojeera.internal.styling.themes import find_unexpected_theme_field
 from gojeera.internal.store.files import get_config_file
 from gojeera.internal.store.secret import SecretStoreError
 
 AUTH_SERVICE = AuthService()
 
 
-class SSLConfiguration(BaseModel):
+class StrictConfigModel(PydanticModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+class SSLConfiguration(StrictConfigModel):
     """Configuration for SSL CA bundles and client-side certificates."""
 
     verify_ssl: bool = True
@@ -49,7 +62,7 @@ class SSLConfiguration(BaseModel):
     """The password for the key file."""
 
 
-class RemoteFiltersConfig(BaseModel):
+class RemoteFiltersConfig(StrictConfigModel):
     """Configuration for fetching remote JQL filters from Jira API."""
 
     enabled: bool = False
@@ -67,7 +80,7 @@ class RemoteFiltersConfig(BaseModel):
     Default: 3600 seconds (1 hour)."""
 
 
-class JumperConfig(BaseModel):
+class JumperConfig(StrictConfigModel):
     """Configuration for the jumper overlay widget."""
 
     enabled: bool = True
@@ -77,6 +90,13 @@ class JumperConfig(BaseModel):
 
     Default is ['q', 'w', 'e', 'a', 's', 'd', 'z', 'x', 'c'].
     """
+
+
+class JQLFilterConfig(StrictConfigModel):
+    """Configuration for a saved JQL filter."""
+
+    label: str
+    expression: str
 
 
 @dataclass(frozen=True)
@@ -174,6 +194,30 @@ class JiraConfig(BaseSettings):
             raise ValueError(f'jira.active_profile "{profile_name}" does not exist.')
         object.__setattr__(self, 'active_profile_name', profile_name)
         self._reload_active_profile_secrets()
+
+    def update_active_oauth2_session(
+        self,
+        *,
+        access_token: str,
+        refresh_token: str | None,
+        oauth2_access_token_expiration_timestamp: int | None,
+    ) -> None:
+        active_profile = self.active_profile
+        profile_name = self.get_active_profile_name()
+        if not isinstance(active_profile, OAuth2AuthProfile) or profile_name is None:
+            raise ValueError('Active profile is not an OAuth2 profile.')
+
+        updated_profiles = dict(self.profiles)
+        updated_profiles[profile_name] = active_profile.model_copy(
+            update={
+                'oauth2_access_token_expiration_timestamp': oauth2_access_token_expiration_timestamp
+            }
+        )
+
+        object.__setattr__(self, 'profiles', updated_profiles)
+        object.__setattr__(self, 'oauth2_access_token', SecretStr(access_token))
+        if refresh_token is not None:
+            object.__setattr__(self, 'oauth2_refresh_token', SecretStr(refresh_token))
 
     @model_validator(mode='after')
     def resolve_profile(self) -> 'JiraConfig':
@@ -447,9 +491,33 @@ class ApplicationConfiguration(BaseSettings):
     When `enable_creating_additional_fields = False`, this is also used to exclude specific fields from the default set."""
     show_footer: bool = True
     """When this is `True` (default), footer key bindings are shown. When `False`, footer widgets are hidden."""
+    custom_themes: list[Theme] | None = None
+    """Optional theme definitions loaded from the main config file."""
+
+    @field_validator('jql_filters', mode='before')
+    @classmethod
+    def validate_jql_filters(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        validated_filters = TypeAdapter(list[JQLFilterConfig]).validate_python(value)
+        return [item.model_dump() for item in validated_filters]
+
+    @field_validator('custom_themes', mode='before')
+    @classmethod
+    def validate_custom_themes(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        for index, item in enumerate(value):
+            if isinstance(item, dict) and (
+                unexpected_field := find_unexpected_theme_field(cast(dict[str, Any], item))
+            ):
+                raise ValueError(
+                    f'Invalid configuration field "custom_themes[{index}].{unexpected_field}"'
+                )
+        return TypeAdapter(list[Theme]).validate_python(value)
 
     model_config = SettingsConfigDict(
-        extra='allow',
+        extra='forbid',
         validate_assignment=True,
         env_prefix='GOJEERA_',
         env_nested_delimiter='__',

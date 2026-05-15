@@ -1,6 +1,8 @@
 from pydantic import SecretStr, ValidationError
 import pytest
 
+from tests.config_test_helpers import write_config_and_set_basic_auth, write_custom_theme_config
+
 from gojeera.internal.store.config import ApplicationConfiguration
 
 
@@ -115,6 +117,79 @@ def test_yaml_jira_authentication_is_ignored(monkeypatch, tmp_path):
         ApplicationConfiguration()
 
 
+def test_unknown_top_level_config_field_raises_validation_error(monkeypatch, tmp_path):
+    write_config_and_set_basic_auth(monkeypatch, tmp_path, 'thme: "oops"')
+
+    with pytest.raises(ValidationError) as exc_info:
+        ApplicationConfiguration()
+    assert exc_info.value.errors()[0]['type'] == 'extra_forbidden'
+    assert exc_info.value.errors()[0]['loc'] == ('thme',)
+
+
+def test_unknown_nested_config_field_raises_validation_error(monkeypatch, tmp_path):
+    write_config_and_set_basic_auth(monkeypatch, tmp_path, 'fetch_remote_filters:', '  a: true')
+
+    with pytest.raises(ValidationError) as exc_info:
+        ApplicationConfiguration()
+    assert exc_info.value.errors()[0]['type'] == 'extra_forbidden'
+    assert exc_info.value.errors()[0]['loc'] == ('fetch_remote_filters', 'a')
+
+
+def test_known_nested_config_sections_remain_valid(monkeypatch, tmp_path):
+    write_config_and_set_basic_auth(
+        monkeypatch,
+        tmp_path,
+        'fetch_remote_filters:',
+        '  enabled: true',
+        '  include_shared: true',
+        '  starred_only: false',
+        '  cache_ttl: 120',
+        'jumper:',
+        '  enabled: true',
+        '  keys: ["q", "w"]',
+        'ssl:',
+        '  verify_ssl: true',
+    )
+
+    config = ApplicationConfiguration()
+
+    assert config.fetch_remote_filters.enabled is True
+    assert config.fetch_remote_filters.include_shared is True
+    assert config.fetch_remote_filters.cache_ttl == 120
+    assert config.jumper.keys == ['q', 'w']
+    assert config.ssl is not None
+    assert config.ssl.verify_ssl is True
+
+
+def test_unknown_jql_filter_field_raises_validation_error(monkeypatch, tmp_path):
+    write_config_and_set_basic_auth(
+        monkeypatch,
+        tmp_path,
+        'jql_filters:',
+        '  - label: "My filter"',
+        '    expression: "assignee = currentUser()"',
+        '    a: "oops"',
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        ApplicationConfiguration()
+    assert exc_info.value.errors()[0]['type'] == 'extra_forbidden'
+    assert exc_info.value.errors()[0]['loc'] == ('jql_filters', 0, 'a')
+
+
+def test_unknown_custom_theme_field_raises_configuration_error(monkeypatch, tmp_path):
+    write_custom_theme_config(
+        monkeypatch,
+        tmp_path,
+        '  - name: "custom"',
+        '    primary: "#ffffff"',
+        '    a: "oops"',
+    )
+
+    with pytest.raises(ValueError, match='Invalid configuration field "custom_themes\\[0\\].a"'):
+        ApplicationConfiguration()
+
+
 def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
     config_file = tmp_path / 'gojeera.yaml'
     config_file.write_text(
@@ -213,4 +288,26 @@ def test_profiles_require_active_profile_when_registry_exists(monkeypatch, tmp_p
     )
 
     with pytest.raises(Exception, match='jira.current_profile is required'):
+        ApplicationConfiguration()
+
+
+def test_invalid_oauth2_profile_field_raises_configuration_error(monkeypatch, tmp_path):
+    profiles_file = tmp_path / 'auth_profiles.yaml'
+    _write_auth_profiles_file(
+        profiles_file,
+        'current_profile: "work"',
+        'profiles:',
+        '  - name: "work"',
+        '    auth_type: "oauth2"',
+        '    site: "https://example.atlassian.net"',
+        '    cloud_id: "cloud-123"',
+        '    asite: "unexpected"',
+    )
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
+    _set_runtime_secrets_provider(
+        monkeypatch,
+        lambda profile, **kwargs: {'oauth2_access_token': 'oauth-access-token'},
+    )
+
+    with pytest.raises(ValueError, match='Invalid auth profile "work": unexpected field "asite"'):
         ApplicationConfiguration()

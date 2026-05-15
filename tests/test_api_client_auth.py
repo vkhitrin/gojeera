@@ -19,17 +19,18 @@ def _configuration() -> ApplicationConfiguration:
 
 
 def _refresh_token_counter():
-    refresh_calls = 0
+    refresh_calls: list[bool] = []
 
-    def refresh_token() -> str:
-        nonlocal refresh_calls
-        refresh_calls += 1
-        return 'fresh-token'
+    def refresh_token(force: bool) -> str | None:
+        refresh_calls.append(force)
+        if force:
+            return 'fresh-token'
+        return None
 
-    def call_count() -> int:
+    def calls() -> list[bool]:
         return refresh_calls
 
-    return refresh_token, call_count
+    return refresh_token, calls
 
 
 def _retry_route():
@@ -54,7 +55,7 @@ def _oauth2_client_kwargs(token_refresh_callback):
 
 def _assert_retry_result(route, call_count: int, response) -> None:
     assert response == {'ok': True}
-    assert call_count == 1
+    assert call_count == [False, True]
     assert route.calls[0].request.headers['Authorization'] == 'Bearer expired-token'
     assert route.calls[1].request.headers['Authorization'] == 'Bearer fresh-token'
 
@@ -62,7 +63,7 @@ def _assert_retry_result(route, call_count: int, response) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_async_jira_client_retries_after_oauth2_refresh():
-    refresh_token, refresh_call_count = _refresh_token_counter()
+    refresh_token, refresh_calls = _refresh_token_counter()
     route = _retry_route()
 
     client = AsyncJiraClient(**_oauth2_client_kwargs(refresh_token))
@@ -72,12 +73,12 @@ async def test_async_jira_client_retries_after_oauth2_refresh():
     finally:
         await client.close_async_client()
 
-    _assert_retry_result(route, refresh_call_count(), response)
+    _assert_retry_result(route, refresh_calls(), response)
 
 
 @respx.mock
 def test_jira_client_retries_after_oauth2_refresh():
-    refresh_token, refresh_call_count = _refresh_token_counter()
+    refresh_token, refresh_calls = _refresh_token_counter()
     route = _retry_route()
 
     client = JiraClient(**_oauth2_client_kwargs(refresh_token))
@@ -87,4 +88,27 @@ def test_jira_client_retries_after_oauth2_refresh():
     finally:
         client.client.close()
 
-    _assert_retry_result(route, refresh_call_count(), response)
+    _assert_retry_result(route, refresh_calls(), response)
+
+
+@respx.mock
+def test_jira_client_refreshes_expired_oauth2_token_before_request():
+    refresh_calls: list[bool] = []
+    route = respx.get('https://api.atlassian.com/test').mock(
+        return_value=httpx.Response(200, json={'ok': True})
+    )
+
+    def refresh_token(force: bool) -> str | None:
+        refresh_calls.append(force)
+        return 'fresh-token'
+
+    client = JiraClient(**_oauth2_client_kwargs(refresh_token))
+
+    try:
+        response = client.make_request(method=client.client.get, url='test')
+    finally:
+        client.client.close()
+
+    assert response == {'ok': True}
+    assert refresh_calls == [False]
+    assert route.calls[0].request.headers['Authorization'] == 'Bearer fresh-token'

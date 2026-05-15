@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import click
+import httpx
 from rich.prompt import Confirm, Prompt
 
 from gojeera.internal.auth.oauth2 import OAUTH2_SCOPES, get_atlassian_accessible_resources
@@ -54,6 +55,85 @@ def _get_console() -> Console:
 
 
 auth_service = AuthService()
+
+
+def _echo_invalid_auth_profile_error(message: str) -> bool:
+    match = re.fullmatch(r'Invalid auth profile "([^"]+)": (.+)', message)
+    if match is None:
+        return False
+
+    profile_name, details = match.groups()
+    click.secho(f'Invalid auth profile "{profile_name}": {details}.', fg='red')
+    return True
+
+
+def _echo_invalid_configuration_field_error(message: str) -> bool:
+    match = re.fullmatch(r'Invalid configuration field "([^"]+)"', message)
+    if match is None:
+        return False
+
+    click.secho(f'Invalid configuration field "{match.group(1)}".', fg='red')
+    return True
+
+
+def _echo_invalid_theme_file_error(message: str) -> bool:
+    match = re.fullmatch(r'Invalid theme file "([^"]+)": (.+)', message)
+    if match is None:
+        return False
+
+    theme_file, details = match.groups()
+    click.secho(f'Invalid theme file "{theme_file}": {details}.', fg='red')
+    return True
+
+
+def _format_validation_error_location(location: tuple[Any, ...] | list[Any]) -> str:
+    path_parts: list[str] = []
+    for item in location:
+        if item == '__root__':
+            continue
+        if isinstance(item, int):
+            if not path_parts:
+                path_parts.append(f'[{item}]')
+            else:
+                path_parts[-1] = f'{path_parts[-1]}[{item}]'
+            continue
+        path_parts.append(str(item))
+    return '.'.join(path_parts)
+
+
+def _echo_invalid_configuration_validation_error(exc: Exception) -> bool:
+    from pydantic import ValidationError
+
+    if not isinstance(exc, ValidationError):
+        return False
+
+    field_paths: list[str] = []
+    for error in exc.errors():
+        if error.get('type') not in {'extra_forbidden', 'unexpected_keyword_argument'}:
+            return False
+        location = error.get('loc')
+        if not location:
+            return False
+        field_paths.append(_format_validation_error_location(cast(tuple[Any, ...], location)))
+
+    for field_path in dict.fromkeys(field_paths):
+        click.secho(f'Invalid configuration field "{field_path}".', fg='red')
+    return bool(field_paths)
+
+
+def _refresh_oauth2_access_token_on_startup(settings: Any) -> None:
+    active_profile = settings.jira.active_profile
+    if not isinstance(active_profile, OAuth2AuthProfile):
+        return
+    if not auth_service.should_refresh_oauth2_access_token_on_startup(active_profile):
+        return
+
+    token_response = auth_service.refresh_oauth2_access_token(active_profile)
+    settings.jira.update_active_oauth2_session(
+        access_token=token_response.access_token,
+        refresh_token=token_response.refresh_token,
+        oauth2_access_token_expiration_timestamp=token_response.access_token_expiration_timestamp,
+    )
 
 
 def _clear_inline_selector(lines: int) -> None:
@@ -295,6 +375,7 @@ def cli(
     version: bool = False,
 ):
     """Launches gojeera."""
+    directory_themes = None
 
     if ctx.invoked_subcommand is not None:
         return
@@ -321,6 +402,10 @@ def cli(
             themes_dir = get_themes_directory()
             directory_themes = load_themes_from_directory(themes_dir)
             valid_themes.update(t.name for t in directory_themes)
+        except ValueError as e:
+            if _echo_invalid_theme_file_error(str(e)):
+                sys.exit(1)
+            raise
         except Exception:
             pass
 
@@ -329,7 +414,7 @@ def cli(
             if hasattr(settings, 'custom_themes'):
                 custom_themes_attr = settings.custom_themes
                 if custom_themes_attr:
-                    config_themes = create_themes_from_config(cast(list[dict], custom_themes_attr))
+                    config_themes = create_themes_from_config(custom_themes_attr)
                     valid_themes.update(t.name for t in config_themes)
         except Exception:
             pass
@@ -396,11 +481,22 @@ def cli(
                 click.echo(f'Authentication profile not found: {profile}')
                 sys.exit(1)
             settings.jira.activate_profile(profile)
+        try:
+            _refresh_oauth2_access_token_on_startup(settings)
+        except (httpx.HTTPError, SecretStoreError, ValueError) as e:
+            click.echo(f'Authentication refresh failed during startup: {e}')
+            sys.exit(1)
         settings.search_on_startup = search_on_startup
     except FileNotFoundError as e:
         click.echo(str(e))
         sys.exit(1)
     except (ValidationError, ValueError) as e:
+        if isinstance(e, ValueError) and _echo_invalid_auth_profile_error(str(e)):
+            sys.exit(1)
+        if isinstance(e, ValueError) and _echo_invalid_configuration_field_error(str(e)):
+            sys.exit(1)
+        if _echo_invalid_configuration_validation_error(e):
+            sys.exit(1)
 
         def echo_config_error(message: str) -> None:
             click.secho(message, fg='red')
@@ -448,15 +544,21 @@ def cli(
 
     from gojeera.app import JiraApp
 
-    JiraApp(
-        settings,
-        project_key=project_key,
-        assignee=assignee,
-        jql_filter=jql_filter,
-        work_item_key=work_item_key,
-        user_theme=theme,
-        focus_item_on_startup=focus_item_on_startup,
-    ).run()
+    try:
+        JiraApp(
+            settings,
+            directory_themes=directory_themes,
+            project_key=project_key,
+            assignee=assignee,
+            jql_filter=jql_filter,
+            work_item_key=work_item_key,
+            user_theme=theme,
+            focus_item_on_startup=focus_item_on_startup,
+        ).run()
+    except ValueError as e:
+        if _echo_invalid_theme_file_error(str(e)):
+            sys.exit(1)
+        raise
 
 
 @cli.group()
@@ -609,6 +711,11 @@ def auth_login():
                 display_name=oauth_display_name,
                 cloud_id=oauth_cloud_id,
                 client_id=oauth_client_id,
+                oauth2_access_token_expiration_timestamp=(
+                    existing_profile.oauth2_access_token_expiration_timestamp
+                    if skip_oauth_login and isinstance(existing_profile, OAuth2AuthProfile)
+                    else token_response.access_token_expiration_timestamp
+                ),
                 activate=activate,
             )
             if not skip_oauth_login:
@@ -694,6 +801,7 @@ def auth_login():
                 display_name=None,
                 cloud_id=None,
                 client_id=None,
+                oauth2_access_token_expiration_timestamp=None,
                 activate=activate,
             )
 

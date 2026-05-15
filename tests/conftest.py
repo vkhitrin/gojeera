@@ -67,6 +67,32 @@ def enable_color_snapshots(monkeypatch):
     monkeypatch.delenv('NO_COLOR', raising=False)
 
 
+@pytest.fixture(autouse=True)
+def isolate_gojeera_environment(monkeypatch, tmp_path):
+    """Prevent host gojeera config from leaking into tests."""
+
+    auth_profiles_file = tmp_path / 'auth_profiles.yaml'
+    config_file = tmp_path / 'gojeera.yaml'
+    auth_profiles_file.write_text('')
+    config_file.write_text('')
+
+    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(auth_profiles_file))
+    monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(config_file))
+
+    for env_name in (
+        'GOJEERA_JIRA__AUTH_TYPE',
+        'GOJEERA_JIRA__API_EMAIL',
+        'GOJEERA_JIRA__API_BASE_URL',
+        'GOJEERA_JIRA__API_TOKEN',
+        'GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN',
+        'GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN',
+        'GOJEERA_JIRA__OAUTH2_CLIENT_SECRET',
+        'GOJEERA_JIRA__CLOUD_ID',
+        'GOJEERA_JIRA__OAUTH2_CLIENT_ID',
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+
 def _main_screen_loading_in_progress(screen) -> bool:
     if hasattr(screen, 'search_results_container'):
         if bool(getattr(screen, '_active_work_item_load_key', None)):

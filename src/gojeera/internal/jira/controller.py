@@ -1,6 +1,6 @@
 from collections import defaultdict
 import dataclasses
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date, datetime
 import logging
 import mimetypes
@@ -10,10 +10,6 @@ from typing import Any, Awaitable, Callable, TypedDict, TypeVar, cast
 
 from dateutil.parser import isoparse
 import httpx
-from pydantic import SecretStr
-
-from gojeera.internal.auth.profiles import OAuth2AuthProfile
-from gojeera.internal.auth.service import AuthService
 from gojeera.internal.jira.api import JiraAPI
 from gojeera.internal.jira.client import AsyncJiraClient
 from gojeera.internal.jira.factories import WorkItemFactory
@@ -52,6 +48,8 @@ from gojeera.internal.models.work_items import (
     PaginatedJiraWorklog,
     WorkItemComment,
 )
+from gojeera.internal.auth.profiles import OAuth2AuthProfile
+from gojeera.internal.auth.service import AuthService
 from gojeera.internal.store.cache import get_cache
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.utils.data.mappings import get_nested
@@ -102,17 +100,13 @@ class APIController:
     def __init__(self, configuration: ApplicationConfiguration | None = None):
         self.config = CONFIGURATION.get() if not configuration else configuration
         self.auth = self.config.jira.build_auth_context()
+        self.auth_service = AuthService()
         self.client: JiraAPI
         self.identity_api: AsyncJiraClient | None = None
-        self.auth_service = AuthService()
-
-        oauth2_token_refresher = (
-            self._refresh_oauth2_access_token if self.auth.auth_type == 'oauth2' else None
-        )
         self.client = JiraAPI(
             auth=self.auth,
             configuration=self.config,
-            oauth2_token_refresher=oauth2_token_refresher,
+            oauth2_token_refresher=self._refresh_oauth2_access_token,
         )
         if self.auth.auth_type == 'oauth2' and self.auth.identity_base_url is not None:
             self.identity_api = AsyncJiraClient(
@@ -121,32 +115,44 @@ class APIController:
                 api_token=self.auth.api_token,
                 configuration=self.config,
                 bearer_token=self.auth.bearer_token,
-                token_refresh_callback=oauth2_token_refresher,
+                token_refresh_callback=self._refresh_oauth2_access_token,
             )
         self.skip_users_without_email = self.config.ignore_users_without_email
         self.logger = logging.getLogger('gojeera')
         self.cache = get_cache()
 
-    def _refresh_oauth2_access_token(self) -> str | None:
+    def _refresh_oauth2_access_token(self, force: bool) -> str | None:
         active_profile = self.config.jira.active_profile
         if not isinstance(active_profile, OAuth2AuthProfile):
-            raise ValueError('OAuth2 token refresh requires an active OAuth2 profile.')
+            return None
 
-        token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
-        refreshed_token = token_response.access_token
+        if force or self.auth_service.should_refresh_oauth2_access_token(active_profile):
+            token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
+            self.config.jira.update_active_oauth2_session(
+                access_token=token_response.access_token,
+                refresh_token=token_response.refresh_token,
+                oauth2_access_token_expiration_timestamp=(
+                    token_response.access_token_expiration_timestamp
+                ),
+            )
+            refreshed_token = token_response.access_token
+        else:
+            refreshed_token = (
+                self.config.jira.oauth2_access_token.get_secret_value()
+                if self.config.jira.oauth2_access_token is not None
+                else self.auth_service.get_oauth2_access_token(active_profile)
+            )
 
-        self.auth = replace(self.auth, bearer_token=refreshed_token)
+        if not refreshed_token:
+            return None
+
+        if refreshed_token == self.auth.bearer_token:
+            return refreshed_token
+
+        self.auth = self.config.jira.build_auth_context()
         self.client.set_bearer_token(refreshed_token)
         if self.identity_api is not None:
             self.identity_api.set_bearer_token(refreshed_token)
-
-        object.__setattr__(self.config.jira, 'oauth2_access_token', SecretStr(refreshed_token))
-        if token_response.refresh_token:
-            object.__setattr__(
-                self.config.jira,
-                'oauth2_refresh_token',
-                SecretStr(token_response.refresh_token),
-            )
         return refreshed_token
 
     async def close(self) -> None:

@@ -72,7 +72,7 @@ class BaseHTTPClient:
         configuration: ApplicationConfiguration,
         instance_base_url: str | None = None,
         bearer_token: str | None = None,
-        token_refresh_callback: Callable[[], str | None] | None = None,
+        token_refresh_callback: Callable[[bool], str | None] | None = None,
     ) -> None:
         self.base_url: str = base_url.rstrip('/')
         self.instance_base_url: str | None = (
@@ -133,11 +133,11 @@ class BaseHTTPClient:
             and self.token_refresh_callback is not None
         )
 
-    def _refresh_bearer_token(self, log_url: str) -> bool:
+    def _refresh_bearer_token(self, log_url: str, *, force: bool) -> bool:
         if self.token_refresh_callback is None:
             return False
         try:
-            refreshed_token = self.token_refresh_callback()
+            refreshed_token = self.token_refresh_callback(force)
         except Exception as refresh_error:
             self.logger.warning(
                 'OAuth2 token refresh failed',
@@ -150,6 +150,14 @@ class BaseHTTPClient:
 
         self.set_bearer_token(refreshed_token)
         return True
+
+    def _refresh_bearer_token_if_needed(self, log_url: str) -> None:
+        if (
+            self.authentication is None
+            and 'Authorization' in self.default_headers
+            and self.token_refresh_callback is not None
+        ):
+            self._refresh_bearer_token(log_url, force=False)
 
     def _extract_error_message(
         self, error: httpx.HTTPStatusError, error_details: dict | None
@@ -227,7 +235,7 @@ class BaseHTTPClient:
     ) -> bool:
         if self._can_retry_after_refresh(
             response, retry_after_refresh
-        ) and self._refresh_bearer_token(log_url):
+        ) and self._refresh_bearer_token(log_url, force=True):
             return True
 
         error_details = self._parse_error_response(response)
@@ -361,6 +369,8 @@ class BaseHTTPClient:
         context_url = context_url or request_url
         log_url = log_url or request_url
         while True:
+            if retry_after_refresh:
+                self._refresh_bearer_token_if_needed(log_url)
             request_headers = self.set_headers(headers)
 
             try:
@@ -410,6 +420,8 @@ class BaseHTTPClient:
     ) -> Any | None:
         retry_after_refresh = True
         while True:
+            if retry_after_refresh:
+                self._refresh_bearer_token_if_needed(request_url)
             request_headers = self.set_headers(headers)
 
             try:

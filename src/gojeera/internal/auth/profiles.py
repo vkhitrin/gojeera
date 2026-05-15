@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ValidationError
 import yaml
 
 from gojeera.internal.store.files import get_config_directory
@@ -13,7 +14,7 @@ ATLASSIAN_OAUTH2_REDIRECT_URI = 'http://127.0.0.1:49152/callback'
 
 
 class AuthProfileBase(BaseModel):
-    model_config = ConfigDict(extra='ignore', frozen=True)
+    model_config = ConfigDict(extra='forbid', frozen=True)
 
     name: str
     site: str
@@ -53,6 +54,7 @@ class OAuth2AuthProfile(AuthProfileBase):
     account_id: str | None = None
     client_id: str | None = None
     display_name: str | None = None
+    oauth2_access_token_expiration_timestamp: int | None = None
     auth_type: Literal['oauth2'] = 'oauth2'
 
     def oauth_cloud_id(self) -> str | None:
@@ -93,7 +95,22 @@ def _save_config_data(data: dict[str, Any]) -> None:
     profiles_file.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=False))
 
 
-def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile | None:
+def _format_profile_validation_error(name: str, exc: ValidationError) -> str:
+    formatted_errors: list[str] = []
+    for error in exc.errors():
+        location = '.'.join(str(part) for part in error.get('loc', ()) if part is not None)
+        if error.get('type') == 'extra_forbidden' and location:
+            formatted_errors.append(f'unexpected field "{location}"')
+        elif location:
+            formatted_errors.append(f'{location}: {error.get("msg")}')
+        else:
+            formatted_errors.append(str(error.get('msg')))
+
+    details = '; '.join(formatted_errors) if formatted_errors else str(exc)
+    return f'Invalid auth profile "{name}": {details}'
+
+
+def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile:
     auth_type = profile_data.get('auth_type', 'basic')
     payload = dict(profile_data)
     payload['name'] = name
@@ -102,8 +119,8 @@ def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile | None
         if auth_type == 'oauth2':
             return OAuth2AuthProfile.model_validate(payload)
         return BasicAuthProfile.model_validate(payload)
-    except Exception:
-        return None
+    except ValidationError as exc:
+        raise ValueError(_format_profile_validation_error(name, exc)) from exc
 
 
 def _dump_profile(profile: AuthProfile) -> dict[str, Any]:
@@ -132,9 +149,7 @@ def get_current_profile_name(config: dict[str, Any]) -> str | None:
 def normalize_profiles(raw_profiles: Any) -> dict[str, AuthProfile]:
     normalized_profiles: dict[str, AuthProfile] = {}
     for name, profile in _iter_profile_entries(raw_profiles):
-        parsed_profile = _load_profile(name, profile)
-        if parsed_profile is not None:
-            normalized_profiles[name] = parsed_profile
+        normalized_profiles[name] = _load_profile(name, profile)
     return normalized_profiles
 
 
@@ -163,6 +178,7 @@ def upsert_profile(
     display_name: str | None,
     cloud_id: str | None,
     client_id: str | None,
+    oauth2_access_token_expiration_timestamp: int | None,
     activate: bool,
 ) -> None:
     config = _load_config_data()
@@ -178,6 +194,7 @@ def upsert_profile(
             account_id=account_id,
             client_id=client_id,
             display_name=display_name,
+            oauth2_access_token_expiration_timestamp=oauth2_access_token_expiration_timestamp,
         )
     else:
         if not email:
@@ -194,6 +211,31 @@ def upsert_profile(
     if activate or not active_profile:
         config['current_profile'] = profile_name
 
+    _save_config_data(config)
+
+
+def update_oauth2_access_token_expiry(
+    profile_name: str, oauth2_access_token_expiration_timestamp: int | None
+) -> None:
+    config = _load_config_data()
+    active_profile, profiles = list_profiles()
+    profile = profiles.get(profile_name)
+
+    if not isinstance(profile, OAuth2AuthProfile):
+        raise ValueError(f'OAuth2 profile not found: {profile_name}')
+
+    profiles[profile_name] = profile.model_copy(
+        update={
+            'oauth2_access_token_expiration_timestamp': oauth2_access_token_expiration_timestamp
+        }
+    )
+
+    config['profiles'] = [
+        {'name': current_profile.name, **_dump_profile(current_profile)}
+        for current_profile in profiles.values()
+    ]
+    if active_profile is not None:
+        config['current_profile'] = active_profile
     _save_config_data(config)
 
 

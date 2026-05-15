@@ -86,7 +86,7 @@ class JiraAPI:
         self,
         auth: JiraAuthContext,
         configuration: ApplicationConfiguration,
-        oauth2_token_refresher: Callable[[], str | None] | None = None,
+        oauth2_token_refresher: Callable[[bool], str | None] | None = None,
     ):
         rest_api_path_prefix = auth.rest_api_path_prefix or self.REST_API_PATH_PREFIX
         agile_api_path_prefix = auth.agile_api_path_prefix or self.AGILE_API_PATH_PREFIX
@@ -132,7 +132,7 @@ class JiraAPI:
         auth: JiraAuthContext,
         configuration: ApplicationConfiguration,
         base_url: str,
-        oauth2_token_refresher: Callable[[], str | None] | None,
+        oauth2_token_refresher: Callable[[bool], str | None] | None,
     ) -> ClientT:
         return client_type(
             base_url=base_url,

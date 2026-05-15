@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta, timezone
 import sys
 from types import SimpleNamespace
 
 from click.testing import CliRunner
+from pydantic import BaseModel, ConfigDict
 
 from gojeera.cli import cli
 from gojeera.internal.auth.oauth2 import OAUTH2_SCOPES
@@ -185,6 +187,7 @@ def test_cli_profile_option_selects_auth_profile(monkeypatch):
             self.jira = SimpleNamespace(
                 active_profile_name='default',
                 profiles={'work': object()},
+                active_profile=object(),
                 activate_profile=lambda profile_name: setattr(
                     self.jira, 'active_profile_name', profile_name
                 ),
@@ -277,6 +280,94 @@ def test_cli_reports_configuration_validation_errors_in_red(monkeypatch):
     assert 'Configuration validation error. Make sure your config file is correct.' in result.output
     assert (
         'Configuration error: jira.api_base_url is required for basic authentication.'
+        in result.output
+    )
+
+
+def test_cli_reports_invalid_auth_profile_with_actionable_message(monkeypatch):
+    runner = _runner()
+
+    class InvalidProfileSettings:
+        def __init__(self):
+            raise ValueError('Invalid auth profile "default": unexpected field "asite"')
+
+    monkeypatch.setattr(
+        'gojeera.internal.store.config.ApplicationConfiguration', InvalidProfileSettings
+    )
+
+    result = runner.invoke(cli, [], color=True)
+
+    assert result.exit_code == 1
+    assert 'Invalid auth profile "default": unexpected field "asite".' in result.output
+    assert (
+        'Configuration validation error. Make sure your config file is correct.'
+        not in result.output
+    )
+
+
+def test_cli_reports_invalid_configuration_field_concisely(monkeypatch):
+    runner = _runner()
+
+    class InvalidConfigSettings:
+        def __init__(self):
+            class FilterModel(BaseModel):
+                model_config = ConfigDict(extra='forbid')
+
+                label: str
+                expression: str
+
+            class StrictConfigModel(BaseModel):
+                model_config = ConfigDict(extra='forbid')
+
+                jql_filters: list[FilterModel]
+
+            StrictConfigModel.model_validate(
+                {'jql_filters': [{'label': 'Mine', 'expression': 'x', 'a': 'oops'}]}
+            )
+
+    monkeypatch.setattr(
+        'gojeera.internal.store.config.ApplicationConfiguration', InvalidConfigSettings
+    )
+
+    result = runner.invoke(cli, [], color=True)
+
+    assert result.exit_code == 1
+    assert 'Invalid configuration field "jql_filters[0].a".' in result.output
+    assert (
+        'Configuration validation error. Make sure your config file is correct.'
+        not in result.output
+    )
+
+
+def test_cli_reports_invalid_theme_file_and_exits(monkeypatch):
+    runner = _runner()
+
+    class DummySettings:
+        def __init__(self):
+            self.jira = SimpleNamespace(
+                active_profile_name='default',
+                profiles={},
+                active_profile=None,
+            )
+            self.search_on_startup = False
+
+    class DummyApp:
+        def __init__(self, settings, **kwargs):
+            pass
+
+        def run(self):
+            raise ValueError(
+                'Invalid theme file "broken.yaml": Theme configuration contains unexpected field \'naaame\''
+            )
+
+    monkeypatch.setattr('gojeera.internal.store.config.ApplicationConfiguration', DummySettings)
+    monkeypatch.setitem(sys.modules, 'gojeera.app', SimpleNamespace(JiraApp=DummyApp))
+
+    result = runner.invoke(cli, [], color=True)
+
+    assert result.exit_code == 1
+    assert (
+        'Invalid theme file "broken.yaml": Theme configuration contains unexpected field \'naaame\'.'
         in result.output
     )
 
@@ -400,6 +491,8 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
                 {
                     'access_token': 'oauth-access-token',
                     'refresh_token': 'oauth-refresh-token',
+                    'expires_in': 3600,
+                    'access_token_expiration_timestamp': 1234567890,
                 },
             )(),
         )[1],
@@ -466,6 +559,7 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     assert profile['data']['cloud_id'] == 'cloud-123'
     assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
     assert profile['data']['client_id'] == 'client-123'
+    assert profile['data']['oauth2_access_token_expiration_timestamp'] is not None
     assert 'scopes' not in profile['data']
     assert selector_calls == [('Authentication type', ['basic', 'oauth2'])]
     assert flow_calls == {
@@ -475,6 +569,44 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
         'redirect_uri': 'http://127.0.0.1:49152/callback',
         'authorization_url': 'https://auth.atlassian.com/authorize',
     }
+
+
+def test_refresh_oauth2_access_token_on_startup_updates_settings(monkeypatch):
+    profile = _oauth2_profile().model_copy(
+        update={
+            'oauth2_access_token_expiration_timestamp': int(
+                (datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()
+            )
+        }
+    )
+    updates = {}
+    settings = SimpleNamespace(
+        jira=SimpleNamespace(
+            active_profile=profile,
+            update_active_oauth2_session=lambda **kwargs: updates.update(kwargs),
+        )
+    )
+
+    monkeypatch.setattr(
+        'gojeera.cli.auth_service',
+        SimpleNamespace(
+            should_refresh_oauth2_access_token_on_startup=lambda current_profile: True,
+            refresh_oauth2_access_token=lambda current_profile: SimpleNamespace(
+                access_token='fresh-access-token',
+                refresh_token='fresh-refresh-token',
+                expires_in=7200,
+                access_token_expiration_timestamp=1234567890,
+            ),
+        ),
+    )
+
+    from gojeera.cli import _refresh_oauth2_access_token_on_startup
+
+    _refresh_oauth2_access_token_on_startup(settings)
+
+    assert updates['access_token'] == 'fresh-access-token'
+    assert updates['refresh_token'] == 'fresh-refresh-token'
+    assert updates['oauth2_access_token_expiration_timestamp'] is not None
 
 
 def test_auth_edit_oauth2_profile_skips_browser_flow_when_credentials_unchanged(monkeypatch):

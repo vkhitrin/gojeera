@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import os
 
 import httpx
@@ -11,12 +12,13 @@ from gojeera.internal.auth.profiles import (
     AuthProfile,
     BasicAuthProfile,
     OAuth2AuthProfile,
+    update_oauth2_access_token_expiry,
 )
 from gojeera.internal.store.secret import (
     get_jira_api_token,
     get_jira_oauth2_access_token,
+    get_jira_oauth2_credentials,
     get_jira_oauth2_client_secret,
-    get_jira_oauth2_refresh_token,
     set_jira_oauth2_access_token,
     set_jira_oauth2_refresh_token,
 )
@@ -40,6 +42,13 @@ class AuthProfileStatus:
 
 
 class AuthService:
+    OAUTH2_STARTUP_REFRESH_WINDOW = timedelta(days=1)
+
+    def _get_oauth2_store_secrets(self, profile: OAuth2AuthProfile) -> dict[str, str]:
+        if profile.account_id is None:
+            return {}
+        return get_jira_oauth2_credentials(profile.account_id)
+
     def get_basic_api_token(
         self, profile: BasicAuthProfile, *, prefer_environment: bool = True
     ) -> str | None:
@@ -56,15 +65,6 @@ class AuthService:
             return None
         return get_jira_oauth2_access_token(profile.account_id)
 
-    def get_oauth2_refresh_token(
-        self, profile: OAuth2AuthProfile, *, prefer_environment: bool = True
-    ) -> str | None:
-        if prefer_environment and (token := os.getenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN')):
-            return token
-        if profile.account_id is None:
-            return None
-        return get_jira_oauth2_refresh_token(profile.account_id)
-
     def get_oauth2_client_secret(
         self, profile: OAuth2AuthProfile, *, prefer_environment: bool = True
     ) -> str | None:
@@ -78,6 +78,34 @@ class AuthService:
         if isinstance(profile, OAuth2AuthProfile):
             return 'env' if os.getenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN') else 'keyring'
         return 'env' if os.getenv('GOJEERA_JIRA__API_TOKEN') else 'keyring'
+
+    def should_refresh_oauth2_access_token(
+        self,
+        profile: OAuth2AuthProfile,
+        *,
+        now: datetime | None = None,
+        refresh_window: timedelta = timedelta(0),
+        skip_environment_override: bool = False,
+    ) -> bool:
+        if not skip_environment_override and os.getenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN'):
+            return False
+
+        expiration_timestamp = profile.oauth2_access_token_expiration_timestamp
+        if expiration_timestamp is None:
+            return True
+
+        current_time = now or datetime.now(timezone.utc)
+        refresh_cutoff = current_time + refresh_window
+        return expiration_timestamp <= int(refresh_cutoff.timestamp())
+
+    def should_refresh_oauth2_access_token_on_startup(
+        self, profile: OAuth2AuthProfile, *, now: datetime | None = None
+    ) -> bool:
+        return self.should_refresh_oauth2_access_token(
+            profile,
+            now=now,
+            refresh_window=self.OAUTH2_STARTUP_REFRESH_WINDOW,
+        )
 
     def validate_profile(
         self,
@@ -150,11 +178,16 @@ class AuthService:
         if not profile.client_id:
             raise ValueError('OAuth2 profile is missing client_id.')
 
-        refresh_token = self.get_oauth2_refresh_token(profile)
+        refresh_token = os.getenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN')
+        client_secret = os.getenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET')
+        stored_secrets = (
+            {} if refresh_token and client_secret else self._get_oauth2_store_secrets(profile)
+        )
+        refresh_token = refresh_token or stored_secrets.get('refresh_token')
         if not refresh_token:
             raise ValueError('OAuth2 refresh token is not available.')
 
-        client_secret = self.get_oauth2_client_secret(profile)
+        client_secret = client_secret or stored_secrets.get('client_secret')
         if not client_secret:
             raise ValueError('OAuth2 client secret is not available.')
 
@@ -169,6 +202,10 @@ class AuthService:
         set_jira_oauth2_access_token(profile.account_id, token_response.access_token)
         if token_response.refresh_token:
             set_jira_oauth2_refresh_token(profile.account_id, token_response.refresh_token)
+        update_oauth2_access_token_expiry(
+            profile.name,
+            token_response.access_token_expiration_timestamp,
+        )
         return token_response
 
     def get_profile_status(
@@ -183,24 +220,6 @@ class AuthService:
         if isinstance(profile, OAuth2AuthProfile):
             token = self.get_oauth2_access_token(profile)
             validation = self.validate_profile(profile, access_token=token)
-            if (
-                not validation.is_valid
-                and profile.client_id is not None
-                and (
-                    validation.message.startswith('401:')
-                    or validation.message == 'missing oauth2 access token'
-                )
-            ):
-                try:
-                    refreshed_tokens = self.refresh_oauth2_access_token(profile)
-                except (httpx.HTTPError, ValueError) as exc:
-                    validation = AuthValidationResult(
-                        is_valid=validation.is_valid,
-                        message=f'{validation.message}; refresh failed: {exc}',
-                    )
-                else:
-                    token = refreshed_tokens.access_token
-                    validation = self.validate_profile(profile, access_token=token)
         else:
             token = self.get_basic_api_token(profile)
             validation = self.validate_profile(profile, api_token=token)
@@ -219,17 +238,25 @@ class AuthService:
     ) -> dict[str, str]:
         if isinstance(profile, OAuth2AuthProfile):
             secrets: dict[str, str] = {}
-            if access_token := self.get_oauth2_access_token(
-                profile, prefer_environment=prefer_environment
-            ):
+            access_token = (
+                os.getenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN') if prefer_environment else None
+            )
+            refresh_token = (
+                os.getenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN') if prefer_environment else None
+            )
+            client_secret = (
+                os.getenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET') if prefer_environment else None
+            )
+            stored_secrets = (
+                {}
+                if access_token and refresh_token and client_secret
+                else self._get_oauth2_store_secrets(profile)
+            )
+            if access_token := access_token or stored_secrets.get('access_token'):
                 secrets['oauth2_access_token'] = access_token
-            if refresh_token := self.get_oauth2_refresh_token(
-                profile, prefer_environment=prefer_environment
-            ):
+            if refresh_token := refresh_token or stored_secrets.get('refresh_token'):
                 secrets['oauth2_refresh_token'] = refresh_token
-            if client_secret := self.get_oauth2_client_secret(
-                profile, prefer_environment=prefer_environment
-            ):
+            if client_secret := client_secret or stored_secrets.get('client_secret'):
                 secrets['oauth2_client_secret'] = client_secret
             return secrets
 

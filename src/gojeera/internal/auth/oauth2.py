@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Queue
 import secrets
@@ -26,6 +27,7 @@ class OAuth2TokenResponse:
     refresh_token: str | None = None
     token_type: str | None = None
     expires_in: int | None = None
+    access_token_expiration_timestamp: int | None = None
     scope: str | None = None
 
 
@@ -326,6 +328,12 @@ def _post_token_request(
     if not isinstance(response_payload, dict):
         raise ValueError('Atlassian token response must be a JSON object.')
 
+    expires_in = (
+        response_payload.get('expires_in')
+        if isinstance(response_payload.get('expires_in'), int)
+        else None
+    )
+
     return OAuth2TokenResponse(
         access_token=str(response_payload.get('access_token') or ''),
         refresh_token=(
@@ -336,9 +344,10 @@ def _post_token_request(
         token_type=(
             str(response_payload.get('token_type')) if response_payload.get('token_type') else None
         ),
-        expires_in=(
-            response_payload.get('expires_in')
-            if isinstance(response_payload.get('expires_in'), int)
+        expires_in=expires_in,
+        access_token_expiration_timestamp=(
+            int((datetime.now(timezone.utc) + timedelta(seconds=expires_in)).timestamp())
+            if expires_in is not None
             else None
         ),
         scope=str(response_payload.get('scope')) if response_payload.get('scope') else None,

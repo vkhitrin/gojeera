@@ -1397,8 +1397,9 @@ class APIController:
                         'The field assignee can not be updated for the selected work item.',
                         extra={'work_item_key': work_item.key},
                     )
+                assignee_account_id = updates.get('assignee_account_id')
                 fields_to_update[meta_assignee.get('key')] = [
-                    {'set': {'accountId': updates.get('assignee_account_id')}}
+                    {'set': {'accountId': assignee_account_id} if assignee_account_id else None}
                 ]
             else:
                 raise UpdateWorkItemException(

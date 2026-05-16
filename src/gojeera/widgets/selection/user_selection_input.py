@@ -1,10 +1,26 @@
 from textual.reactive import Reactive, reactive
-
 from gojeera.utils.data.fields import optional_selection_value_has_changed
 from gojeera.widgets.selection.vim_select import VimSelect
 
+UNASSIGNED_VALUE = ''
+UNASSIGNED_OPTION = ('Unassigned', UNASSIGNED_VALUE)
 
-class UserSelectionInput(VimSelect):
+
+def with_unassigned_option(options):
+    if any(option_value == UNASSIGNED_VALUE for _label, option_value in options):
+        return list(options)
+    return [UNASSIGNED_OPTION, *options]
+
+
+class UnassignedUserSelect(VimSelect):
+    def set_options(self, options) -> None:
+        super().set_options(with_unassigned_option(options))
+
+    def replace_options(self, options, *, selection: str | None = None) -> None:
+        super().replace_options(with_unassigned_option(options), selection=selection)
+
+
+class UserSelectionInput(UnassignedUserSelect):
     DEFAULT_CSS = """
     UserSelectionInput {
         width: 100%;
@@ -16,13 +32,15 @@ class UserSelectionInput(VimSelect):
 
     def __init__(self, users: list):
         super().__init__(
-            options=users,
+            options=with_unassigned_option(users),
             prompt='Unassigned',
             name='users',
             id=self.WIDGET_ID,
             type_to_search=True,
             compact=True,
             classes='jira-selector',
+            allow_blank=False,
+            value=UNASSIGNED_VALUE,
         )
         self.jira_field_key = 'assignee'
         self._update_enabled = True

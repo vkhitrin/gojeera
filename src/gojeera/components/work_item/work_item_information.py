@@ -1,4 +1,5 @@
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.reactive import Reactive, reactive
 from textual.widgets import ContentSwitcher
@@ -9,6 +10,7 @@ from gojeera.components.work_item.work_item_description import (
     WorkItemInfoContainer,
     WorkItemSummary,
 )
+from gojeera.components.work_item.work_item_fields import WorkItemFields
 from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
@@ -16,7 +18,25 @@ from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.widgets.work_item.work_item_breadcrumb import WorkItemBreadcrumb
 
 
-class WorkItemInformation(Container):
+WORK_ITEM_WORKLOG_BINDINGS = [
+    Binding(
+        key='ctrl+l',
+        action='view_worklog',
+        description='Worklog',
+        tooltip='View work logs',
+        show=True,
+    ),
+    Binding(
+        key='ctrl+t',
+        action='log_work',
+        description='Log Work',
+        tooltip='Log work time',
+        show=True,
+    ),
+]
+
+
+class WorkItemInformation(Container, can_focus=True):
     """The middle content area controlled by the shared tab row."""
 
     DEFAULT_CSS = """
@@ -57,6 +77,10 @@ class WorkItemInformation(Container):
         return self.screen.query_one('#details-work-item-summary', WorkItemSummary)
 
     @property
+    def fields_widget(self) -> WorkItemFields:
+        return self.screen.query_one(WorkItemFields)
+
+    @property
     def content_switcher(self) -> ContentSwitcher:
         return self.query_one('#work-item-information-switcher', ContentSwitcher)
 
@@ -70,7 +94,17 @@ class WorkItemInformation(Container):
     def get_active_pane(self):
         return self.query_one(f'#{self.content_switcher.current}')
 
+    def on_focus(self) -> None:
+        self.screen.refresh_bindings()
+
+    def action_view_worklog(self) -> None:
+        self.fields_widget.action_view_worklog()
+
+    def action_log_work(self) -> None:
+        self.fields_widget.action_log_work()
+
     def watch_work_item(self, work_item: JiraWorkItem | None) -> None:
+        self.call_after_refresh(self.screen.refresh_bindings)
         self.breadcrumb_widget.set_work_item(work_item)
 
         if work_item is None:

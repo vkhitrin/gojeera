@@ -12,12 +12,16 @@ from gojeera.utils.data.fields import (
     require_update_mode,
     selection_update_payload,
 )
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.selection.user_selection_input import (
+    UNASSIGNED_OPTION,
+    UNASSIGNED_VALUE,
+    UnassignedUserSelect,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class UserPicker(VimSelect, BaseField, BaseUpdateField):
+class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
     """
     User picker widget.
     """
@@ -43,12 +47,13 @@ class UserPicker(VimSelect, BaseField, BaseUpdateField):
         field_supports_update: bool = True,
     ):
         super().__init__(
-            options=[],
+            options=[UNASSIGNED_OPTION],
             prompt='Unassigned',
             id=field_id,
             type_to_search=True,
             compact=True,
-            allow_blank=True,
+            allow_blank=False,
+            value=UNASSIGNED_VALUE,
         )
 
         def sync_update_state() -> None:

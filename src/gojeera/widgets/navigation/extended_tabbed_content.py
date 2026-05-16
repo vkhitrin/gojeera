@@ -81,20 +81,6 @@ class ExtendedTabbedContent(TabbedContent):
 
     BINDINGS = [
         Binding(
-            key='ctrl+l',
-            action='view_worklog',
-            description='Worklog',
-            tooltip='View work logs',
-            show=True,
-        ),
-        Binding(
-            key='ctrl+t',
-            action='log_work',
-            description='Log Work',
-            tooltip='Log work time',
-            show=True,
-        ),
-        Binding(
             key='ctrl+n',
             action='add_attachment',
             description='New Attachment',
@@ -338,18 +324,6 @@ class ExtendedTabbedContent(TabbedContent):
 
             comments_widget = self.screen.query_one(WorkItemCommentsWidget)
             comments_widget.action_add_comment()
-
-    def action_view_worklog(self) -> None:
-        try:
-            self.work_item_fields_widget.action_view_worklog()
-        except Exception:
-            pass
-
-    def action_log_work(self) -> None:
-        try:
-            self.work_item_fields_widget.action_log_work()
-        except Exception:
-            pass
 
     def _active_focus_pane(self):
         active_pane = self.get_pane(self.active)

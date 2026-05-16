@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Generic, Literal, TypeVar, cast
 
 from textual import events
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widget import Widget
@@ -78,8 +79,8 @@ class ExtendedModalScreen(ModalScreen[T], Generic[T]):
 
     BINDINGS = [
         ('escape', 'dismiss_screen', 'Close'),
-        ('f12', 'app.debug_info', 'Debug'),
-        ('ctrl+backslash', 'show_overlay', 'Jump'),
+        Binding('f12', 'app.debug_info', 'Debug', show=False),
+        Binding('ctrl+backslash', 'show_overlay', 'Jump', show=False),
         build_toggle_footer_binding(),
     ]
 

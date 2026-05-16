@@ -1581,15 +1581,20 @@ DataTableSearchInput {
 LogWorkScreen #modal_outer {
   width: 56%;
   max-width: 96;
-  height: auto;
-  max-height: 50;
+  height: 75%;
+  max-height: 24;
+}
+
+LogWorkScreen #modal_title {
+  padding: 1 1 0 1;
 }
 
 LogWorkScreen #modal-form-scroll {
-  height: auto;
+  height: 1fr;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: auto;
-  padding: 0 1 0 1;
+  padding: 0 1 1 1;
 }
 
 LogWorkScreen #time-fields-grid {
@@ -1612,17 +1617,27 @@ LogWorkScreen #description-container {
   margin-top: 0;
 }
 
-LogWorkScreen #datetime-container {
-  margin-bottom: 0;
-}
-
-LogWorkScreen #description-container {
-  margin-bottom: 1;
-}
-
 LogWorkScreen #time-hint {
   margin-top: 0;
   margin-bottom: 1;
+}
+
+LogWorkScreen ExtendedADFMarkdownTextArea,
+LogWorkScreen ExtendedADFMarkdownTextArea TabbedContent {
+  height: 11;
+  min-height: 11;
+  max-height: 11;
+}
+
+LogWorkScreen ExtendedADFMarkdownTextArea TabPane {
+  height: 11;
+}
+
+LogWorkScreen ExtendedADFMarkdownTextArea TextArea,
+LogWorkScreen ExtendedADFMarkdownTextArea VerticalScroll {
+  height: 9;
+  min-height: 9;
+  max-height: 9;
 }
 
 LogWorkScreen #modal_footer {
@@ -1638,24 +1653,6 @@ TimeRemainingInput {
 LogDateTimeInput {
   width: 100%;
   height: auto;
-}
-
-LogWorkScreen ExtendedADFMarkdownTextArea {
-  height: auto;
-  min-height: 10;
-  max-height: 25;
-}
-
-LogWorkScreen #work_description-tabs,
-LogWorkScreen #work_description-edit-tab,
-LogWorkScreen #work_description-preview-tab {
-  padding: 0 1;
-}
-
-LogWorkScreen #work_description-textarea,
-LogWorkScreen #work_description-preview-scroll,
-LogWorkScreen #work_description-markdown {
-  padding: 0;
 }
 
 FlagWorkItemScreen {

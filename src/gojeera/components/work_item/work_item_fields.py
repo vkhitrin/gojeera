@@ -60,8 +60,11 @@ from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.selection.multi_select import MultiSelect, extract_sprint_entries
 from gojeera.widgets.selection.selection import SelectionWidget
 from gojeera.widgets.selection.user_picker import UserPicker
-from gojeera.widgets.selection.user_selection_input import UserSelectionInput
-from gojeera.widgets.selection.work_item_status_selection_input import WorkItemStatusSelectionInput
+from gojeera.widgets.selection.user_selection_input import UNASSIGNED_VALUE, UserSelectionInput
+from gojeera.widgets.selection.work_item_status_selection_input import (
+    CURRENT_STATUS_VALUE,
+    WorkItemStatusSelectionInput,
+)
 from gojeera.widgets.work_item.work_item_fields_preview import WorkItemFieldsPreview
 from gojeera.widgets.work_item.work_item_labels import WorkItemLabels
 
@@ -362,6 +365,7 @@ class WorkItemFields(Container, can_focus=False):
         self._deferred_fields_start_timer = None
         self._last_pending_changes_footer_state: tuple[bool, bool] | None = None
         self._field_spacing_refresh_scheduled = False
+        self._work_item_status_selector: WorkItemStatusSelectionInput | None = None
 
     @property
     def help_anchor(self) -> str:
@@ -377,7 +381,14 @@ class WorkItemFields(Container, can_focus=False):
 
     @property
     def work_item_status_selector(self) -> WorkItemStatusSelectionInput:
+        if self._work_item_status_selector is not None:
+            return self._work_item_status_selector
+        # Jira work items always include a current status, so the selector is mounted during load.
         return self.query_one(WorkItemStatusSelectionInput)
+
+    @property
+    def maybe_work_item_status_selector(self) -> WorkItemStatusSelectionInput | None:
+        return self._work_item_status_selector
 
     @property
     def assignee_selector(self) -> UserSelectionInput:
@@ -565,6 +576,56 @@ class WorkItemFields(Container, can_focus=False):
         WorkItemFields._apply_field_control_classes(widget)
         return widget
 
+    def _ensure_status_selector(
+        self,
+        options: list[tuple[str, str | bool]],
+        *,
+        prompt: str = '',
+        transition_status_ids: dict[str, str] | None = None,
+    ) -> WorkItemStatusSelectionInput:
+        if self._work_item_status_selector is not None:
+            return self._work_item_status_selector
+
+        selector = WorkItemStatusSelectionInput(options, prompt=prompt)
+        selector._transition_status_ids = transition_status_ids or {}
+        selector.value = CURRENT_STATUS_VALUE
+        self._work_item_status_selector = selector
+        self.query_one('#status-field-row', expect_type=Horizontal).mount(
+            self._field_control(selector)
+        )
+        return selector
+
+    def _set_status_selector_options(
+        self,
+        *,
+        status_name: str,
+        status_id: str,
+        transitions: list[tuple[str, str, str]] | None = None,
+    ) -> WorkItemStatusSelectionInput:
+        selector_already_exists = self._work_item_status_selector is not None
+        options: list[tuple[str, str | bool]] = [
+            (status_name, CURRENT_STATUS_VALUE),
+            *[(label, transition_id) for label, transition_id, _status_id in transitions or []],
+        ]
+        transition_status_ids = {
+            transition_id: transition_status_id
+            for _label, transition_id, transition_status_id in transitions or []
+        }
+        status_selector = self._ensure_status_selector(
+            options,
+            prompt=status_name,
+            transition_status_ids=transition_status_ids,
+        )
+        if selector_already_exists:
+            status_selector.set_status_options(
+                current_status_name=status_name,
+                transitions=transitions,
+            )
+        status_selector.original_value = status_id
+        status_selector.value = CURRENT_STATUS_VALUE
+        status_selector.prompt = status_name
+        return status_selector
+
     @staticmethod
     def _set_top_margin(widget: Widget, visible: bool) -> None:
         current_value = getattr(widget, '_gojeera_top_margin_visible', None)
@@ -657,15 +718,19 @@ class WorkItemFields(Container, can_focus=False):
     def _update_static_field_tooltips(self, work_item: JiraWorkItem) -> None:
         fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
 
+        status_field_bindings = (
+            [
+                (
+                    self.status_field_container,
+                    status_selector,
+                    self._get_field_tooltip_metadata('status', fields.get('status')),
+                )
+            ]
+            if (status_selector := self.maybe_work_item_status_selector) is not None
+            else []
+        )
         field_bindings: list[tuple[FieldRowSlot, Widget, dict[str, Any] | None]] = [
-            (
-                self.status_field_container,
-                self.work_item_status_selector,
-                self._get_field_tooltip_metadata(
-                    'status',
-                    fields.get('status'),
-                ),
-            ),
+            *status_field_bindings,
             (
                 self.priority_field_container,
                 self.priority_selector,
@@ -777,7 +842,6 @@ class WorkItemFields(Container, can_focus=False):
                         status_container.display = False
                         with Horizontal(id='status-field-row'):
                             yield self._field_label('Status')
-                            yield self._field_control(WorkItemStatusSelectionInput([]))
                     with FieldRowSlot(
                         id='resolution-field-container', include_top_spacer=True
                     ) as resolution_container:
@@ -795,7 +859,8 @@ class WorkItemFields(Container, can_focus=False):
                                 SelectionWidget(
                                     mode=FieldMode.UPDATE,
                                     field_id='priority',
-                                    options=[],
+                                    options=[('', '')],
+                                    allow_blank=False,
                                 )
                             )
                     with FieldRowSlot(
@@ -1128,7 +1193,7 @@ class WorkItemFields(Container, can_focus=False):
             wrapper.update_label_styling()
 
         static_fields_map = {
-            'status-field-container': lambda: self.work_item_status_selector,
+            'status-field-container': lambda: self.maybe_work_item_status_selector,
             'priority-field-container': lambda: self.priority_selector,
             'assignee-field-container': lambda: self.assignee_selector,
             'labels-field-container': lambda: self.work_item_labels_widget,
@@ -1154,10 +1219,9 @@ class WorkItemFields(Container, can_focus=False):
 
                 if container_id == 'status-field-container':
                     has_changed = (
-                        hasattr(widget, 'value')
-                        and widget.value != Select.NULL
-                        and hasattr(widget, 'selection')
+                        isinstance(widget, WorkItemStatusSelectionInput)
                         and widget.selection is not None
+                        and widget.selected_status_id != widget.original_value
                     )
                 elif hasattr(widget, 'value_has_changed'):
                     has_changed = widget.value_has_changed
@@ -1204,6 +1268,7 @@ class WorkItemFields(Container, can_focus=False):
             self._save_in_progress,
         )
         self._update_pending_changes_footer()
+        self.screen.refresh_bindings()
 
     def _update_pending_changes_footer(self) -> None:
         show_pending_changes = (
@@ -1541,7 +1606,8 @@ class WorkItemFields(Container, can_focus=False):
                     try:
                         dynamic_widget.value = selection_id if selection_id else Select.NULL
                     except Exception:
-                        dynamic_widget.value = Select.NULL
+                        if getattr(dynamic_widget, '_allow_blank', True):
+                            dynamic_widget.value = Select.NULL
                 elif isinstance(dynamic_widget, URL) or isinstance(dynamic_widget, TextInput):
                     string_value = str(current_value) if current_value else ''
                     dynamic_widget._original_value = string_value
@@ -1598,7 +1664,7 @@ class WorkItemFields(Container, can_focus=False):
                         dynamic_widget.prompt = label
                     else:
                         dynamic_widget.set_options([])
-                        dynamic_widget.clear()
+                        dynamic_widget.value = UNASSIGNED_VALUE
                         dynamic_widget.prompt = 'Unassigned'
 
                 if field_is_editable is not None and hasattr(dynamic_widget, 'update_enabled'):
@@ -1749,7 +1815,7 @@ class WorkItemFields(Container, can_focus=False):
                         self.assignee_selector.value = updated_work_item.assignee.account_id
                     else:
                         self.assignee_selector.original_value = None
-                        self.assignee_selector.value = Select.NULL
+                        self.assignee_selector.value = UNASSIGNED_VALUE
 
                 if refresh_all or self._field_changed(
                     changed_fields, self.priority_selector.jira_field_key
@@ -1759,13 +1825,14 @@ class WorkItemFields(Container, can_focus=False):
                         self.priority_selector.value = updated_work_item.priority.id
                     else:
                         self.priority_selector._original_value = None
-                        self.priority_selector.value = Select.NULL
+                        self.priority_selector.value = ''
 
                 if refresh_all or self._field_changed(changed_fields, 'status'):
                     if updated_work_item.status:
-                        self.work_item_status_selector.prompt = updated_work_item.status.name
-                        self.work_item_status_selector.original_value = updated_work_item.status.id
-                        self.work_item_status_selector.value = Select.NULL
+                        self._set_status_selector_options(
+                            status_name=updated_work_item.status.name,
+                            status_id=updated_work_item.status.id,
+                        )
 
                 if refresh_all or self._field_changed(
                     changed_fields, self.work_item_due_date_field.jira_field_key
@@ -2001,6 +2068,10 @@ class WorkItemFields(Container, can_focus=False):
                 for v in priority_field.get('allowedValues', []):
                     priorities.append((v.get('name'), v.get('id')))
 
+                if not priorities:
+                    self.priority_selector.update_enabled = False
+                    return
+
                 self.priority_selector.set_options(priorities)
 
                 if work_item_priority:
@@ -2023,12 +2094,11 @@ class WorkItemFields(Container, can_focus=False):
             self.assignee_field_container.display = False
             self.reporter_field_container.display = False
             self.due_date_container.display = False
-            self.work_item_status_selector.value = Select.NULL
-            self.work_item_status_selector.prompt = 'Select a status'
-            self.work_item_status_selector.disabled = False
-            self.assignee_selector.value = Select.NULL
+            if status_selector := self.maybe_work_item_status_selector:
+                status_selector.disabled = False
+            self.assignee_selector.value = UNASSIGNED_VALUE
             self.assignee_selector.original_value = None
-            self.priority_selector.value = Select.NULL
+            self.priority_selector.value = ''
             self.priority_selector.update_enabled = True
             self.work_item_due_date_field.set_original_value(None)
             await self.work_item_labels_widget.set_labels([])
@@ -2237,10 +2307,12 @@ class WorkItemFields(Container, can_focus=False):
 
         payload = self._build_payload_for_update()
         has_field_changes = bool(payload)
+        status_selector = self.maybe_work_item_status_selector
 
         has_status_change = (
-            self.work_item_status_selector.selection is not None
-            and self.work_item_status_selector.selected_status_id != self.work_item.status.id
+            status_selector is not None
+            and status_selector.selection is not None
+            and status_selector.selected_status_id != self.work_item.status.id
         )
 
         return has_field_changes or has_status_change
@@ -2286,8 +2358,10 @@ class WorkItemFields(Container, can_focus=False):
             self._resume_pending_change_tracking()
 
     def _status_has_pending_change(self) -> bool:
+        status_selector = self.maybe_work_item_status_selector
         return (
-            self.work_item_status_selector.selection is not None
+            status_selector is not None
+            and status_selector.selection is not None
             and self.work_item is not None
             and self.work_item.status is not None
         )
@@ -2295,9 +2369,10 @@ class WorkItemFields(Container, can_focus=False):
     def _reset_status_selection(self) -> None:
         if not self.work_item or not self.work_item.status:
             return
-        self.work_item_status_selector.original_value = self.work_item.status.id
-        self.work_item_status_selector.value = Select.NULL
-        self.work_item_status_selector.prompt = self.work_item.status.name
+        self._set_status_selector_options(
+            status_name=self.work_item.status.name,
+            status_id=self.work_item.status.id,
+        )
 
     def _iter_dirty_update_widgets(self) -> list[Widget]:
         widgets: list[Widget] = []
@@ -2345,26 +2420,13 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         if isinstance(widget, (SelectionWidget, UserPicker, UserSelectionInput)):
-            widget.value = widget.original_value if widget.original_value else Select.NULL
             if isinstance(widget, UserPicker):
+                self._reset_user_selection_widget(widget)
                 widget.pending_value = widget.original_value
-                widget.prompt = next(
-                    (
-                        label
-                        for label, value in getattr(widget, '_options', [])
-                        if value == widget.original_value
-                    ),
-                    'Unassigned',
-                )
             elif isinstance(widget, UserSelectionInput):
-                widget.prompt = next(
-                    (
-                        label
-                        for label, value in getattr(widget, '_options', [])
-                        if value == widget.original_value
-                    ),
-                    'Unassigned',
-                )
+                self._reset_user_selection_widget(widget)
+            else:
+                widget.value = widget.original_value if widget.original_value else Select.NULL
             return
 
         if isinstance(widget, (MultiSelect, WorkItemLabels)):
@@ -2373,6 +2435,18 @@ class WorkItemFields(Container, can_focus=False):
                 original_value=widget.original_value,
                 field_supports_update=widget.update_enabled,
             )
+
+    @staticmethod
+    def _reset_user_selection_widget(widget: UserPicker | UserSelectionInput) -> None:
+        widget.value = widget.original_value if widget.original_value else UNASSIGNED_VALUE
+        widget.prompt = next(
+            (
+                label
+                for label, value in getattr(widget, '_options', [])
+                if value == widget.original_value
+            ),
+            'Unassigned',
+        )
 
     @work(exclusive=False, group='save-work-item')
     async def _save_work_item(self) -> None:
@@ -2405,9 +2479,12 @@ class WorkItemFields(Container, can_focus=False):
 
             payload: dict = self._build_payload_for_update()
 
+            status_selector = self.maybe_work_item_status_selector
             work_item_requires_transition = (
-                self.work_item_status_selector.selection is not None
-                and self.work_item_status_selector.selected_status_id != self.work_item.status.id
+                status_selector is not None
+                and status_selector.selection is not None
+                and self.work_item.status is not None
+                and status_selector.selected_status_id != self.work_item.status.id
             )
 
             if not payload and not work_item_requires_transition:
@@ -2457,7 +2534,7 @@ class WorkItemFields(Container, can_focus=False):
                         )
 
             if work_item_requires_transition:
-                transition_id = self.work_item_status_selector.selection
+                transition_id = status_selector.selection if status_selector else None
                 response = await application.api.transition_work_item_status(
                     self.work_item.key, str(transition_id)
                 )
@@ -2600,12 +2677,33 @@ class WorkItemFields(Container, can_focus=False):
         current_status_name: str | None,
         current_status_id: str | None,
     ) -> None:
+        self._update_status_selector_state(
+            current_status_name=current_status_name,
+            current_status_id=current_status_id,
+            disabled=True,
+        )
+
+    def _update_status_selector_state(
+        self,
+        *,
+        current_status_name: str | None,
+        current_status_id: str | None,
+        disabled: bool | None = None,
+        clear_transition_status_ids: bool = False,
+    ) -> None:
         with self.app.batch_update():
-            self.work_item_status_selector.disabled = True
             self._set_status_selector_state(
                 current_status_name=current_status_name,
                 current_status_id=current_status_id,
             )
+            if status_selector := self.maybe_work_item_status_selector:
+                if clear_transition_status_ids:
+                    status_selector._transition_status_ids = {}
+                status_selector.disabled = (
+                    disabled
+                    if disabled is not None
+                    else not (current_status_name and current_status_id)
+                )
 
     def _disable_sprint_picker(
         self,
@@ -2695,12 +2793,14 @@ class WorkItemFields(Container, can_focus=False):
 
                 allowed_status_options = sorted(allowed_status_options, key=lambda x: str(x[0]))
                 with self.app.batch_update():
-                    self.work_item_status_selector.set_transition_options(allowed_status_options)
-                    self.work_item_status_selector.value = Select.NULL
-                    self.work_item_status_selector.original_value = current_status_id
-                    self.work_item_status_selector.disabled = False
-                    if current_status_name:
-                        self.work_item_status_selector.prompt = current_status_name
+                    if current_status_name and current_status_id:
+                        status_selector = self._set_status_selector_options(
+                            status_name=current_status_name,
+                            status_id=current_status_id,
+                            transitions=allowed_status_options,
+                        )
+                        status_selector.original_value = current_status_id
+                        status_selector.disabled = False
 
     def _apply_assignable_users_options(
         self,
@@ -2718,7 +2818,7 @@ class WorkItemFields(Container, can_focus=False):
                     if display_name := self._get_user_display_name(current_assignee):
                         self.assignee_selector.prompt = display_name
                 else:
-                    self.assignee_selector.value = Select.NULL
+                    self.assignee_selector.value = UNASSIGNED_VALUE
                     self.assignee_selector.original_value = None
                     self.assignee_selector.prompt = 'Unassigned'
                 self.assignee_selector.update_enabled = bool(field_is_editable)
@@ -2732,7 +2832,7 @@ class WorkItemFields(Container, can_focus=False):
                 self.assignee_selector.update_enabled = bool(field_is_editable)
             else:
                 self.assignee_selector.set_options([])
-                self.assignee_selector.value = Select.NULL
+                self.assignee_selector.value = UNASSIGNED_VALUE
                 self.assignee_selector.original_value = None
                 self.assignee_selector.prompt = 'Unassigned'
                 self.assignee_selector.update_enabled = False
@@ -2742,13 +2842,11 @@ class WorkItemFields(Container, can_focus=False):
         current_status_name: str | None = None,
         current_status_id: str | None = None,
     ) -> None:
-        with self.app.batch_update():
-            self.work_item_status_selector._transition_status_ids = {}
-            self.work_item_status_selector.disabled = True
-            self._set_status_selector_state(
-                current_status_name=current_status_name,
-                current_status_id=current_status_id,
-            )
+        self._update_status_selector_state(
+            current_status_name=current_status_name,
+            current_status_id=current_status_id,
+            clear_transition_status_ids=True,
+        )
 
     def _set_status_selector_state(
         self,
@@ -2756,16 +2854,15 @@ class WorkItemFields(Container, can_focus=False):
         current_status_name: str | None,
         current_status_id: str | None,
     ) -> None:
-        self.work_item_status_selector.original_value = current_status_id
         if current_status_name and current_status_id:
-            self.work_item_status_selector.set_options([(current_status_name, current_status_id)])
-            self.work_item_status_selector.value = Select.NULL
-            self.work_item_status_selector.prompt = current_status_name
+            self._set_status_selector_options(
+                status_name=current_status_name,
+                status_id=current_status_id,
+            )
             return
 
-        self.work_item_status_selector.set_options([])
-        self.work_item_status_selector.value = Select.NULL
-        self.work_item_status_selector.prompt = 'Select a status'
+        if status_selector := self.maybe_work_item_status_selector:
+            status_selector.disabled = True
 
     def watch_work_item(self, work_item: JiraWorkItem | None) -> None:
         if self._current_loading_worker is not None:

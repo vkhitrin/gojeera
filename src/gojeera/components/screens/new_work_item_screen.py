@@ -69,7 +69,6 @@ PROCESS_OPTIONAL_FIELDS = ['duedate', 'priority']
 
 class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, object | None]]):
     BINDINGS = DynamicModalScreen.BINDINGS + [
-        ('ctrl+backslash', 'show_overlay', 'Jump'),
         ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
     TITLE = 'New Work Item'

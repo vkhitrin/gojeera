@@ -1,6 +1,6 @@
-from textual.reactive import Reactive, reactive
-
 from gojeera.widgets.selection.vim_select import VimSelect
+
+CURRENT_STATUS_VALUE = ''
 
 
 class WorkItemStatusSelectionInput(VimSelect):
@@ -12,17 +12,17 @@ class WorkItemStatusSelectionInput(VimSelect):
 
     WIDGET_ID = 'jira-work-item-status-selector'
 
-    statuses: Reactive[list[tuple[str, str]] | None] = reactive(None, always_update=True)
-
-    def __init__(self, statuses: list):
+    def __init__(self, statuses: list, *, prompt: str = ''):
         super().__init__(
             options=statuses,
-            prompt='Select a status',
+            prompt=prompt,
             name='work_item_status',
             id=self.WIDGET_ID,
             type_to_search=True,
             compact=True,
             classes='jira-selector',
+            allow_blank=False,
+            value=CURRENT_STATUS_VALUE,
         )
         self.original_value: str | None = None
         self._transition_status_ids: dict[str, str] = {}
@@ -33,13 +33,19 @@ class WorkItemStatusSelectionInput(VimSelect):
             return self._transition_status_ids.get(transition_id, transition_id)
         return None
 
-    def set_transition_options(self, statuses: list[tuple[str, str, str]]) -> None:
+    def set_status_options(
+        self,
+        *,
+        current_status_name: str,
+        transitions: list[tuple[str, str, str]] | None = None,
+    ) -> None:
         self._transition_status_ids = {
-            transition_id: status_id for _label, transition_id, status_id in statuses
+            transition_id: status_id for _label, transition_id, status_id in transitions or []
         }
-        self.set_options([(label, transition_id) for label, transition_id, _status_id in statuses])
-
-    async def watch_statuses(self, statuses: list[tuple[str, str]] | None = None) -> None:
-        self.clear()
-        await self.recompose()
-        self.set_options(statuses or [])
+        self.set_options(
+            [
+                (current_status_name, CURRENT_STATUS_VALUE),
+                *[(label, transition_id) for label, transition_id, _status_id in transitions or []],
+            ]
+        )
+        self.value = CURRENT_STATUS_VALUE

@@ -146,7 +146,7 @@ class WorkItemSearchResultsControls(Horizontal):
 
     @on(Select.Changed, '#search-results-order-by')
     async def handle_order_by_changed(self, event: Select.Changed) -> None:
-        if not event.value or str(event.value) == Select.BLANK:
+        if not event.value:
             return
         if self.order_by.disabled:
             return

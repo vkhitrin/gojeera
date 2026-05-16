@@ -419,6 +419,12 @@ class WidgetBuilder:
         return None
 
     @staticmethod
+    def _selection_allows_blank(metadata: FieldMetadata, initial_value: Any) -> bool:
+        if metadata.field_id == 'priority' or metadata.schema_type.lower() == 'priority':
+            return False
+        return initial_value == Select.NULL or not metadata.required
+
+    @staticmethod
     def _multi_select_for_mode(
         mode: FieldMode,
         metadata: FieldMetadata,
@@ -536,7 +542,8 @@ class WidgetBuilder:
                     title=metadata.name,
                     required=metadata.required,
                     initial_value=init_val,
-                    allow_blank=allow_blank or (init_val == Select.NULL),
+                    allow_blank=allow_blank
+                    and WidgetBuilder._selection_allows_blank(metadata, init_val),
                     prompt='',
                 ),
                 update_factory=lambda: SelectionWidget(

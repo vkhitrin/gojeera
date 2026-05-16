@@ -18,7 +18,7 @@ class ExtendedFileOpen(FileOpen):
     BINDINGS = [
         Binding('full_stop', 'hidden', show=False),
         Binding('escape', 'dismiss(None)', 'Cancel'),
-        Binding('ctrl+backslash', 'show_overlay', 'Jump'),
+        Binding('ctrl+backslash', 'show_overlay', 'Jump', show=False),
     ]
 
     def __init__(

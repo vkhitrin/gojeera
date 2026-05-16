@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from textual import events
 from textual.widgets import Select
@@ -21,14 +22,25 @@ class VimSelect(Select):
 
     def replace_options(
         self,
-        options: Sequence[tuple[str, str]],
+        options: Sequence[tuple[str, Any]],
         *,
         selection: str | None = None,
     ) -> None:
-        self.clear()
+        current_value = None if self.value == Select.NULL else self.value
         self.set_options(options)
-        if selection and any(option_value == selection for _, option_value in options):
+
+        if selection is not None and any(option_value == selection for _, option_value in options):
             self.value = selection
+            return
+
+        if any(option_value == current_value for _, option_value in options):
+            self.value = current_value
+            return
+
+        if getattr(self, '_allow_blank', True):
+            self.value = Select.NULL
+        elif options:
+            self.value = options[0][1]
 
     async def _on_key(self, event: events.Key) -> None:
         if not self.expanded:

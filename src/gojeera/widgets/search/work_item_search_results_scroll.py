@@ -177,20 +177,6 @@ __OVERFLOW_SCROLLBAR_CSS__
             show=False,
         ),
         Binding(
-            key='left',
-            action='previous_page',
-            description='←',
-            show=True,
-            tooltip='Load the previous page of results',
-        ),
-        Binding(
-            key='right',
-            action='next_page',
-            description='→',
-            show=True,
-            tooltip='Load the next page of results',
-        ),
-        Binding(
             key='ctrl+o',
             action='open_work_item_in_browser',
             description='Browse',

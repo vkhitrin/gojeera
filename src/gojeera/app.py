@@ -33,6 +33,7 @@ from gojeera.components.work_item.work_item_description import (
 )
 from gojeera.components.work_item.work_item_fields import WorkItemFields
 from gojeera.components.work_item.work_item_information import (
+    WORK_ITEM_WORKLOG_BINDINGS,
     WorkItemBreadcrumb,
     WorkItemInformation,
 )
@@ -166,12 +167,14 @@ class WorkspaceMixin(App):
             tooltip='Load the parent work item',
             show=True,
         ),
+        *WORK_ITEM_WORKLOG_BINDINGS,
         register_binding_in_command_palette(
             Binding(
                 key='ctrl+backslash',
                 action='show_overlay',
                 description='Jump',
                 tooltip='Jump between widgets',
+                show=False,
             )
         ),
         register_binding_in_command_palette(
@@ -390,6 +393,13 @@ class WorkspaceMixin(App):
             return self.search_results_container.search_active
         if action == 'edit_work_item_info':
             return self.current_loaded_work_item_key is not None
+        if action in ('view_worklog', 'log_work'):
+            return self.current_loaded_work_item_key is not None
+        if action in ('apply_changes', 'discard_changes'):
+            return (
+                self.current_loaded_work_item_key is not None
+                and self.work_item_fields_widget.has_pending_changes
+            )
         if action == 'go_to_parent_work_item':
             work_item = self.information_panel.work_item
             return bool(work_item and work_item.parent_key.strip())
@@ -1199,12 +1209,12 @@ class WorkspaceMixin(App):
     def action_view_worklog(self) -> None:
         if not self.current_loaded_work_item_key:
             return
-        self.work_item_fields_widget.action_view_worklog()
+        self.information_panel.action_view_worklog()
 
     def action_log_work(self) -> None:
         if not self.current_loaded_work_item_key:
             return
-        self.work_item_fields_widget.action_log_work()
+        self.information_panel.action_log_work()
 
     def action_apply_changes(self) -> None:
         if not self.current_loaded_work_item_key:

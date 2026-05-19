@@ -116,7 +116,6 @@ gojeera --profile "service_account"
 | `Ctrl+P` | Command Palette  | Open command palette                                     |
 | `CTRL+N` | New Work Item    | Create a new work item from the main search/results view |
 | `?`      | Help             | Open help                                                |
-| `F10`    | Quick Navigation | Open a work item directly by key                         |
 | `F11`    | Toggle Footer    | Show or hide the footer for the current session          |
 | `F12`    | Debug Info       | Show debug information (config, server, user)            |
 | `[`      | Previous Tab     | Navigate to previous tab in work item details            |

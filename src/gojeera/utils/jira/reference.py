@@ -34,7 +34,7 @@ class WorkItemReference:
 
 @runtime_checkable
 class WorkItemReferenceLoader(Protocol):
-    async def load_work_item(self, selected_work_item_key: str) -> None: ...
+    async def load_work_item(self, selected_work_item_key: str) -> bool: ...
 
     def set_pending_work_item_navigation_target(
         self, target: WorkItemNavigationTarget | None
@@ -108,5 +108,7 @@ async def load_work_item_reference(
         return False
 
     loader.set_pending_work_item_navigation_target(reference.navigation_target)
-    await loader.load_work_item(reference.work_item_key)
-    return True
+    loaded = await loader.load_work_item(reference.work_item_key)
+    if not loaded:
+        loader.set_pending_work_item_navigation_target(None)
+    return loaded

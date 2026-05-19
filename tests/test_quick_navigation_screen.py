@@ -1,6 +1,9 @@
 import asyncio
 
-from gojeera.components.screens.quick_navigation_screen import QuickNavigationScreen
+from httpx import Response
+import respx
+
+from gojeera.app import JiraApp
 from gojeera.components.work_item.work_item_comments import CommentsScrollView
 from gojeera.utils.jira.reference import parse_work_item_reference
 from gojeera.utils.jira.urls import (
@@ -13,18 +16,14 @@ from gojeera.widgets.markdown.gojeera_markdown import (
     get_markdown_link_tooltip,
     get_markdown_link_work_item_key,
 )
+from gojeera.widgets.navigation.extended_palette import ExtendedPalette
 
-from .test_helpers import with_snapshot_assertion
 
-
-async def open_quick_navigation_screen(pilot):
-    screen = QuickNavigationScreen()
-    await pilot.app.push_screen(screen)
+async def open_quick_navigation_palette(pilot):
+    pilot.app.action_command_palette()
     await asyncio.sleep(0.3)
 
-    assert isinstance(pilot.app.screen, QuickNavigationScreen)
-    assert pilot.app.screen.work_item_key_input.has_focus
-    assert pilot.app.screen.open_button.disabled
+    assert isinstance(pilot.app.screen, ExtendedPalette)
 
 
 async def load_work_item_via_quick_navigation(
@@ -33,7 +32,7 @@ async def load_work_item_via_quick_navigation(
     reference: str,
     expected_key: str,
 ):
-    await open_quick_navigation_screen(pilot)
+    await open_quick_navigation_palette(pilot)
 
     await pilot.press(*reference)
     await asyncio.sleep(0.2)
@@ -80,6 +79,24 @@ async def quick_navigation_loads_focused_comment_from_url(pilot):
     assert comments_scroll.selected_comment._comment_id == '231668'
 
 
+async def quick_navigation_rejects_missing_work_item(pilot):
+    await open_quick_navigation_palette(pilot)
+
+    await pilot.press(*'ENG-0')
+    await asyncio.sleep(0.2)
+
+    await pilot.press('enter')
+    await asyncio.sleep(0.5)
+
+    await pilot.app.workers.wait_for_complete()
+    await asyncio.sleep(0.5)
+
+    main_screen = pilot.app
+    assert main_screen.current_loaded_work_item_key is None
+    assert main_screen.information_panel.work_item is None
+    assert main_screen._active_work_item_load_key is None
+
+
 class TestQuickNavigationScreen:
     def test_extract_work_item_key_accepts_browse_url(self, mock_configuration):
         base_url = mock_configuration.jira.api_base_url
@@ -121,17 +138,77 @@ class TestQuickNavigationScreen:
         assert get_markdown_link_work_item_key(browse_style) == 'ENG-1'
         assert get_markdown_link_tooltip(regular_style) is None
 
-    @with_snapshot_assertion(open_quick_navigation_screen, terminal_size=(120, 40))
-    def test_quick_navigation_screen_initial_state(self): ...
+    async def test_quick_navigation_palette_initial_state(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-    @with_snapshot_assertion(quick_navigation_load_valid_work_item, terminal_size=(120, 40))
-    def test_quick_navigation_loads_valid_work_item(self): ...
+        async with app.run_test(size=(120, 40)) as pilot:
+            await open_quick_navigation_palette(pilot)
 
-    @with_snapshot_assertion(quick_navigation_loads_work_item_from_url, terminal_size=(120, 40))
-    def test_quick_navigation_loads_work_item_from_url(self): ...
+    async def test_quick_navigation_loads_valid_work_item(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
-    @with_snapshot_assertion(
-        quick_navigation_loads_focused_comment_from_url,
-        terminal_size=(120, 40),
-    )
-    def test_quick_navigation_loads_focused_comment_from_url(self): ...
+        async with app.run_test(size=(120, 40)) as pilot:
+            await quick_navigation_load_valid_work_item(pilot)
+
+    async def test_quick_navigation_loads_work_item_from_url(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await quick_navigation_loads_work_item_from_url(pilot)
+
+    async def test_quick_navigation_loads_focused_comment_from_url(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await quick_navigation_loads_focused_comment_from_url(pilot)
+
+    async def test_quick_navigation_rejects_missing_work_item(
+        self,
+        monkeypatch,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        notifications: list[dict] = []
+
+        def capture_notification(message, **kwargs):
+            notifications.append({'message': message, **kwargs})
+
+        monkeypatch.setattr(app, 'notify', capture_notification)
+
+        with respx.mock:
+            missing_work_item_route = respx.get(
+                url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-0(?:\?.*)?$'
+            ).mock(return_value=Response(404, json={'errorMessages': ['Issue does not exist']}))
+
+            async with app.run_test(size=(120, 40)) as pilot:
+                await quick_navigation_rejects_missing_work_item(pilot)
+
+            assert missing_work_item_route.called
+            assert notifications == [
+                {
+                    'message': 'Work item not found',
+                    'severity': 'warning',
+                }
+            ]

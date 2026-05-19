@@ -121,6 +121,12 @@ def get_search_command_provider() -> type[Provider]:
     return SearchCommandProvider
 
 
+def get_quick_navigation_provider() -> type[Provider]:
+    from gojeera.commands.providers.quick_navigation_provider import QuickNavigationProvider
+
+    return QuickNavigationProvider
+
+
 class WorkspaceMixin(App):
     """Workspace behavior hosted directly on the application."""
 
@@ -175,15 +181,6 @@ class WorkspaceMixin(App):
                 description='Jump',
                 tooltip='Jump between widgets',
                 show=False,
-            )
-        ),
-        register_binding_in_command_palette(
-            Binding(
-                key='f10',
-                action='quick_navigation',
-                description='Quick Navigation',
-                tooltip='Open a work item directly by key',
-                show=True,
             )
         ),
         register_binding_in_command_palette(
@@ -1268,25 +1265,6 @@ class WorkspaceMixin(App):
 
         await self.information_panel.breadcrumb_widget.open_parent_work_item_screen()
 
-    async def action_quick_navigation(self) -> None:
-        from gojeera.components.screens.quick_navigation_screen import QuickNavigationScreen
-
-        await self.app.push_screen(QuickNavigationScreen(), callback=self.quick_navigation)
-
-    async def quick_navigation(self, data: dict[str, str] | None) -> None:
-        if not data:
-            return
-
-        work_item_reference = data.get('work_item_reference')
-        if not work_item_reference:
-            return
-
-        await load_work_item_reference(
-            cast(WorkItemReferenceLoader, self),
-            work_item_reference,
-            title='Quick Navigation',
-        )
-
     def set_pending_work_item_navigation_target(
         self, target: WorkItemNavigationTarget | None
     ) -> None:
@@ -1465,55 +1443,49 @@ class WorkspaceMixin(App):
     def _bind_provisional_work_item_shell(self, work_item: JiraWorkItem) -> None:
         self.current_loaded_work_item_key = work_item.key
 
-    async def load_work_item(self, selected_work_item_key: str) -> None:
+    async def load_work_item(self, selected_work_item_key: str) -> bool:
         if not selected_work_item_key:
             self.notify(
                 'You need to select a work item before fetching its details.',
                 title='Find Work Item',
                 severity='error',
             )
-            return
+            return False
 
         if self._active_work_item_load_key == selected_work_item_key:
-            return
+            return False
 
         if self._is_current_loaded_work_item(selected_work_item_key):
             self._apply_pending_work_item_navigation_target()
-            return
+            return True
 
-        self._clear_loaded_work_item_state(
-            preserve_content=True,
-            next_loaded_work_item_key=selected_work_item_key,
-        )
-        self._active_work_item_load_key = selected_work_item_key
-        self.search_results_list.mark_loaded_work_item(selected_work_item_key)
-
-        if provisional_work_item := self.search_results_list.get_work_item_by_key(
-            selected_work_item_key
-        ):
-            self._bind_provisional_work_item_shell(provisional_work_item)
-
-        self.is_loading = True
         try:
             main_response: APIControllerResponse = await self.api.get_work_item(
                 work_item_id_or_key=selected_work_item_key,
             )
 
-            if self._active_work_item_load_key != selected_work_item_key:
-                return
-
             if not main_response.success or not main_response.result:
-                if self._active_work_item_load_key == selected_work_item_key:
-                    self.is_loading = False
                 self.notify(
-                    'Unable to find the selected work item',
-                    title='Find Work Item',
-                    severity='error',
+                    'Work item not found',
+                    severity='warning',
                 )
-                return
+                return False
 
             result: JiraWorkItemSearchResponse = main_response.result
             work_item: JiraWorkItem = result.work_items[0]
+
+            self._active_work_item_load_key = selected_work_item_key
+            self.is_loading = True
+            self._clear_loaded_work_item_state(
+                preserve_content=True,
+                next_loaded_work_item_key=selected_work_item_key,
+            )
+            self.search_results_list.mark_loaded_work_item(selected_work_item_key)
+
+            if provisional_work_item := self.search_results_list.get_work_item_by_key(
+                selected_work_item_key
+            ):
+                self._bind_provisional_work_item_shell(provisional_work_item)
 
             self.tabs.disabled = False
             self.fields_panel.disabled = False
@@ -1534,6 +1506,7 @@ class WorkspaceMixin(App):
             )
 
             self._active_work_item_load_key = None
+            return True
         except asyncio.CancelledError:
             if self._active_work_item_load_key == selected_work_item_key:
                 self.is_loading = False
@@ -1751,6 +1724,7 @@ class JiraApp(WorkspaceMixin, App):
     COMMANDS = App.COMMANDS | {
         get_work_item_command_provider,
         get_search_command_provider,
+        get_quick_navigation_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,
@@ -2007,7 +1981,7 @@ class JiraApp(WorkspaceMixin, App):
                 self._push_screen_exclusive_sync(
                     ExtendedPalette(
                         id='--command-palette',
-                        placeholder='Search for commands or type "page N"…',
+                        placeholder='Search actions, navigate to page, or enter a work item key/URL…',
                     )
                 )
 

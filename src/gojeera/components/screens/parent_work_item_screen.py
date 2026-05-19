@@ -271,7 +271,7 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
 
         normalized_query = normalize_work_item_key(query)
         if normalized_query is None:
-            self._set_not_found_state('Type a full work item key like PLAT-123')
+            self._set_not_found_state('Type a full work item key like KEY-123')
             return
 
         self._set_searching_state('Looking up parent work item...')

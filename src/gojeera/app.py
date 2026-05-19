@@ -237,6 +237,7 @@ class WorkspaceMixin(App):
         self._active_work_item_load_key: str | None = None
         self._comments_loading_worker: Worker | None = None
         self._subtasks_loading_worker: Worker | None = None
+        self._screen_transition_in_progress = False
 
     def set_focus(
         self,
@@ -1060,13 +1061,23 @@ class WorkspaceMixin(App):
         }
 
     def end_search_request(self) -> None:
-        if self.search_results_list.is_pending_initial_render:
+        list_view = self.search_results_list
+        if list_view.is_pending_initial_render:
+            list_view.call_after_refresh(list_view._complete_initial_render)
+            self.set_timer(0.25, self._complete_pending_search_render)
             if self.unified_search_bar.search_in_progress:
                 self.unified_search_bar.search_in_progress = False
             return
         self.search_results_container.hide_loading()
         if self.unified_search_bar.search_in_progress:
             self.unified_search_bar.search_in_progress = False
+
+    def _complete_pending_search_render(self) -> None:
+        list_view = self.search_results_list
+        if not list_view.is_pending_initial_render:
+            return
+
+        list_view._complete_initial_render()
 
     def _clear_loaded_work_item_state(
         self,
@@ -1821,7 +1832,7 @@ class JiraApp(WorkspaceMixin, App):
         """Show the theme picker with the extended command palette."""
         from textual.theme import ThemeProvider
 
-        self.push_screen(
+        self._push_screen_exclusive_sync(
             ExtendedPalette(
                 providers=[ThemeProvider],
                 placeholder='Search for themes…',
@@ -1915,6 +1926,9 @@ class JiraApp(WorkspaceMixin, App):
     async def action_help(self) -> None:
         from gojeera.components.screens.help_screen import HelpScreen
 
+        if self._screen_transition_in_progress:
+            return
+
         focused = self.focused
 
         def restore_focus(_response) -> None:
@@ -1925,32 +1939,72 @@ class JiraApp(WorkspaceMixin, App):
         anchor: str | None = None
         if focused and hasattr(focused, 'help_anchor'):
             anchor = str(getattr(focused, 'help_anchor', None))
-        await self.push_screen(HelpScreen(anchor), restore_focus)
+        await self._push_screen_exclusive(HelpScreen(anchor), restore_focus)
 
     async def action_debug_info(self) -> None:
         from gojeera.components.screens.debug_screen import DebugInfoScreen
 
-        if isinstance(self.screen, DebugInfoScreen):
-            self.pop_screen()
+        if self._screen_transition_in_progress:
             return
 
-        await self.push_screen(DebugInfoScreen())
+        if isinstance(self.screen, DebugInfoScreen):
+            self._pop_screen_exclusive()
+            return
+
+        await self._push_screen_exclusive(DebugInfoScreen())
 
     async def action_quit(self) -> None:
         if CONFIGURATION.get().confirm_before_quit:
             from gojeera.components.screens.quit_screen import QuitScreen
 
-            await self.push_screen(QuitScreen())
+            await self._push_screen_exclusive(QuitScreen())
         else:
             await self.api.close()
             self.app.exit()
 
+    async def _push_screen_exclusive(self, *args, **kwargs) -> None:
+        if self._screen_transition_in_progress:
+            return
+
+        self._screen_transition_in_progress = True
+        try:
+            await self.push_screen(*args, **kwargs)
+        finally:
+            self._screen_transition_in_progress = False
+
+    def _pop_screen_exclusive(self) -> None:
+        if self._screen_transition_in_progress:
+            return
+
+        self._screen_transition_in_progress = True
+        self.pop_screen()
+        self._release_screen_transition_after_refresh()
+
+    def _push_screen_exclusive_sync(self, *args, **kwargs) -> None:
+        if self._screen_transition_in_progress:
+            return
+
+        self._screen_transition_in_progress = True
+        self.push_screen(*args, **kwargs)
+        self._release_screen_transition_after_refresh()
+
+    def _release_screen_transition_after_refresh(self) -> None:
+        self.call_after_refresh(self._release_screen_transition)
+        self.set_timer(0.1, self._release_screen_transition)
+
+    def _release_screen_transition(self) -> None:
+        self._screen_transition_in_progress = False
+
     def action_command_palette(self) -> None:
         if isinstance(self.screen, ExtendedPalette):
-            self.pop_screen()
+            self._pop_screen_exclusive()
         else:
-            if self.use_command_palette and not ExtendedPalette.is_open(self):
-                self.push_screen(
+            if (
+                self.use_command_palette
+                and not self._screen_transition_in_progress
+                and not ExtendedPalette.is_open(self)
+            ):
+                self._push_screen_exclusive_sync(
                     ExtendedPalette(
                         id='--command-palette',
                         placeholder='Search for commands or type "page N"…',

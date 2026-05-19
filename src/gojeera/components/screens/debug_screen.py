@@ -9,6 +9,7 @@ from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import Select, Static, TabPane
 import yaml
 
@@ -321,20 +322,23 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             self._loading_sections.discard(section)
 
-        if section in {'server_info', 'global_settings'}:
-            self.server_scroll.loading = bool(
-                {'server_info', 'global_settings'} & self._loading_sections
-            )
-            return
+        try:
+            if section in {'server_info', 'global_settings'}:
+                self.server_scroll.loading = bool(
+                    {'server_info', 'global_settings'} & self._loading_sections
+                )
+                return
 
-        scroll_map = {
-            'application': self.application_scroll,
-            'config': self.config_scroll,
-            'user': self.user_scroll,
-            'cache': self.cache_scroll,
-        }
-        if section in scroll_map:
-            scroll_map[section].loading = is_loading
+            scroll_map = {
+                'application': self.application_scroll,
+                'config': self.config_scroll,
+                'user': self.user_scroll,
+                'cache': self.cache_scroll,
+            }
+            if section in scroll_map:
+                scroll_map[section].loading = is_loading
+        except NoMatches:
+            return
 
     @work(exclusive=False)
     async def _fetch_server_info(self) -> None:
@@ -377,7 +381,10 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('Unable to fetch server information')
 
-        self.server_content.update('\n'.join(lines))
+        try:
+            self.server_content.update('\n'.join(lines))
+        except NoMatches:
+            return
 
     @work(exclusive=False)
     async def _fetch_user_info(self) -> None:
@@ -419,7 +426,10 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('Unable to fetch user information')
 
-        self.user_content.update('\n'.join(lines))
+        try:
+            self.user_content.update('\n'.join(lines))
+        except NoMatches:
+            return
 
     @work(exclusive=False)
     async def _fetch_global_settings(self) -> None:
@@ -473,7 +483,10 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         else:
             lines.append('Unable to fetch global settings')
 
-        self.global_content.update('\n'.join(lines))
+        try:
+            self.global_content.update('\n'.join(lines))
+        except NoMatches:
+            return
 
     def on_key(self, event: events.Key) -> None:
         if event.key == 'escape':

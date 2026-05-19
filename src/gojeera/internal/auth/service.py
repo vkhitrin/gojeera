@@ -12,14 +12,12 @@ from gojeera.internal.auth.profiles import (
     AuthProfile,
     BasicAuthProfile,
     OAuth2AuthProfile,
-    update_oauth2_access_token_expiry,
 )
 from gojeera.internal.store.secret import (
     get_jira_api_token,
-    get_jira_oauth2_access_token,
     get_jira_oauth2_credentials,
+    get_jira_oauth2_client_id,
     get_jira_oauth2_client_secret,
-    set_jira_oauth2_access_token,
     set_jira_oauth2_refresh_token,
 )
 
@@ -29,6 +27,8 @@ class AuthValidationResult:
     is_valid: bool
     message: str
     account_id: str | None = None
+    email: str | None = None
+    cloud_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,33 @@ class AuthProfileStatus:
 
 class AuthService:
     OAUTH2_STARTUP_REFRESH_WINDOW = timedelta(days=1)
+
+    def __init__(self) -> None:
+        self._oauth2_access_token_cache: dict[str, OAuth2TokenResponse] = {}
+
+    def _oauth2_cache_key(self, profile: OAuth2AuthProfile) -> str:
+        return profile.account_id or profile.name
+
+    def _get_cached_oauth2_access_token(
+        self, profile: OAuth2AuthProfile, *, now: datetime | None = None
+    ) -> str | None:
+        token_response = self._oauth2_access_token_cache.get(self._oauth2_cache_key(profile))
+        if token_response is None:
+            return None
+
+        expiration_timestamp = token_response.access_token_expiration_timestamp
+        if expiration_timestamp is not None:
+            current_time = now or datetime.now(timezone.utc)
+            if expiration_timestamp <= int(current_time.timestamp()):
+                self._oauth2_access_token_cache.pop(self._oauth2_cache_key(profile), None)
+                return None
+
+        return token_response.access_token
+
+    def _cache_oauth2_access_token(
+        self, profile: OAuth2AuthProfile, token_response: OAuth2TokenResponse
+    ) -> None:
+        self._oauth2_access_token_cache[self._oauth2_cache_key(profile)] = token_response
 
     def _get_oauth2_store_secrets(self, profile: OAuth2AuthProfile) -> dict[str, str]:
         if profile.account_id is None:
@@ -61,9 +88,7 @@ class AuthService:
     ) -> str | None:
         if prefer_environment and (token := os.getenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN')):
             return token
-        if profile.account_id is None:
-            return None
-        return get_jira_oauth2_access_token(profile.account_id)
+        return self._get_cached_oauth2_access_token(profile)
 
     def get_oauth2_client_secret(
         self, profile: OAuth2AuthProfile, *, prefer_environment: bool = True
@@ -73,6 +98,17 @@ class AuthService:
         if profile.account_id is None:
             return None
         return get_jira_oauth2_client_secret(profile.account_id)
+
+    def get_oauth2_client_id(
+        self, profile: OAuth2AuthProfile, *, prefer_environment: bool = True
+    ) -> str | None:
+        if prefer_environment and (client_id := os.getenv('GOJEERA_JIRA__OAUTH2_CLIENT_ID')):
+            return client_id
+        if profile.client_id:
+            return profile.client_id
+        if profile.account_id is None:
+            return None
+        return get_jira_oauth2_client_id(profile.account_id)
 
     def get_token_source(self, profile: AuthProfile) -> str:
         if isinstance(profile, OAuth2AuthProfile):
@@ -133,8 +169,9 @@ class AuthService:
                 if not token:
                     return AuthValidationResult(False, 'missing api token')
 
+                site_url = profile.site_url()
                 response = httpx.get(
-                    f'{profile.site.rstrip("/")}/rest/api/3/myself',
+                    f'{site_url}/rest/api/3/myself',
                     headers={'Accept': 'application/json'},
                     auth=httpx.BasicAuth(profile.email, token),
                     timeout=10.0,
@@ -155,10 +192,30 @@ class AuthService:
                 or payload.get('account_id')
                 or 'authenticated'
             )
+            cloud_id = None
+            if isinstance(profile, BasicAuthProfile):
+                try:
+                    tenant_response = httpx.get(
+                        f'{profile.site_url()}/_edge/tenant_info',
+                        headers={'Accept': 'application/json'},
+                        auth=httpx.BasicAuth(profile.email, api_token or ''),
+                        timeout=10.0,
+                    )
+                    if tenant_response.status_code == 200:
+                        tenant_payload = tenant_response.json()
+                        if isinstance(tenant_payload, dict):
+                            cloud_id = tenant_payload.get('cloudId') or tenant_payload.get(
+                                'cloud_id'
+                            )
+                except (httpx.HTTPError, ValueError):
+                    cloud_id = None
+
             return AuthValidationResult(
                 True,
                 str(display_name),
                 account_id=payload.get('accountId') or payload.get('account_id'),
+                email=payload.get('email') or payload.get('emailAddress'),
+                cloud_id=cloud_id,
             )
 
         try:
@@ -175,37 +232,34 @@ class AuthService:
         return AuthValidationResult(False, f'{response.status_code}: {error_message}')
 
     def refresh_oauth2_access_token(self, profile: OAuth2AuthProfile) -> OAuth2TokenResponse:
-        if not profile.client_id:
-            raise ValueError('OAuth2 profile is missing client_id.')
-
+        client_id = os.getenv('GOJEERA_JIRA__OAUTH2_CLIENT_ID') or profile.client_id
         refresh_token = os.getenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN')
         client_secret = os.getenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET')
-        stored_secrets = (
-            {} if refresh_token and client_secret else self._get_oauth2_store_secrets(profile)
-        )
-        refresh_token = refresh_token or stored_secrets.get('refresh_token')
+
+        if not (client_id and refresh_token and client_secret):
+            stored_secrets = self._get_oauth2_store_secrets(profile)
+            client_id = client_id or stored_secrets.get('client_id')
+            refresh_token = refresh_token or stored_secrets.get('refresh_token')
+            client_secret = client_secret or stored_secrets.get('client_secret')
+
+        if not client_id:
+            raise ValueError('OAuth2 profile is missing client_id.')
         if not refresh_token:
             raise ValueError('OAuth2 refresh token is not available.')
-
-        client_secret = client_secret or stored_secrets.get('client_secret')
         if not client_secret:
             raise ValueError('OAuth2 client secret is not available.')
 
         token_response = refresh_atlassian_oauth2_token(
-            client_id=profile.client_id,
+            client_id=client_id,
             client_secret=client_secret,
             refresh_token=refresh_token,
             token_url=ATLASSIAN_OAUTH2_TOKEN_URL,
         )
         if profile.account_id is None:
             raise ValueError('OAuth2 profile is missing account_id.')
-        set_jira_oauth2_access_token(profile.account_id, token_response.access_token)
-        if token_response.refresh_token:
+        if token_response.refresh_token and token_response.refresh_token != refresh_token:
             set_jira_oauth2_refresh_token(profile.account_id, token_response.refresh_token)
-        update_oauth2_access_token_expiry(
-            profile.name,
-            token_response.access_token_expiration_timestamp,
-        )
+        self._cache_oauth2_access_token(profile, token_response)
         return token_response
 
     def get_profile_status(
@@ -219,7 +273,17 @@ class AuthService:
 
         if isinstance(profile, OAuth2AuthProfile):
             token = self.get_oauth2_access_token(profile)
-            validation = self.validate_profile(profile, access_token=token)
+            if token is None:
+                try:
+                    token = self.refresh_oauth2_access_token(profile).access_token
+                except (ValueError, RuntimeError) as exc:
+                    validation = AuthValidationResult(False, str(exc))
+                except httpx.HTTPError as exc:
+                    validation = AuthValidationResult(False, f'connection error: {exc}')
+                else:
+                    validation = self.validate_profile(profile, access_token=token)
+            else:
+                validation = self.validate_profile(profile, access_token=token)
         else:
             token = self.get_basic_api_token(profile)
             validation = self.validate_profile(profile, api_token=token)
@@ -252,10 +316,12 @@ class AuthService:
                 if access_token and refresh_token and client_secret
                 else self._get_oauth2_store_secrets(profile)
             )
-            if access_token := access_token or stored_secrets.get('access_token'):
+            if access_token := access_token:
                 secrets['oauth2_access_token'] = access_token
             if refresh_token := refresh_token or stored_secrets.get('refresh_token'):
                 secrets['oauth2_refresh_token'] = refresh_token
+            if client_id := stored_secrets.get('client_id'):
+                secrets['oauth2_client_id'] = client_id
             if client_secret := client_secret or stored_secrets.get('client_secret'):
                 secrets['oauth2_client_secret'] = client_secret
             return secrets

@@ -1,6 +1,6 @@
-from gojeera.widgets.selection.vim_select import VimSelect
+from textual.widgets import Select
 
-CURRENT_STATUS_VALUE = ''
+from gojeera.widgets.selection.vim_select import VimSelect
 
 
 class WorkItemStatusSelectionInput(VimSelect):
@@ -21,8 +21,8 @@ class WorkItemStatusSelectionInput(VimSelect):
             type_to_search=True,
             compact=True,
             classes='jira-selector',
-            allow_blank=False,
-            value=CURRENT_STATUS_VALUE,
+            allow_blank=True,
+            value=Select.NULL,
         )
         self.original_value: str | None = None
         self._transition_status_ids: dict[str, str] = {}
@@ -43,9 +43,7 @@ class WorkItemStatusSelectionInput(VimSelect):
             transition_id: status_id for _label, transition_id, status_id in transitions or []
         }
         self.set_options(
-            [
-                (current_status_name, CURRENT_STATUS_VALUE),
-                *[(label, transition_id) for label, transition_id, _status_id in transitions or []],
-            ]
+            [(label, transition_id) for label, transition_id, _status_id in transitions or []]
         )
-        self.value = CURRENT_STATUS_VALUE
+        self.prompt = current_status_name
+        self.value = Select.NULL

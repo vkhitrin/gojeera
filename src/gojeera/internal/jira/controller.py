@@ -126,7 +126,11 @@ class APIController:
         if not isinstance(active_profile, OAuth2AuthProfile):
             return None
 
-        if force or self.auth_service.should_refresh_oauth2_access_token(active_profile):
+        if (
+            force
+            or getattr(self.config.jira, 'oauth2_access_token', None) is None
+            or self.auth_service.should_refresh_oauth2_access_token(active_profile)
+        ):
             token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
             self.config.jira.update_active_oauth2_session(
                 access_token=token_response.access_token,

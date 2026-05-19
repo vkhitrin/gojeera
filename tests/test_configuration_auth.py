@@ -5,6 +5,8 @@ from tests.config_test_helpers import write_config_and_set_basic_auth, write_cus
 
 from gojeera.internal.store.config import ApplicationConfiguration
 
+OAUTH2_PROFILE_ID = 'cloud-123:account-123'
+
 
 def _set_profile_registry_env(monkeypatch, profiles_file, tmp_path) -> None:
     monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(profiles_file))
@@ -12,6 +14,7 @@ def _set_profile_registry_env(monkeypatch, profiles_file, tmp_path) -> None:
     monkeypatch.delenv('GOJEERA_JIRA__API_TOKEN', raising=False)
     monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
     monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
+    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_ID', raising=False)
     monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_CLIENT_SECRET', raising=False)
 
 
@@ -21,6 +24,28 @@ def _set_runtime_secrets_provider(monkeypatch, provider) -> None:
 
 def _write_auth_profiles_file(profiles_file, *lines: str) -> None:
     profiles_file.write_text('\n'.join(lines))
+
+
+def _write_acli_oauth_profile(
+    profiles_file,
+    *,
+    current_profile: str | None = OAUTH2_PROFILE_ID,
+    extra_profile_lines: tuple[str, ...] = (),
+    extra_profiles: tuple[str, ...] = (),
+) -> None:
+    _write_auth_profiles_file(
+        profiles_file,
+        f'current_profile: "{current_profile}"'
+        if current_profile is not None
+        else 'current_profile: null',
+        'profiles:',
+        '  - auth_type: "oauth"',
+        '    site: "https://example.atlassian.net"',
+        '    cloud_id: "cloud-123"',
+        '    account_id: "account-123"',
+        *extra_profile_lines,
+        *extra_profiles,
+    )
 
 
 def _set_basic_auth_env(monkeypatch, tmp_path) -> None:
@@ -191,55 +216,41 @@ def test_unknown_custom_theme_field_raises_configuration_error(monkeypatch, tmp_
 
 
 def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
-    config_file = tmp_path / 'gojeera.yaml'
-    config_file.write_text(
-        '\n'.join(
-            [
-                'jira:',
-                '  current_profile: "work"',
-                '  profiles:',
-                '    - name: "work"',
-                '      auth_type: "oauth2"',
-                '      site: "https://example.atlassian.net"',
-                '      cloud_id: "cloud-123"',
-            ]
-        )
-    )
-    monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(config_file))
+    profiles_file = tmp_path / 'auth_profiles.yaml'
+    _write_acli_oauth_profile(profiles_file)
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
     monkeypatch.setenv('GOJEERA_JIRA__AUTH_TYPE', 'oauth2')
     monkeypatch.setenv('GOJEERA_JIRA__API_BASE_URL', 'https://example.atlassian.net')
     monkeypatch.setenv('GOJEERA_JIRA__CLOUD_ID', 'cloud-123')
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN', raising=False)
-    monkeypatch.delenv('GOJEERA_JIRA__OAUTH2_REFRESH_TOKEN', raising=False)
     monkeypatch.setattr(
         'gojeera.internal.store.config.AUTH_SERVICE.get_runtime_secrets',
         lambda profile, **kwargs: {
-            'oauth2_access_token': 'access-token',
             'oauth2_refresh_token': 'refresh-token',
+            'oauth2_client_id': 'client-123',
+            'oauth2_client_secret': 'client-secret',
         },
     )
 
     config = ApplicationConfiguration()
 
-    assert config.jira.oauth2_access_token == SecretStr('access-token')
+    assert config.jira.get_active_profile_name() == OAUTH2_PROFILE_ID
+    assert config.jira.oauth2_access_token is None
     assert config.jira.oauth2_refresh_token == SecretStr('refresh-token')
+    assert config.jira.oauth2_client_id == 'client-123'
+    assert config.jira.oauth2_client_secret == SecretStr('client-secret')
     assert config.jira.oauth2_redirect_uri == 'http://127.0.0.1:49152/callback'
 
 
 def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
-    _write_auth_profiles_file(
+    _write_acli_oauth_profile(
         profiles_file,
-        'current_profile: oauth',
-        'profiles:',
-        '  - name: "oauth"',
-        '    auth_type: "oauth2"',
-        '    site: "https://example.atlassian.net"',
-        '    cloud_id: "cloud-123"',
-        '  - name: "basic"',
-        '    auth_type: "basic"',
-        '    site: "https://example.atlassian.acme.net"',
-        '    email: "basic@example.com"',
+        extra_profiles=(
+            '  - name: "basic"',
+            '    auth_type: "basic"',
+            '    site: "https://example.atlassian.acme.net"',
+            '    email: "basic@example.com"',
+        ),
     )
     _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
     _set_runtime_secrets_provider(
@@ -272,15 +283,7 @@ def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monke
 
 def test_profiles_require_active_profile_when_registry_exists(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
-    _write_auth_profiles_file(
-        profiles_file,
-        'current_profile: null',
-        'profiles:',
-        '  - name: "default"',
-        '    auth_type: "oauth2"',
-        '    site: "https://example.atlassian.net"',
-        '    cloud_id: "cloud-123"',
-    )
+    _write_acli_oauth_profile(profiles_file, current_profile=None)
     _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
     _set_runtime_secrets_provider(
         monkeypatch,
@@ -293,15 +296,9 @@ def test_profiles_require_active_profile_when_registry_exists(monkeypatch, tmp_p
 
 def test_invalid_oauth2_profile_field_raises_configuration_error(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
-    _write_auth_profiles_file(
+    _write_acli_oauth_profile(
         profiles_file,
-        'current_profile: "work"',
-        'profiles:',
-        '  - name: "work"',
-        '    auth_type: "oauth2"',
-        '    site: "https://example.atlassian.net"',
-        '    cloud_id: "cloud-123"',
-        '    asite: "unexpected"',
+        extra_profile_lines=('    asite: "unexpected"',),
     )
     _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
     _set_runtime_secrets_provider(
@@ -309,5 +306,7 @@ def test_invalid_oauth2_profile_field_raises_configuration_error(monkeypatch, tm
         lambda profile, **kwargs: {'oauth2_access_token': 'oauth-access-token'},
     )
 
-    with pytest.raises(ValueError, match='Invalid auth profile "work": unexpected field "asite"'):
+    with pytest.raises(
+        ValueError, match=f'Invalid auth profile "{OAUTH2_PROFILE_ID}": unexpected field "asite"'
+    ):
         ApplicationConfiguration()

@@ -257,7 +257,7 @@ class JiraConfig(BaseSettings):
         if self.api_base_url_override is not None:
             return self.api_base_url_override
         if self.active_profile is not None:
-            return self.active_profile.site
+            return self.active_profile.site_url()
         return None
 
     @property
@@ -410,9 +410,11 @@ class ApplicationConfiguration(BaseSettings):
                 raise ValueError('jira.api_base_url is required for oauth2 authentication.')
             if self.jira.cloud_id is None:
                 raise ValueError('jira.cloud_id is required for oauth2 authentication.')
-            if self.jira.oauth2_access_token is None:
+            if self.jira.oauth2_access_token is None and (
+                self.jira.oauth2_refresh_token is None or self.jira.oauth2_client_secret is None
+            ):
                 raise ValueError(
-                    'jira.oauth2_access_token is required via GOJEERA_JIRA__OAUTH2_ACCESS_TOKEN or the operating system keyring.'
+                    'jira.oauth2_access_token or jira.oauth2_refresh_token with jira.oauth2_client_secret is required via environment variables or the operating system keyring.'
                 )
         else:
             if self.jira.api_base_url is None:
@@ -586,7 +588,7 @@ class KeyringSettingsSource(InitSettingsSource):
             if not isinstance(api_base_url, str):
                 api_base_url = jira_config.get('api_base_url_override')
             if not isinstance(api_base_url, str) and active_profile is not None:
-                api_base_url = active_profile.site
+                api_base_url = active_profile.site_url()
 
             resolved_profile: AuthProfile | None = active_profile
             if auth_type == 'basic' and isinstance(active_profile, OAuth2AuthProfile):

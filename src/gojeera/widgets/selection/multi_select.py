@@ -467,6 +467,40 @@ class MultiSelect(Tags, BaseField):
     def _sync_dropdown_arrow_visibility(self) -> None:
         self.multi_select_tag_input.set_class(not self._has_remaining_options(), '-hide-arrow')
 
+    def _sync_tag_input_display(self) -> None:
+        if not self.is_attached:
+            return
+
+        try:
+            tag_input = self.tag_input_widget
+        except NoMatches:
+            return
+
+        if self.allow_new_tags or self.unselected_tags:
+            tag_input.styles.display = 'block'
+        else:
+            tag_input.styles.display = 'none'
+
+    def watch_allow_new_tags(self) -> None:  # ty: ignore[invalid-method-override]
+        """
+        Keep the tag input visibility in sync without using upstream async watchers.
+
+        textual-tags declares this watcher as async even though Textual invokes
+        init watchers synchronously, which creates unawaited coroutine warnings.
+        """
+
+        self._sync_tag_input_display()
+
+    def watch_tag_values(self) -> None:  # ty: ignore[invalid-method-override]
+        """
+        Keep the tag input visibility in sync without using upstream async watchers.
+
+        See ``watch_allow_new_tags`` for why this intentionally does not call the
+        upstream implementation.
+        """
+
+        self._sync_tag_input_display()
+
     def on_multi_select_tag_auto_complete_visibility_changed(
         self, event: MultiSelectTagAutoComplete.VisibilityChanged
     ) -> None:

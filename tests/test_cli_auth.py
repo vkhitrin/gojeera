@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import sys
+import time
 from types import SimpleNamespace
 
 from click.testing import CliRunner
@@ -398,9 +399,46 @@ def test_auth_status_reports_profiles_and_keyring_state(monkeypatch):
     assert 'Logged in as Test User (keyring)' in result.output
     assert '- Profile: work' in result.output
     assert '- Active profile: true' in result.output
-    assert '- Authentication type: Basic' in result.output
+    assert '- Authentication type: API token' in result.output
     assert '- Token: ********' in result.output
     assert '- Token source:' not in result.output
+
+
+def test_auth_status_checks_multiple_profiles_concurrently_in_output_order(monkeypatch):
+    runner = _runner()
+    first_profile = _basic_profile(name='first', site='https://first.atlassian.net')
+    second_profile = _basic_profile(name='second', site='https://second.atlassian.net')
+
+    monkeypatch.setattr(
+        'gojeera.cli.list_profiles',
+        lambda: ('first', {'first': first_profile, 'second': second_profile}),
+    )
+
+    def get_profile_status(profile_name, profile, *, active_profile_name):
+        if profile_name == 'first':
+            time.sleep(0.05)
+        return AuthProfileStatus(
+            profile_name=profile_name,
+            profile=profile,
+            is_active=profile_name == active_profile_name,
+            token_source='keyring',
+            token=f'{profile_name}-token',
+            validation=AuthValidationResult(True, f'{profile_name.title()} User'),
+        )
+
+    monkeypatch.setattr(
+        'gojeera.cli.auth_service',
+        SimpleNamespace(get_profile_status=get_profile_status),
+    )
+
+    result = runner.invoke(cli, ['auth', 'status'])
+
+    assert result.exit_code == 0
+    assert result.output.index('https://first.atlassian.net') < result.output.index(
+        'https://second.atlassian.net'
+    )
+    assert 'Logged in as First User (keyring)' in result.output
+    assert 'Logged in as Second User (keyring)' in result.output
 
 
 def test_auth_status_refreshes_expired_oauth2_access_token(monkeypatch):
@@ -516,6 +554,7 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
                 account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
             ),
             get_oauth2_client_secret=lambda profile, **kwargs: None,
+            get_oauth2_client_id=lambda profile, **kwargs: None,
         ),
     )
 
@@ -523,30 +562,28 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
         profile['name'] = profile_name
         profile['data'] = kwargs
 
-    def mock_set_jira_oauth2_access_token(account_id, access_token):
-        stored['oauth2'] = (account_id, access_token)
-
     def mock_set_jira_oauth2_refresh_token(account_id, refresh_token):
         stored['refresh'] = (account_id, refresh_token)
 
     def mock_set_jira_oauth2_client_secret(account_id, client_secret):
         stored['client_secret'] = (account_id, client_secret)
 
+    def mock_set_jira_oauth2_client_id(account_id, client_id):
+        stored['client_id'] = (account_id, client_id)
+
     monkeypatch.setattr('gojeera.cli.upsert_profile', mock_upsert_profile)
-    monkeypatch.setattr(
-        'gojeera.cli.set_jira_oauth2_access_token', mock_set_jira_oauth2_access_token
-    )
     monkeypatch.setattr(
         'gojeera.cli.set_jira_oauth2_refresh_token', mock_set_jira_oauth2_refresh_token
     )
     monkeypatch.setattr(
         'gojeera.cli.set_jira_oauth2_client_secret', mock_set_jira_oauth2_client_secret
     )
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_client_id', mock_set_jira_oauth2_client_id)
 
     result = runner.invoke(cli, ['auth', 'login'])
 
     assert result.exit_code == 0
-    assert stored['oauth2'] == ('712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857', 'oauth-access-token')
+    assert 'Selected Atlassian site: Example https://example.atlassian.net' in result.output
     assert stored['refresh'] == (
         '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
         'oauth-refresh-token',
@@ -555,7 +592,12 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
         '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
         'secret-123',
     )
+    assert stored['client_id'] == (
+        '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+        'client-123',
+    )
     assert profile['data']['auth_type'] == 'oauth2'
+    assert profile['name'] == 'work'
     assert profile['data']['cloud_id'] == 'cloud-123'
     assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
     assert profile['data']['client_id'] == 'client-123'
@@ -583,6 +625,7 @@ def test_refresh_oauth2_access_token_on_startup_updates_settings(monkeypatch):
     settings = SimpleNamespace(
         jira=SimpleNamespace(
             active_profile=profile,
+            oauth2_access_token=None,
             update_active_oauth2_session=lambda **kwargs: updates.update(kwargs),
         )
     )

@@ -1,7 +1,5 @@
 import json
 import logging
-import sys
-from ctypes import c_char_p, c_long, c_void_p
 
 import keyring
 
@@ -24,52 +22,6 @@ def _logger() -> logging.Logger:
     return logging.getLogger('gojeera')
 
 
-def _is_macos_keyring_backend() -> bool:
-    return sys.platform == 'darwin' and keyring.get_keyring().__class__.__module__.startswith(
-        'keyring.backends.macOS'
-    )
-
-
-def _set_macos_password_preserving_access(
-    service_name: str, account_name: str, password: str
-) -> None:
-    from keyring.backends.macOS import api
-
-    sec_item_update = api._sec.SecItemUpdate
-    setattr(sec_item_update, 'restype', api.OS_status)
-    setattr(sec_item_update, 'argtypes', (c_void_p, c_void_p))
-
-    query = api.create_query(
-        kSecClass=api.k_('kSecClassGenericPassword'),
-        kSecAttrService=service_name,
-        kSecAttrAccount=account_name,
-    )
-    attributes = api.create_query(kSecValueData=_create_macos_secret_data(api, password))
-    status = sec_item_update(query, attributes)
-
-    try:
-        api.Error.raise_for_status(status)
-    except api.NotFound:
-        api.set_generic_password(None, service_name, account_name, password)
-
-
-def _set_password(service_name: str, account_name: str, password: str) -> None:
-    if _is_macos_keyring_backend():
-        _set_macos_password_preserving_access(service_name, account_name, password)
-        return
-
-    keyring.set_password(service_name, account_name, password)
-
-
-def _create_macos_secret_data(api, secret_value: str) -> c_void_p:
-    cf_data_create = api._found.CFDataCreate
-    setattr(cf_data_create, 'restype', c_void_p)
-    setattr(cf_data_create, 'argtypes', (c_void_p, c_char_p, c_long))
-
-    secret_bytes = secret_value.encode('utf-8')
-    return c_void_p(cf_data_create(None, secret_bytes, len(secret_bytes)))
-
-
 def _decode_oauth2_bundle(payload: str) -> dict[str, str]:
     try:
         parsed = json.loads(payload)
@@ -84,7 +36,7 @@ def _decode_oauth2_bundle(payload: str) -> dict[str, str]:
         )
 
     normalized: dict[str, str] = {}
-    for key in ('access_token', 'refresh_token', 'client_secret'):
+    for key in ('refresh_token', 'client_secret', 'client_id'):
         value = parsed.get(key)
         if isinstance(value, str) and value:
             normalized[key] = value
@@ -122,7 +74,7 @@ def _delete_password_if_exists(service_name: str, account_name: str) -> bool:
 
 def _write_oauth2_bundle(account_id: str, bundle: dict[str, str]) -> None:
     try:
-        _set_password(
+        keyring.set_password(
             JIRA_SECRET_SERVICE,
             _oauth2_account_name(account_id),
             _encode_oauth2_bundle(bundle),
@@ -163,7 +115,7 @@ def get_jira_api_token(api_email: str) -> str | None:
 
 def set_jira_api_token(api_email: str, api_token: str) -> None:
     try:
-        _set_password(
+        keyring.set_password(
             JIRA_SECRET_SERVICE,
             _basic_auth_account_name(api_email),
             api_token,
@@ -172,20 +124,20 @@ def set_jira_api_token(api_email: str, api_token: str) -> None:
         raise SecretStoreError(f'Unable to write Jira API token to keyring: {exc}') from exc
 
 
-def get_jira_oauth2_access_token(account_id: str) -> str | None:
-    return _read_oauth2_bundle(account_id).get('access_token')
-
-
 def get_jira_oauth2_credentials(account_id: str) -> dict[str, str]:
     return _read_oauth2_bundle(account_id)
 
 
-def set_jira_oauth2_access_token(account_id: str, access_token: str) -> None:
-    _update_oauth2_bundle_value(account_id, 'access_token', access_token)
-
-
 def set_jira_oauth2_refresh_token(account_id: str, refresh_token: str) -> None:
     _update_oauth2_bundle_value(account_id, 'refresh_token', refresh_token)
+
+
+def get_jira_oauth2_client_id(account_id: str) -> str | None:
+    return _read_oauth2_bundle(account_id).get('client_id')
+
+
+def set_jira_oauth2_client_id(account_id: str, client_id: str) -> None:
+    _update_oauth2_bundle_value(account_id, 'client_id', client_id)
 
 
 def get_jira_oauth2_client_secret(account_id: str) -> str | None:
@@ -207,12 +159,12 @@ def delete_jira_api_token(api_email: str) -> bool:
         raise SecretStoreError(f'Unable to delete Jira API token from keyring: {exc}') from exc
 
 
-def delete_jira_oauth2_access_token(account_id: str) -> bool:
-    return _delete_oauth2_bundle_value(account_id, 'access_token')
-
-
 def delete_jira_oauth2_refresh_token(account_id: str) -> bool:
     return _delete_oauth2_bundle_value(account_id, 'refresh_token')
+
+
+def delete_jira_oauth2_client_id(account_id: str) -> bool:
+    return _delete_oauth2_bundle_value(account_id, 'client_id')
 
 
 def delete_jira_oauth2_client_secret(account_id: str) -> bool:

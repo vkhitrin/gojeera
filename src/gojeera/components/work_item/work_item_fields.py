@@ -61,10 +61,7 @@ from gojeera.widgets.selection.multi_select import MultiSelect, extract_sprint_e
 from gojeera.widgets.selection.selection import SelectionWidget
 from gojeera.widgets.selection.user_picker import UserPicker
 from gojeera.widgets.selection.user_selection_input import UNASSIGNED_VALUE, UserSelectionInput
-from gojeera.widgets.selection.work_item_status_selection_input import (
-    CURRENT_STATUS_VALUE,
-    WorkItemStatusSelectionInput,
-)
+from gojeera.widgets.selection.work_item_status_selection_input import WorkItemStatusSelectionInput
 from gojeera.widgets.work_item.work_item_fields_preview import WorkItemFieldsPreview
 from gojeera.widgets.work_item.work_item_labels import WorkItemLabels
 
@@ -588,7 +585,6 @@ class WorkItemFields(Container, can_focus=False):
 
         selector = WorkItemStatusSelectionInput(options, prompt=prompt)
         selector._transition_status_ids = transition_status_ids or {}
-        selector.value = CURRENT_STATUS_VALUE
         self._work_item_status_selector = selector
         self.query_one('#status-field-row', expect_type=Horizontal).mount(
             self._field_control(selector)
@@ -604,7 +600,6 @@ class WorkItemFields(Container, can_focus=False):
     ) -> WorkItemStatusSelectionInput:
         selector_already_exists = self._work_item_status_selector is not None
         options: list[tuple[str, str | bool]] = [
-            (status_name, CURRENT_STATUS_VALUE),
             *[(label, transition_id) for label, transition_id, _status_id in transitions or []],
         ]
         transition_status_ids = {
@@ -622,7 +617,7 @@ class WorkItemFields(Container, can_focus=False):
                 transitions=transitions,
             )
         status_selector.original_value = status_id
-        status_selector.value = CURRENT_STATUS_VALUE
+        status_selector.value = Select.NULL
         status_selector.prompt = status_name
         return status_selector
 

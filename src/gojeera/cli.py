@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import sys
@@ -22,11 +23,11 @@ from gojeera.internal.auth.profiles import (
 from gojeera.internal.store.secret import (
     SecretStoreError,
     delete_jira_api_token,
-    delete_jira_oauth2_access_token,
+    delete_jira_oauth2_client_id,
     delete_jira_oauth2_client_secret,
     delete_jira_oauth2_refresh_token,
     set_jira_api_token,
-    set_jira_oauth2_access_token,
+    set_jira_oauth2_client_id,
     set_jira_oauth2_client_secret,
     set_jira_oauth2_refresh_token,
 )
@@ -125,7 +126,10 @@ def _refresh_oauth2_access_token_on_startup(settings: Any) -> None:
     active_profile = settings.jira.active_profile
     if not isinstance(active_profile, OAuth2AuthProfile):
         return
-    if not auth_service.should_refresh_oauth2_access_token_on_startup(active_profile):
+    if (
+        settings.jira.oauth2_access_token is not None
+        and not auth_service.should_refresh_oauth2_access_token_on_startup(active_profile)
+    ):
         return
 
     token_response = auth_service.refresh_oauth2_access_token(active_profile)
@@ -159,7 +163,29 @@ def _mask_token(token: str | None) -> str:
 
 
 def _format_auth_type_label(auth_type: str) -> str:
-    return 'OAuth2' if auth_type == 'oauth2' else 'Basic'
+    return 'OAuth2' if auth_type == 'oauth2' else 'API token'
+
+
+async def _get_auth_profile_statuses(
+    profiles: dict[str, AuthProfile],
+    *,
+    active_profile: str | None,
+) -> list[AuthProfileStatus]:
+    tasks = [
+        asyncio.to_thread(
+            auth_service.get_profile_status,
+            profile_name,
+            profile,
+            active_profile_name=active_profile,
+        )
+        for profile_name, profile in profiles.items()
+    ]
+    return list(await asyncio.gather(*tasks))
+
+
+def _print_selected_oauth2_resource(resource: AtlassianAccessibleResource) -> None:
+    label = f'{resource.name} {resource.url}'.strip()
+    _get_console().print(f'[bold]Selected Atlassian site[/bold]: [cyan]{label}[/cyan]')
 
 
 def _resolve_oauth2_resource(
@@ -177,6 +203,7 @@ def _resolve_oauth2_resource(
 
     if len(resources) == 1:
         resource = resources[0]
+        _print_selected_oauth2_resource(resource)
         return resource.id, resource
 
     default_index = 0
@@ -201,6 +228,7 @@ def _resolve_oauth2_resource(
     selected_resource = next(
         resource for resource in resources if resource.id == selected_resource_id
     )
+    _print_selected_oauth2_resource(selected_resource)
     return selected_resource_id, selected_resource
 
 
@@ -577,7 +605,7 @@ def auth_login():
         profile_name, existing_profile, is_edit_mode = _resolve_existing_profile_selection()
         existing_auth_type = existing_profile.auth_type if existing_profile is not None else None
         auth_type_options = [
-            ('basic', 'Basic (email + API token)'),
+            ('basic', 'API token'),
             ('oauth2', 'OAuth2'),
         ]
         auth_type = _select_option(
@@ -588,10 +616,6 @@ def auth_login():
         auth_type_label = next(label for value, label in auth_type_options if value == auth_type)
         console.print(f'[bold]Authentication type[/bold]: {auth_type_label}')
 
-        if not profile_name:
-            click.echo('Profile name is required.')
-            sys.exit(1)
-
         if auth_type == 'oauth2':
             console.print('[bold magenta]OAuth2 Settings[/bold magenta]')
             console.print(
@@ -601,7 +625,11 @@ def auth_login():
             existing_instance_url = (
                 existing_profile.site if isinstance(existing_profile, OAuth2AuthProfile) else None
             )
-            existing_client_id = existing_profile.existing_client_id() if existing_profile else ''
+            existing_client_id = (
+                auth_service.get_oauth2_client_id(existing_profile, prefer_environment=False)
+                if isinstance(existing_profile, OAuth2AuthProfile)
+                else ''
+            ) or ''
             client_id = Prompt.ask(
                 '[bold]Atlassian client ID[/bold]', default=existing_client_id
             ).strip()
@@ -633,6 +661,10 @@ def auth_login():
                 oauth_display_name = existing_profile.display_name
                 oauth_cloud_id = existing_profile.cloud_id
                 oauth_client_id = existing_profile.client_id
+                oauth_email = existing_profile.email
+                oauth_access_token_expiration_timestamp = (
+                    existing_profile.oauth2_access_token_expiration_timestamp
+                )
             else:
                 if (
                     not client_secret
@@ -678,7 +710,7 @@ def auth_login():
 
                 validation_result = auth_service.validate_profile(
                     OAuth2AuthProfile(
-                        name=profile_name,
+                        name='oauth',
                         site=instance_url,
                         cloud_id=cloud_id,
                         account_id=None,
@@ -699,6 +731,10 @@ def auth_login():
                 oauth_display_name = validation_result.message
                 oauth_cloud_id = cloud_id
                 oauth_client_id = client_id
+                oauth_email = validation_result.email
+                oauth_access_token_expiration_timestamp = (
+                    token_response.access_token_expiration_timestamp
+                )
 
             activate = Confirm.ask('[bold]Set as active profile?[/bold]', default=True)
 
@@ -706,16 +742,12 @@ def auth_login():
                 profile_name,
                 auth_type='oauth2',
                 site=oauth_site,
-                email=None,
+                email=oauth_email,
                 account_id=oauth_account_id,
                 display_name=oauth_display_name,
                 cloud_id=oauth_cloud_id,
                 client_id=oauth_client_id,
-                oauth2_access_token_expiration_timestamp=(
-                    existing_profile.oauth2_access_token_expiration_timestamp
-                    if skip_oauth_login and isinstance(existing_profile, OAuth2AuthProfile)
-                    else token_response.access_token_expiration_timestamp
-                ),
+                oauth2_access_token_expiration_timestamp=oauth_access_token_expiration_timestamp,
                 activate=activate,
             )
             if not skip_oauth_login:
@@ -723,11 +755,11 @@ def auth_login():
                     click.echo('OAuth2 login did not return an Atlassian account ID.')
                     sys.exit(1)
                 refresh_token = cast(str, token_response.refresh_token)
-                set_jira_oauth2_access_token(oauth_account_id, access_token)
                 set_jira_oauth2_refresh_token(oauth_account_id, refresh_token)
                 set_jira_oauth2_client_secret(oauth_account_id, client_secret)
+                set_jira_oauth2_client_id(oauth_account_id, client_id)
         else:
-            console.print('[bold green]Basic Auth Settings[/bold green]')
+            console.print('[bold green]API Token Settings[/bold green]')
             existing_instance_url = (
                 existing_profile.site if isinstance(existing_profile, BasicAuthProfile) else ''
             )
@@ -761,6 +793,9 @@ def auth_login():
             if skip_basic_login:
                 basic_site = existing_profile.site
                 basic_email = existing_profile.email
+                basic_account_id = existing_profile.account_id
+                basic_display_name = existing_profile.display_name
+                basic_cloud_id = existing_profile.cloud_id
             else:
                 if (
                     not api_token
@@ -789,6 +824,9 @@ def auth_login():
 
                 basic_site = instance_url
                 basic_email = email
+                basic_account_id = validation_result.account_id
+                basic_display_name = validation_result.message
+                basic_cloud_id = validation_result.cloud_id
 
             activate = Confirm.ask('[bold]Set as active profile?[/bold]', default=True)
 
@@ -797,9 +835,9 @@ def auth_login():
                 auth_type='basic',
                 site=basic_site,
                 email=basic_email,
-                account_id=None,
-                display_name=None,
-                cloud_id=None,
+                account_id=basic_account_id,
+                display_name=basic_display_name,
+                cloud_id=basic_cloud_id,
                 client_id=None,
                 oauth2_access_token_expiration_timestamp=None,
                 activate=activate,
@@ -849,11 +887,11 @@ def auth_logout(profile_name: str | None):
 
     try:
         if isinstance(profile, OAuth2AuthProfile):
-            if profile.account_id and delete_jira_oauth2_access_token(profile.account_id):
-                pass
             if profile.account_id and delete_jira_oauth2_refresh_token(profile.account_id):
                 pass
             if profile.account_id and delete_jira_oauth2_client_secret(profile.account_id):
+                pass
+            if profile.account_id and delete_jira_oauth2_client_id(profile.account_id):
                 pass
         else:
             if delete_jira_api_token(profile.email):
@@ -876,14 +914,9 @@ def auth_status(show_token: bool):
         click.echo('No profiles configured.')
         return
 
-    for index, (profile_name, profile) in enumerate(profiles.items()):
-        status: AuthProfileStatus = auth_service.get_profile_status(
-            profile_name,
-            profile,
-            active_profile_name=active_profile,
-        )
-
-        click.echo(status.profile.site or profile_name)
+    statuses = asyncio.run(_get_auth_profile_statuses(profiles, active_profile=active_profile))
+    for index, status in enumerate(statuses):
+        click.echo(status.profile.site or status.profile_name)
         if status.validation.is_valid:
             console.print(
                 f'  [green]\u2713[/green] Logged in as {status.validation.message} ({status.token_source})'
@@ -903,7 +936,7 @@ def auth_status(show_token: bool):
             formatted_scopes = ', '.join(f"'{scope}'" for scope in scopes)
             click.echo(f'  - Token scopes: {formatted_scopes}')
 
-        if index < len(profiles) - 1:
+        if index < len(statuses) - 1:
             click.echo()
 
 

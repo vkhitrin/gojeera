@@ -24,7 +24,7 @@ gojeera auth login
 Or use environment variables:
 
 ```bash
-# Basic Authentication
+# API token authentication
 export GOJEERA_JIRA__API_EMAIL="your-email@example.com"
 export GOJEERA_JIRA__API_BASE_URL="https://your-instance.atlassian.net"
 export GOJEERA_JIRA__API_TOKEN="your-api-token"
@@ -35,6 +35,11 @@ export GOJEERA_JIRA__OAUTH2_CLIENT_SECRET="your-client-secret"
 ```
 
 Environment variables override the operating system keyring.
+
+`gojeera auth login` stores API token profiles in the same shape as Atlassian
+CLI profiles: `site` may be a hostname such as `your-instance.atlassian.net`,
+`auth_type` is written as `api_token`, and `cloud_id` plus `account_id` are
+derived during the authentication check when Jira returns them.
 
 ### OAuth2 Scope Requirements
 

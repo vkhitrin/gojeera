@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError
@@ -18,6 +19,12 @@ class AuthProfileBase(BaseModel):
 
     name: str
     site: str
+
+    def site_url(self) -> str:
+        site = self.site.strip().rstrip('/')
+        if urlsplit(site).scheme:
+            return site
+        return f'https://{site}'
 
     def basic_email(self) -> str | None:
         return None
@@ -40,6 +47,9 @@ class AuthProfileBase(BaseModel):
 
 class BasicAuthProfile(AuthProfileBase):
     email: str
+    cloud_id: str | None = None
+    account_id: str | None = None
+    display_name: str | None = None
     auth_type: Literal['basic'] = 'basic'
 
     def basic_email(self) -> str | None:
@@ -52,6 +62,7 @@ class BasicAuthProfile(AuthProfileBase):
 class OAuth2AuthProfile(AuthProfileBase):
     cloud_id: str
     account_id: str | None = None
+    email: str | None = None
     client_id: str | None = None
     display_name: str | None = None
     oauth2_access_token_expiration_timestamp: int | None = None
@@ -114,6 +125,12 @@ def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile:
     auth_type = profile_data.get('auth_type', 'basic')
     payload = dict(profile_data)
     payload['name'] = name
+    if auth_type == 'api_token':
+        payload['auth_type'] = 'basic'
+        auth_type = 'basic'
+    if auth_type == 'oauth':
+        payload['auth_type'] = 'oauth2'
+        auth_type = 'oauth2'
 
     try:
         if auth_type == 'oauth2':
@@ -124,7 +141,34 @@ def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile:
 
 
 def _dump_profile(profile: AuthProfile) -> dict[str, Any]:
-    return profile.model_dump(exclude_none=True, exclude={'name', 'scopes'})
+    if isinstance(profile, OAuth2AuthProfile):
+        payload = profile.model_dump(
+            exclude_none=True,
+            exclude={
+                'name',
+                'scopes',
+                'client_id',
+                'oauth2_access_token_expiration_timestamp',
+            },
+        )
+        payload['auth_type'] = 'oauth'
+        return payload
+    payload = profile.model_dump(exclude_none=True, exclude={'name', 'scopes'})
+    payload['auth_type'] = 'api_token'
+    return payload
+
+
+def _dump_profile_entry(profile: AuthProfile) -> dict[str, Any]:
+    payload = _dump_profile(profile)
+    return {'name': profile.name, **payload}
+
+
+def _cloud_account_profile_name(profile: dict[str, Any]) -> str | None:
+    cloud_id = profile.get('cloud_id')
+    account_id = profile.get('account_id')
+    if isinstance(cloud_id, str) and isinstance(account_id, str):
+        return f'{cloud_id}:{account_id}'
+    return None
 
 
 def _iter_profile_entries(raw_profiles: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -133,7 +177,7 @@ def _iter_profile_entries(raw_profiles: Any) -> list[tuple[str, dict[str, Any]]]
         for item in raw_profiles:
             if not isinstance(item, dict):
                 continue
-            name = item.get('name')
+            name = item.get('name') or _cloud_account_profile_name(item)
             if isinstance(name, str):
                 entries.append((name, item))
         return entries
@@ -192,6 +236,7 @@ def upsert_profile(
             site=site,
             cloud_id=cloud_id,
             account_id=account_id,
+            email=email,
             client_id=client_id,
             display_name=display_name,
             oauth2_access_token_expiration_timestamp=oauth2_access_token_expiration_timestamp,
@@ -199,43 +244,24 @@ def upsert_profile(
     else:
         if not email:
             raise ValueError('Basic profiles require email.')
-        profile = BasicAuthProfile(name=profile_name, site=site, email=email)
+        profile = BasicAuthProfile(
+            name=profile_name,
+            site=site,
+            email=email,
+            cloud_id=cloud_id,
+            account_id=account_id,
+            display_name=display_name,
+        )
 
     profiles[profile_name] = profile
 
     config['profiles'] = [
-        {'name': current_profile.name, **_dump_profile(current_profile)}
-        for current_profile in profiles.values()
+        _dump_profile_entry(current_profile) for current_profile in profiles.values()
     ]
 
     if activate or not active_profile:
         config['current_profile'] = profile_name
 
-    _save_config_data(config)
-
-
-def update_oauth2_access_token_expiry(
-    profile_name: str, oauth2_access_token_expiration_timestamp: int | None
-) -> None:
-    config = _load_config_data()
-    active_profile, profiles = list_profiles()
-    profile = profiles.get(profile_name)
-
-    if not isinstance(profile, OAuth2AuthProfile):
-        raise ValueError(f'OAuth2 profile not found: {profile_name}')
-
-    profiles[profile_name] = profile.model_copy(
-        update={
-            'oauth2_access_token_expiration_timestamp': oauth2_access_token_expiration_timestamp
-        }
-    )
-
-    config['profiles'] = [
-        {'name': current_profile.name, **_dump_profile(current_profile)}
-        for current_profile in profiles.values()
-    ]
-    if active_profile is not None:
-        config['current_profile'] = active_profile
     _save_config_data(config)
 
 
@@ -251,8 +277,7 @@ def remove_profile(profile_name: str) -> AuthProfile | None:
         config['current_profile'] = next(iter(profiles), None)
 
     config['profiles'] = [
-        {'name': current_profile.name, **_dump_profile(current_profile)}
-        for current_profile in profiles.values()
+        _dump_profile_entry(current_profile) for current_profile in profiles.values()
     ]
     _save_config_data(config)
     return removed_profile
@@ -265,12 +290,6 @@ def load_profiles_settings() -> dict[str, Any]:
     if current_profile:
         jira_settings['current_profile'] = current_profile
     if profiles:
-        jira_settings['profiles'] = [
-            {
-                'name': profile.name,
-                **_dump_profile(profile),
-            }
-            for profile in profiles.values()
-        ]
+        jira_settings['profiles'] = [_dump_profile_entry(profile) for profile in profiles.values()]
 
     return {'jira': jira_settings} if jira_settings else {}

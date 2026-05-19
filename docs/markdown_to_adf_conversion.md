@@ -151,7 +151,9 @@ The conversion from ADF to Markdown follows these steps (in order):
 3. **`sanitize_adf_text_content()`** - Strip ANSI escape sequences and other
    non-printing control characters from ADF text nodes while preserving
    newlines and tabs for multiline code blocks
-4. **`fix_adf_text_with_marks()`** - Fix spacing issues in `strong`/`em` marks
+4. **`fix_adf_text_with_marks()`** - Fix boundary spacing issues in
+   `strong`/`em`/`code` marks so inline code from Jira does not render with
+   double backtick delimiters when the marked text includes padding spaces
 5. **`fix_codeblock_in_list()`** - Extract `codeBlock` nodes from `listItem` nodes
 6. **`replace_mentions_with_links()`** - Convert `mention` nodes to standard
    Markdown links `[@User](url/jira/people/id)`
@@ -163,6 +165,9 @@ The conversion from ADF to Markdown follows these steps (in order):
 11. **Postprocessing**:
     - Strip extra blank lines in code blocks
     - Strip leading newlines
+    - **`_normalize_inline_code_padding()`** - Collapse inline code spans emitted
+      as `` ` padded code ` `` into single-backtick spans when the padding came
+      from ADF mark boundaries
     - **`_convert_status_markers_to_inline_code()`** - Convert internal status
       placeholders to `[status:c]text`
     - **`_convert_date_markers_to_inline_code()`** - Convert internal date

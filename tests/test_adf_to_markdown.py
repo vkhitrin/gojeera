@@ -325,7 +325,16 @@ class TestAdfToMarkdownConversion:
                         'Apr 29 13:23:52.207  \x1b[31mWARN\x1b[0;39m main'
                     )
                 ],
-            }
+            },
+            build_paragraph(
+                build_text_node('status moves to'),
+                {
+                    'type': 'text',
+                    'text': ' Waiting For Tag ',
+                    'marks': [{'type': 'code'}],
+                },
+                build_text_node('.'),
+            ),
         )
 
         markdown = convert_adf_to_markdown(adf)
@@ -333,3 +342,5 @@ class TestAdfToMarkdownConversion:
         assert '\x1b' not in markdown
         assert 'INFO main' in markdown
         assert 'WARN main' in markdown
+        assert 'status moves to `Waiting For Tag`.' in markdown
+        assert '`` Waiting For Tag ``' not in markdown

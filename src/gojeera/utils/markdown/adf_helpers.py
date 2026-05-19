@@ -301,7 +301,7 @@ def fix_adf_text_with_marks(adf: dict) -> dict:
         adf: ADF structure (dict or any type)
 
     Returns:
-        Fixed ADF structure with trailing spaces removed from marked text
+        Fixed ADF structure with boundary spaces moved outside marked text
     """
     if 'content' in adf and isinstance(adf['content'], list):
         new_content = []
@@ -315,11 +315,11 @@ def fix_adf_text_with_marks(adf: dict) -> dict:
 
             if node.get('type') == 'text' and 'marks' in node and 'text' in node:
                 marks = node.get('marks', [])
-                has_strong_or_em = any(
-                    m.get('type') in ('strong', 'em') for m in marks if isinstance(m, dict)
+                has_boundary_sensitive_mark = any(
+                    m.get('type') in ('strong', 'em', 'code') for m in marks if isinstance(m, dict)
                 )
 
-                if has_strong_or_em:
+                if has_boundary_sensitive_mark:
                     original_text = node['text']
                     stripped_text = original_text.strip()
                     had_trailing_space = original_text.endswith(' ')
@@ -334,7 +334,20 @@ def fix_adf_text_with_marks(adf: dict) -> dict:
 
                         new_content.append(node)
 
-                        if had_trailing_space and i < len(adf['content']) - 1:
+                        next_node = adf['content'][i + 1] if i < len(adf['content']) - 1 else None
+                        next_text = (
+                            next_node.get('text')
+                            if isinstance(next_node, dict)
+                            and isinstance(next_node.get('text'), str)
+                            else ''
+                        )
+                        next_is_punctuation = bool(next_text) and next_text[0] in '.,;:!?)],'
+
+                        if (
+                            had_trailing_space
+                            and i < len(adf['content']) - 1
+                            and not next_is_punctuation
+                        ):
                             new_content.append({'type': 'text', 'text': ' '})
                         continue
 
@@ -532,6 +545,12 @@ def _convert_decision_markers_to_inline_code(markdown: str) -> str:
         rf'{re.escape(GOJEERA_DECISION_MARKER_SUFFIX)}'
     )
     return pattern.sub(replace_match, markdown)
+
+
+def _normalize_inline_code_padding(markdown: str) -> str:
+    """Remove padding spaces that force double-backtick inline code spans."""
+
+    return re.sub(r'`` ([^`\n]*?) ``', r'`\1`', markdown)
 
 
 def _convert_panels_to_alerts(markdown: str) -> str:
@@ -915,6 +934,8 @@ def convert_adf_to_markdown(
     markdown = re.sub(r'(```\w*\n.*?)\n\n```', r'\1\n```', markdown, flags=re.DOTALL)
 
     markdown = markdown.lstrip('\n')
+
+    markdown = _normalize_inline_code_padding(markdown)
 
     markdown = _convert_status_markers_to_inline_code(markdown)
 

@@ -1,14 +1,19 @@
 import asyncio
 
 from gojeera.app import JiraApp
+from gojeera.components.screens.help_screen import HelpScreen
+
+from .test_helpers import wait_until
 
 
 async def open_help_screen(pilot):
     await asyncio.sleep(0.1)
 
-    await pilot.press('question_mark')
+    await pilot.press('f1')
 
-    await asyncio.sleep(0.3)
+    await wait_until(lambda: isinstance(pilot.app.screen, HelpScreen), timeout=3.0)
+    await wait_until(lambda: bool(pilot.app.screen.query('#help_viewer')), timeout=3.0)
+    await pilot.pause()
 
 
 async def open_help_and_scroll_down(pilot):

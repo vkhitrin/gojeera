@@ -1,4 +1,3 @@
-import inspect
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -15,8 +14,8 @@ class HelpScreen(ExtendedModalScreen[None]):
     """The screen that displays help."""
 
     BINDINGS = ExtendedModalScreen.BINDINGS + [
-        ('escape', 'app.pop_screen', 'Close Help'),
-        ('question_mark', 'app.pop_screen', 'Close Help'),
+        ('escape', 'app.help', 'Close Help'),
+        ('f1', 'app.help', 'Close Help'),
     ]
     TITLE = 'gojeera Help'
     is_loading: Reactive[bool] = reactive(False, always_update=True)
@@ -24,31 +23,31 @@ class HelpScreen(ExtendedModalScreen[None]):
     def __init__(self, anchor: str | None = None):
         super().__init__()
         self._anchor = anchor
-        self._content: str = ''
+        self._content = self._load_help_content()
+
+    @staticmethod
+    def _load_help_content() -> str:
+        help_filename = Path(__file__).resolve().parents[2] / 'usage.md'
         try:
-            in_app_help_filename = self._get_in_app_help_filename()
-            with open(in_app_help_filename, 'r', encoding='utf-8') as file:
-                self._content = file.read()
+            return help_filename.read_text(encoding='utf-8')
         except FileNotFoundError:
-            self._content = 'Unable to load the contents of the help. Please refer to https://github.com/vkhitrin/gojeera'
+            return 'Unable to load the contents of the help. Please refer to https://github.com/vkhitrin/gojeera'
 
     def compose(self) -> ComposeResult:
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static('gojeera Help', id='modal_title')
         yield ExtendedFooter(show_command_palette=False)
 
-    @staticmethod
-    def _get_in_app_help_filename() -> str:
-        filename = Path(inspect.getfile(HelpScreen)).resolve()
-        return str(filename.parents[2] / 'usage.md')
-
-    async def on_mount(self):
+    async def on_mount(self) -> None:
         self.is_loading = True
         self.call_after_refresh(self._load_content)
 
     async def _load_content(self) -> None:
         viewer = ExtendedMarkdownViewer(
-            self._content, show_table_of_contents=True, id='help_viewer', open_links=False
+            self._content,
+            show_table_of_contents=True,
+            id='help_viewer',
+            open_links=False,
         )
         self.is_loading = False
         await self.query_one('#modal_outer').mount(viewer)

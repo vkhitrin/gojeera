@@ -43,6 +43,14 @@ class SearchCommandProvider(ActionCommandProvider):
         if not screen:
             return
 
+        if screen.current_loaded_work_item_key:
+            yield (
+                'Unload Work Item',
+                'unload_work_item',
+                'Clear the currently loaded work item details',
+                screen,
+            )
+
         if screen.search_results_container.search_active:
             yield (
                 'Clear Search',

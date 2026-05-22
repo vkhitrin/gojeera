@@ -1819,8 +1819,7 @@ class WorkItemFields(Container, can_focus=False):
                         self.priority_selector._original_value = updated_work_item.priority.id
                         self.priority_selector.value = updated_work_item.priority.id
                     else:
-                        self.priority_selector._original_value = None
-                        self.priority_selector.value = ''
+                        self._clear_priority_selection()
 
                 if refresh_all or self._field_changed(changed_fields, 'status'):
                     if updated_work_item.status:
@@ -2031,6 +2030,11 @@ class WorkItemFields(Container, can_focus=False):
         self.priority_selector.value = normalized_priority_id
         self.priority_selector._original_value = normalized_priority_id
 
+    def _clear_priority_selection(self) -> None:
+        self.priority_selector._original_value = None
+        if getattr(self.priority_selector, '_allow_blank', True):
+            self.priority_selector.clear()
+
     def _update_assignee_selection(self, assignee_id: str) -> None:
         self.assignee_selector.value = assignee_id
         self.assignee_selector.original_value = assignee_id
@@ -2068,6 +2072,7 @@ class WorkItemFields(Container, can_focus=False):
                     return
 
                 self.priority_selector.set_options(priorities)
+                self.priority_selector.update_enabled = True
 
                 if work_item_priority:
                     self._update_priority_selection(work_item_priority.id)
@@ -2075,50 +2080,58 @@ class WorkItemFields(Container, can_focus=False):
             self.priority_selector.update_enabled = False
 
     async def watch_clear_form(self, clear: bool = False) -> None:
-        if clear and self._loading_form:
+        if not clear or self._loading_form:
             return
-        if clear:
-            self.work_item_resolution_field.value = ''
-            self.resolution_field_container.display = False
-            self.work_item_resolution_date_field.value = ''
-            self.resolution_date_container.display = False
-            self.work_item_last_update_date_field.value = ''
-            self.reporter_field.value = ''
-            self.status_field_container.display = False
-            self.priority_field_container.display = False
-            self.assignee_field_container.display = False
-            self.reporter_field_container.display = False
-            self.due_date_container.display = False
-            if status_selector := self.maybe_work_item_status_selector:
-                status_selector.disabled = False
-            self.assignee_selector.value = UNASSIGNED_VALUE
-            self.assignee_selector.original_value = None
-            self.priority_selector.value = ''
-            self.priority_selector.update_enabled = True
-            self.work_item_due_date_field.set_original_value(None)
+
+        self._suspend_pending_change_tracking()
+        try:
+            with self.app.batch_update():
+                self.work_item_resolution_field.value = ''
+                self.resolution_field_container.display = False
+                self.work_item_resolution_date_field.value = ''
+                self.resolution_date_container.display = False
+                self.work_item_last_update_date_field.value = ''
+                self.reporter_field.value = ''
+                self.status_field_container.display = False
+                self.priority_field_container.display = False
+                self.assignee_field_container.display = False
+                self.reporter_field_container.display = False
+                self.due_date_container.display = False
+                if status_selector := self.maybe_work_item_status_selector:
+                    status_selector.disabled = False
+                self.assignee_selector.value = UNASSIGNED_VALUE
+                self.assignee_selector.original_value = None
+                self._clear_priority_selection()
+                self.priority_selector.update_enabled = False
+                self.work_item_due_date_field.set_original_value(None)
+                self.work_item_labels_widget.update_enabled = False
+                self.labels_field_container.display = False
+
+                self.work_item_components_widget.update_enabled = False
+                self.components_field_container.display = False
+                self.work_item_affects_version_widget.update_enabled = False
+                self.affects_version_field_container.display = False
+                self.work_item_fix_version_widget.update_enabled = False
+                self.fix_version_field_container.display = False
+
+                self.work_item_story_points_widget.value = ''
+                self.work_item_story_points_widget._original_value = None
+                self.work_item_story_points_widget.update_enabled = False
+                self.story_points_field_container.display = False
+
+                self.sprint_picker_widget.set_options_state(None)
+                self.sprint_picker_widget._original_value = None
+                self.sprint_picker_widget.update_enabled = False
+                self.sprint_field_container.display = False
+                self._set_dynamic_fields_section_state(loading=False, visible=False)
+                self.dynamic_fields_widgets_container.display = False
+                self.has_pending_changes = False
+                self.clear_form = False
+
             await self.work_item_labels_widget.set_labels([])
-            self.work_item_labels_widget.update_enabled = False
-            self.labels_field_container.display = False
-
-            self.work_item_components_widget.update_enabled = False
-            self.components_field_container.display = False
-            self.work_item_affects_version_widget.update_enabled = False
-            self.affects_version_field_container.display = False
-            self.work_item_fix_version_widget.update_enabled = False
-            self.fix_version_field_container.display = False
-
-            self.work_item_story_points_widget.value = ''
-            self.work_item_story_points_widget._original_value = None
-            self.work_item_story_points_widget.update_enabled = False
-            self.story_points_field_container.display = False
-
-            self.sprint_picker_widget.set_options_state(None)
-            self.sprint_picker_widget._original_value = None
-            self.sprint_picker_widget.update_enabled = False
-            self.sprint_field_container.display = False
-            self._set_dynamic_fields_section_state(loading=False, visible=False)
-            self.dynamic_fields_widgets_container.display = False
             self._schedule_field_spacing_refresh()
+        finally:
+            self._resume_pending_change_tracking()
 
     def watch_is_loading(self, loading: bool) -> None:
         with self.app.batch_update():

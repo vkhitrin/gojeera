@@ -234,7 +234,7 @@ class WorkspaceMixin(App):
         self._active_work_item_load_key: str | None = None
         self._comments_loading_worker: Worker | None = None
         self._subtasks_loading_worker: Worker | None = None
-        self._screen_transition_in_progress = False
+        self._pending_screen_types: set[type[object]] = set()
 
     def set_focus(
         self,
@@ -389,6 +389,8 @@ class WorkspaceMixin(App):
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == 'clear_search':
             return self.search_results_container.search_active
+        if action == 'unload_work_item':
+            return self.current_loaded_work_item_key is not None
         if action == 'edit_work_item_info':
             return self.current_loaded_work_item_key is not None
         if action in ('view_worklog', 'log_work'):
@@ -868,6 +870,16 @@ class WorkspaceMixin(App):
         if self.focused is self.search_results_list:
             self.query_one('#unified-search-bar', UnifiedSearchBar).focus()
 
+    def action_unload_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        self._clear_loaded_work_item_state()
+        if self.search_results_container.search_active:
+            self.search_results_list.focus()
+        else:
+            self.query_one('#unified-search-bar', UnifiedSearchBar).focus()
+
     def action_focus_search_results_page_input(self) -> None:
         container = self.search_results_container
         if (
@@ -1092,24 +1104,25 @@ class WorkspaceMixin(App):
             self.search_results_list.clear_loaded_work_item()
 
         if not preserve_content:
-            self.information_panel.work_item = None
-            self.work_item_info_container.work_item = None
-            self.work_item_fields_widget.work_item = None
+            with self.app.batch_update():
+                self.information_panel.work_item = None
+                self.work_item_info_container.work_item = None
+                self.work_item_fields_widget.work_item = None
 
-            self.related_work_items_widget.work_items = None
-            self.related_work_items_widget.work_item_key = None
+                self.related_work_items_widget.work_items = None
+                self.related_work_items_widget.work_item_key = None
 
-            self.work_item_comments_widget.comments = None
-            self.work_item_comments_widget.work_item_key = None
+                self.work_item_comments_widget.comments = None
+                self.work_item_comments_widget.work_item_key = None
 
-            self.work_item_attachments_widget.attachments = None
-            self.work_item_attachments_widget.work_item_key = None
+                self.work_item_attachments_widget.attachments = None
+                self.work_item_attachments_widget.work_item_key = None
 
-            self.work_item_child_work_items_widget.work_items = None
-            self.work_item_child_work_items_widget.work_item_key = None
+                self.work_item_child_work_items_widget.work_items = None
+                self.work_item_child_work_items_widget.work_item_key = None
 
-            if CONFIGURATION.get().show_work_item_web_links:
-                self.work_item_remote_links_widget.work_item_key = None
+                if CONFIGURATION.get().show_work_item_web_links:
+                    self.work_item_remote_links_widget.work_item_key = None
 
         if preserve_content:
             return
@@ -1459,6 +1472,9 @@ class WorkspaceMixin(App):
             self._apply_pending_work_item_navigation_target()
             return True
 
+        self._active_work_item_load_key = selected_work_item_key
+        self.is_loading = True
+
         try:
             main_response: APIControllerResponse = await self.api.get_work_item(
                 work_item_id_or_key=selected_work_item_key,
@@ -1474,8 +1490,6 @@ class WorkspaceMixin(App):
             result: JiraWorkItemSearchResponse = main_response.result
             work_item: JiraWorkItem = result.work_items[0]
 
-            self._active_work_item_load_key = selected_work_item_key
-            self.is_loading = True
             self._clear_loaded_work_item_state(
                 preserve_content=True,
                 next_loaded_work_item_key=selected_work_item_key,
@@ -1702,7 +1716,7 @@ class JiraApp(WorkspaceMixin, App):
         Binding(key='ctrl+q', action='', description=''),
         register_binding_in_command_palette(
             Binding(
-                key='question_mark',
+                key='f1',
                 action='help',
                 description='Help',
                 tooltip='Open help',
@@ -1900,7 +1914,9 @@ class JiraApp(WorkspaceMixin, App):
     async def action_help(self) -> None:
         from gojeera.components.screens.help_screen import HelpScreen
 
-        if self._screen_transition_in_progress:
+        if isinstance(self.screen, HelpScreen):
+            self._pending_screen_types.discard(HelpScreen)
+            self.pop_screen()
             return
 
         focused = self.focused
@@ -1918,11 +1934,9 @@ class JiraApp(WorkspaceMixin, App):
     async def action_debug_info(self) -> None:
         from gojeera.components.screens.debug_screen import DebugInfoScreen
 
-        if self._screen_transition_in_progress:
-            return
-
         if isinstance(self.screen, DebugInfoScreen):
-            self._pop_screen_exclusive()
+            self._pending_screen_types.discard(DebugInfoScreen)
+            self.pop_screen()
             return
 
         await self._push_screen_exclusive(DebugInfoScreen())
@@ -1936,48 +1950,43 @@ class JiraApp(WorkspaceMixin, App):
             await self.api.close()
             self.app.exit()
 
-    async def _push_screen_exclusive(self, *args, **kwargs) -> None:
-        if self._screen_transition_in_progress:
+    async def _push_screen_exclusive(self, screen, callback=None) -> None:
+        screen_type = type(screen)
+        if screen_type in self._pending_screen_types:
             return
 
-        self._screen_transition_in_progress = True
-        try:
-            await self.push_screen(*args, **kwargs)
-        finally:
-            self._screen_transition_in_progress = False
+        self._pending_screen_types.add(screen_type)
+
+        def wrapped_callback(result) -> None:
+            self._pending_screen_types.discard(screen_type)
+            if callback is not None:
+                callback(result)
+
+        await self.push_screen(screen, wrapped_callback)
 
     def _pop_screen_exclusive(self) -> None:
-        if self._screen_transition_in_progress:
-            return
-
-        self._screen_transition_in_progress = True
+        self._pending_screen_types.discard(type(self.screen))
         self.pop_screen()
-        self._release_screen_transition_after_refresh()
 
-    def _push_screen_exclusive_sync(self, *args, **kwargs) -> None:
-        if self._screen_transition_in_progress:
+    def _push_screen_exclusive_sync(self, screen, callback=None) -> None:
+        screen_type = type(screen)
+        if screen_type in self._pending_screen_types:
             return
 
-        self._screen_transition_in_progress = True
-        self.push_screen(*args, **kwargs)
-        self._release_screen_transition_after_refresh()
+        self._pending_screen_types.add(screen_type)
 
-    def _release_screen_transition_after_refresh(self) -> None:
-        self.call_after_refresh(self._release_screen_transition)
-        self.set_timer(0.1, self._release_screen_transition)
+        def wrapped_callback(result) -> None:
+            self._pending_screen_types.discard(screen_type)
+            if callback is not None:
+                callback(result)
 
-    def _release_screen_transition(self) -> None:
-        self._screen_transition_in_progress = False
+        self.push_screen(screen, wrapped_callback)
 
     def action_command_palette(self) -> None:
         if isinstance(self.screen, ExtendedPalette):
             self._pop_screen_exclusive()
         else:
-            if (
-                self.use_command_palette
-                and not self._screen_transition_in_progress
-                and not ExtendedPalette.is_open(self)
-            ):
+            if self.use_command_palette and not ExtendedPalette.is_open(self):
                 self._push_screen_exclusive_sync(
                     ExtendedPalette(
                         id='--command-palette',

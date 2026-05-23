@@ -37,6 +37,7 @@ from gojeera.internal.auth.profiles import (
 )
 from gojeera.internal.auth.service import AuthService
 from gojeera.internal.styling.themes import find_unexpected_theme_field
+from gojeera.internal.models.jira import JiraFilter, JiraFilterDict
 from gojeera.internal.store.files import get_config_file
 from gojeera.internal.store.secret import SecretStoreError
 
@@ -93,10 +94,13 @@ class JumperConfig(StrictConfigModel):
 
 
 class JQLFilterConfig(StrictConfigModel):
-    """Configuration for a saved JQL filter."""
+    """Configuration for a local saved JQL filter."""
 
     label: str
     expression: str
+
+    def to_jira_filter(self) -> JiraFilter:
+        return JiraFilter(label=self.label, expression=self.expression)
 
 
 @dataclass(frozen=True)
@@ -104,11 +108,12 @@ class JiraAuthContext:
     profile_name: str | None
     auth_type: Literal['basic', 'oauth2']
     api_base_url: str
+    cloud_id: str
+    account_id: str
     instance_base_url: str | None = None
     api_email: str | None = None
     api_token: str | None = None
     bearer_token: str | None = None
-    cloud_id: str | None = None
     rest_api_path_prefix: str = '/rest/api/3/'
     agile_api_path_prefix: str = '/rest/agile/1.0/'
     identity_base_url: str | None = None
@@ -323,6 +328,9 @@ class JiraConfig(BaseSettings):
         profile_name = self.get_active_profile_name()
         if self.auth_type == 'oauth2':
             cloud_id = self.require_cloud_id()
+            account_id = self.active_profile.account_id if self.active_profile else None
+            if not account_id:
+                raise ValueError('jira.account_id is required for oauth2 authentication.')
             return JiraAuthContext(
                 profile_name=profile_name,
                 auth_type='oauth2',
@@ -330,17 +338,24 @@ class JiraConfig(BaseSettings):
                 instance_base_url=self.require_api_base_url(),
                 bearer_token=self.require_oauth2_access_token(),
                 cloud_id=cloud_id,
+                account_id=account_id,
                 rest_api_path_prefix=f'/ex/jira/{cloud_id}/rest/api/3/',
                 agile_api_path_prefix=f'/ex/jira/{cloud_id}/rest/agile/1.0/',
                 identity_base_url='https://api.atlassian.com',
             )
 
+        cloud_id = self.require_cloud_id()
+        account_id = self.active_profile.account_id if self.active_profile else None
+        if not account_id:
+            raise ValueError('jira.account_id is required for basic authentication.')
         return JiraAuthContext(
             profile_name=profile_name,
             auth_type='basic',
             api_base_url=self.require_api_base_url(),
             instance_base_url=self.require_api_base_url(),
             api_email=self.require_api_email(),
+            cloud_id=cloud_id,
+            account_id=account_id,
             api_token=self.require_api_token(),
         )
 
@@ -435,7 +450,7 @@ class ApplicationConfiguration(BaseSettings):
     enable_sprint_selection: bool = True
     """If True (default), enables the sprint selection dropdown when creating or updating work items. When False,
     the sprint field uses a plain text input."""
-    jql_filters: list[dict[str, str]] | None = None
+    jql_filters: list[JiraFilterDict] | None = None
     """A list of pre-defined JQL filters to use in the JQL Expression Editor. Each item should be a dictionary
     with 'label' and 'expression' keys. Example:
 
@@ -502,7 +517,7 @@ class ApplicationConfiguration(BaseSettings):
         if not isinstance(value, list):
             return value
         validated_filters = TypeAdapter(list[JQLFilterConfig]).validate_python(value)
-        return [item.model_dump() for item in validated_filters]
+        return [item.to_jira_filter().as_filter_dict() for item in validated_filters]
 
     @field_validator('custom_themes', mode='before')
     @classmethod

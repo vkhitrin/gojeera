@@ -17,7 +17,14 @@ from textual.pilot import Pilot
 from textual.widgets import Input, TextArea
 
 from gojeera.internal.auth.profiles import BasicAuthProfile
-from gojeera.internal.store.cache import get_cache
+from gojeera.internal.models.jira import (
+    JiraField,
+    JiraSprint,
+    JiraUser,
+    JiraProject,
+    WorkItemStatus,
+    WorkItemType,
+)
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
 
 pytest_textual_snapshot.SVGImageExtension.file_extension = 'svg'
@@ -165,6 +172,8 @@ def build_test_configuration() -> ApplicationConfiguration:
                 name='default',
                 site='https://example.atlassian.acme.net',
                 email='testuser@example.com',
+                cloud_id='cloud-123',
+                account_id='account-123',
             )
         },
         api_email='testuser@example.com',
@@ -284,11 +293,24 @@ def snap_compare(snapshot: SnapshotAssertion, request: pytest.FixtureRequest):
 
 # NOTE: (vkhitrin) Clear the global application cache after each test
 #       to prevent cross-test contamination.
+@pytest.fixture
+def application_cache(monkeypatch, tmp_path):
+    import gojeera.internal.store.cache as cache_module
+
+    if cache_module._global_cache is not None:
+        cache_module._global_cache.close()
+    monkeypatch.setattr(cache_module, '_global_cache', None)
+    monkeypatch.setattr(cache_module.Path, 'home', lambda: tmp_path)
+    test_cache = cache_module.get_cache()
+    yield test_cache
+    test_cache.close()
+
+
 @pytest.fixture(autouse=True)
-def clear_global_cache():
+def clear_global_cache(application_cache):
+    application_cache.clear()
     yield
-    cache = get_cache()
-    cache.clear()
+    application_cache.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -1596,11 +1618,110 @@ def mock_jira_fields_search():
 
 @pytest.fixture
 async def mock_jira_api_sync(
+    application_cache,
+    mock_configuration,
     mock_jira_search_empty,
     mock_jira_configuration,
     mock_jira_users,
     mock_support_common_mocks_args,
+    mock_jira_projects,
+    mock_project_issue_types,
+    mock_jira_statuses,
+    mock_jira_engineering_agile_boards,
+    mock_jira_engineering_agile_sprints,
+    mock_jira_fields,
 ):
+    auth = mock_configuration.jira.build_auth_context()
+    application_cache.set_profile(
+        ':'.join(
+            part
+            for part in (auth.cloud_id, auth.account_id or auth.api_email or auth.profile_name)
+            if part
+        )
+    )
+
+    projects = [
+        JiraProject(id=str(project['id']), key=str(project['key']), name=str(project['name']))
+        for project in mock_jira_projects.get('values', [])
+    ]
+    application_cache.set_projects(projects)
+    project_key = projects[0].key if projects else 'ENG'
+
+    users = [
+        JiraUser(
+            account_id=str(user['accountId']),
+            active=bool(user.get('active', True)),
+            display_name=str(user.get('displayName', '')),
+            email=user.get('emailAddress'),
+        )
+        for user in mock_jira_users
+    ]
+    application_cache.set_project_users(project_key, users)
+
+    work_item_types = [
+        WorkItemType(
+            id=str(item['id']),
+            name=str(item['name']),
+            subtask=bool(item.get('subtask', False)),
+            hierarchy_level=item.get('hierarchyLevel'),
+        )
+        for item in mock_project_issue_types
+    ]
+    application_cache.set_project_work_item_types(project_key, work_item_types)
+    application_cache.set_work_item_types(work_item_types)
+
+    statuses = [
+        WorkItemStatus(
+            id=str(status['id']),
+            name=str(status['name']),
+            description=status.get('description'),
+            status_category_color=(status.get('statusCategory') or {}).get('colorName'),
+        )
+        for status in mock_jira_statuses
+    ]
+    application_cache.set_statuses(statuses)
+    application_cache.set_project_statuses(
+        project_key,
+        {
+            work_item_types[0].id if work_item_types else 'default': {
+                'work_item_type_name': work_item_types[0].name if work_item_types else 'Default',
+                'work_item_type_statuses': statuses,
+            }
+        },
+    )
+
+    application_cache.set_boards_for_project(
+        project_key, mock_jira_engineering_agile_boards.get('values', [])
+    )
+    application_cache.set_sprints_for_project(
+        project_key,
+        [
+            JiraSprint(
+                id=int(sprint['id']),
+                name=str(sprint['name']),
+                state=str(sprint['state']),
+                boardId=int(sprint.get('boardId') or sprint.get('originBoardId') or 0),
+                goal=sprint.get('goal'),
+                startDate=sprint.get('startDate'),
+                endDate=sprint.get('endDate'),
+                completeDate=sprint.get('completeDate'),
+            )
+            for sprint in mock_jira_engineering_agile_sprints.get('values', [])
+        ],
+    )
+    application_cache.set_fields(
+        [
+            JiraField(
+                id=str(field['id']),
+                key=str(field.get('key', field['id'])),
+                name=str(field.get('name', field['id'])),
+                schema=field.get('schema', {}),
+                description=field.get('description'),
+            )
+            for field in mock_jira_fields
+        ]
+    )
+
     async with respx.mock:
         setup_common_mocks(**mock_support_common_mocks_args)
         mock_search_empty(mock_jira_search_empty)

@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from typing import Literal
+
+from typing_extensions import NotRequired, TypedDict
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -47,7 +50,7 @@ class JiraWorkItemGenericFields(Enum):
 
 
 @dataclass
-class Project(BaseModel):
+class JiraProject(BaseModel):
     id: str
     name: str
     key: str
@@ -70,7 +73,7 @@ class WorkItemType(BaseModel):
     name: str
     subtask: bool = False
     hierarchy_level: int | None = None
-    scope_project: Project | None = None
+    scope_project: JiraProject | None = None
 
 
 @dataclass
@@ -154,6 +157,41 @@ class JiraBoard(BaseModel):
     name: str
     type: str
     projectKey: str | None = None
+
+    def as_jira_dict(self) -> dict[str, int | str | None]:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'type': self.type,
+            'projectKey': self.projectKey,
+        }
+
+
+class JiraFilterDict(TypedDict):
+    """Dictionary representation of a JQL filter used by UI autocomplete."""
+
+    label: str
+    expression: str
+    source: NotRequired[Literal['local', 'remote'] | str]
+    starred: NotRequired[bool]
+
+
+@dataclass
+class JiraFilter(BaseModel):
+    """JQL filter from local configuration or Jira remote filters."""
+
+    label: str
+    expression: str
+    source: str = 'local'
+    starred: bool = False
+
+    def as_filter_dict(self) -> JiraFilterDict:
+        return {
+            'label': self.label,
+            'expression': self.expression,
+            'source': self.source,
+            'starred': self.starred,
+        }
 
 
 @dataclass

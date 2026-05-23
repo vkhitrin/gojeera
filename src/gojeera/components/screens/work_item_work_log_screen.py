@@ -218,7 +218,13 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
                     metadata = ' '.join(metadata_parts)
                     content = ''
                     if worklog.comment:
-                        base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
+                        base_url = getattr(
+                            getattr(
+                                getattr(self.app, 'atlassian_context', None), 'server_info', None
+                            ),
+                            'base_url',
+                            None,
+                        )
                         if content := worklog.get_comment(base_url=base_url):
                             content = content.strip()
                     title = content or 'No description'

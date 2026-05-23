@@ -31,6 +31,8 @@ def _configuration_for_auth_context(auth_context: SimpleNamespace) -> Applicatio
                 api_email='user@example.com',
                 api_token='basic-token',
                 bearer_token=None,
+                cloud_id='cloud-123',
+                account_id='account-123',
                 identity_base_url=None,
                 rest_api_path_prefix='/rest/api/3/',
                 agile_api_path_prefix='/rest/agile/1.0/',
@@ -51,6 +53,8 @@ def _configuration_for_auth_context(auth_context: SimpleNamespace) -> Applicatio
                 api_token=None,
                 bearer_token='oauth-token',
                 identity_base_url='https://api.atlassian.com',
+                cloud_id='cloud-123',
+                account_id='account-123',
                 rest_api_path_prefix='/ex/jira/cloud-123/rest/api/3/',
                 agile_api_path_prefix='/ex/jira/cloud-123/rest/agile/1.0/',
             ),
@@ -93,6 +97,8 @@ def test_api_controller_refreshes_expired_oauth2_token_and_updates_clients(monke
         identity_base_url='https://api.atlassian.com',
         rest_api_path_prefix='/ex/jira/cloud-123/rest/api/3/',
         agile_api_path_prefix='/ex/jira/cloud-123/rest/agile/1.0/',
+        cloud_id='cloud-123',
+        account_id='account-123',
     )
     active_profile = OAuth2AuthProfile(
         name='oauth-profile',

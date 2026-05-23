@@ -36,6 +36,7 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
 
     update_enabled: Reactive[bool] = reactive(True)
     pending_value: str | None = None
+    pending_display_name: str | None = None
 
     def __init__(
         self,
@@ -44,11 +45,12 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
         title: str | None = None,
         required: bool = False,
         original_value: str | None = None,
+        original_display_name: str | None = None,
         field_supports_update: bool = True,
     ):
         super().__init__(
             options=[UNASSIGNED_OPTION],
-            prompt='Unassigned',
+            prompt=original_display_name or 'Unassigned',
             id=field_id,
             type_to_search=True,
             compact=True,
@@ -58,6 +60,7 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
 
         def sync_update_state() -> None:
             self.pending_value = original_value
+            self.pending_display_name = original_display_name
             self.update_enabled = field_supports_update
 
         configure_select_field_for_mode(
@@ -73,6 +76,10 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
 
     def watch_update_enabled(self, enabled: bool) -> None:
         self.disabled = not enabled
+
+    def set_pending_user(self, account_id: str | None, display_name: str | None = None) -> None:
+        self.pending_value = account_id
+        self.pending_display_name = display_name
 
     def watch_users(self, users: dict | None = None) -> None:
         if self.mode != FieldMode.CREATE:

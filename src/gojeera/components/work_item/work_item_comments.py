@@ -220,7 +220,11 @@ class CommentContainer(Vertical, can_focus=False):
             return False
 
         application = cast('JiraApp', self.app)  # noqa: F821
-        current_user_id = application.user_info.account_id if application.user_info else None
+        current_user_id = (
+            application.atlassian_context.user_info.account_id
+            if application.atlassian_context.user_info
+            else None
+        )
         if not current_user_id:
             self.notify(
                 'Unable to determine current user',
@@ -667,7 +671,11 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
             await self._clear_rendered_comments()
 
             for index, comment in enumerate(sorted_items):
-                base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
+                base_url = getattr(
+                    getattr(getattr(self.app, 'atlassian_context', None), 'server_info', None),
+                    'base_url',
+                    None,
+                )
 
                 inner_container = Vertical(classes='comment-item-inner')
 

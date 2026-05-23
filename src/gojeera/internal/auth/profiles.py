@@ -55,6 +55,9 @@ class BasicAuthProfile(AuthProfileBase):
     def basic_email(self) -> str | None:
         return self.email
 
+    def oauth_cloud_id(self) -> str | None:
+        return self.cloud_id
+
     def existing_email(self) -> str:
         return self.email
 

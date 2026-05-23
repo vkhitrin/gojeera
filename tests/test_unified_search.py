@@ -11,6 +11,7 @@ from gojeera.components.search.unified_search import UnifiedSearchBar
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.jira.factories import WorkItemFactory
 from gojeera.internal.models.work_items import JiraWorkItemSearchResponse
+from gojeera.internal.store.cache import get_cache
 from gojeera.widgets.selection.vim_select import VimSelect
 
 from .test_helpers import choose_select_option, wait_for_mount, wait_until
@@ -32,6 +33,14 @@ def get_main_screen(app: JiraApp) -> 'JiraApp':
     return app
 
 
+async def seed_search_history(pilot) -> None:
+    cache = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)._cache
+    await asyncio.to_thread(cache.add_search_history, 'text', 'recent text search')
+    await asyncio.to_thread(cache.add_search_history, 'text', 'another text query')
+    await asyncio.to_thread(cache.add_search_history, 'jql', 'project = ENG ORDER BY updated DESC')
+    await asyncio.to_thread(cache.add_search_history, 'jql', 'assignee = currentUser()')
+
+
 async def switch_to_text_search(pilot):
     await wait_for_mount(pilot)
 
@@ -51,6 +60,30 @@ async def switch_to_jql_search(pilot):
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
     assert search_bar.search_mode == 'jql', (
         f"Expected 'jql' mode but got '{search_bar.search_mode}'"
+    )
+
+
+async def open_text_search_history_dropdown(pilot):
+    await switch_to_text_search(pilot)
+    await seed_search_history(pilot)
+
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    search_bar._refresh_search_history_autocomplete('text')
+    await pilot.app.workers.wait_for_complete()
+
+    search_input = search_bar.query_one('#unified-search-input', Input)
+    search_input.focus()
+    await asyncio.sleep(0.2)
+    await pilot.press('down')
+    await asyncio.sleep(0.2)
+
+
+async def wait_for_jql_filters_loaded(search_bar: UnifiedSearchBar) -> None:
+    await wait_until(
+        lambda: (
+            search_bar.unified_input.placeholder != 'Loading filters... (Enter JQL query or wait)'
+        ),
+        timeout=3.0,
     )
 
 
@@ -141,8 +174,13 @@ async def open_status_selector(pilot):
 
 async def open_jql_filters_dropdown(pilot):
     await switch_to_jql_search(pilot)
+    await seed_search_history(pilot)
 
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    await wait_for_jql_filters_loaded(search_bar)
+    search_bar._refresh_search_history_autocomplete('jql')
+    await pilot.app.workers.wait_for_complete()
+
     jql_input = search_bar.query_one('#unified-search-input')
     jql_input.focus()
     await asyncio.sleep(0.2)
@@ -155,6 +193,7 @@ async def open_jql_filters_dropdown(pilot):
 
 async def apply_initial_jql_filter_for_snapshot(pilot):
     await wait_for_mount(pilot)
+    await seed_search_history(pilot)
 
     search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
     await search_bar.set_initial_jql_filter('Open Issues Assigned To Me')
@@ -442,6 +481,17 @@ class TestUnifiedSearch:
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=switch_to_text_search)
 
+    def test_unified_search_text_mode_with_search_history(
+        self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
+    ):
+        config = mock_configuration
+
+        app = JiraApp(settings=config, user_info=mock_user_info)
+
+        assert snap_compare(
+            app, terminal_size=(120, 40), run_before=open_text_search_history_dropdown
+        )
+
     def test_unified_search_switch_to_jql_mode(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
@@ -517,6 +567,25 @@ class TestUnifiedSearch:
             },
             {'label': 'Recently Updated', 'expression': 'updated >= -7d ORDER BY updated DESC'},
         ]
+        config.fetch_remote_filters.enabled = True
+
+        get_cache().set_remote_filters(
+            mock_user_info.account_id,
+            [
+                {
+                    'label': 'Favorite Remote Filter',
+                    'expression': 'project = ENG AND priority = High',
+                    'source': 'remote',
+                    'starred': True,
+                },
+                {
+                    'label': 'Regular Remote Filter',
+                    'expression': 'project = ENG ORDER BY updated DESC',
+                    'source': 'remote',
+                    'starred': False,
+                },
+            ],
+        )
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 

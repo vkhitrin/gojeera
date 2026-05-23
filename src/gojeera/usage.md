@@ -169,8 +169,10 @@ created >= -30d ORDER BY created DESC
 **Features**:
 
 - Autocomplete for JQL expressions (local or remote filters)
+- Search history suggestions marked with the ⏱ symbol
 - Local filters (defined in config) marked with ⌂ symbol
 - Remote filters (fetched from Jira) marked with ☁ symbol
+- Favorited filters marked with the ★ symbol
 
 **Example JQL queries**:
 
@@ -179,18 +181,6 @@ assignee = currentUser() AND status != Done ORDER BY priority DESC
 project = "MYPROJ" AND sprint in openSprints()
 updated >= -7d ORDER BY updated DESC
 ```
-
-### JQL Filters
-
-![Unified search filters view](/static/unified_search_filters_view.svg)
-
-You can fetch saved filters from your Jira instance by enabling the feature
-in your configuration.
-
-Remote filters appear in the JQL autocomplete dropdown with a ☁ symbol.
-
-Filters can also be defined locally via the configuration file and appear
-with a ⌂ symbol.
 
 ## Browsing Work Items
 

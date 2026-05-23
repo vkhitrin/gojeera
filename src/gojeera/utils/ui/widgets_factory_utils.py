@@ -415,7 +415,13 @@ class WidgetBuilder:
         if isinstance(current_value, dict):
             return current_value.get('accountId')
         if isinstance(current_value, str):
-            return current_value.split(':', 1)[1] if ':' in current_value else current_value
+            return current_value
+        return None
+
+    @staticmethod
+    def _extract_user_display_name(current_value: Any) -> str | None:
+        if isinstance(current_value, dict):
+            return current_value.get('displayName')
         return None
 
     @staticmethod
@@ -499,7 +505,8 @@ class WidgetBuilder:
                         metadata,
                         mode=mode,
                         original_value=WidgetBuilder._extract_user_account_id(current_value),
-                    )
+                    ),
+                    original_display_name=WidgetBuilder._extract_user_display_name(current_value),
                 ),
             )
 

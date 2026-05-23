@@ -9,7 +9,7 @@ from gojeera.internal.models.jira import (
     JiraSprint,
     JiraUser,
     JiraWorkItemComponent,
-    Project,
+    JiraProject,
     TimeTracking,
     WorkItemPriority,
     WorkItemStatus,
@@ -99,7 +99,7 @@ class RelatedJiraWorkItem(BaseModel):
 class JiraWorkItem(JiraBaseWorkItem):
     summary: str
     status: WorkItemStatus
-    project: Project | None = None
+    project: JiraProject | None = None
     created: datetime | None = None
     updated: datetime | None = None
     due_date: date | None = None

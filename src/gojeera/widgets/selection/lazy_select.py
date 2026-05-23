@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from textual.widgets import Static
-from textual.widgets._select import SelectCurrent
+from textual.widgets._select import SelectCurrent, SelectOverlay
 
 from gojeera.widgets.selection.vim_select import VimSelect
 
@@ -89,4 +89,9 @@ class LazySelect(VimSelect):
 
     def set_options(self, options) -> None:
         super().set_options(options)
+        if self.expanded:
+            try:
+                self.query_one(SelectOverlay).action_first()
+            except Exception:
+                pass
         self._stop_spinner()

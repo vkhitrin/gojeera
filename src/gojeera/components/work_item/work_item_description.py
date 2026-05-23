@@ -114,7 +114,11 @@ class WorkItemInfoContainer(Container, can_focus=False):
         self.work_item_description_widget.visible = True
 
         if work_item.description:
-            base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
+            base_url = getattr(
+                getattr(getattr(self.app, 'atlassian', None), 'server_info', None),
+                'base_url',
+                None,
+            )
             self.work_item_description_widget.jira_base_url = base_url
 
             is_required = False

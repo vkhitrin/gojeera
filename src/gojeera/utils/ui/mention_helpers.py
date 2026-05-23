@@ -36,8 +36,7 @@ async def insert_user_mention(
         if work_item_key and not project_key:
             project_key = work_item_key.split('-')[0]
 
-        cache_key = project_key if project_key else 'global'
-        cached_users_data = cache.get('project_users', cache_key)
+        cached_users_data = cache.get_project_users(project_key) if project_key else None
 
         if cached_users_data:
             users: list[JiraUser] = cached_users_data

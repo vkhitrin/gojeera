@@ -17,7 +17,7 @@ from textual_tags import Tag
 from gojeera.components.screens.description_actions import DescriptionActionsMixin
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import Attachment
-from gojeera.internal.store.cache import get_cache
+from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.data.fields import (
     CustomFieldType,
@@ -254,7 +254,9 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             return self._reporter_account_id
 
         app = cast('JiraApp', self.app)
-        return app.user_info.account_id if app.user_info else None
+        return (
+            app.atlassian_context.user_info.account_id if app.atlassian_context.user_info else None
+        )
 
     def _validate_required_fields(self) -> bool:
         pending_fields = []
@@ -595,21 +597,21 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         self.save_button.disabled = not self._validate_required_fields()
 
     def fetch_projects(self) -> None:
-        cached_projects = self._cache.get('projects')
-        if cached_projects is not None:
-            try:
-                projects_list = [(f'{p.name} ({p.key})', p.key) for p in cached_projects]
-                self._populate_project_selector(projects_list, project_key=self._project_key)
-            except Exception:
-                pass
-            return
-
         self._fetch_projects_worker()
 
     @work(exclusive=False, group='fetch-projects')
     async def _fetch_projects_worker(self) -> None:
         worker = get_current_worker()
         if not worker.is_cancelled:
+            cached_projects = await run_cache_io(self._cache.get_projects)
+            if cached_projects is not None:
+                try:
+                    projects_list = [(f'{p.name} ({p.key})', p.key) for p in cached_projects]
+                    self._populate_project_selector(projects_list, project_key=self._project_key)
+                except Exception:
+                    pass
+                return
+
             application = cast('JiraApp', self.app)  # noqa: F821
             response = await application.api.search_projects()
 
@@ -617,7 +619,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 projects = response.result or []
                 projects.sort(key=lambda x: x.name)
 
-                self._cache.set('projects', projects)
+                await run_cache_io(lambda: self._cache.set_projects(projects))
 
                 projects_list = [(f'{p.name} ({p.key})', p.key) for p in projects]
 
@@ -649,28 +651,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 pass
             return
 
-        cache_key = self._selected_project_key
-        cached_types = self._cache.get('project_types_raw', cache_key)
-        if cached_types is not None:
-            types = self._filter_work_item_types_for_parent(cached_types)
-
-            types.sort(key=lambda x: x.name)
-            types_list = [(t.name, t.id) for t in types]
-
-            self._types_fetched_for_project = cache_key
-            try:
-                with self.prevent(Select.Changed):
-                    self.work_item_type_selector.set_options(types_list)
-
-                if self._requires_subtask_issue_type and types_list:
-                    work_item_type_id = types_list[0][1]
-                    self.call_after_refresh(
-                        lambda: self._apply_prefilled_subtask_type(cache_key, work_item_type_id)
-                    )
-            except Exception:
-                pass
-            return
-
         if self._types_fetched_for_project == self._selected_project_key:
             return
 
@@ -681,13 +661,27 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         worker = get_current_worker()
         if not worker.is_cancelled:
             try:
+                cached_types = await run_cache_io(
+                    lambda: self._cache.get_project_work_item_types(project_key)
+                )
+                if cached_types is not None:
+                    types = self._filter_work_item_types_for_parent(cached_types)
+                    types.sort(key=lambda x: x.name)
+                    types_list = [(t.name, t.id) for t in types]
+                    self._types_fetched_for_project = project_key
+                    with self.prevent(Select.Changed):
+                        self.work_item_type_selector.set_options(types_list)
+                    return
+
                 application = cast('JiraApp', self.app)  # noqa: F821
                 response = await application.api.get_work_item_types_for_project(project_key)
 
                 if response.success and response.result:
                     types = response.result or []
 
-                    self._cache.set('project_types_raw', types, project_key)
+                    await run_cache_io(
+                        lambda: self._cache.set_project_work_item_types(project_key, types)
+                    )
                     types = self._filter_work_item_types_for_parent(types)
 
                     types.sort(key=lambda x: x.name)
@@ -737,35 +731,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 pass
             return
 
-        cache_key = self._selected_project_key
-        cached_users = self._cache.get('project_users_tuples', cache_key)
-        if cached_users is not None:
-            users_options = list(cached_users)
-            app = cast('JiraApp', self.app)
-            default_reporter_account_id = self._default_reporter_account_id()
-            if (
-                default_reporter_account_id
-                and app.user_info
-                and all(
-                    account_id != default_reporter_account_id for _, account_id in users_options
-                )
-            ):
-                users_options.insert(0, (app.user_info.display_name, app.user_info.account_id))
-
-            self._users_fetched_for_project = cache_key
-            try:
-                self.reporter_selector.set_options(users_options)
-
-                if default_reporter_account_id:
-                    self.reporter_selector.value = default_reporter_account_id
-
-                    self.save_button.disabled = not self._validate_required_fields()
-
-                self.assignee_selector.set_options(users_options)
-            except Exception:
-                pass
-            return
-
         if self._users_fetched_for_project == self._selected_project_key:
             return
 
@@ -785,17 +750,35 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         if not worker.is_cancelled:
             try:
                 application = cast('JiraApp', self.app)  # noqa: F821
-                response = await application.api.search_users_assignable_to_projects(
-                    project_keys=[project_key],
-                    active=True,
+                cached_users = await run_cache_io(
+                    lambda: self._cache.get_project_users(project_key)
                 )
+                if cached_users is not None:
+                    users_result = cached_users
+                else:
+                    response = await application.api.search_users_assignable_to_projects(
+                        project_keys=[project_key],
+                        active=True,
+                    )
+                    if not (response.success and response.result):
+                        self.notify(
+                            f'Failed to fetch users: {response.error}',
+                            severity='error',
+                            title='Create Work Item',
+                        )
+                        stop_user_spinners()
+                        return
+                    users_result = response.result or []
+                    await run_cache_io(
+                        lambda: self._cache.set_project_users(project_key, users_result)
+                    )
 
-                if response.success and response.result:
-                    users_list = [(user.display_name, user.account_id) for user in response.result]
+                if users_result:
+                    users_list = [(user.display_name, user.account_id) for user in users_result]
                     default_reporter_account_id = self._default_reporter_account_id()
                     if (
                         default_reporter_account_id
-                        and application.user_info
+                        and application.atlassian_context.user_info
                         and all(
                             account_id != default_reporter_account_id
                             for _, account_id in users_list
@@ -804,12 +787,10 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                         users_list.insert(
                             0,
                             (
-                                application.user_info.display_name,
-                                application.user_info.account_id,
+                                application.atlassian_context.user_info.display_name,
+                                application.atlassian_context.user_info.account_id,
                             ),
                         )
-
-                    self._cache.set('project_users_tuples', users_list, project_key)
 
                     try:
                         self.reporter_selector.set_options(users_list)
@@ -824,13 +805,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                         self._users_fetched_for_project = project_key
                     except Exception:
                         pass
-                else:
-                    self.notify(
-                        f'Failed to fetch users: {response.error}',
-                        severity='error',
-                        title='Create Work Item',
-                    )
-                    stop_user_spinners()
             except Exception as e:
                 self.notify(
                     f'Error fetching users: {str(e)}', severity='error', title='Create Work Item'

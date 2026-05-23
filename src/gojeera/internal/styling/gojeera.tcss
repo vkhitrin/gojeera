@@ -224,14 +224,14 @@ UnifiedSearchBar > Input#unified-search-input {
   }
 }
 
-JQLAutoComplete {
+SearchAutoComplete {
   background: $surface;
   border: none;
   padding: 0;
   max-height: 10;
 }
 
-JQLAutoComplete > AutoCompleteList {
+SearchAutoComplete > AutoCompleteList {
   background: $surface;
   color: $text;
   border: none;
@@ -239,19 +239,19 @@ JQLAutoComplete > AutoCompleteList {
   scrollbar-size-vertical: 1;
 }
 
-JQLAutoComplete > AutoCompleteList > .option-list--option {
+SearchAutoComplete > AutoCompleteList > .option-list--option {
   background: $surface;
   color: $text;
   padding: 0 1;
   height: 1;
 }
 
-JQLAutoComplete > AutoCompleteList > .option-list--option-highlighted {
+SearchAutoComplete > AutoCompleteList > .option-list--option-highlighted {
   text-style: bold;
   padding: 0 1;
 }
 
-JQLAutoComplete > AutoCompleteList > .option-list--option:hover {
+SearchAutoComplete > AutoCompleteList > .option-list--option:hover {
   text-style: bold;
 }
 

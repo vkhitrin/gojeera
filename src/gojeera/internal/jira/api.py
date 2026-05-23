@@ -17,7 +17,7 @@ import magic  # noqa: E402
 
 from gojeera.internal.jira.client import AsyncHTTPClient, AsyncJiraClient, JiraClient  # noqa: E402
 from gojeera.internal.models.exceptions import FileUploadException  # noqa: E402
-from gojeera.internal.store.cache import get_cache  # noqa: E402
+from gojeera.internal.store.cache import get_cache, run_cache_io  # noqa: E402
 from gojeera.utils.system.logging_utils import build_log_extra  # noqa: E402
 
 if TYPE_CHECKING:
@@ -124,6 +124,10 @@ class JiraAPI:
         self._auth = auth
         self.logger = logging.getLogger('gojeera')
         self.cache = get_cache()
+        self.cache.set_profile(self._cache_profile_key())
+
+    def _cache_profile_key(self) -> str:
+        return f'{self._auth.cloud_id}:{self._auth.account_id}'
 
     @staticmethod
     def _build_http_client(
@@ -698,7 +702,7 @@ class JiraAPI:
         starred_only: bool = False,
         max_results: int = 50,
         include_shared: bool = False,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """Fetch JQL filters from Jira.
 
         Args:
@@ -713,7 +717,11 @@ class JiraAPI:
         filters = []
         seen_ids = set()
 
-        if account_id:
+        if starred_only:
+            self.logger.info('Fetching favourite filters')
+            favourite_filters = await self._fetch_favourite_filters()
+            filters.extend(self._process_filters(favourite_filters, starred_only, seen_ids))
+        elif account_id:
             self.logger.info(
                 'Fetching personal filters',
                 extra=build_log_extra({'account_id': account_id, 'shared': False}),
@@ -748,6 +756,25 @@ class JiraAPI:
 
         self.logger.info('Returning filters', extra=build_log_extra({'count': len(filters)}))
         return filters
+
+    async def _fetch_favourite_filters(self) -> list[dict]:
+        try:
+            response = await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='filter/favourite',
+                params={'expand': 'jql,favourite'},
+            )
+        except Exception:
+            self.logger.warning('Failed to fetch favourite filters', exc_info=True)
+            return []
+
+        if not response:
+            return []
+        if isinstance(response, list):
+            return cast(list[dict], response)
+        if isinstance(response, dict):
+            return cast(list[dict], response.get('values', []))
+        return []
 
     async def _fetch_paginated_filter_search_results(
         self,
@@ -819,7 +846,7 @@ class JiraAPI:
 
     def _process_filters(
         self, filter_values: list[dict], starred_only: bool, seen_ids: set[str]
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """Process filter data from API response.
 
         Args:
@@ -1548,14 +1575,31 @@ class JiraAPI:
         Returns:
             List of board dictionaries
         """
+        cached_boards = await run_cache_io(
+            lambda: self.cache.get_boards_for_project(str(project_key_or_id), allow_stale=True)
+        )
+        needs_refresh = await run_cache_io(
+            lambda: self.cache.needs_refresh('boards', str(project_key_or_id))
+        )
+        if cached_boards is not None and not needs_refresh:
+            return [
+                board.as_jira_dict()
+                for board in cached_boards
+                if not board_type or board.type == board_type
+            ]
+
         params: dict[str, Any] = {'projectKeyOrId': project_key_or_id}
         if board_type:
             params['type'] = board_type
-        return await self._fetch_paginated_agile_values(
+        boards = await self._fetch_paginated_agile_values(
             url='board',
             params=params,
             context_name=f'boards for project {project_key_or_id}',
         )
+        await run_cache_io(
+            lambda: self.cache.set_boards_for_project(str(project_key_or_id), boards)
+        )
+        return boards
 
     async def get_projects_for_board(self, board_id: int) -> list[dict]:
         """Fetch projects associated with a board using Jira Software API."""
@@ -1589,8 +1633,7 @@ class JiraAPI:
             error_messages = error_context.get('errorMessages', [])
             first_error = error_messages[0] if error_messages else str(error)
             if 'does not support sprints' in first_error.lower():
-                self.logger.info(f'Board {board_id} does not support sprints; caching and skipping')
-                self.cache.set('boards_without_sprints', True, str(board_id))
+                self.logger.info(f'Board {board_id} does not support sprints; skipping')
                 return []
 
             self.logger.warning(
@@ -1600,7 +1643,7 @@ class JiraAPI:
             )
             return []
 
-        return await self._fetch_paginated_values(
+        sprints = await self._fetch_paginated_values(
             request_page=lambda page_params: cast(
                 Awaitable[dict[str, Any] | None],
                 self._agile_client.make_request(
@@ -1613,6 +1656,7 @@ class JiraAPI:
             context_name=f'sprints for board {board_id}',
             on_error=handle_sprint_error,
         )
+        return sprints
 
     async def get_sprints_for_project(
         self,
@@ -1722,8 +1766,6 @@ class JiraAPI:
         for board in boards:
             board_id = board.get('id')
             if not board_id:
-                continue
-            if self.cache.get('boards_without_sprints', str(board_id)):
                 continue
             scrum_boards.append(board)
 

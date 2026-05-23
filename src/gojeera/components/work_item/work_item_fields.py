@@ -1632,7 +1632,7 @@ class WorkItemFields(Container, can_focus=False):
                         account_id = str(current_value)
 
                     dynamic_widget._original_value = account_id
-                    dynamic_widget.pending_value = account_id
+                    dynamic_widget.set_pending_user(account_id, display_name)
                     if display_name:
                         dynamic_widget.prompt = str(display_name)
                     elif not account_id:
@@ -2430,7 +2430,7 @@ class WorkItemFields(Container, can_focus=False):
         if isinstance(widget, (SelectionWidget, UserPicker, UserSelectionInput)):
             if isinstance(widget, UserPicker):
                 self._reset_user_selection_widget(widget)
-                widget.pending_value = widget.original_value
+                widget.set_pending_user(widget.original_value, None)
             elif isinstance(widget, UserSelectionInput):
                 self._reset_user_selection_widget(widget)
             else:
@@ -3544,6 +3544,7 @@ class WorkItemFields(Container, can_focus=False):
                 continue
 
             current_user_value = user_picker.pending_value
+            current_user_display_name = user_picker.pending_display_name
             field_editable = editable_fields.get(user_picker.jira_field_key)
 
             selectable_users: list[tuple[str, str]] = self._generate_assignable_users_for_dropdown(
@@ -3561,7 +3562,12 @@ class WorkItemFields(Container, can_focus=False):
                                 selectable_users.append((user.display_name, user.account_id))
                                 break
                         else:
-                            selectable_users.append((current_user_value, current_user_value))
+                            selectable_users.append(
+                                (
+                                    current_user_display_name or current_user_value,
+                                    current_user_value,
+                                )
+                            )
 
                 user_picker.set_options(selectable_users)
                 if current_user_value:
@@ -3571,7 +3577,9 @@ class WorkItemFields(Container, can_focus=False):
                 )
             else:
                 if current_user_value:
-                    user_picker.set_options([(current_user_value, current_user_value)])
+                    user_picker.set_options(
+                        [(current_user_display_name or current_user_value, current_user_value)]
+                    )
                     user_picker.value = current_user_value
                     user_picker.update_enabled = (
                         bool(field_editable) if field_editable is not None else False

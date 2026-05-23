@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -11,12 +11,13 @@ from textual.reactive import reactive
 from textual.widgets import Button, Input, Select
 from textual.worker import get_current_worker
 
-from gojeera.internal.store.cache import get_cache
+from gojeera.internal.models.jira import JiraFilterDict
+from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.jira.urls import extract_work_item_key
 from gojeera.widgets.inputs.extended_input import ExtendedInput
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
-from gojeera.widgets.search.jql_autocomplete import JQLAutoComplete
+from gojeera.widgets.search.search_autocomplete import SearchAutoComplete
 from gojeera.widgets.selection.lazy_select import LazySelect
 from gojeera.widgets.selection.vim_select import VimSelect
 
@@ -31,7 +32,7 @@ logger = logging.getLogger('gojeera')
 class UnifiedSearchBar(Container):
     """Unified search bar widget with mode selection and dynamic content based on mode."""
 
-    class AccountIdReady(Message):
+    class ProfileIsReady(Message):
         def __init__(self, account_id: str) -> None:
             self.account_id = account_id
             super().__init__()
@@ -60,8 +61,10 @@ class UnifiedSearchBar(Container):
 
         self._cache = get_cache()
 
-        self._jql_autocomplete: JQLAutoComplete | None = None
+        self._jql_autocomplete: SearchAutoComplete | None = None
+        self._search_history_autocomplete: SearchAutoComplete | None = None
         self._work_item_key: str | None = None
+        self._remote_filters_fetched = not CONFIGURATION.get().fetch_remote_filters.enabled
 
     @staticmethod
     def _set_widget_display(widget, visible: bool) -> None:
@@ -185,6 +188,7 @@ class UnifiedSearchBar(Container):
         self._sync_search_button_state()
 
         self._init_jql_autocomplete()
+        self._init_search_history_autocomplete()
 
     def _sync_basic_filter_jump_modes(self) -> None:
         for selector_id in (
@@ -225,22 +229,80 @@ class UnifiedSearchBar(Container):
     async def handle_new_work_item_button(self) -> None:
         await cast('JiraApp', self.app).action_new_work_item()
 
+    @work(exclusive=False, group='store-search-history')
+    async def _store_search_history(self, mode: str, query: str) -> None:
+        if mode not in ('text', 'jql'):
+            return
+
+        normalized_query = query.strip()
+        if not normalized_query:
+            return
+
+        try:
+            await run_cache_io(lambda: self._cache.add_search_history(mode, normalized_query))
+            self._refresh_search_history_autocomplete(mode)
+        except Exception:
+            logger.debug('Failed to store search history', exc_info=True)
+
+    def record_current_search_history(self) -> None:
+        if self.search_mode not in ('text', 'jql'):
+            return
+
+        query = self.unified_input.value.strip()
+        if not query:
+            return
+
+        if (
+            self.search_mode == 'jql'
+            and self._jql_autocomplete
+            and self._jql_autocomplete.has_filter_expression(query)
+        ):
+            return
+
+        self._store_search_history(self.search_mode, query)
+
+    def _init_search_history_autocomplete(self) -> None:
+        self._search_history_autocomplete = SearchAutoComplete(
+            target=self.unified_input,
+            show_on_empty_input=False,
+            hide_exact_single_match=True,
+        )
+        self.app.mount(self._search_history_autocomplete)
+        self._search_history_autocomplete.disabled = True
+
+    @work(exclusive=True, group='search-history')
+    async def _refresh_search_history_autocomplete(self, mode: str) -> None:
+        if mode not in ('text', 'jql') or not self._search_history_autocomplete:
+            return
+
+        try:
+            queries = await run_cache_io(lambda: self._cache.get_search_history(mode))
+        except Exception:
+            logger.debug('Failed to load search history', exc_info=True)
+            return
+
+        if mode == 'jql' and self._jql_autocomplete:
+            self._jql_autocomplete.update_history_queries(queries)
+        else:
+            self._search_history_autocomplete.update_queries(queries)
+
     def _init_jql_autocomplete(self) -> None:
         from gojeera.internal.store.config import CONFIGURATION
 
         jql_filters = CONFIGURATION.get().jql_filters or []
 
-        self._jql_autocomplete = JQLAutoComplete(
+        self._jql_autocomplete = SearchAutoComplete(
             target=self.unified_input,
             jql_filters=jql_filters,
+            show_on_empty_input=True,
         )
 
         self.app.mount(self._jql_autocomplete)
 
         self._jql_autocomplete.disabled = True
 
-    @on(AccountIdReady)
-    def _handle_account_id_ready(self, message: AccountIdReady) -> None:
+    @on(ProfileIsReady)
+    def _handle_account_id_ready(self, message: ProfileIsReady) -> None:
         config = CONFIGURATION.get()
 
         if config.fetch_remote_filters.enabled:
@@ -272,10 +334,12 @@ class UnifiedSearchBar(Container):
         if not account_id:
             return
 
-        cached_filters = self._cache.get('remote_filters', account_id)
+        cached_filters = await run_cache_io(lambda: self._cache.get_remote_filters(account_id))
 
         if cached_filters:
-            self._merge_remote_filters(cached_filters)
+            self._merge_remote_filters(
+                [filter_data.as_filter_dict() for filter_data in cached_filters]
+            )
 
             self._remote_filters_fetched = True
 
@@ -283,19 +347,21 @@ class UnifiedSearchBar(Container):
             return
 
         try:
-            remote_filters = await self.api.client.fetch_user_filters(
-                account_id=account_id,
-                starred_only=starred_only,
-                max_results=50,
-                include_shared=include_shared,
+            remote_filters = cast(
+                'list[JiraFilterDict]',
+                await self.api.client.fetch_user_filters(
+                    account_id=account_id,
+                    starred_only=starred_only,
+                    max_results=50,
+                    include_shared=include_shared,
+                ),
             )
 
             if remote_filters:
-                self._cache.set(
-                    'remote_filters',
-                    remote_filters,
-                    identifier=account_id,
-                    ttl_seconds=cache_ttl,
+                await run_cache_io(
+                    lambda: self._cache.set_remote_filters(
+                        account_id, remote_filters, ttl_seconds=cache_ttl
+                    )
                 )
 
                 self._merge_remote_filters(remote_filters)
@@ -322,7 +388,7 @@ class UnifiedSearchBar(Container):
             except Exception:
                 logger.debug('Failed to update unified input placeholder', exc_info=True)
 
-    def _merge_remote_filters(self, remote_filters: list[dict[str, str]]) -> None:
+    def _merge_remote_filters(self, remote_filters: list[JiraFilterDict]) -> None:
         from gojeera.internal.store.config import CONFIGURATION
 
         if not self._jql_autocomplete:
@@ -464,6 +530,13 @@ class UnifiedSearchBar(Container):
                 if self._jql_autocomplete.disabled != autocomplete_disabled:
                     self._jql_autocomplete.disabled = autocomplete_disabled
 
+            if self._search_history_autocomplete:
+                history_disabled = mode != 'text'
+                if self._search_history_autocomplete.disabled != history_disabled:
+                    self._search_history_autocomplete.disabled = history_disabled
+                if mode in ('text', 'jql'):
+                    self._refresh_search_history_autocomplete(mode)
+
             if mode == 'basic':
                 self._set_widget_display(self.project_selector, True)
                 self._set_widget_display(self.assignee_selector, True)
@@ -490,7 +563,7 @@ class UnifiedSearchBar(Container):
                 self._set_widget_display(self.status_selector, False)
                 self._set_widget_display(self.unified_input, True)
 
-                if hasattr(self, '_remote_filters_fetched') and self._remote_filters_fetched:
+                if self._remote_filters_fetched:
                     placeholder = 'Enter JQL query or click for filter suggestions...'
                 else:
                     placeholder = 'Loading filters... (Enter JQL query or wait)'
@@ -534,10 +607,8 @@ class UnifiedSearchBar(Container):
         self,
         *,
         statuses: list[tuple[str, str]],
-        cache_key: str,
         project_key: str | None,
     ) -> None:
-        self._cache.set('project_statuses', statuses, cache_key)
         self.statuses = statuses
         self._statuses_fetched_for_project = project_key
 
@@ -545,7 +616,6 @@ class UnifiedSearchBar(Container):
         self,
         *,
         statuses: list[WorkItemStatus],
-        cache_key: str,
         project_key: str | None,
     ) -> None:
         self._store_fetched_statuses(
@@ -553,7 +623,6 @@ class UnifiedSearchBar(Container):
                 (status.name, status.id)
                 for status in sorted(statuses, key=lambda status: status.name)
             ],
-            cache_key=cache_key,
             project_key=project_key,
         )
 
@@ -574,7 +643,7 @@ class UnifiedSearchBar(Container):
                 self.project_selector._stop_spinner()
                 return
 
-            cached_projects = self._cache.get('projects')
+            cached_projects = await run_cache_io(self._cache.get_projects)
             if cached_projects is not None:
                 projects_list = [(f'{p.name} ({p.key})', p.key) for p in cached_projects]
                 self.projects = {'projects': projects_list, 'selection': None}
@@ -582,9 +651,10 @@ class UnifiedSearchBar(Container):
 
             response = await self.api.search_projects()
             if response.success and response.result:
-                self._cache.set('projects', response.result)
+                projects_result = response.result
+                await run_cache_io(lambda: self._cache.set_projects(projects_result))
 
-                projects_list = [(f'{p.name} ({p.key})', p.key) for p in response.result]
+                projects_list = [(f'{p.name} ({p.key})', p.key) for p in projects_result]
                 self.projects = {'projects': projects_list, 'selection': None}
 
             else:
@@ -610,8 +680,11 @@ class UnifiedSearchBar(Container):
                     self.assignee_selector._stop_spinner()
                     return
 
-                cache_key = project_key if project_key else 'global'
-                cached_users = self._cache.get('project_users', cache_key)
+                cached_users = (
+                    await run_cache_io(lambda: self._cache.get_project_users(project_key))
+                    if project_key
+                    else None
+                )
                 if cached_users is not None:
                     users_tuples = [(user.display_name, user.account_id) for user in cached_users]
                     self.users = {'users': users_tuples, 'selection': None}
@@ -626,18 +699,30 @@ class UnifiedSearchBar(Container):
                 else:
                     response = await self.api.search_users('')
 
-                if response.success and response.result:
-                    self._cache.set('project_users', response.result, cache_key)
+                if response.success:
+                    result = response.result or []
+                    if project_key:
+                        await run_cache_io(
+                            lambda: self._cache.set_project_users(project_key, result)
+                        )
 
-                    users = [(user.display_name, user.account_id) for user in response.result]
+                    users = [(user.display_name, user.account_id) for user in result]
                     self.users = {'users': users, 'selection': None}
                     self._users_fetched_for_project = project_key
+                    return
 
-                else:
-                    self.notify(
-                        f'Failed to fetch users: {response.error}', severity='error', title='Search'
+                error = (
+                    response.error
+                    or 'You may not have permission to view assignable users for this project.'
+                )
+                if project_key:
+                    await run_cache_io(
+                        lambda: self._cache.record_failure('project_users', project_key, error)
                     )
-                    self.assignee_selector._stop_spinner()
+                self.notify(f'Failed to fetch users: {error}', severity='warning', title='Search')
+                self.users = {'users': [], 'selection': None}
+                self._users_fetched_for_project = project_key
+                self.assignee_selector._stop_spinner()
             except Exception as e:
                 self.notify(f'Error fetching users: {str(e)}', severity='error', title='Search')
                 self.assignee_selector._stop_spinner()
@@ -656,10 +741,15 @@ class UnifiedSearchBar(Container):
                     self.type_selector._stop_spinner()
                     return
 
-                cache_key = project_key if project_key else 'global'
-                cached_types = self._cache.get('project_types', cache_key)
+                cached_types = (
+                    await run_cache_io(lambda: self._cache.get_project_work_item_types(project_key))
+                    if project_key
+                    else await run_cache_io(self._cache.get_work_item_types)
+                )
                 if cached_types is not None:
-                    self.types = cached_types
+                    self.types = [
+                        (t.name, t.id) for t in sorted(cached_types, key=lambda x: x.name)
+                    ]
                     self._types_fetched_for_project = project_key
 
                     return
@@ -670,10 +760,18 @@ class UnifiedSearchBar(Container):
                     response = await self.api.get_work_item_types()
 
                 if response.success and response.result:
-                    types_list = sorted(response.result, key=lambda x: x.name)
+                    work_item_types = response.result
+                    types_list = sorted(work_item_types, key=lambda x: x.name)
                     types = [(t.name, t.id) for t in types_list]
 
-                    self._cache.set('project_types', types, cache_key)
+                    if project_key:
+                        await run_cache_io(
+                            lambda: self._cache.set_project_work_item_types(
+                                project_key, work_item_types
+                            )
+                        )
+                    else:
+                        await run_cache_io(lambda: self._cache.set_work_item_types(work_item_types))
 
                     self.types = types
                     self._types_fetched_for_project = project_key
@@ -705,11 +803,32 @@ class UnifiedSearchBar(Container):
                     self.status_selector._stop_spinner()
                     return
 
-                cache_key = project_key if project_key else 'global'
-                cached_statuses = self._cache.get('project_statuses', cache_key)
+                cached_statuses = None
+                if project_key:
+                    cached_statuses = await run_cache_io(
+                        lambda: self._cache.get_project_statuses(project_key)
+                    )
+                else:
+                    cached_statuses = await run_cache_io(self._cache.get_statuses)
                 if cached_statuses is not None:
-                    self.statuses = cached_statuses
-                    self._statuses_fetched_for_project = project_key
+                    if project_key:
+                        seen = set()
+                        unique_statuses = []
+                        project_statuses = cast(dict[str, dict[str, Any]], cached_statuses)
+                        for work_item_type_data in project_statuses.values():
+                            for status in work_item_type_data.get('work_item_type_statuses', []):
+                                if status.id not in seen:
+                                    seen.add(status.id)
+                                    unique_statuses.append(status)
+                        self._store_sorted_status_options(
+                            statuses=unique_statuses,
+                            project_key=project_key,
+                        )
+                    else:
+                        self._store_sorted_status_options(
+                            statuses=cached_statuses,
+                            project_key=project_key,
+                        )
 
                     return
 
@@ -726,7 +845,6 @@ class UnifiedSearchBar(Container):
                                     unique_statuses.append(status)
                         self._store_sorted_status_options(
                             statuses=unique_statuses,
-                            cache_key=cache_key,
                             project_key=project_key,
                         )
                     else:
@@ -736,7 +854,6 @@ class UnifiedSearchBar(Container):
                     if response.success and response.result:
                         self._store_sorted_status_options(
                             statuses=response.result,
-                            cache_key=cache_key,
                             project_key=project_key,
                         )
                     else:

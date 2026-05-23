@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
 from textual import events, work
@@ -19,7 +18,6 @@ from gojeera.internal.models.jira import (
     JiraMyselfInfo,
     JiraServerInfo,
 )
-from gojeera.internal.store.cache import get_cache
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
@@ -35,7 +33,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     """Modal screen for displaying debug information about gojeera configuration and Jira server."""
 
     BINDINGS = ExtendedModalScreen.BINDINGS + [
-        ('f12', 'app.pop_screen', 'Close'),
+        Binding('f12', 'app.debug_info', 'Close', show=True),
         Binding(
             key='[',
             action='focus_previous',
@@ -57,7 +55,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         id: str | None = None,  # noqa: A002
     ):
         super().__init__(name, id)
-        self._cache = get_cache()
         self._loading_sections: set[str] = set()
 
     @property
@@ -71,10 +68,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     @property
     def config_content(self) -> Static:
         return self.query_one('#config-content', expect_type=Static)
-
-    @property
-    def cache_content(self) -> Static:
-        return self.query_one('#cache-content', expect_type=Static)
 
     @property
     def server_content(self) -> Static:
@@ -108,10 +101,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     def user_scroll(self) -> VerticalScroll:
         return self.query_one('#user-scroll', expect_type=VerticalScroll)
 
-    @property
-    def cache_scroll(self) -> VerticalScroll:
-        return self.query_one('#cache-scroll', expect_type=VerticalScroll)
-
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
@@ -130,9 +119,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
                 with TabPane('User Info', id='tab-user'):
                     with VerticalScroll(id='user-scroll'):
                         yield Static(id='user-content')
-                with TabPane('Cache', id='tab-cache'):
-                    with VerticalScroll(id='cache-scroll'):
-                        yield Static(id='cache-content')
 
         yield ExtendedFooter(show_command_palette=False)
 
@@ -157,7 +143,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         self._fetch_user_info()
         self._fetch_global_settings()
 
-        await self._populate_cache_section()
         self.call_after_refresh(lambda: focus_first_available(self.tabs.tabs_widget))
 
     async def _populate_config_section(self) -> None:
@@ -280,42 +265,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
 
         return executed_query
 
-    async def _populate_cache_section(self) -> None:
-        stats = self._cache.get_stats()
-
-        lines = []
-        lines.append(f'Total Entries: {stats["total_entries"]}')
-        lines.append(f'Active Entries: {stats["active_entries"]}')
-        lines.append(f'Expired Entries: {stats["expired_entries"]}')
-
-        if stats['cache_types']:
-            lines.append(f'Cache Types: {", ".join(sorted(stats["cache_types"]))}')
-
-        lines.append('')
-
-        if stats['total_entries'] == 0:
-            lines.append('No cached entries')
-        else:
-            cache_entries = []
-            for key, entry in self._cache._cache.items():
-                status = 'Expired' if entry.is_expired() else 'Active'
-                ttl_info = (
-                    f'{entry.ttl_seconds}s' if entry.ttl_seconds is not None else 'No expiration'
-                )
-                age_seconds = int((datetime.now() - entry.created_at).total_seconds())
-                cache_entries.append((key, status, ttl_info, age_seconds))
-
-            cache_entries.sort(key=lambda x: x[0])
-
-            for key, status, ttl_info, age_seconds in cache_entries:
-                lines.append(f'{key}')
-                lines.append(f'  Status: {status}')
-                lines.append(f'  TTL: {ttl_info}')
-                lines.append(f'  Age: {age_seconds}s')
-                lines.append('')
-
-        self.cache_content.update('\n'.join(lines).rstrip())
-
     def _set_section_loading(self, section: str, is_loading: bool) -> None:
         if is_loading:
             self._loading_sections.add(section)
@@ -333,7 +282,6 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
                 'application': self.application_scroll,
                 'config': self.config_scroll,
                 'user': self.user_scroll,
-                'cache': self.cache_scroll,
             }
             if section in scroll_map:
                 scroll_map[section].loading = is_loading
@@ -345,14 +293,13 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         try:
             app = cast('JiraApp', self.app)  # noqa: F821
 
-            server_info: JiraServerInfo | None = self._cache.get('debug_server_info')
+            server_info: JiraServerInfo | None = app.atlassian_context.server_info
 
             if not server_info:
                 response_server_info: APIControllerResponse = await app.api.server_info()
                 if response_server_info.success and response_server_info.result:
                     server_info = response_server_info.result
-
-                    self._cache.set('debug_server_info', server_info, ttl_seconds=None)
+                    app.atlassian_context.server_info = server_info
 
             self._update_server_section(server_info)
         finally:
@@ -391,17 +338,12 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         try:
             app = cast('JiraApp', self.app)  # noqa: F821
 
-            user_info: JiraMyselfInfo | None = app.user_info
-
-            if not user_info:
-                user_info = self._cache.get('debug_user_info')
+            user_info: JiraMyselfInfo | None = app.atlassian_context.user_info
 
             if not user_info:
                 response_myself: APIControllerResponse = await app.api.myself()
                 if response_myself.success and response_myself.result:
                     user_info = response_myself.result
-
-                    self._cache.set('debug_user_info', user_info, ttl_seconds=None)
 
             self._update_user_section(user_info)
         finally:
@@ -436,16 +378,13 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
         try:
             app = cast('JiraApp', self.app)  # noqa: F821
 
-            jira_global_settings: JiraGlobalSettings | None = self._cache.get(
-                'debug_global_settings'
-            )
+            jira_global_settings: JiraGlobalSettings | None = app.atlassian_context.global_settings
 
             if not jira_global_settings:
                 response_global_settings: APIControllerResponse = await app.api.global_settings()
                 if response_global_settings.success and response_global_settings.result:
                     jira_global_settings = response_global_settings.result
-
-                    self._cache.set('debug_global_settings', jira_global_settings, ttl_seconds=None)
+                    app.atlassian_context.global_settings = jira_global_settings
 
             self._update_global_settings_section(jira_global_settings)
         finally:

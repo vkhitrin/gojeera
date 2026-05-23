@@ -43,6 +43,8 @@ from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinks
 from gojeera.internal.jira.controller import APIController
 from gojeera.internal.models.jira import Attachment
 from gojeera.internal.models.work_items import WorkItemSearchResult
+from gojeera.internal.models.atlassian import AtlassianContext
+from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.internal.store.files import get_log_file, get_themes_directory
 from gojeera.internal.styling.themes import load_themes_from_directory
@@ -71,10 +73,7 @@ if TYPE_CHECKING:
 
     from gojeera.components.work_item.work_item_fields import WorkItemUpdated
     from gojeera.internal.jira.controller import APIControllerResponse
-    from gojeera.internal.models.jira import (
-        JiraMyselfInfo,
-        JiraServerInfo,
-    )
+    from gojeera.internal.models.jira import JiraMyselfInfo
     from gojeera.internal.models.work_items import (
         JiraWorkItem,
         JiraWorkItemSearchResponse,
@@ -127,9 +126,18 @@ def get_quick_navigation_provider() -> type[Provider]:
     return QuickNavigationProvider
 
 
+def get_recently_viewed_work_items_provider() -> type[Provider]:
+    from gojeera.commands.providers.recently_viewed_work_items_provider import (
+        RecentlyViewedWorkItemsProvider,
+    )
+
+    return RecentlyViewedWorkItemsProvider
+
+
 class WorkspaceMixin(App):
     """Workspace behavior hosted directly on the application."""
 
+    atlassian_context: AtlassianContext
     is_loading: Reactive[bool] = reactive(False, always_update=True)
     BINDINGS = [
         Binding(
@@ -219,7 +227,7 @@ class WorkspaceMixin(App):
     ) -> None:
         del project_key
         self.api = api
-        self.user_info = user_info
+        self.atlassian_context.user_info = user_info
         self.available_users: list[tuple[str, str]] = []
         self.initial_work_item_key = work_item_key
         self.initial_assignee = assignee
@@ -227,6 +235,7 @@ class WorkspaceMixin(App):
         self.focus_item_on_startup = focus_item_on_startup
         self.logger = logging.getLogger('gojeera')
         self.current_loaded_work_item_key: str | None = None
+        self.active_sub_command_palette_id: str | None = None
         self.focused_work_item_link_key: str | None = None
         self._pending_work_item_navigation_target: WorkItemNavigationTarget | None = None
         self._active_search_data: dict | None = None
@@ -406,13 +415,8 @@ class WorkspaceMixin(App):
         return super().check_action(action, parameters)
 
     async def on_mount(self) -> None:
-        if self.user_info:
-            account_id = self.user_info.account_id
-            self.logger.info(
-                'Using pre-authenticated account ID',
-                extra=build_log_extra({'account_id': account_id}),
-            )
-            self.unified_search_bar.post_message(self.unified_search_bar.AccountIdReady(account_id))
+        if self.atlassian_context.user_info:
+            self._notify_profile_is_ready(self.atlassian_context.user_info.account_id)
 
         if CONFIGURATION.get().jumper.enabled:
             set_jump_mode(self.unified_search_bar, 'focus')
@@ -486,14 +490,11 @@ class WorkspaceMixin(App):
         )
 
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
-        self.user_info = user_info
-        self.logger.info(
-            'Using authenticated account ID',
-            extra=build_log_extra({'account_id': user_info.account_id}),
-        )
-        self.unified_search_bar.post_message(
-            self.unified_search_bar.AccountIdReady(user_info.account_id)
-        )
+        self.atlassian_context.user_info = user_info
+        self._notify_profile_is_ready(user_info.account_id)
+
+    def _notify_profile_is_ready(self, account_id: str) -> None:
+        self.unified_search_bar.post_message(self.unified_search_bar.ProfileIsReady(account_id))
 
     def _update_attachments_tab_title(self, count: int) -> None:
         self._update_information_tab_badge('tab-attachments', count)
@@ -823,6 +824,9 @@ class WorkspaceMixin(App):
             if results.response is None and use_active_search:
                 self._restore_active_search_pagination(list_view)
 
+            if not use_active_search and results.response is not None:
+                self.unified_search_bar.record_current_search_history()
+
             if use_active_search and page is not None and results.response is not None:
                 list_view.page = page
                 list_view.pending_page = None
@@ -1149,7 +1153,9 @@ class WorkspaceMixin(App):
         await self.app.push_screen(
             AddWorkItemScreen(
                 project_key=None,
-                reporter_account_id=self.user_info.account_id if self.user_info else None,
+                reporter_account_id=self.atlassian_context.user_info.account_id
+                if self.atlassian_context.user_info
+                else None,
             ),
             callback=self.new_work_item,
         )
@@ -1201,7 +1207,11 @@ class WorkspaceMixin(App):
 
         from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
 
-        reporter_account_id = self.user_info.account_id if self.user_info else None
+        reporter_account_id = (
+            self.atlassian_context.user_info.account_id
+            if self.atlassian_context.user_info
+            else None
+        )
 
         await self.app.push_screen(
             AddWorkItemScreen(
@@ -1456,6 +1466,19 @@ class WorkspaceMixin(App):
     def _bind_provisional_work_item_shell(self, work_item: JiraWorkItem) -> None:
         self.current_loaded_work_item_key = work_item.key
 
+    def _record_recently_viewed_work_item(self, work_item: JiraWorkItem) -> None:
+        self.run_worker(
+            run_cache_io(
+                lambda: get_cache().add_recently_viewed_work_item(
+                    work_item.key,
+                    work_item.summary,
+                    work_item.work_item_type.name if work_item.work_item_type else None,
+                )
+            ),
+            exclusive=False,
+            group='recently-viewed-work-items',
+        )
+
     async def load_work_item(self, selected_work_item_key: str) -> bool:
         if not selected_work_item_key:
             self.notify(
@@ -1469,6 +1492,8 @@ class WorkspaceMixin(App):
             return False
 
         if self._is_current_loaded_work_item(selected_work_item_key):
+            if self.information_panel.work_item:
+                self._record_recently_viewed_work_item(self.information_panel.work_item)
             self._apply_pending_work_item_navigation_target()
             return True
 
@@ -1511,6 +1536,7 @@ class WorkspaceMixin(App):
                 self.tabs.show_tab('tab-subtasks')
 
             self.current_loaded_work_item_key = selected_work_item_key
+            self._record_recently_viewed_work_item(work_item)
             self.call_after_refresh(self.refresh_bindings)
 
             self.call_after_refresh(
@@ -1654,7 +1680,6 @@ class WorkspaceMixin(App):
 
         max_attempts = 50
         attempt = 0
-        item_count = 0
 
         while attempt < max_attempts:
             await self.app.animator.wait_for_idle()
@@ -1663,22 +1688,6 @@ class WorkspaceMixin(App):
             if item_count > 0:
                 break
             attempt += 1
-
-        if item_count == 0:
-            self.notify(
-                'Search results are empty or still loading.',
-                severity='warning',
-                title='Focus Work Item',
-            )
-            return
-
-        if position < 1 or position > item_count:
-            self.notify(
-                f'Position {position} is out of range. Search results contain {item_count} item(s).',
-                severity='warning',
-                title='Focus Work Item',
-            )
-            return
 
         item_index = position - 1
         containers = scroll_view.work_item_containers
@@ -1739,6 +1748,7 @@ class JiraApp(WorkspaceMixin, App):
         get_work_item_command_provider,
         get_search_command_provider,
         get_quick_navigation_provider,
+        get_recently_viewed_work_items_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,
@@ -1761,7 +1771,7 @@ class JiraApp(WorkspaceMixin, App):
         self.config = settings
         CONFIGURATION.set(settings)
         self.api = APIController()
-        self.user_info = user_info
+        self.atlassian_context = AtlassianContext(user_info=user_info)
 
         self.initial_work_item_key: str | None = None
         if work_item_key and (cleaned_work_item_key := work_item_key.strip()):
@@ -1775,7 +1785,6 @@ class JiraApp(WorkspaceMixin, App):
         self.initial_jql_filter_label: str | None = jql_filter
 
         self.focus_item_on_startup: int | None = focus_item_on_startup
-        self.server_info: JiraServerInfo | None = None
         self._directory_themes = directory_themes
         self._init_workspace(
             api=self.api,
@@ -1784,7 +1793,7 @@ class JiraApp(WorkspaceMixin, App):
             jql_filter_label=self.initial_jql_filter_label,
             work_item_key=self.initial_work_item_key,
             focus_item_on_startup=self.focus_item_on_startup,
-            user_info=self.user_info,
+            user_info=self.atlassian_context.user_info,
         )
         self._setup_logging()
         self._register_custom_themes()
@@ -1860,14 +1869,22 @@ class JiraApp(WorkspaceMixin, App):
 
     async def _initialize_startup_context(self) -> None:
         server_info_coroutine = self.api.server_info()
-        user_info_coroutine = self.api.myself() if self.user_info is None else None
+        global_settings_coroutine = self.api.global_settings()
+        user_info_coroutine = (
+            self.api.myself() if self.atlassian_context.user_info is None else None
+        )
 
         if user_info_coroutine is not None:
-            server_info_result, user_info_result = await asyncio.gather(
-                server_info_coroutine, user_info_coroutine, return_exceptions=True
+            server_info_result, global_settings_result, user_info_result = await asyncio.gather(
+                server_info_coroutine,
+                global_settings_coroutine,
+                user_info_coroutine,
+                return_exceptions=True,
             )
         else:
-            server_info_result = await server_info_coroutine
+            server_info_result, global_settings_result = await asyncio.gather(
+                server_info_coroutine, global_settings_coroutine, return_exceptions=True
+            )
             user_info_result = None
 
         if isinstance(server_info_result, BaseException):
@@ -1877,15 +1894,24 @@ class JiraApp(WorkspaceMixin, App):
             )
         elif server_info_result.success and server_info_result.result:
             server_info = server_info_result.result
-            self.server_info = server_info
-            self.logger.info(
-                'Fetched server info',
-                extra=build_log_extra({'base_url': server_info.base_url}),
-            )
+            self.atlassian_context.server_info = server_info
         else:
             self.logger.warning(
                 'Failed to fetch server info',
                 extra=build_log_extra({'error': server_info_result.error}),
+            )
+
+        if isinstance(global_settings_result, BaseException):
+            self.logger.warning(
+                'Failed to fetch global settings',
+                extra=build_log_extra({'error': str(global_settings_result)}),
+            )
+        elif global_settings_result.success and global_settings_result.result:
+            self.atlassian_context.global_settings = global_settings_result.result
+        else:
+            self.logger.warning(
+                'Failed to fetch global settings',
+                extra=build_log_extra({'error': global_settings_result.error}),
             )
 
         if user_info_result is None:
@@ -1897,7 +1923,7 @@ class JiraApp(WorkspaceMixin, App):
 
         if user_info_result.success and user_info_result.result:
             user_info = user_info_result.result
-            self.user_info = user_info
+            self.atlassian_context.user_info = user_info
             self.set_authenticated_user(user_info)
             return
 
@@ -1905,7 +1931,7 @@ class JiraApp(WorkspaceMixin, App):
 
     def _handle_startup_auth_failure(self, error_message: str | None) -> None:
         message = error_message or 'Please check your credentials.'
-        self.logger.warning(
+        self.logger.error(
             'Authentication failed during startup',
             extra=build_log_extra({'error': message}),
         )
@@ -1950,10 +1976,10 @@ class JiraApp(WorkspaceMixin, App):
             await self.api.close()
             self.app.exit()
 
-    async def _push_screen_exclusive(self, screen, callback=None) -> None:
+    def _prepare_exclusive_screen_push(self, screen, callback=None):
         screen_type = type(screen)
         if screen_type in self._pending_screen_types:
-            return
+            return None
 
         self._pending_screen_types.add(screen_type)
 
@@ -1962,37 +1988,70 @@ class JiraApp(WorkspaceMixin, App):
             if callback is not None:
                 callback(result)
 
-        await self.push_screen(screen, wrapped_callback)
+        return wrapped_callback
+
+    async def _push_screen_exclusive(self, screen, callback=None) -> None:
+        wrapped_callback = self._prepare_exclusive_screen_push(screen, callback)
+        if wrapped_callback is not None:
+            await self.push_screen(screen, wrapped_callback)
 
     def _pop_screen_exclusive(self) -> None:
         self._pending_screen_types.discard(type(self.screen))
         self.pop_screen()
 
     def _push_screen_exclusive_sync(self, screen, callback=None) -> None:
-        screen_type = type(screen)
-        if screen_type in self._pending_screen_types:
-            return
+        wrapped_callback = self._prepare_exclusive_screen_push(screen, callback)
+        if wrapped_callback is not None:
+            self.push_screen(screen, wrapped_callback)
 
-        self._pending_screen_types.add(screen_type)
-
-        def wrapped_callback(result) -> None:
-            self._pending_screen_types.discard(screen_type)
-            if callback is not None:
-                callback(result)
-
-        self.push_screen(screen, wrapped_callback)
+    def _open_main_command_palette(self) -> None:
+        self.active_sub_command_palette_id = None
+        if self.use_command_palette and not ExtendedPalette.is_open(self):
+            self._push_screen_exclusive_sync(
+                ExtendedPalette(
+                    id='--command-palette',
+                    placeholder='Search actions, navigate to page, or enter a work item key/URL…',
+                )
+            )
 
     def action_command_palette(self) -> None:
         if isinstance(self.screen, ExtendedPalette):
+            self.active_sub_command_palette_id = None
             self._pop_screen_exclusive()
         else:
-            if self.use_command_palette and not ExtendedPalette.is_open(self):
-                self._push_screen_exclusive_sync(
-                    ExtendedPalette(
-                        id='--command-palette',
-                        placeholder='Search actions, navigate to page, or enter a work item key/URL…',
-                    )
-                )
+            self._open_main_command_palette()
+
+    def action_show_main_command_palette(self) -> None:
+        if isinstance(self.screen, ExtendedPalette):
+            self.screen.switch_palette_context(
+                sub_palette_id=None,
+                placeholder='Search actions, navigate to page, or enter a work item key/URL…',
+            )
+            return
+        self.active_sub_command_palette_id = None
+        self._open_main_command_palette()
+
+    def _open_sub_command_palette(self, palette_id: str, placeholder: str) -> None:
+        if isinstance(self.screen, ExtendedPalette):
+            self.screen.switch_palette_context(sub_palette_id=palette_id, placeholder=placeholder)
+            return
+        self.active_sub_command_palette_id = palette_id
+        self._push_screen_exclusive_sync(
+            ExtendedPalette(
+                id='--command-palette',
+                placeholder=placeholder,
+            )
+        )
+
+    def action_show_recently_viewed_work_items_palette(self) -> None:
+        from gojeera.commands.providers.recently_viewed_work_items_provider import (
+            RECENTLY_VIEWED_WORK_ITEMS_PALETTE_ID,
+        )
+
+        self._open_sub_command_palette(
+            RECENTLY_VIEWED_WORK_ITEMS_PALETTE_ID,
+            'Search recently viewed work items…',
+        )
 
     def action_toggle_footer_visibility(self) -> None:
         self.toggle_footer_visibility()

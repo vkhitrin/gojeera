@@ -129,7 +129,11 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
     def _extract_markdown_from_description(self, description) -> str:
         if isinstance(description, dict):
             try:
-                base_url = getattr(getattr(self.app, 'server_info', None), 'base_url', None)
+                base_url = getattr(
+                    getattr(getattr(self.app, 'atlassian', None), 'server_info', None),
+                    'base_url',
+                    None,
+                )
                 return convert_adf_to_markdown(description, base_url=base_url)
             except Exception:
                 return ''

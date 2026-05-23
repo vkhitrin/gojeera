@@ -69,16 +69,6 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         crop_start_line=1,
         crop_line_count=1,
     ),
-    'unified_search_filters_view': StaticSvgScenario(
-        name='unified_search_filters_view',
-        output='static/unified_search_filters_view.svg',
-        source='tests/__snapshots__/test_unified_search/TestUnifiedSearch.test_unified_search_jql_with_filters.svg',
-        source_kind='snapshot',
-        template='static/unified_search_filters_view.svg',
-        widget='src/gojeera/components/unified_search.py',
-        crop_start_line=1,
-        crop_line_count=3,
-    ),
     'work_item_description_tab': StaticSvgScenario(
         name='work_item_description_tab',
         output='static/work_item_description_tab.svg',

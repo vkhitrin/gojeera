@@ -36,10 +36,6 @@ async def open_debug_user_tab(pilot):
     await open_debug_tab(pilot, 3)
 
 
-async def open_debug_cache_tab(pilot):
-    await open_debug_tab(pilot, 4)
-
-
 def with_debug_snapshot_assertion(run_before):
     return with_snapshot_assertion_fixture(
         run_before,
@@ -59,9 +55,6 @@ class TestDebugScreen:
 
     @with_debug_snapshot_assertion(open_debug_user_tab)
     def test_debug_screen_user_tab(self): ...
-
-    @with_debug_snapshot_assertion(open_debug_cache_tab)
-    def test_debug_screen_cache_tab(self): ...
 
     async def test_debug_screen_is_globally_available_from_modal(
         self, mock_configuration, mock_jira_api_sync, mock_user_info

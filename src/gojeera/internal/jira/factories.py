@@ -10,7 +10,7 @@ from gojeera.internal.models.jira import (
     JiraUser,
     JiraWorkItemComponent,
     JiraWorkItemGenericFields,
-    Project,
+    JiraProject,
     TimeTracking,
     WorkItemPriority,
     WorkItemStatus,
@@ -166,7 +166,7 @@ class WorkItemFactory:
             key=str(data.get('key', '')),
             summary=fields.get(JiraWorkItemGenericFields.SUMMARY.value, ''),
             description=fields.get(JiraWorkItemGenericFields.DESCRIPTION.value),
-            project=Project(
+            project=JiraProject(
                 id=_optional_string(project.get('id')) or '',
                 name=_optional_string(project.get('name')) or '',
                 key=_optional_string(project.get('key')) or '',

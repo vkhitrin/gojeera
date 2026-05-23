@@ -43,14 +43,24 @@ class ProjectClassCss:
 def compile_textual_css(tcss_file: Path, project_css: list[ProjectClassCss]) -> list[str]:
     """Validate project CSS with Textual's stylesheet parser."""
     from gojeera.app import JiraApp
+    from gojeera.internal.auth.profiles import BasicAuthProfile
     from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
 
     app = JiraApp(
         settings=ApplicationConfiguration.model_construct(
-            jira=JiraConfig.model_construct(
-                api_email='',
+            jira=JiraConfig(
+                current_profile='css-check',
+                auth_type='basic',
+                profiles={
+                    'css-check': BasicAuthProfile(
+                        name='css-check',
+                        site='https://css-check.example.test',
+                        email='css-check@example.test',
+                        cloud_id='css-check-cloud',
+                        account_id='css-check-account',
+                    )
+                },
                 api_token=SecretStr(''),
-                api_base_url='',
             )
         )
     )

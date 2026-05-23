@@ -33,7 +33,7 @@ from gojeera.internal.models.jira import (
     JiraUserGroup,
     JiraWorkItemGenericFields,
     LinkWorkItemType,
-    Project,
+    JiraProject,
     UpdateWorkItemResponse,
     WorkItemRemoteLink,
     WorkItemStatus,
@@ -50,7 +50,7 @@ from gojeera.internal.models.work_items import (
 )
 from gojeera.internal.auth.profiles import OAuth2AuthProfile
 from gojeera.internal.auth.service import AuthService
-from gojeera.internal.store.cache import get_cache
+from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.utils.data.mappings import get_nested
 from gojeera.utils.system.logging_utils import (
@@ -120,6 +120,10 @@ class APIController:
         self.skip_users_without_email = self.config.ignore_users_without_email
         self.logger = logging.getLogger('gojeera')
         self.cache = get_cache()
+        self.cache.set_profile(self._cache_profile_key())
+
+    def _cache_profile_key(self) -> str:
+        return f'{self.auth.cloud_id}:{self.auth.account_id}'
 
     def _refresh_oauth2_access_token(self, force: bool) -> str | None:
         active_profile = self.config.jira.active_profile
@@ -437,7 +441,7 @@ class APIController:
             )
             return APIControllerResponse(success=False, error=exception_details.message)
         return APIControllerResponse(
-            result=Project(
+            result=JiraProject(
                 id=str(response.get('id', '')),
                 name=response.get('name', ''),
                 key=response.get('key', ''),
@@ -457,11 +461,16 @@ class APIController:
             keys: the project keys to filter the results by.
 
         Returns:
-            An instance of `APIControllerResponse` with the list of `Project` instances. If an error occurs an
+            An instance of `APIControllerResponse` with the list of `JiraProject` instances. If an error occurs an
             instance of `APIControllerResponse` with the `error` message.
         """
 
-        projects: list[Project] = []
+        if query is None and not keys:
+            cached_projects = await run_cache_io(self.cache.get_projects)
+            if cached_projects is not None:
+                return APIControllerResponse(result=cached_projects)
+
+        projects: list[JiraProject] = []
         is_last = False
         i = 0
         while not is_last and i < MAXIMUM_PAGE_NUMBER_SEARCH_PROJECTS:
@@ -490,12 +499,16 @@ class APIController:
             else:
                 for project in response.get('values', []):
                     projects.append(
-                        Project(
+                        JiraProject(
                             id=project.get('id'), key=project.get('key'), name=project.get('name')
                         )
                     )
                 is_last = response.get('isLast')
                 i += 1
+
+        if query is None and not keys:
+            await run_cache_io(lambda: self.cache.set_projects(projects))
+
         return APIControllerResponse(result=projects)
 
     async def get_project_statuses(self, project_key: str) -> APIControllerResponse:
@@ -509,7 +522,7 @@ class APIController:
             instance of `APIControllerResponse` with the `error` message and `success = False`.
         """
 
-        cached_statuses = self.cache.get('project_statuses', project_key)
+        cached_statuses = await run_cache_io(lambda: self.cache.get_project_statuses(project_key))
         if cached_statuses is not None:
             return APIControllerResponse(result=cached_statuses)
 
@@ -540,11 +553,17 @@ class APIController:
                 'work_item_type_statuses': statuses_for_work_item_type,
             }
 
-        self.cache.set('project_statuses', statuses_by_work_item_type, project_key)
+        await run_cache_io(
+            lambda: self.cache.set_project_statuses(project_key, statuses_by_work_item_type)
+        )
 
         return APIControllerResponse(result=statuses_by_work_item_type)
 
     async def status(self) -> APIControllerResponse:
+        cached_statuses = await run_cache_io(self.cache.get_statuses)
+        if cached_statuses is not None:
+            return APIControllerResponse(result=cached_statuses)
+
         try:
             response: list[dict] = await self.client.status()
         except Exception as e:
@@ -563,6 +582,7 @@ class APIController:
                     description=item.get('description'),
                 )
             )
+        await run_cache_io(lambda: self.cache.set_statuses(statuses))
         return APIControllerResponse(result=statuses)
 
     async def get_work_item_types_for_project(self, project_key: str) -> APIControllerResponse:
@@ -576,7 +596,9 @@ class APIController:
             instance of `APIControllerResponse` with the `error` message.
         """
 
-        cached_types = self.cache.get('project_types', project_key)
+        cached_types = await run_cache_io(
+            lambda: self.cache.get_project_work_item_types(project_key)
+        )
         if cached_types is not None:
             return APIControllerResponse(result=cached_types)
 
@@ -600,7 +622,9 @@ class APIController:
             for item in project.get('issueTypes', []) or []
         ]
 
-        self.cache.set('project_types', work_item_types, project_key)
+        await run_cache_io(
+            lambda: self.cache.set_project_work_item_types(project_key, work_item_types)
+        )
 
         return APIControllerResponse(result=work_item_types)
 
@@ -613,6 +637,10 @@ class APIController:
             An instance of `APIControllerResponse` with the list of `IssueType` instances. If an error occurs an
             instance of `APIControllerResponse` with the `error` message.
         """
+        cached_types = await run_cache_io(self.cache.get_work_item_types)
+        if cached_types is not None:
+            return APIControllerResponse(result=cached_types)
+
         try:
             response: list[dict] = await self.client.get_work_items_types_for_user()
         except Exception as e:
@@ -622,14 +650,14 @@ class APIController:
             )
             return APIControllerResponse(success=False, error=exception_details.get('message'))
         else:
-            projects_by_id: dict[str, Project] = {}
+            projects_by_id: dict[str, JiraProject] = {}
             projects: APIControllerResponse = await self.search_projects()
             if projects.success:
                 projects_by_id = {p.id: p for p in projects.result or []}
 
             result: list[WorkItemType] = []
             for item in response:
-                scope_project: Project | None = None
+                scope_project: JiraProject | None = None
                 if (
                     (scope := item.get('scope', {}))
                     and (scope_type := scope.get('type'))
@@ -646,6 +674,7 @@ class APIController:
                         scope_project=scope_project,
                     )
                 )
+            await run_cache_io(lambda: self.cache.set_work_item_types(result))
             return APIControllerResponse(result=result)
 
     async def search_users(self, email_or_name: str) -> APIControllerResponse:
@@ -696,7 +725,7 @@ class APIController:
         project_key = work_item_key.split('-')[0] if work_item_key else None
 
         if not query and project_key:
-            cached_users = self.cache.get('project_users', project_key)
+            cached_users = await run_cache_io(lambda: self.cache.get_project_users(project_key))
             if cached_users:
                 return APIControllerResponse(result=cached_users)
 
@@ -723,7 +752,7 @@ class APIController:
         sorted_users = self._filter_and_sort_jira_users(response, active=active)
 
         if not query and project_key:
-            self.cache.set('project_users', sorted_users, project_key)
+            await run_cache_io(lambda: self.cache.set_project_users(project_key, sorted_users))
 
         return APIControllerResponse(result=sorted_users)
 
@@ -748,7 +777,7 @@ class APIController:
         """
 
         if not query and len(project_keys) == 1:
-            cached_users = self.cache.get('project_users', project_keys[0])
+            cached_users = await run_cache_io(lambda: self.cache.get_project_users(project_keys[0]))
             if cached_users is not None:
                 return APIControllerResponse(result=cached_users)
 
@@ -775,7 +804,7 @@ class APIController:
         sorted_users = self._filter_and_sort_jira_users(response, active=active)
 
         if not query and len(project_keys) == 1:
-            self.cache.set('project_users', sorted_users, project_keys[0])
+            await run_cache_io(lambda: self.cache.set_project_users(project_keys[0], sorted_users))
 
         return APIControllerResponse(result=sorted_users)
 
@@ -2385,7 +2414,7 @@ class APIController:
             `APIControllerResponse(success=True, result=fields)` if the operation was successful;
             `APIControllerResponse(success=False)` if there is an error.
         """
-        cached_fields = self.cache.get('fields')
+        cached_fields = await run_cache_io(self.cache.get_fields)
         if cached_fields is not None:
             if field_name:
                 filtered_fields = [
@@ -2433,7 +2462,7 @@ class APIController:
                 )
             )
         if field_name is None:
-            self.cache.set('fields', fields)
+            await run_cache_io(lambda: self.cache.set_fields(fields))
         return APIControllerResponse(result=fields)
 
     async def get_label_suggestions(self, query: str = '') -> APIControllerResponse:
@@ -2478,7 +2507,7 @@ class APIController:
             An instance of `APIControllerResponse` with a list of JiraSprint models and `success = True`.
             If an error occurs then `success = False` and the error message in the `error` key.
         """
-        cached_sprints = self.cache.get('sprints', project_key)
+        cached_sprints = await run_cache_io(lambda: self.cache.get_sprints_for_project(project_key))
         if cached_sprints:
             return APIControllerResponse(result=cached_sprints)
 
@@ -2521,7 +2550,7 @@ class APIController:
             # retries succeed, especially when board discovery or agile access is
             # still settling during the first work-item load.
             if sprints:
-                self.cache.set('sprints', sprints, project_key)
+                await run_cache_io(lambda: self.cache.set_sprints_for_project(project_key, sprints))
 
             return APIControllerResponse(result=sprints)
 

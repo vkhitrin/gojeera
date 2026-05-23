@@ -291,7 +291,11 @@ class ExtendedTabbedContent(TabbedContent):
             from gojeera.app import JiraApp
 
             app = cast(JiraApp, self.app)
-            reporter_account_id = app.user_info.account_id if app.user_info else None
+            reporter_account_id = (
+                app.atlassian_context.user_info.account_id
+                if app.atlassian_context.user_info
+                else None
+            )
 
             await self.app.push_screen(
                 AddWorkItemScreen(

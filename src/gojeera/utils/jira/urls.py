@@ -21,16 +21,17 @@ def normalize_work_item_key(value: str) -> str | None:
 
 
 def _get_base_url(app: 'JiraApp | None' = None) -> str:
-    """Get base URL from app.server_info or fallback to api_base_url.
+    """Get base URL from app Atlassian context or fallback to api_base_url.
 
     Args:
-        app: Optional JiraApp instance to get server_info from
+        app: Optional JiraApp instance to get server info from
 
     Returns:
         Base URL for constructing Jira web links
     """
     if app:
-        server_info = getattr(app, 'server_info', None)
+        atlassian = getattr(app, 'atlassian_context', None)
+        server_info = getattr(atlassian, 'server_info', None)
         if server_info and hasattr(server_info, 'base_url'):
             return server_info.base_url
 

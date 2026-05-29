@@ -8,6 +8,7 @@ from pydantic import ValidationError
 import yaml
 
 from gojeera.internal.store.files import get_config_directory
+from gojeera.internal.store.files import load_yaml_mapping
 
 ATLASSIAN_OAUTH2_AUTHORIZATION_URL = 'https://auth.atlassian.com/authorize'
 ATLASSIAN_OAUTH2_TOKEN_URL = 'https://auth.atlassian.com/oauth/token'
@@ -99,8 +100,10 @@ def _load_config_data() -> dict[str, Any]:
     profiles_file = get_profiles_file()
     if not profiles_file.exists():
         return {}
-    data = yaml.safe_load(profiles_file.read_text()) or {}
-    return data if isinstance(data, dict) else {}
+    try:
+        return load_yaml_mapping(profiles_file, default_empty={})
+    except TypeError:
+        return {}
 
 
 def _save_config_data(data: dict[str, Any]) -> None:

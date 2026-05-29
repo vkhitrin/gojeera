@@ -1,0 +1,28 @@
+template_name: ENG Initiative Template
+project:
+  key: ENG
+  name: Engineering Project
+issuetype:
+  name: Initiative
+summary: "[Initiative summary]"
+description:
+  type: doc
+  version: 1
+  content:
+    - type: paragraph
+      content:
+        - type: text
+          text: "[Describe the initiative goal and expected outcome.]"
+    - type: paragraph
+      content:
+        - type: text
+          text: "[Add context, scope, and success criteria.]"
+priority:
+  id: "3"
+  name: Medium
+labels:
+  - monster-program
+  - cinematic-lineup
+components:
+  - name: Backend
+customfield_10727: [{ "id": "10727", "value": "Engineering" }]

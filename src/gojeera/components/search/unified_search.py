@@ -19,6 +19,7 @@ from gojeera.widgets.inputs.extended_input import ExtendedInput
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.search.search_autocomplete import SearchAutoComplete
 from gojeera.widgets.selection.lazy_select import LazySelect
+from gojeera.widgets.selection.popup_menu import PopupMenu, PopupMenuItem
 from gojeera.widgets.selection.vim_select import VimSelect
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ class UnifiedSearchBar(Container):
         self._search_history_autocomplete: SearchAutoComplete | None = None
         self._work_item_key: str | None = None
         self._remote_filters_fetched = not CONFIGURATION.get().fetch_remote_filters.enabled
+        self._create_work_item_menu: PopupMenu | None = None
 
     @staticmethod
     def _set_widget_display(widget, visible: bool) -> None:
@@ -101,7 +103,7 @@ class UnifiedSearchBar(Container):
         return self.query_one('#unified-search-input', Input)
 
     @property
-    def new_work_item_button(self) -> Button:
+    def create_work_item_button(self) -> Button:
         return self.query_one('#unified-search-new-work-item-button', Button)
 
     @property
@@ -118,11 +120,15 @@ class UnifiedSearchBar(Container):
             compact=True,
         )
 
-        yield Button(
-            '+',
-            id='unified-search-new-work-item-button',
-            compact=True,
-        )
+        with Container(id='unified-search-new-work-item-menu-anchor'):
+            yield Button(
+                '+',
+                id='unified-search-new-work-item-button',
+                compact=True,
+            )
+            menu = self._build_create_work_item_menu()
+            self._create_work_item_menu = menu
+            yield menu
 
         yield LazySelect(
             lazy_load_callback=lambda: self.fetch_projects(),
@@ -178,7 +184,7 @@ class UnifiedSearchBar(Container):
         set_jump_mode(self.type_selector, 'focus')
         set_jump_mode(self.status_selector, 'focus')
         set_jump_mode(self.unified_input, 'focus')
-        set_jump_mode(self.new_work_item_button, 'click')
+        set_jump_mode(self.create_work_item_button, 'click')
         set_jump_mode(self.search_button, 'click')
 
         self.assignee_selector.disabled = True
@@ -225,9 +231,48 @@ class UnifiedSearchBar(Container):
     def watch_search_in_progress(self, _search_in_progress: bool) -> None:
         self._sync_search_button_state()
 
+    async def _handle_create_work_item_menu_item(self, item: PopupMenuItem) -> None:
+        if item.id == 'new-work-item':
+            await cast('JiraApp', self.app).action_create_work_item()
+            return
+
+        if item.id == 'new-work-item-from-template':
+            await cast('JiraApp', self.app).action_create_work_item_from_template()
+
+    @on(PopupMenu.Selected, '#unified-search-new-work-item-menu')
+    async def handle_create_work_item_menu_selected(self, event: PopupMenu.Selected) -> None:
+        event.stop()
+        await self._handle_create_work_item_menu_item(event.item)
+
+    @on(PopupMenu.Dismissed, '#unified-search-new-work-item-menu')
+    def handle_create_work_item_menu_dismissed(self, event: PopupMenu.Dismissed) -> None:
+        event.stop()
+
+    def _build_create_work_item_menu(self) -> PopupMenu:
+        return PopupMenu(
+            [
+                PopupMenuItem(
+                    id='new-work-item',
+                    title='Work Item',
+                    description='Create a Jira work item from scratch',
+                    icon='✎',
+                ),
+                PopupMenuItem(
+                    id='new-work-item-from-template',
+                    title='Work Item From Template',
+                    description='Create a Jira work item from a template',
+                    icon='◫',
+                ),
+            ],
+            id='unified-search-new-work-item-menu',
+            anchor=lambda: self.create_work_item_button,
+        )
+
     @on(Button.Pressed, '#unified-search-new-work-item-button')
-    async def handle_new_work_item_button(self) -> None:
-        await cast('JiraApp', self.app).action_new_work_item()
+    async def handle_create_work_item_button(self, event: Button.Pressed) -> None:
+        event.stop()
+        if self._create_work_item_menu is not None:
+            self._create_work_item_menu.toggle()
 
     @work(exclusive=False, group='store-search-history')
     async def _store_search_history(self, mode: str, query: str) -> None:
@@ -634,6 +679,19 @@ class UnifiedSearchBar(Container):
         )
         self.status_selector._stop_spinner()
 
+    @staticmethod
+    def _unique_project_statuses(
+        project_statuses: dict[str, dict[str, Any]],
+    ) -> list[WorkItemStatus]:
+        seen = set()
+        unique_statuses = []
+        for work_item_type_data in project_statuses.values():
+            for status in work_item_type_data.get('work_item_type_statuses', []):
+                if status.id not in seen:
+                    seen.add(status.id)
+                    unique_statuses.append(status)
+        return unique_statuses
+
     @work(exclusive=False, group='fetch-projects')
     async def fetch_projects(self) -> None:
         worker = get_current_worker()
@@ -803,7 +861,6 @@ class UnifiedSearchBar(Container):
                     self.status_selector._stop_spinner()
                     return
 
-                cached_statuses = None
                 if project_key:
                     cached_statuses = await run_cache_io(
                         lambda: self._cache.get_project_statuses(project_key)
@@ -812,16 +869,9 @@ class UnifiedSearchBar(Container):
                     cached_statuses = await run_cache_io(self._cache.get_statuses)
                 if cached_statuses is not None:
                     if project_key:
-                        seen = set()
-                        unique_statuses = []
                         project_statuses = cast(dict[str, dict[str, Any]], cached_statuses)
-                        for work_item_type_data in project_statuses.values():
-                            for status in work_item_type_data.get('work_item_type_statuses', []):
-                                if status.id not in seen:
-                                    seen.add(status.id)
-                                    unique_statuses.append(status)
                         self._store_sorted_status_options(
-                            statuses=unique_statuses,
+                            statuses=self._unique_project_statuses(project_statuses),
                             project_key=project_key,
                         )
                     else:
@@ -835,16 +885,8 @@ class UnifiedSearchBar(Container):
                 if project_key:
                     response = await self.api.get_project_statuses(project_key)
                     if response.success and response.result:
-                        seen = set()
-                        unique_statuses = []
-                        for _work_item_type_id, work_item_type_data in response.result.items():
-                            statuses_list = work_item_type_data.get('work_item_type_statuses', [])
-                            for status in statuses_list:
-                                if status.id not in seen:
-                                    seen.add(status.id)
-                                    unique_statuses.append(status)
                         self._store_sorted_status_options(
-                            statuses=unique_statuses,
+                            statuses=self._unique_project_statuses(response.result),
                             project_key=project_key,
                         )
                     else:

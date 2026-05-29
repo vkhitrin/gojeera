@@ -10,7 +10,7 @@ from textual.widgets import TextArea
 
 from gojeera.components.screens.comment_screen import CommentScreen
 from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
-from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 from gojeera.components.screens.work_log_screen import LogWorkScreen
 from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 

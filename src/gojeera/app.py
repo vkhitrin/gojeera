@@ -16,6 +16,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import Reactive, reactive
 from textual.theme import Theme
+from textual.widget import Widget
 from textual.widgets import Button, Input, Select, Static, TabPane
 from textual.widgets._tabbed_content import ContentTab
 from textual.worker import Worker
@@ -108,6 +109,12 @@ def get_work_item_command_provider() -> type[Provider]:
     return WorkItemCommandProvider
 
 
+def get_create_command_provider() -> type[Provider]:
+    from gojeera.commands.providers.create_command_provider import CreateCommandProvider
+
+    return CreateCommandProvider
+
+
 def get_user_mention_command_provider() -> type[Provider]:
     from gojeera.commands.providers.user_mention_provider import UserMentionCommandProvider
 
@@ -191,15 +198,13 @@ class WorkspaceMixin(App):
                 show=False,
             )
         ),
-        register_binding_in_command_palette(
-            Binding(
-                key='ctrl+n',
-                action='new_work_item',
-                description='New Work Item',
-                show=True,
-                id='new_work_item',
-                tooltip='Create a new work item',
-            )
+        Binding(
+            key='ctrl+n',
+            action='create_work_item',
+            description='Create Work Item',
+            show=True,
+            id='create_work_item',
+            tooltip='Create Work Item',
         ),
         Binding(
             key='[',
@@ -897,8 +902,12 @@ class WorkspaceMixin(App):
         container.page_input.focus()
 
     def _is_any_select_expanded(self) -> bool:
-        for select in self.query(Select):
-            if select.expanded:
+        for widget in self.query(Widget):
+            if isinstance(widget, Select) and widget.expanded:
+                return True
+            if getattr(widget, 'blocks_global_actions_when_expanded', False) and getattr(
+                widget, 'expanded', False
+            ):
                 return True
         return False
 
@@ -1147,8 +1156,8 @@ class WorkspaceMixin(App):
 
         self.call_after_refresh(self.refresh_bindings)
 
-    async def action_new_work_item(self) -> None:
-        from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+    async def action_create_work_item(self) -> None:
+        from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 
         await self.app.push_screen(
             AddWorkItemScreen(
@@ -1157,7 +1166,41 @@ class WorkspaceMixin(App):
                 if self.atlassian_context.user_info
                 else None,
             ),
-            callback=self.new_work_item,
+            callback=self.create_work_item,
+        )
+
+    async def action_create_work_item_from_template(self) -> None:
+        from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
+        from gojeera.components.screens.work_item_template_screen import (
+            WorkItemTemplatePickerScreen,
+        )
+        from gojeera.utils.work_item_templates import has_valid_work_item_templates
+
+        if not has_valid_work_item_templates():
+            self.notify(
+                'No templates found in the gojeera templates directory.',
+                title='Work Item Templates',
+                severity='warning',
+            )
+            return
+
+        async def open_create_work_item_from_template(
+            selected_template: tuple[str, dict[str, object]] | None,
+        ) -> None:
+            if selected_template is None:
+                return
+            _template_name, template = selected_template
+            user_info = self.atlassian_context.user_info
+            await self.app.push_screen(
+                AddWorkItemScreen(
+                    reporter_account_id=user_info.account_id if user_info else None,
+                    initial_template=template,
+                ),
+                callback=self.create_work_item,
+            )
+
+        await self.app.push_screen(
+            WorkItemTemplatePickerScreen(on_use_template=open_create_work_item_from_template),
         )
 
     async def action_edit_work_item_info(self) -> None:
@@ -1200,12 +1243,12 @@ class WorkspaceMixin(App):
             return
         await self.work_item_attachments_widget.action_add_attachment()
 
-    async def action_new_work_item_subtask(self) -> None:
+    async def action_create_work_item_subtask(self) -> None:
         work_item = self.work_item_info_container.work_item
         if not work_item or (work_item.work_item_type and work_item.work_item_type.subtask):
             return
 
-        from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+        from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 
         reporter_account_id = (
             self.atlassian_context.user_info.account_id
@@ -1219,7 +1262,7 @@ class WorkspaceMixin(App):
                 reporter_account_id=reporter_account_id,
                 parent_work_item=work_item,
             ),
-            callback=self.new_work_item,
+            callback=self.create_work_item,
         )
 
     async def action_new_related_work_item(self) -> None:
@@ -1432,7 +1475,7 @@ class WorkspaceMixin(App):
         )
         self.work_item_child_work_items_widget.hide_loading()
 
-    async def new_work_item(self, data: dict | None) -> None:
+    async def create_work_item(self, data: dict | None) -> None:
         if data and data.get('parent_key'):
             await self.retrieve_work_item_subtasks(str(data['parent_key']))
 
@@ -1746,6 +1789,7 @@ class JiraApp(WorkspaceMixin, App):
 
     COMMANDS = App.COMMANDS | {
         get_work_item_command_provider,
+        get_create_command_provider,
         get_search_command_provider,
         get_quick_navigation_provider,
         get_recently_viewed_work_items_provider,

@@ -858,7 +858,7 @@ def mock_eng_creation_project_setup(
     mock_engineering_project_createmeta(mock_engineering_createmeta_fields)
 
 
-def mock_eng_new_work_item_setup(
+def mock_eng_create_work_item_setup(
     mock_jira_server_info,
     mock_jira_myself,
     mock_jira_projects,
@@ -2302,7 +2302,7 @@ def mock_jira_worklog():
 
 
 @pytest.fixture
-async def mock_jira_api_with_new_work_item(
+async def mock_jira_api_with_create_work_item(
     mock_jira_server_info,
     mock_jira_projects,
     mock_jira_issue_types,
@@ -2316,7 +2316,7 @@ async def mock_jira_api_with_new_work_item(
     mock_jira_fields_search,
 ):
     async with respx.mock:
-        mock_eng_new_work_item_setup(
+        mock_eng_create_work_item_setup(
             mock_jira_server_info,
             mock_jira_myself,
             mock_jira_projects,
@@ -2362,7 +2362,7 @@ async def mock_jira_api_with_new_work_item(
 
 """Fixture for clone work item tests - to be added to conftest.py"""
 
-# Add this fixture to conftest.py after mock_jira_api_with_new_work_item
+# Add this fixture to conftest.py after mock_jira_api_with_create_work_item
 
 
 @pytest.fixture
@@ -2832,7 +2832,7 @@ async def mock_jira_api_with_sprints(
 ):
     """Mock Jira API with sprint selection enabled."""
     async with respx.mock:
-        mock_eng_new_work_item_setup(
+        mock_eng_create_work_item_setup(
             mock_jira_server_info,
             mock_jira_myself,
             mock_jira_projects,

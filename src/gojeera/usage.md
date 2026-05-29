@@ -109,17 +109,17 @@ gojeera --profile "service_account"
 
 ## Global Keybindings
 
-| Key      | Action           | Description                                              |
-| -------- | ---------------- | -------------------------------------------------------- |
-| `Ctrl+C` | Quit             | Exit the application                                     |
-| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation             |
-| `Ctrl+P` | Command Palette  | Open command palette                                     |
-| `CTRL+N` | New Work Item    | Create a new work item from the main search/results view |
-| `F1`     | Help             | Open help                                                |
-| `F11`    | Toggle Footer    | Show or hide the footer for the current session          |
-| `F12`    | Debug Info       | Show debug information (config, server, user)            |
-| `[`      | Previous Tab     | Navigate to previous tab in work item details            |
-| `]`      | Next Tab         | Navigate to next tab in work item details                |
+| Key      | Action           | Description                                          |
+| -------- | ---------------- | ---------------------------------------------------- |
+| `Ctrl+C` | Quit             | Exit the application                                 |
+| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation         |
+| `Ctrl+P` | Command Palette  | Open command palette                                 |
+| `CTRL+N` | Create Work Item | Create a work item from the main search/results view |
+| `F1`     | Help             | Open help                                            |
+| `F11`    | Toggle Footer    | Show or hide the footer for the current session      |
+| `F12`    | Debug Info       | Show debug information (config, server, user)        |
+| `[`      | Previous Tab     | Navigate to previous tab in work item details        |
+| `]`      | Next Tab         | Navigate to next tab in work item details            |
 
 ## External Editing
 
@@ -291,7 +291,7 @@ Manage subtasks for the current work item.
 
 **Keybindings**:
 
-- `CTRL+N` - New subtask when the Subtasks tab is active
+- `CTRL+N` - Create subtask when the Subtasks tab is active
 - `CTRL+B` - Clone selected subtask
 - `CTRL+E` - Edit selected subtask summary
 - `Ctrl+G` - Load selected subtask
@@ -360,17 +360,19 @@ Shows and allows editing of work item fields:
 
 ## Creating and Editing Work Items
 
-### Creating a New Work Item
+### Creating a Work Item
 
-![New work item screen](/static/new_work_item_screen.svg)
+![Create work item screen](/static/create_work_item_screen.svg)
 
-Press `Ctrl+N` from the main screen to open the new work item dialog.
+Press `Ctrl+N` from the main screen to open the create work item menu.
 This shortcut is contextual and applies from the main search/results view.
+
+Choose **Create Work Item** to open an empty create work item dialog.
 
 **Required fields**:
 
 - **Project**: Select the target project
-- **Type**: Select work item type (Bug, Task, Story, etc.)
+- **Type**: Select work item type (Bug, Story, Task, etc.)
 - **Summary**: Brief description
 
 **Optional fields** (depending on configuration):
@@ -380,6 +382,45 @@ This shortcut is contextual and applies from the main search/results view.
 - Due Date
 - Labels
 - Custom fields (if `enable_creating_additional_fields` is enabled)
+
+### Work Item Templates
+
+Work item templates allow creation of work items
+from a YAML file.
+
+Template files are loaded from the gojeera templates directory:
+
+```text
+${HOME}/gojeera/templates/
+```
+
+Example template:
+
+```yaml
+template_name: Bug report # Optional field
+project:
+  key: ENG
+issuetype:
+  name: Bug
+summary: "[Bug summary]"
+description:
+  content:
+    - content:
+        - text: "Placeholder text"
+          type: "text"
+      type: "paragraph"
+  type: "doc"
+  version: "1"
+priority:
+  name: Medium
+labels:
+  - needs-triage
+components:
+  - name: Backend
+customfield_10727: [{ "id": "10727", "value": "Engineering" }]
+```
+
+Template fields are mapped to Jira metadata fields.
 
 ## Markdown and ADF Support
 

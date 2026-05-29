@@ -1,7 +1,7 @@
 import pytest
 
 from gojeera.app import JiraApp
-from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 
 from .test_helpers import (

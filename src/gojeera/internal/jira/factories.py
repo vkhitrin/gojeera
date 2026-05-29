@@ -69,7 +69,7 @@ class WorkItemFactory:
         return WorkItemFactory.build_required_work_item_type(work_item_type_data)
 
     @staticmethod
-    def new_work_item(data: dict) -> JiraWorkItem:
+    def create_work_item(data: dict) -> JiraWorkItem:
         """Creates an instance of `JiraIssue` for a work item as returned by the API.
 
         Args:

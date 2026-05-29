@@ -350,19 +350,6 @@ class WidgetBuilder:
     """
 
     @staticmethod
-    def _build_basic_create_widget(
-        widget_cls: type[TextInput] | type[UserPicker],
-        mode: FieldMode,
-        metadata: FieldMetadata,
-    ) -> TextInput | UserPicker:
-        return widget_cls(
-            mode=mode,
-            field_id=metadata.field_id,
-            title=metadata.name,
-            required=metadata.required,
-        )
-
-    @staticmethod
     def _build_mode_widget(
         mode: FieldMode,
         *,
@@ -413,7 +400,12 @@ class WidgetBuilder:
         if not current_value:
             return None
         if isinstance(current_value, dict):
-            return current_value.get('accountId')
+            account_id = (
+                current_value.get('accountId')
+                or current_value.get('account_id')
+                or current_value.get('id')
+            )
+            return str(account_id) if account_id else None
         if isinstance(current_value, str):
             return current_value
         return None
@@ -421,7 +413,12 @@ class WidgetBuilder:
     @staticmethod
     def _extract_user_display_name(current_value: Any) -> str | None:
         if isinstance(current_value, dict):
-            return current_value.get('displayName')
+            display_name = (
+                current_value.get('displayName')
+                or current_value.get('display_name')
+                or current_value.get('name')
+            )
+            return str(display_name) if display_name else None
         return None
 
     @staticmethod
@@ -429,6 +426,32 @@ class WidgetBuilder:
         if metadata.field_id == 'priority' or metadata.schema_type.lower() == 'priority':
             return False
         return initial_value == Select.NULL or not metadata.required
+
+    @staticmethod
+    def _resolve_option_value_id(value: Any, options: list[tuple[str, str]]) -> str | None:
+        if value is None or value == Select.NULL:
+            return None
+
+        valid_ids = {value_id for _name, value_id in options}
+        name_to_id = dict(options)
+
+        if isinstance(value, dict):
+            value_id = value.get('id')
+            if value_id is not None and str(value_id) in valid_ids:
+                return str(value_id)
+
+            for display_key in ('name', 'value'):
+                display_value = value.get(display_key)
+                if display_value is not None and str(display_value) in name_to_id:
+                    return str(name_to_id[str(display_value)])
+            return None
+
+        value_str = str(value)
+        if value_str in valid_ids:
+            return value_str
+        if value_str in name_to_id:
+            return str(name_to_id[value_str])
+        return None
 
     @staticmethod
     def _multi_select_for_mode(
@@ -466,6 +489,20 @@ class WidgetBuilder:
         )
 
     @staticmethod
+    def _build_simple_input(
+        widget_cls: type[NumericInput] | type[URL],
+        mode: FieldMode,
+        metadata: FieldMetadata,
+        current_value: Any = None,
+    ) -> Widget:
+        def create_widget():
+            return widget_cls(
+                **WidgetBuilder._field_kwargs(metadata, mode=mode, original_value=current_value)
+            )
+
+        return WidgetBuilder._wrap_dynamic_field(create_widget, metadata)
+
+    @staticmethod
     def _build_temporal_input(
         widget_cls: type[DateInput] | type[DateTimeInput],
         mode: FieldMode,
@@ -497,8 +534,13 @@ class WidgetBuilder:
         def create_widget():
             return WidgetBuilder._build_mode_widget(
                 mode,
-                create_factory=lambda: WidgetBuilder._build_basic_create_widget(
-                    UserPicker, mode, metadata
+                create_factory=lambda: UserPicker(
+                    **WidgetBuilder._field_kwargs(
+                        metadata,
+                        mode=mode,
+                        original_value=WidgetBuilder._extract_user_account_id(current_value),
+                    ),
+                    original_display_name=WidgetBuilder._extract_user_display_name(current_value),
                 ),
                 update_factory=lambda: UserPicker(
                     **WidgetBuilder._field_kwargs(
@@ -518,12 +560,7 @@ class WidgetBuilder:
         metadata: FieldMetadata,
         current_value: float | None = None,
     ) -> Widget:
-        def create_widget():
-            return NumericInput(
-                **WidgetBuilder._field_kwargs(metadata, mode=mode, original_value=current_value)
-            )
-
-        return WidgetBuilder._wrap_dynamic_field(create_widget, metadata)
+        return WidgetBuilder._build_simple_input(NumericInput, mode, metadata, current_value)
 
     @staticmethod
     def build_selection(
@@ -539,6 +576,11 @@ class WidgetBuilder:
             if metadata.has_default and metadata.default_value:
                 allow_blank = False
                 init_val = metadata.default_value.get('id', Select.NULL)
+
+            if mode == FieldMode.CREATE and current_value is not None:
+                init_val = WidgetBuilder._resolve_option_value_id(current_value, options)
+                if init_val is None:
+                    init_val = Select.NULL
 
             return WidgetBuilder._build_mode_widget(
                 mode,
@@ -599,22 +641,27 @@ class WidgetBuilder:
         metadata: FieldMetadata,
         current_value: Any = None,
     ) -> Widget:
-        def create_widget():
-            return WidgetBuilder._build_mode_widget(
+        update_value = WidgetBuilder._normalize_update_string_value(current_value)
+        return WidgetBuilder._wrap_dynamic_field(
+            lambda: WidgetBuilder._build_mode_widget(
                 mode,
-                create_factory=lambda: WidgetBuilder._build_basic_create_widget(
-                    TextInput, mode, metadata
+                create_factory=lambda: TextInput(
+                    **WidgetBuilder._field_kwargs(
+                        metadata,
+                        mode=mode,
+                        original_value=update_value,
+                    )
                 ),
                 update_factory=lambda: TextInput(
                     **WidgetBuilder._field_kwargs(
                         metadata,
                         mode=mode,
-                        original_value=WidgetBuilder._normalize_update_string_value(current_value),
+                        original_value=update_value,
                     )
                 ),
-            )
-
-        return WidgetBuilder._wrap_dynamic_field(create_widget, metadata)
+            ),
+            metadata,
+        )
 
     @staticmethod
     def build_url(
@@ -622,16 +669,7 @@ class WidgetBuilder:
         metadata: FieldMetadata,
         current_value: str | None = None,
     ) -> Widget:
-        def create_widget():
-            return URL(
-                **WidgetBuilder._field_kwargs(
-                    metadata,
-                    mode=mode,
-                    original_value=current_value if mode == FieldMode.UPDATE else None,
-                )
-            )
-
-        return WidgetBuilder._wrap_dynamic_field(create_widget, metadata)
+        return WidgetBuilder._build_simple_input(URL, mode, metadata, current_value)
 
     @staticmethod
     def build_labels(
@@ -640,12 +678,13 @@ class WidgetBuilder:
         current_value: list[str] | None = None,
     ) -> Widget:
         def create_widget():
+            initial_labels = current_value or []
             return WorkItemLabels(
                 mode=mode,
                 field_id=metadata.field_id,
                 title=metadata.name,
                 required=metadata.required,
-                original_value=current_value or [],
+                original_value=initial_labels,
                 supports_update=metadata.supports_update,
             )
 
@@ -658,13 +697,22 @@ class WidgetBuilder:
         current_value: list[Any] | None = None,
     ) -> Widget:
         def create_widget():
-            current_ids = []
-            if mode == FieldMode.UPDATE and current_value:
-                for item in current_value:
-                    if isinstance(item, dict) and 'id' in item:
-                        current_ids.append(str(item['id']))
-
             options = AllowedValuesParser.parse_options(metadata.allowed_values or [])
+            name_to_id = dict(options)
+            current_ids = []
+            if current_value:
+                for item in current_value:
+                    if isinstance(item, dict):
+                        if 'id' in item:
+                            current_ids.append(str(item['id']))
+                        elif 'name' in item and str(item['name']) in name_to_id:
+                            current_ids.append(str(name_to_id[str(item['name'])]))
+                        elif 'value' in item and str(item['value']) in name_to_id:
+                            current_ids.append(str(name_to_id[str(item['value'])]))
+                    elif str(item) in name_to_id:
+                        current_ids.append(str(name_to_id[str(item)]))
+                    else:
+                        current_ids.append(str(item))
 
             return WidgetBuilder._multi_select_for_mode(
                 mode,
@@ -820,7 +868,7 @@ def map_field_to_widget(
             and metadata.schema.get('items') == 'string'
             and metadata.field_id == 'labels'
         ):
-            return builder.build_labels(mode, metadata, None)
+            return builder.build_labels(mode, metadata, current_value)
 
         elif (
             schema_type == 'array'
@@ -874,11 +922,21 @@ def build_dynamic_widgets(
         if any(fid in skip_fields_lower for fid in field_identifiers if fid):
             continue
 
+        has_current_value = any(
+            identifier in current_values
+            for identifier in (field_id, field_key, field_name)
+            if identifier
+        )
+
         if mode == FieldMode.CREATE and not required:
             if str(field_id).lower() in skip_fields_lower:
                 continue
 
-            if not enable_additional and field_id not in process_optional_fields:
+            if (
+                not enable_additional
+                and field_id not in process_optional_fields
+                and not has_current_value
+            ):
                 continue
 
         metadata = FieldMetadata(field_data)
@@ -888,6 +946,12 @@ def build_dynamic_widgets(
         current_value = None
         if mode == FieldMode.UPDATE:
             current_value = current_values.get(field_id)
+        elif mode == FieldMode.CREATE:
+            current_value = current_values.get(field_id)
+            if current_value is None and field_key:
+                current_value = current_values.get(field_key)
+            if current_value is None and field_name:
+                current_value = current_values.get(field_name)
 
         widget = map_field_to_widget(mode, metadata, current_value)
 

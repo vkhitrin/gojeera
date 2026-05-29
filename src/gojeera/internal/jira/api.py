@@ -1117,7 +1117,7 @@ class JiraAPI:
             ),
         )
 
-    async def new_work_item(self, fields: dict) -> dict:
+    async def create_work_item(self, fields: dict) -> dict:
         """Creates a work item.
 
         Args:
@@ -1151,7 +1151,7 @@ class JiraAPI:
             A dictionary with the details of the cloned item, including its key.
         """
 
-        cloned_item = await self.new_work_item(fields_to_clone)
+        cloned_item = await self.create_work_item(fields_to_clone)
 
         if link_to_original and cloned_item.get('key'):
             try:

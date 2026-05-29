@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterable
 import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -854,7 +855,7 @@ class APIController:
             return APIControllerResponse(success=False, error=exception_details.get('message'))
         else:
             try:
-                instance: JiraWorkItem = WorkItemFactory.new_work_item(work_item)
+                instance: JiraWorkItem = WorkItemFactory.create_work_item(work_item)
             except Exception as e:
                 self.logger.error(
                     'There was an error while extracting data from a work item',
@@ -1034,7 +1035,7 @@ class APIController:
         work_item: JiraWorkItem
         for work_item in response.get('issues', []):
             try:
-                work_item = WorkItemFactory.new_work_item(work_item)
+                work_item = WorkItemFactory.create_work_item(work_item)
                 work_items.append(work_item)
             except Exception as e:
                 self.logger.warning(f'Failed to parse work item: {e}')
@@ -2014,7 +2015,12 @@ class APIController:
             )
             return APIControllerResponse(success=False, error=exception_details.get('message'))
 
-    async def new_work_item(self, data: dict, **dynamic_fields) -> APIControllerResponse:
+    async def create_work_item(
+        self,
+        data: dict,
+        available_fields: Iterable[str] | None = None,
+        **dynamic_fields,
+    ) -> APIControllerResponse:
         """Creates a work item.
 
         Args:
@@ -2029,15 +2035,17 @@ class APIController:
 
         project_key = data.get('project_key')
         work_item_type_id = data.get('work_item_type_id')
-        available_fields: set[str] = set()
+        resolved_available_fields: set[str] = set()
+        if available_fields is not None:
+            resolved_available_fields = {str(field) for field in available_fields}
 
-        if project_key and work_item_type_id:
+        if not resolved_available_fields and project_key and work_item_type_id:
             metadata_response = await self.get_work_item_create_metadata(
                 project_key, work_item_type_id
             )
             if metadata_response.success and metadata_response.result:
                 metadata_fields = metadata_response.result.get('fields', [])
-                available_fields = {
+                resolved_available_fields = {
                     field.get('key') for field in metadata_fields if field.get('key')
                 }
 
@@ -2045,7 +2053,7 @@ class APIController:
             fields['assignee'] = {'id': assignee_account_id}
 
         if reporter_account_id := data.get('reporter_account_id'):
-            if not available_fields or 'reporter' in available_fields:
+            if not resolved_available_fields or 'reporter' in resolved_available_fields:
                 fields['reporter'] = {'id': reporter_account_id}
 
         if work_item_type_id := data.get('work_item_type_id'):
@@ -2091,7 +2099,7 @@ class APIController:
                 fields[field_key] = field_value
 
         try:
-            result: dict = await self.client.new_work_item(fields)
+            result: dict = await self.client.create_work_item(fields)
         except Exception as e:
             exception_details: dict = self._extract_exception_details(e)
 

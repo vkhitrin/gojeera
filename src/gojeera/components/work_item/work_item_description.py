@@ -249,10 +249,6 @@ class WorkItemInfoContainer(Container, can_focus=False):
 
         current_work_item = self.work_item
         if not current_work_item:
-            self.notify(
-                'No work item is currently loaded.',
-                severity='error',
-            )
             return
 
         application = cast('JiraApp', self.app)  # noqa: F821
@@ -266,7 +262,8 @@ class WorkItemInfoContainer(Container, can_focus=False):
 
             if response.success:
                 self.notify(
-                    f'Work item {current_work_item.key} updated successfully',
+                    title=current_work_item.key,
+                    message='Updated successfully',
                 )
                 await self._apply_updated_work_item_info(current_work_item, updates, screen)
             else:
@@ -284,6 +281,7 @@ class WorkItemInfoContainer(Container, can_focus=False):
                 extra={'error': str(e), 'work_item_key': current_work_item.key},
             )
             self.notify(
-                f'An error occurred while updating the work item: {e}',
+                title=current_work_item.key,
+                message=f'An error occurred while updating the work item: {e}',
                 severity='error',
             )

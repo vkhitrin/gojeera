@@ -48,6 +48,8 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
         original_display_name: str | None = None,
         field_supports_update: bool = True,
     ):
+        self.pending_value = original_value
+        self.pending_display_name = original_display_name
         super().__init__(
             options=[UNASSIGNED_OPTION],
             prompt=original_display_name or 'Unassigned',
@@ -87,7 +89,19 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
 
         if users and (items := users.get('users', []) or []):
             options = [(item.display_name, item.account_id) for item in items]
-            self.replace_options(options, selection=users.get('selection'))
+            selection = users.get('selection') or self.pending_value
+            if (
+                self.pending_value
+                and self.pending_display_name
+                and all(value != self.pending_value for _label, value in options)
+            ):
+                options.insert(0, (self.pending_display_name, self.pending_value))
+            self.replace_options(options, selection=selection)
+
+    def get_value_for_create(self) -> str | None:
+        if self.mode != FieldMode.CREATE:
+            raise ValueError('get_value_for_create() only valid in CREATE mode')
+        return normalized_selection_value(self.value)
 
     def get_value_for_update(self) -> dict | None:
         require_update_mode(self.mode, 'get_value_for_update()')

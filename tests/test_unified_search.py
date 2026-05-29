@@ -327,7 +327,7 @@ def install_sortable_search_api(app: JiraApp, search_payload: dict) -> None:
         field, direction = parse_order_by(jql_query)
         filtered = filter_issues(jql_query)
         sorted_issues = sort_issues(filtered, field, direction)
-        work_items = [WorkItemFactory.new_work_item(issue) for issue in sorted_issues]
+        work_items = [WorkItemFactory.create_work_item(issue) for issue in sorted_issues]
         return JiraWorkItemSearchResponse(
             work_items=work_items,
             next_page_token=None,

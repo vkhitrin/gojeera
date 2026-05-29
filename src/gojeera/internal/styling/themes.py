@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 from textual.theme import Theme
 import yaml
 
+from gojeera.internal.store.files import list_yaml_files, load_yaml_file
 from gojeera.utils.system.logging_utils import build_log_extra
 
 logger = logging.getLogger('gojeera')
@@ -87,15 +88,9 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
     """
     themes = []
 
-    if not themes_directory.exists():
-        return themes
-
-    yaml_files = list(themes_directory.glob('*.yaml')) + list(themes_directory.glob('*.yml'))
-
-    for yaml_file in yaml_files:
+    for yaml_file in list_yaml_files(themes_directory):
         try:
-            with open(yaml_file, encoding='utf-8') as f:
-                theme_config = yaml.safe_load(f)
+            theme_config = load_yaml_file(yaml_file)
 
             if not theme_config:
                 logger.warning(

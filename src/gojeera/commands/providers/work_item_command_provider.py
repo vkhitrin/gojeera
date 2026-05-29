@@ -97,8 +97,8 @@ class WorkItemCommandProvider(ActionCommandProvider):
             commands.insert(
                 6,
                 (
-                    f'{work_item_key} > New Subtask',
-                    'new_work_item_subtask',
+                    f'{work_item_key} > Create Subtask',
+                    'create_work_item_subtask',
                     'Create a subtask under work item',
                 ),
             )

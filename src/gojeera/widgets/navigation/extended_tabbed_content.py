@@ -89,9 +89,9 @@ class ExtendedTabbedContent(TabbedContent):
         ),
         Binding(
             key='ctrl+n',
-            action='new_work_item_subtask',
-            description='New Subtask',
-            tooltip='Create a new subtask',
+            action='create_work_item_subtask',
+            description='Create Subtask',
+            tooltip='Create Subtask',
             show=True,
         ),
         Binding(
@@ -249,7 +249,7 @@ class ExtendedTabbedContent(TabbedContent):
             return self.active == 'tab-description'
         if action == 'add_attachment':
             return self.active == 'tab-attachments'
-        if action == 'new_work_item_subtask':
+        if action == 'create_work_item_subtask':
             return self.active == 'tab-subtasks'
         if action == 'link_work_item':
             return self.active == 'tab-related'
@@ -273,11 +273,11 @@ class ExtendedTabbedContent(TabbedContent):
             attachments_widget = self.screen.query_one(WorkItemAttachmentsWidget)
             await attachments_widget.action_add_attachment()
 
-    async def action_new_work_item_subtask(self) -> None:
+    async def action_create_work_item_subtask(self) -> None:
         if self.active == 'tab-subtasks':
             from typing import cast
 
-            from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+            from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 
             screen = cast('JiraApp', self.app)  # noqa: F821
 
@@ -303,7 +303,7 @@ class ExtendedTabbedContent(TabbedContent):
                     reporter_account_id=reporter_account_id,
                     parent_work_item=screen.work_item_info_container.work_item,
                 ),
-                callback=screen.new_work_item,
+                callback=screen.create_work_item,
             )
 
     async def action_link_work_item(self) -> None:

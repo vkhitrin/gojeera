@@ -1,6 +1,6 @@
 import asyncio
 
-from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 
 from .test_helpers import focus_work_item_tab, wait_until, with_snapshot_assertion
 

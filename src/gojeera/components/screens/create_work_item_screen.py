@@ -11,6 +11,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Select, Static, TextArea
+from textual.widgets._select import InvalidSelectValueError
 from textual.worker import get_current_worker
 from textual_tags import Tag
 
@@ -26,7 +27,7 @@ from gojeera.utils.data.fields import (
     get_sprint_field_id_from_fields_data,
     is_epic_work_item_type,
 )
-from gojeera.utils.markdown.adf_helpers import text_to_adf
+from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown, text_to_adf
 from gojeera.utils.system.clipboard import prepare_staged_attachment_text
 from gojeera.utils.system.clipboard_attachments import (
     materialize_uploaded_attachment_references,
@@ -71,23 +72,27 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
     BINDINGS = DynamicModalScreen.BINDINGS + [
         ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
-    TITLE = 'New Work Item'
+    TITLE = 'Create Work Item'
 
     def __init__(
         self,
         project_key: str | None = None,
         reporter_account_id: str | None = None,
         parent_work_item: 'JiraWorkItem | None' = None,
+        initial_template: dict[str, object] | None = None,
     ):
         super().__init__()
-        self._project_key = project_key
+        self._initial_template = initial_template or {}
+        template_project_key = self._extract_template_project_key(self._initial_template)
+        self._project_key = project_key or template_project_key
         self._reporter_account_id = reporter_account_id
         self._parent_work_item = parent_work_item
         self._parent_work_item_key = parent_work_item.key if parent_work_item else None
         self._field_metadata: dict[str, dict] = {}
+        self._available_field_keys: set[str] = set()
         self._reporter_is_editable: bool = True
 
-        self._selected_project_key: str | None = project_key
+        self._selected_project_key: str | None = self._project_key
 
         self._types_fetched_for_project: str | None = None
         self._users_fetched_for_project: str | None = None
@@ -102,6 +107,39 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         self._uploaded_clipboard_attachments: list[Attachment] = []
         self._created_work_item_key: str | None = None
         self._is_submitting: bool = False
+
+    @staticmethod
+    def _extract_template_project_key(template: dict[str, object]) -> str | None:
+        project = template.get('project')
+        if isinstance(project, dict):
+            project_data = cast(dict[str, object], project)
+            key = project_data.get('key')
+            return str(key) if key else None
+        return str(project) if project else None
+
+    @staticmethod
+    def _extract_template_work_item_type_name(template: dict[str, object]) -> str | None:
+        work_item_type = template.get('issuetype')
+        if isinstance(work_item_type, dict):
+            work_item_type_data = cast(dict[str, object], work_item_type)
+            name = work_item_type_data.get('name')
+            return str(name) if name else None
+        return str(work_item_type) if work_item_type else None
+
+    def _apply_initial_template_primary_fields(self) -> None:
+        if not self._initial_template:
+            return
+
+        if summary := self._initial_template.get('summary'):
+            self.summary_field.value = str(summary)
+
+        description = self._initial_template.get('description')
+        if isinstance(description, dict):
+            self.description_field.text = convert_adf_to_markdown(description, base_url=None)
+        elif description:
+            self.description_field.text = str(description)
+
+        self.save_button.disabled = not self._validate_required_fields()
 
     @property
     def _parent_work_item_type_name(self) -> str | None:
@@ -311,39 +349,16 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         from gojeera.widgets.selection.selection import SelectionWidget
         from gojeera.widgets.selection.user_picker import UserPicker
         from gojeera.widgets.work_item.work_item_labels import WorkItemLabels
+        from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
 
         pending_fields = []
 
-        dynamic_widgets = []
+        for wrapper in self.dynamic_fields_container.query(DynamicFieldWrapper):
+            if not wrapper.required:
+                continue
 
-        seen_widget_ids = set()
-
-        def add_unique_widgets(widget_list):
-            """Helper to add widgets only if not already seen."""
-            for widget in widget_list:
-                widget_id = id(widget)
-                if widget_id not in seen_widget_ids and widget.is_attached:
-                    seen_widget_ids.add(widget_id)
-                    dynamic_widgets.append(widget)
-
-        add_unique_widgets(self.dynamic_fields_container.query(TextInput))
-        add_unique_widgets(self.dynamic_fields_container.query(NumericInput))
-        add_unique_widgets(self.dynamic_fields_container.query(SelectionWidget))
-        add_unique_widgets(self.dynamic_fields_container.query(UserPicker))
-        add_unique_widgets(self.dynamic_fields_container.query(DateInput))
-        add_unique_widgets(self.dynamic_fields_container.query(DateTimeInput))
-        add_unique_widgets(self.dynamic_fields_container.query(URL))
-        add_unique_widgets(self.dynamic_fields_container.query(MultiSelect))
-        add_unique_widgets(self.dynamic_fields_container.query(WorkItemLabels))
-
-        for widget in dynamic_widgets:
-            is_required = False
-            if hasattr(widget, 'required'):
-                is_required = widget.required
-            elif hasattr(widget, '_required'):
-                is_required = widget._required
-
-            if not is_required:
+            widget = wrapper.widget
+            if widget is None or not widget.is_attached:
                 continue
 
             field_name = getattr(
@@ -354,24 +369,15 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             is_empty = False
 
             if isinstance(widget, (TextInput, NumericInput, URL)):
-                if not widget.value or not str(widget.value).strip():
-                    is_empty = True
-
+                is_empty = not widget.value or not str(widget.value).strip()
             elif isinstance(widget, (SelectionWidget, UserPicker)):
-                if not widget.value or widget.value == Select.NULL:
-                    is_empty = True
-
+                is_empty = not widget.value or widget.value == Select.NULL
             elif isinstance(widget, (DateInput, DateTimeInput)):
-                if not widget.value or not widget.value.strip():
-                    is_empty = True
-
+                is_empty = not widget.value or not widget.value.strip()
             elif isinstance(widget, MultiSelect):
-                if not widget.selected_tags or len(widget.selected_tags) == 0:
-                    is_empty = True
-
+                is_empty = not widget.selected_tags
             elif isinstance(widget, WorkItemLabels):
-                if not widget.value or len(widget.value) == 0:
-                    is_empty = True
+                is_empty = not widget.value
 
             if is_empty:
                 pending_fields.append(field_name)
@@ -381,7 +387,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
-            yield Static('New Work Item', id='modal_title')
+            yield Static('Create Work Item', id='modal_title')
             with VerticalScroll(id='modal-form-scroll'):
                 with StaticFieldsWidgets():
                     with Vertical(id='project-field-container'):
@@ -490,11 +496,11 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
     def on_mount(self):
         if self._parent_work_item_key:
             if self._requires_subtask_issue_type:
-                self.modal_title.update(f'New Subtask For {self._parent_work_item_key}')
+                self.modal_title.update(f'Create Subtask For {self._parent_work_item_key}')
             else:
-                self.modal_title.update(f'New Work Item For {self._parent_work_item_key}')
+                self.modal_title.update(f'Create Work Item For {self._parent_work_item_key}')
         else:
-            self.modal_title.update('New Work Item')
+            self.modal_title.update('Create Work Item')
 
         if CONFIGURATION.get().jumper.enabled:
             set_jump_mode(self.project_selector, 'focus')
@@ -652,6 +658,10 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             return
 
         if self._types_fetched_for_project == self._selected_project_key:
+            try:
+                self.work_item_type_selector._stop_spinner()
+            except Exception:
+                pass
             return
 
         self._fetch_work_item_types_worker(self._selected_project_key)
@@ -671,6 +681,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     self._types_fetched_for_project = project_key
                     with self.prevent(Select.Changed):
                         self.work_item_type_selector.set_options(types_list)
+                    self._apply_template_work_item_type_selection(types_list, project_key)
                     return
 
                 application = cast('JiraApp', self.app)  # noqa: F821
@@ -690,6 +701,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     with self.prevent(Select.Changed):
                         self.work_item_type_selector.set_options(types_list)
                     self._types_fetched_for_project = project_key
+                    self._apply_template_work_item_type_selection(types_list, project_key)
 
                     if self._requires_subtask_issue_type and types_list:
                         work_item_type_id = types_list[0][1]
@@ -715,6 +727,32 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         else:
             self.work_item_type_selector._stop_spinner()
 
+    def _apply_template_work_item_type_selection(
+        self,
+        types_list: list[tuple[str, str]],
+        project_key: str,
+    ) -> None:
+        if not self._initial_template or self._selected_work_item_type_id:
+            return
+        template_type_name = self._extract_template_work_item_type_name(self._initial_template)
+        if not template_type_name:
+            return
+        for type_name, type_id in types_list:
+            if type_name != template_type_name:
+                continue
+            with self.prevent(Select.Changed):
+                self.work_item_type_selector.value = type_id
+            self._selected_work_item_type_id = type_id
+            self.dynamic_fields_container.display = True
+            self._apply_initial_template_primary_fields()
+            if self._metadata_loaded_for != (project_key, type_id):
+                self.run_worker(
+                    self.fetch_work_item_create_metadata(project_key, type_id),
+                    exclusive=False,
+                )
+            self.schedule_dynamic_modal_layout()
+            return
+
     def _lazy_load_users(self) -> None:
         if not self._selected_project_key:
             self.notify(
@@ -732,6 +770,11 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             return
 
         if self._users_fetched_for_project == self._selected_project_key:
+            try:
+                self.reporter_selector._stop_spinner()
+                self.assignee_selector._stop_spinner()
+            except Exception:
+                pass
             return
 
         self._fetch_users_worker(self._selected_project_key)
@@ -948,6 +991,9 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 return
 
             fields_data = response.result.get('fields', [])
+            self._available_field_keys = {
+                str(field_key) for field in fields_data if (field_key := field.get('key'))
+            }
             for field in fields_data:
                 field_id = field.get('fieldId')
                 if field_id:
@@ -974,9 +1020,12 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                             self._default_reporter_account_id()
                             and self.reporter_selector.value == Select.NULL
                         ):
-                            self.reporter_selector.value = self._default_reporter_account_id()
-
-                            self.save_button.disabled = not self._validate_required_fields()
+                            try:
+                                self.reporter_selector.value = self._default_reporter_account_id()
+                            except InvalidSelectValueError:
+                                pass
+                            else:
+                                self.save_button.disabled = not self._validate_required_fields()
                     else:
                         self.reporter_selector.display = False
 
@@ -993,7 +1042,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             metadata_fields: list[Widget] = build_dynamic_widgets(
                 mode=FieldMode.CREATE,
                 fields_data=fields_data,
-                current_values=None,
+                current_values=self._initial_template,
                 skip_fields=skip_fields,
                 enable_additional=enable_additional,
                 process_optional_fields=set(PROCESS_OPTIONAL_FIELDS),
@@ -1001,6 +1050,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             self.dynamic_fields_container.loading = False
             await self.dynamic_fields_container.remove_children()
             await self.dynamic_fields_container.mount_all(metadata_fields)
+            self.save_button.disabled = not self._validate_required_fields()
             self.schedule_dynamic_modal_layout()
 
             self._make_dynamic_widgets_jumpable()
@@ -1305,8 +1355,10 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
 
         self._set_submitting(True)
         if self._created_work_item_key is None:
-            response: APIControllerResponse = await application.api.new_work_item(
-                base_data, **dynamic_fields
+            response: APIControllerResponse = await application.api.create_work_item(
+                base_data,
+                available_fields=self._available_field_keys,
+                **dynamic_fields,
             )
             if not response.success or not response.result:
                 self.notify(

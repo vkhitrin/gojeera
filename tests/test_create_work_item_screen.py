@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 
@@ -5,9 +6,11 @@ from httpx import Response
 import respx
 
 from gojeera.app import JiraApp
-from gojeera.components.screens.new_work_item_screen import AddWorkItemScreen
+from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
+from gojeera.components.search.unified_search import UnifiedSearchBar
 from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
 from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
+from gojeera.widgets.selection.popup_menu import PopupMenu
 from gojeera.widgets.selection.selection import SelectionWidget
 
 from .test_helpers import (
@@ -27,16 +30,31 @@ ENG_8_WORK_ITEM = json.loads(
 )
 
 
-async def open_new_work_item_screen(pilot):
-    """Open the new work item screen."""
+async def open_create_work_item_screen(pilot):
+    """Open the create work item screen."""
     await wait_for_mount(pilot)
     await pilot.press('ctrl+n')
     await wait_until(lambda: isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
 
 
+async def open_create_work_item_screen_from_menu(pilot):
+    await wait_for_mount(pilot)
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    search_bar.create_work_item_button.press()
+    await wait_until(
+        lambda: (
+            pilot.app.screen.query_one('#unified-search-new-work-item-menu', PopupMenu).expanded
+        ),
+        timeout=3.0,
+    )
+    await pilot.press('enter')
+    await wait_until(lambda: isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
+    await asyncio.sleep(0.2)
+
+
 async def open_and_select_project(pilot):
-    """Open new work item screen and select a project."""
-    await open_new_work_item_screen(pilot)
+    """Open create work item screen and select a project."""
+    await open_create_work_item_screen(pilot)
     screen = pilot.app.screen
     assert isinstance(screen, AddWorkItemScreen)
 
@@ -55,7 +73,7 @@ async def open_and_select_project(pilot):
 
 
 async def fill_required_fields(pilot):
-    """Open new work item screen and fill required fields."""
+    """Open create work item screen and fill required fields."""
     await open_and_select_project(pilot)
 
     # Select work item type
@@ -175,45 +193,56 @@ async def fill_save_and_open_created_work_item_attachments(pilot):
     )
 
 
-class TestNewWorkItemScreen:
-    """Snapshot tests to verify new work item screen display and interactions."""
+class TestCreateWorkItemScreen:
+    """Snapshot tests to verify create work item screen display and interactions."""
 
-    def test_new_work_item_initial_state(
-        self, snap_compare, mock_configuration, mock_jira_api_with_new_work_item, mock_user_info
+    def test_create_work_item_initial_state(
+        self, snap_compare, mock_configuration, mock_jira_api_with_create_work_item, mock_user_info
     ):
-        """Snapshot: New work item screen in initial state."""
+        """Snapshot: Create work item screen in initial state."""
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
-        assert snap_compare(app, terminal_size=(120, 40), run_before=open_new_work_item_screen)
+        assert snap_compare(app, terminal_size=(120, 40), run_before=open_create_work_item_screen)
 
-    def test_new_work_item_all_required_filled(
-        self, snap_compare, mock_configuration, mock_jira_api_with_new_work_item, mock_user_info
+    def test_create_work_item_menu_entry_opens_create_work_item_screen(
+        self, snap_compare, mock_configuration, mock_jira_api_with_create_work_item, mock_user_info
     ):
-        """Snapshot: New work item screen with all required fields filled."""
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=open_create_work_item_screen_from_menu,
+        )
+
+    def test_create_work_item_all_required_filled(
+        self, snap_compare, mock_configuration, mock_jira_api_with_create_work_item, mock_user_info
+    ):
+        """Snapshot: Create work item screen with all required fields filled."""
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=fill_required_fields)
 
-    def test_new_work_item_save_and_search(
-        self, snap_compare, mock_configuration, mock_jira_api_with_new_work_item, mock_user_info
+    def test_create_work_item_save_and_search(
+        self, snap_compare, mock_configuration, mock_jira_api_with_create_work_item, mock_user_info
     ):
-        """Snapshot: After saving new work item and searching for it, results appear."""
+        """Snapshot: After saving create work item and searching for it, results appear."""
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=fill_save_and_search_work_item)
 
-    def test_new_work_item_uploads_clipboard_attachment_after_creation(
+    def test_create_work_item_uploads_clipboard_attachment_after_creation(
         self,
         snap_compare,
         monkeypatch,
         mock_configuration,
-        mock_jira_api_with_new_work_item,
+        mock_jira_api_with_create_work_item,
         mock_jira_new_attachment,
         mock_user_info,
         staged_upload_file,

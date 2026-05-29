@@ -37,7 +37,7 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
     """
 
     BINDINGS = ExtendedModalScreen.BINDINGS + [
-        ('ctrl+c', 'app.pop_screen', 'Close'),
+        ('ctrl+c', 'dismiss_screen', 'Close'),
     ]
 
     def __init__(

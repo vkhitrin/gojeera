@@ -357,4 +357,4 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         self.run_worker(self._submit_comment(), exclusive=True)
 
     def _cancel(self) -> None:
-        self.app.pop_screen()
+        self.dismiss()

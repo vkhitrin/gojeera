@@ -22,7 +22,7 @@ class DecisionPickerScreen(SimpleOptionPickerScreen):
     """Modal screen for selecting a decision marker type."""
 
     BINDINGS = SimpleOptionPickerScreen.BINDINGS + [
-        ('ctrl+c', 'app.pop_screen', 'Close'),
+        ('ctrl+c', 'dismiss_screen', 'Close'),
     ]
 
     DECISION_TYPES = [

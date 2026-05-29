@@ -429,7 +429,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
 
     def on_key(self, event: events.Key) -> None:
         if event.key == 'escape':
-            self.app.pop_screen()
+            self.dismiss()
             event.stop()
         elif event.key == 'pageup':
             self.modal_outer.scroll_page_up()

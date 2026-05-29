@@ -65,14 +65,14 @@ debug = [
 ]
 dev = [
     "textual-dev>=1.8.0",
-    "ruff>=0.15.14",
-    "ty>=0.0.39",
+    "ruff>=0.15.15",
+    "ty>=0.0.40",
     "vulture>=2.16",
     "deadcode>=2.4.1",
 ]
 test = [
     "pytest>8.4.1",
-    "pytest-asyncio>=1.3.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>6.2.1",
     "pytest-textual-snapshot>=1.0.0",
     "pytest-xdist>=3.8.0",

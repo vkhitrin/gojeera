@@ -30,4 +30,4 @@ class QuitScreen(BaseConfirmationDialogScreen[str]):
 
     @on(Button.Pressed, '#button-cancel')
     def handle_cancel(self) -> None:
-        self.app.pop_screen()
+        self.dismiss()

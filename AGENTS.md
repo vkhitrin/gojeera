@@ -1,9 +1,7 @@
-# goojera Project Context
+# Project Overview
 
 gojeera is a Textual User Interface (TUI) application for interacting with
 Atlassian Jira with a focus on cloud instances using API v3.
-
-## Project Overview
 
 - **Language**: Python
 - **Framework**: Textual TUI Framework (<https://textual.textualize.io/>)
@@ -18,22 +16,9 @@ Atlassian Jira with a focus on cloud instances using API v3.
 
 ## Markdown ↔ ADF Conversion
 
-gojeera converts between Markdown and Atlassian Document Format (ADF) for Jira
-work item descriptions.
+gojeera converts between Markdown and Atlassian Document Format (ADF).
 
 **IMPORTANT**: Any changes to Markdown → ADF or ADF → Markdown conversion logic
 **MUST** be documented in `docs/markdown_to_adf_conversion.md`.
 This file serves as the single source of truth for conversion mappings,
 supported features, and implementation details.
-
-**For complete conversion reference**, see: `docs/markdown_to_adf_conversion.md`
-
-## Crucial Notes
-
-- UI components inherit from Textual widgets
-- Services handle Jira API communication
-- Models use Pydantic for data validation
-- Async operations for API calls
-- Ensure proper error handling for API failures
-- Respect rate limits when making API calls
-- Keep the TUI responsive during long operations (do not block UI)

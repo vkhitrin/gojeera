@@ -961,6 +961,7 @@ class WorkItemFields(Container, can_focus=False):
 
                 with Container(id='dynamic-fields-section') as dynamic_fields_section:
                     dynamic_fields_section.display = False
+                    self._set_top_margin(dynamic_fields_section, True)
                     yield DynamicFieldsWidgets()
 
                 with DateMetadata():
@@ -1043,7 +1044,7 @@ class WorkItemFields(Container, can_focus=False):
         self._update_layout_mode()
 
     def _schedule_field_spacing_refresh(self) -> None:
-        if not self.is_mounted:
+        if not self.is_mounted or self._loading_form:
             return
         if self._field_spacing_refresh_scheduled:
             return
@@ -1054,12 +1055,9 @@ class WorkItemFields(Container, can_focus=False):
         self._field_spacing_refresh_scheduled = False
         self._refresh_field_spacing()
 
-    def _set_dynamic_fields_section_state(self, *, loading: bool, visible: bool) -> None:
-        with self.app.batch_update():
-            if self.dynamic_fields_section_container.display != visible:
-                self.dynamic_fields_section_container.display = visible
-            if self.dynamic_fields_section_container.loading != loading:
-                self.dynamic_fields_section_container.loading = loading
+    def _set_dynamic_fields_section_visibility(self, visible: bool) -> None:
+        if self.dynamic_fields_section_container.display != visible:
+            self.dynamic_fields_section_container.display = visible
 
     def _apply_static_schema_visibility(
         self,
@@ -1108,15 +1106,6 @@ class WorkItemFields(Container, can_focus=False):
             if slot.display
         )
 
-        has_visible_dynamic_rows = any(
-            getattr(child, 'display', True)
-            for child in self.dynamic_fields_widgets_container.children
-        )
-        if self.dynamic_fields_section_container.display and (
-            self.dynamic_fields_section_container.loading or has_visible_dynamic_rows
-        ):
-            ordered_items.append(self.dynamic_fields_section_container)
-
         ordered_items.extend(
             slot
             for slot in [
@@ -1129,7 +1118,6 @@ class WorkItemFields(Container, can_focus=False):
         )
 
         self._set_top_margin(self.time_tracking_container, False)
-        self._set_top_margin(self.dynamic_fields_section_container, False)
 
         for child in self.dynamic_fields_widgets_container.children:
             if isinstance(child, FieldRowSlot):
@@ -1146,7 +1134,6 @@ class WorkItemFields(Container, can_focus=False):
         self.fields_stack.display = False
         self.preview_widget.styles.opacity = 0
         self.content_container.styles.opacity = 0
-        self.dynamic_fields_section_container.loading = False
         self.call_after_refresh(self._setup_jump_mode)
         self._update_layout_mode()
 
@@ -2123,7 +2110,7 @@ class WorkItemFields(Container, can_focus=False):
                 self.sprint_picker_widget._original_value = None
                 self.sprint_picker_widget.update_enabled = False
                 self.sprint_field_container.display = False
-                self._set_dynamic_fields_section_state(loading=False, visible=False)
+                self._set_dynamic_fields_section_visibility(False)
                 self.dynamic_fields_widgets_container.display = False
                 self.has_pending_changes = False
                 self.clear_form = False
@@ -2215,9 +2202,8 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         self._show_time_tracking_after_load = True
-        time_tracking_visible = not self.is_loading
-        if self.time_tracking_container.display != time_tracking_visible:
-            self.time_tracking_container.display = time_tracking_visible
+        if not self.time_tracking_container.display:
+            self.time_tracking_container.display = True
         widget.update_time_tracking(
             original_estimate,
             time_spent,
@@ -2901,7 +2887,7 @@ class WorkItemFields(Container, can_focus=False):
             self.fields_stack.display = False
             self.preview_widget.styles.opacity = 0
             self.content_container.styles.opacity = 0
-            self._set_dynamic_fields_section_state(loading=False, visible=False)
+            self._set_dynamic_fields_section_visibility(False)
             self.dynamic_fields_widgets_container.display = False
             self._set_preview_overlay_visible(False)
 
@@ -2954,6 +2940,18 @@ class WorkItemFields(Container, can_focus=False):
         self._complete_preview_handoff(work_item_key)
         self._signal_fields_widget_ready_for_handoff(work_item_key)
 
+    def _finish_fields_load(self, work_item_key: str) -> bool:
+        if self._current_work_item_for_key(work_item_key) is None:
+            return False
+
+        self._setup_jump_mode()
+        self._refresh_field_spacing()
+        self._loading_form = False
+        if self.is_loading:
+            self.is_loading = False
+        self._signal_full_fields_ready(work_item_key)
+        return True
+
     def _start_populate_work_item_fields_worker(self, work_item_key: str) -> None:
         if (current_work_item := self._current_work_item_for_key(work_item_key)) is None:
             return
@@ -2974,7 +2972,7 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         self._pending_work_item_key_for_deferred_load = None
-        self._set_dynamic_fields_section_state(loading=False, visible=False)
+        self._set_dynamic_fields_section_visibility(False)
         self.dynamic_fields_widgets_container.display = False
         if self._deferred_fields_start_timer is not None:
             self._deferred_fields_start_timer.stop()
@@ -3022,6 +3020,7 @@ class WorkItemFields(Container, can_focus=False):
         work_item_key = work_item.key
 
         self._loading_form = True
+        await asyncio.sleep(0)
 
         editable_fields: dict = self._determine_editable_fields(work_item)
         edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
@@ -3134,22 +3133,18 @@ class WorkItemFields(Container, can_focus=False):
 
         if self.has_pending_changes:
             self.has_pending_changes = False
-        self._setup_jump_mode()
-        self._schedule_field_spacing_refresh()
 
         if CONFIGURATION.get().enable_updating_additional_fields:
-            self._set_dynamic_fields_section_state(loading=False, visible=False)
+            self._set_dynamic_fields_section_visibility(False)
             self.dynamic_fields_widgets_container.display = False
             self._start_populate_dynamic_work_item_fields_worker(
                 work_item_key,
                 editable_fields,
             )
         else:
-            self._set_dynamic_fields_section_state(loading=False, visible=False)
+            self._set_dynamic_fields_section_visibility(False)
             self.dynamic_fields_widgets_container.display = False
-            self._loading_form = False
-            if self.is_loading:
-                self.is_loading = False
+            self._finish_fields_load(work_item_key)
             self._start_field_descriptions_loading()
 
     async def _populate_dynamic_work_item_fields(
@@ -3177,19 +3172,12 @@ class WorkItemFields(Container, can_focus=False):
             getattr(child, 'display', True)
             for child in self.dynamic_fields_widgets_container.children
         )
-        self._set_dynamic_fields_section_state(
-            loading=False,
-            visible=has_dynamic_rows,
-        )
+        self._set_dynamic_fields_section_visibility(has_dynamic_rows)
         if self.has_pending_changes:
             self.has_pending_changes = False
-        if self.is_loading:
-            self.is_loading = False
-        self._loading_form = False
-        self._setup_jump_mode()
-        self._schedule_field_spacing_refresh()
         self._dynamic_loading_worker = None
-        self._signal_full_fields_ready(work_item_key)
+        if not self._finish_fields_load(work_item_key):
+            return
         self._user_picker_population_worker = self.run_worker(
             self._populate_user_picker_widgets_deferred(work_item_key, editable_fields),
             exclusive=False,
@@ -3569,23 +3557,26 @@ class WorkItemFields(Container, can_focus=False):
                                 )
                             )
 
-                user_picker.set_options(selectable_users)
-                if current_user_value:
-                    user_picker.value = current_user_value
-                user_picker.update_enabled = (
-                    bool(field_editable) if field_editable is not None else False
+                user_picker.set_user_options_state(
+                    selectable_users,
+                    selection=current_user_value,
+                    update_enabled=bool(field_editable) if field_editable is not None else False,
                 )
             else:
                 if current_user_value:
-                    user_picker.set_options(
-                        [(current_user_display_name or current_user_value, current_user_value)]
-                    )
-                    user_picker.value = current_user_value
-                    user_picker.update_enabled = (
-                        bool(field_editable) if field_editable is not None else False
+                    user_picker.set_user_options_state(
+                        [(current_user_display_name or current_user_value, current_user_value)],
+                        selection=current_user_value,
+                        update_enabled=bool(field_editable)
+                        if field_editable is not None
+                        else False,
                     )
                 else:
-                    user_picker.update_enabled = False
+                    user_picker.set_user_options_state(
+                        [],
+                        selection=None,
+                        update_enabled=False,
+                    )
 
     async def _setup_labels_field(self, work_item: JiraWorkItem, editable_fields: dict) -> None:
         if not work_item.edit_meta:
@@ -3860,10 +3851,19 @@ class WorkItemFields(Container, can_focus=False):
         self, work_item: JiraWorkItem, _editable_fields: dict | None
     ) -> None:
         config = CONFIGURATION.get()
+        edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
+        current_readonly_sprints = self._extract_current_sprint_entries(work_item, None)
+        sprint_field_id_from_meta = get_sprint_field_id_from_editmeta(edit_meta_fields)
+
+        if (
+            not self.sprint_field_container.display
+            and not current_readonly_sprints
+            and not sprint_field_id_from_meta
+        ):
+            return
 
         def hide_sprint_field() -> None:
             self.sprint_picker_widget.loading = False
-            self.sprint_picker_widget.set_options_state(None)
             self.sprint_picker_widget._original_value = None
             self.sprint_picker_widget.update_enabled = False
             self.sprint_picker_widget.disabled = True
@@ -3908,11 +3908,11 @@ class WorkItemFields(Container, can_focus=False):
             show_current_sprint_readonly()
             return
 
-        if not work_item.edit_meta or 'fields' not in work_item.edit_meta:
+        if not edit_meta_fields:
             hide_sprint_field()
             return
 
-        sprint_field_id = get_sprint_field_id_from_editmeta(work_item.edit_meta.get('fields', {}))
+        sprint_field_id = sprint_field_id_from_meta
 
         if not sprint_field_id:
             hide_sprint_field()
@@ -3962,10 +3962,11 @@ class WorkItemFields(Container, can_focus=False):
                 'field_supports_update': field_can_be_updated,
             }
         )
+        show_loading_state = not current_sprints
         if project_key in self._sprint_fetch_in_flight_projects:
-            self.sprint_picker_widget.loading = True
+            self.sprint_picker_widget.loading = show_loading_state
             return
-        self.sprint_picker_widget.loading = True
+        self.sprint_picker_widget.loading = show_loading_state
         self._sprint_fetch_in_flight_projects.add(project_key)
         self.run_worker(
             self._populate_static_sprint_picker(

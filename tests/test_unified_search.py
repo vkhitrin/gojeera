@@ -337,10 +337,12 @@ def install_sortable_search_api(app: JiraApp, search_payload: dict) -> None:
         )
 
     async def mock_search_work_items(self, **kwargs: Any) -> APIControllerResponse:
+        del self
         jql_query = cast(str | None, kwargs.get('jql_query'))
         return APIControllerResponse(success=True, result=build_search_response_payload(jql_query))
 
     async def mock_count_work_items(self, **kwargs: Any) -> APIControllerResponse:
+        del self
         jql_query = cast(str | None, kwargs.get('jql_query'))
         return APIControllerResponse(
             success=True,
@@ -424,6 +426,7 @@ def with_basic_sortable_search_pilot():
             mock_jira_search_with_results,
             mock_user_info,
         ):
+            del mock_jira_api_with_search_results
             async with run_basic_sortable_search_test(
                 mock_configuration,
                 mock_user_info,
@@ -443,9 +446,46 @@ def get_result_keys(app: JiraApp) -> list[str]:
 
 
 class TestUnifiedSearch:
+    @pytest.mark.asyncio
+    async def test_search_results_page_actions_do_not_overflow(
+        self, mock_configuration, mock_jira_api_with_search_results, mock_user_info
+    ):
+        del mock_jira_api_with_search_results
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        page_requests: list[int] = []
+
+        def record_page_request(*, page_number: int, **kwargs: Any) -> None:
+            del kwargs
+            page_requests.append(page_number)
+
+        cast(Any, app)._start_search_page = record_page_request
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            search_results = get_main_screen(app).search_results_list
+            search_results.focus()
+
+            search_results.page = 1
+            search_results.total_pages = 3
+            await pilot.press('p')
+            await pilot.pause()
+
+            assert search_results.page == 1
+            assert page_requests == []
+
+            search_results.page = 3
+            search_results.total_pages = 3
+            search_results.token_by_page = {}
+            await pilot.press('n')
+            await pilot.pause()
+
+            assert search_results.page == 3
+            assert page_requests == []
+
     def test_set_initial_jql_filter(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         filter_label = 'Open Issues Assigned To Me'
         filter_expression = 'assignee = currentUser() AND resolution = Unresolved'
 
@@ -466,6 +506,7 @@ class TestUnifiedSearch:
     def test_unified_search_basic_mode_initial(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -475,6 +516,7 @@ class TestUnifiedSearch:
     def test_unified_search_switch_to_text_mode(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -484,6 +526,7 @@ class TestUnifiedSearch:
     def test_unified_search_text_mode_with_search_history(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -495,6 +538,7 @@ class TestUnifiedSearch:
     def test_unified_search_switch_to_jql_mode(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -504,6 +548,7 @@ class TestUnifiedSearch:
     def test_unified_search_text_with_query(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -513,6 +558,7 @@ class TestUnifiedSearch:
     def test_unified_search_jql_with_query(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -522,6 +568,7 @@ class TestUnifiedSearch:
     def test_unified_search_project_selector_opened(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -531,6 +578,7 @@ class TestUnifiedSearch:
     def test_unified_search_assignee_selector_opened(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -540,6 +588,7 @@ class TestUnifiedSearch:
     def test_unified_search_type_selector_opened(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -549,6 +598,7 @@ class TestUnifiedSearch:
     def test_unified_search_status_selector_opened(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         app = JiraApp(settings=config, user_info=mock_user_info)
@@ -558,6 +608,7 @@ class TestUnifiedSearch:
     def test_unified_search_jql_with_filters(
         self, snap_compare, mock_configuration, mock_jira_api_sync, mock_user_info
     ):
+        del mock_jira_api_sync
         config = mock_configuration
 
         config.jql_filters = [
@@ -598,6 +649,7 @@ class TestUnifiedSearch:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
+        del mock_jira_api_with_search_results
         async with run_search_test(mock_configuration, mock_user_info) as pilot:
             search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
             search_button = search_bar.query_one('#unified-search-button', Button)
@@ -619,6 +671,7 @@ class TestUnifiedSearch:
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
+        del mock_jira_api_with_search_results
         async with run_search_test(
             mock_configuration,
             mock_user_info,
@@ -684,6 +737,7 @@ class TestUnifiedSearch:
         mock_jira_search_with_results,
         mock_user_info,
     ):
+        del mock_jira_api_with_search_results
         async with run_sortable_search_test(
             mock_configuration,
             mock_user_info,

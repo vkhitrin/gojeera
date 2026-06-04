@@ -9,8 +9,27 @@ from .test_helpers import (
 )
 
 
+async def wait_for_work_item_fields_to_settle(pilot) -> None:
+    fields_widget = pilot.app.work_item_fields_widget
+    await wait_until(
+        lambda: (
+            fields_widget.work_item is not None
+            and not fields_widget.is_loading
+            and fields_widget.priority_selector.update_enabled
+            and fields_widget.assignee_selector.update_enabled
+            and fields_widget.work_item_components_widget.update_enabled
+            and fields_widget.work_item_affects_version_widget.update_enabled
+            and fields_widget.work_item_fix_version_widget.update_enabled
+        ),
+        timeout=5.0,
+    )
+    await pilot.app.workers.wait_for_complete()
+    await pilot.pause()
+
+
 async def open_parent_work_item_screen(pilot):
     await load_work_item_from_search(pilot, 'ENG-3')
+    await wait_for_work_item_fields_to_settle(pilot)
 
     work_item = pilot.app.information_panel.work_item
     assert work_item is not None

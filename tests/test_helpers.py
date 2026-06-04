@@ -34,10 +34,12 @@ class CommentPickerFlowConfig(NamedTuple):
 
 
 async def wait_for_mount(pilot):
+    del pilot
     await asyncio.sleep(0.1)
 
 
 async def wait_for_worker_idle(pilot, *, timeout: float = 3.0) -> None:
+    del timeout
     await pilot.app.workers.wait_for_complete()
     await pilot.pause()
 
@@ -296,10 +298,12 @@ async def create_related_work_item_link(
 
 
 async def accept_confirmation(pilot, *, wait_before: float = 1.0, wait_after: float = 1.0) -> None:
+    await asyncio.sleep(wait_before)
     screen = assert_confirmation_screen(pilot.app.screen)
     screen.query_one('#confirmation-button-accept', Button).press()
     await wait_until(lambda: not isinstance(pilot.app.screen, ConfirmationScreen), timeout=3.0)
     await wait_for_screen_to_settle(pilot)
+    await asyncio.sleep(wait_after)
 
 
 def assert_confirmation_screen(screen) -> ConfirmationScreen:
@@ -545,6 +549,7 @@ def with_snapshot_assertion_fixture(
 ):
     def decorator(_):
         def wrapper(self, request, snap_compare, mock_configuration, mock_user_info):
+            del self
             request.getfixturevalue(fixture_name)
             assert_snapshot_matches(
                 snap_compare,

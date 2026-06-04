@@ -760,11 +760,12 @@ __OVERFLOW_SCROLLBAR_CSS__
         return True
 
     def action_previous_page(self) -> None:
-        if self.page > 1:
+        if self.check_action('previous_page', ()):
             self._request_work_items_page(self.page - 1)
 
     def action_next_page(self) -> None:
-        self._request_work_items_page(self.page + 1)
+        if self.check_action('next_page', ()):
+            self._request_work_items_page(self.page + 1)
 
     def action_previous_work_items_page(self) -> None:
         self.action_previous_page()

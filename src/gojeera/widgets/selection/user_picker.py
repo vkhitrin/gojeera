@@ -1,4 +1,6 @@
 import logging
+from collections.abc import Sequence
+from typing import Any
 
 from textual.reactive import Reactive, reactive
 
@@ -16,6 +18,7 @@ from gojeera.widgets.selection.user_selection_input import (
     UNASSIGNED_OPTION,
     UNASSIGNED_VALUE,
     UnassignedUserSelect,
+    with_unassigned_option,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,14 +53,22 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
     ):
         self.pending_value = original_value
         self.pending_display_name = original_display_name
+        initial_options = [UNASSIGNED_OPTION]
+        initial_value = UNASSIGNED_VALUE
+        initial_prompt = 'Unassigned'
+        if original_value:
+            initial_prompt = original_display_name or original_value
+            initial_options.append((initial_prompt, original_value))
+            initial_value = original_value
+
         super().__init__(
-            options=[UNASSIGNED_OPTION],
-            prompt=original_display_name or 'Unassigned',
+            options=initial_options,
+            prompt=initial_prompt,
             id=field_id,
             type_to_search=True,
             compact=True,
             allow_blank=False,
-            value=UNASSIGNED_VALUE,
+            value=initial_value,
         )
 
         def sync_update_state() -> None:
@@ -82,6 +93,24 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
     def set_pending_user(self, account_id: str | None, display_name: str | None = None) -> None:
         self.pending_value = account_id
         self.pending_display_name = display_name
+
+    def set_user_options_state(
+        self,
+        options: Sequence[tuple[str, Any]],
+        *,
+        selection: str | None,
+        update_enabled: bool,
+    ) -> None:
+        normalized_options = list(options)
+        current_options = list(getattr(self, '_options', []) or [])
+        selection_changed = normalized_selection_value(self.value) != selection
+        options_changed = current_options != with_unassigned_option(normalized_options)
+
+        if options_changed or selection_changed:
+            self.replace_options(normalized_options, selection=selection)
+
+        if self.update_enabled != update_enabled:
+            self.update_enabled = update_enabled
 
     def watch_users(self, users: dict | None = None) -> None:
         if self.mode != FieldMode.CREATE:

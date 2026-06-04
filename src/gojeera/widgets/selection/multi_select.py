@@ -373,6 +373,9 @@ class MultiSelect(Tags, BaseField):
         self._suspend_change_events = False
         self._is_hydrating = False
         self._pending_options_state: dict[str, Any] | None = None
+        self._options_state_signature: (
+            tuple[tuple[tuple[str, str], ...], tuple[str, ...], bool] | None
+        ) = None
 
         self._id_to_name = {value_id: name for name, value_id in options}
         self._name_to_id = dict(options)
@@ -825,6 +828,41 @@ class MultiSelect(Tags, BaseField):
 
         self._sync_dropdown_arrow_visibility()
 
+    @staticmethod
+    def _options_state_signature_for(
+        options: list[tuple[str, str]],
+        selection: list[str] | None,
+        field_supports_update: bool,
+    ) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...], bool]:
+        return (
+            tuple((str(name), str(value_id)) for name, value_id in options),
+            tuple(str(value_id) for value_id in (selection or [])),
+            field_supports_update,
+        )
+
+    def _update_option_indexes(self, options: list[tuple[str, str]]) -> None:
+        self._id_to_name = {value_id: name for name, value_id in options}
+        self._name_to_id = dict(options)
+        self._all_option_names = [name for name, _ in options]
+
+    def _refresh_option_values_only(
+        self,
+        options: list[tuple[str, str]],
+        selection: list[str] | None,
+        field_supports_update: bool,
+    ) -> None:
+        """Refresh available options while preserving already-rendered tags."""
+
+        self._update_option_indexes(options)
+        self._original_value = list(selection) if selection else None
+        self._supports_update = field_supports_update
+        self.disabled = not field_supports_update
+
+        self.tag_values.clear()
+        self.tag_values.update(self._all_option_names)
+        self._sync_dropdown_arrow_visibility()
+        self._sync_tag_input_display()
+
     async def _apply_options_state(
         self,
         *,
@@ -832,13 +870,26 @@ class MultiSelect(Tags, BaseField):
         selection: list[str] | None,
         field_supports_update: bool,
     ) -> None:
+        signature = self._options_state_signature_for(options, selection, field_supports_update)
+        if signature == self._options_state_signature:
+            return
+
+        selected_tag_names = {
+            self._id_to_name.get(value_id, value_id) for value_id in (selection or [])
+        }
+        can_preserve_selected_tags = selected_tag_names == set(self.selected_tags)
+
         self._is_hydrating = True
         try:
-            await self.update_options(
-                options=options,
-                original_value=selection,
-                field_supports_update=field_supports_update,
-            )
+            if can_preserve_selected_tags:
+                self._refresh_option_values_only(options, selection, field_supports_update)
+            else:
+                await self.update_options(
+                    options=options,
+                    original_value=selection,
+                    field_supports_update=field_supports_update,
+                )
+            self._options_state_signature = signature
         finally:
             self._is_hydrating = False
 

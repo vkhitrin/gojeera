@@ -21,9 +21,13 @@ class DecisionSelector(VimSelect):
 class DecisionPickerScreen(SimpleOptionPickerScreen):
     """Modal screen for selecting a decision marker type."""
 
-    BINDINGS = SimpleOptionPickerScreen.BINDINGS + [
-        ('ctrl+c', 'dismiss_screen', 'Close'),
+    BINDINGS = [
+        ('ctrl+c', 'dismiss_screen_with_ctrl_c', 'Close'),
+        *SimpleOptionPickerScreen.BINDINGS,
     ]
+
+    def action_dismiss_screen_with_ctrl_c(self) -> None:
+        self.dismiss()
 
     DECISION_TYPES = [
         ('DECIDED', ('[decision:d]', 'DECIDED')),

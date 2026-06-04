@@ -24,6 +24,7 @@ async def open_log_work_screen_with_valid_fields(pilot):
     screen = pilot.app.screen
     assert isinstance(screen, LogWorkScreen)
 
+    await wait_until(lambda: screen.time_spent_input.has_focus, timeout=2.0)
     screen.time_spent_input.value = '2h'
     await wait_until(lambda: not screen.save_button.disabled, timeout=2.0)
 

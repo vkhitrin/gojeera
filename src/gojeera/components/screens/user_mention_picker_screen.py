@@ -36,9 +36,13 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
         users: Optional list of users to display initially
     """
 
-    BINDINGS = ExtendedModalScreen.BINDINGS + [
-        ('ctrl+c', 'dismiss_screen', 'Close'),
+    BINDINGS = [
+        ('ctrl+c', 'dismiss_screen_with_ctrl_c', 'Close'),
+        *ExtendedModalScreen.BINDINGS,
     ]
+
+    def action_dismiss_screen_with_ctrl_c(self) -> None:
+        self.dismiss()
 
     def __init__(
         self,

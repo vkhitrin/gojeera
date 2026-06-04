@@ -169,6 +169,13 @@ class WorkspaceMixin(App):
             show=True,
         ),
         Binding(
+            key='ctrl+r',
+            action='reload_loaded_work_item',
+            description='Reload',
+            tooltip='Reload the active work item',
+            show=True,
+        ),
+        Binding(
             key='ctrl+s',
             action='apply_changes',
             description='Apply Changes',
@@ -413,6 +420,8 @@ class WorkspaceMixin(App):
         if action == 'unload_work_item':
             return self.current_loaded_work_item_key is not None
         if action == 'edit_work_item_info':
+            return self.current_loaded_work_item_key is not None
+        if action == 'reload_loaded_work_item':
             return self.current_loaded_work_item_key is not None
         if action in ('view_worklog', 'log_work'):
             return self.current_loaded_work_item_key is not None
@@ -1221,6 +1230,16 @@ class WorkspaceMixin(App):
             return
         await self.work_item_info_container.action_edit_work_item_info()
 
+    def action_reload_loaded_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        self.run_worker(
+            self.load_work_item(self.current_loaded_work_item_key, force_reload=True),
+            exclusive=True,
+            group='work-item',
+        )
+
     def action_open_loaded_work_item_in_browser(self) -> None:
         if not self.current_loaded_work_item_key:
             return
@@ -1550,7 +1569,9 @@ class WorkspaceMixin(App):
             group='recently-viewed-work-items',
         )
 
-    async def load_work_item(self, selected_work_item_key: str) -> bool:
+    async def load_work_item(
+        self, selected_work_item_key: str, *, force_reload: bool = False
+    ) -> bool:
         if not selected_work_item_key:
             self.notify(
                 'You need to select a work item before fetching its details.',
@@ -1562,7 +1583,7 @@ class WorkspaceMixin(App):
         if self._active_work_item_load_key == selected_work_item_key:
             return False
 
-        if self._is_current_loaded_work_item(selected_work_item_key):
+        if self._is_current_loaded_work_item(selected_work_item_key) and not force_reload:
             if self.information_panel.work_item:
                 self._record_recently_viewed_work_item(self.information_panel.work_item)
             self._apply_pending_work_item_navigation_target()

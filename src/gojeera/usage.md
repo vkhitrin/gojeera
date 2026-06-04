@@ -115,6 +115,7 @@ gojeera --profile "service_account"
 | `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation         |
 | `Ctrl+P` | Command Palette  | Open command palette                                 |
 | `CTRL+N` | Create Work Item | Create a work item from the main search/results view |
+| `CTRL+R` | Reload           | Reload the active work item                          |
 | `F1`     | Help             | Open help                                            |
 | `F11`    | Toggle Footer    | Show or hide the footer for the current session      |
 | `F12`    | Debug Info       | Show debug information (config, server, user)        |

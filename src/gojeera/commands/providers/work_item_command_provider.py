@@ -53,6 +53,11 @@ class WorkItemCommandProvider(ActionCommandProvider):
                 'Clone work item',
             ),
             (
+                f'{work_item_key} > Reload Work Item',
+                'reload_loaded_work_item',
+                'Reload the active work item from Jira',
+            ),
+            (
                 f'{work_item_key} > Edit Information',
                 'edit_work_item_info',
                 'Edit the summary and description',

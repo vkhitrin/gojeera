@@ -47,7 +47,10 @@ from gojeera.internal.models.work_items import (
     JiraWorkItemSearchResponse,
     JiraWorklog,
     PaginatedJiraWorklog,
+    PaginatedWorkItemHistory,
     WorkItemComment,
+    WorkItemHistoryChange,
+    WorkItemHistoryEntry,
 )
 from gojeera.internal.auth.profiles import OAuth2AuthProfile
 from gojeera.internal.auth.service import AuthService
@@ -362,6 +365,40 @@ class APIController:
             self._build_work_item_comment(comment_data)
             for comment_data in response.get('comments', [])
         ]
+
+    def _build_work_item_history_entries(
+        self, response: dict[str, Any]
+    ) -> list[WorkItemHistoryEntry]:
+        history: list[WorkItemHistoryEntry] = []
+        for history_data in response.get('values', []):
+            history.append(
+                WorkItemHistoryEntry(
+                    id=str(history_data.get('id', '')),
+                    author=WorkItemFactory.build_jira_user(history_data.get('author')),
+                    created=(
+                        isoparse(history_data.get('created'))
+                        if history_data.get('created')
+                        else None
+                    ),
+                    changes=[
+                        WorkItemHistoryChange(
+                            field=str(change_data.get('field') or change_data.get('fieldId') or ''),
+                            from_value=change_data.get('fromString') or change_data.get('from'),
+                            to_value=change_data.get('toString') or change_data.get('to'),
+                        )
+                        for change_data in history_data.get('items', [])
+                    ],
+                )
+            )
+        return sorted(history, key=lambda item: item.created or datetime.min, reverse=True)
+
+    def _build_work_item_history(self, response: dict[str, Any]) -> PaginatedWorkItemHistory:
+        return PaginatedWorkItemHistory(
+            entries=self._build_work_item_history_entries(response),
+            max_results=int(response.get('maxResults', 0) or 0),
+            start_at=int(response.get('startAt', 0) or 0),
+            is_last=bool(response.get('isLast', True)),
+        )
 
     def _server_information_error_response(self, error: Exception) -> APIControllerResponse:
         exception_details: dict = self._extract_exception_details(error)
@@ -1643,6 +1680,20 @@ class APIController:
             self.client.get_comments(work_item_key_or_id, offset, limit),
             result_builder=self._build_work_item_comments,
             error_message='Unable to fetch comments',
+            extra={'work_item_key_or_id': work_item_key_or_id},
+        )
+
+    async def get_work_item_history(
+        self,
+        work_item_key_or_id: str,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> APIControllerResponse:
+        """Retrieves the changelog history of a work item."""
+        return await self._execute_result_api_operation(
+            self.client.get_work_item_changelog(work_item_key_or_id, offset, limit),
+            result_builder=self._build_work_item_history,
+            error_message='Unable to fetch work item history',
             extra={'work_item_key_or_id': work_item_key_or_id},
         )
 

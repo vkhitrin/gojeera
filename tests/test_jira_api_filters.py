@@ -1,22 +1,11 @@
-import logging
-from unittest.mock import AsyncMock
-
 import pytest
 
-from gojeera.internal.jira.api import JiraAPI
-
-
-def _build_api_with_mocked_client(responses: list[dict]) -> tuple[JiraAPI, AsyncMock]:
-    api = JiraAPI.__new__(JiraAPI)
-    api.logger = logging.getLogger('gojeera.test')
-    api._client = AsyncMock()
-    api._client.make_request = AsyncMock(side_effect=responses)
-    return api, api._client.make_request
+from tests.jira_api_test_utils import build_api_with_mocked_client
 
 
 @pytest.mark.asyncio
 async def test_fetch_user_filters_fetches_all_personal_pages():
-    api, make_request = _build_api_with_mocked_client(
+    api, make_request = build_api_with_mocked_client(
         [
             {
                 'startAt': 0,
@@ -62,7 +51,7 @@ async def test_fetch_user_filters_fetches_all_personal_pages():
 
 @pytest.mark.asyncio
 async def test_fetch_user_filters_fetches_all_shared_pages_and_deduplicates():
-    api, make_request = _build_api_with_mocked_client(
+    api, make_request = build_api_with_mocked_client(
         [
             {
                 'startAt': 0,
@@ -118,7 +107,7 @@ async def test_fetch_user_filters_fetches_all_shared_pages_and_deduplicates():
 
 @pytest.mark.asyncio
 async def test_get_all_fields_paginated_fetches_all_pages():
-    api, make_request = _build_api_with_mocked_client(
+    api, make_request = build_api_with_mocked_client(
         [
             {
                 'startAt': 0,

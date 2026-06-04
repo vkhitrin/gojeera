@@ -70,6 +70,49 @@ class WorkItemComment(BaseModel):
 
 
 @dataclass
+class WorkItemHistoryChange(BaseModel):
+    field: str
+    from_value: str | None = None
+    to_value: str | None = None
+
+    def display(self) -> str:
+        previous = self.from_value if self.from_value not in (None, '') else 'None'
+        current = self.to_value if self.to_value not in (None, '') else 'None'
+        return f'{self.field}: {previous} -> {current}'
+
+    def sentence(self) -> str:
+        previous = self.from_value if self.from_value not in (None, '') else 'None'
+        current = self.to_value if self.to_value not in (None, '') else 'None'
+        return f'{self.field}: {previous} -> {current}'
+
+
+@dataclass
+class WorkItemHistoryEntry(BaseModel):
+    id: str
+    author: JiraUser | None = None
+    created: datetime | None = None
+    changes: list[WorkItemHistoryChange] | None = None
+
+    @property
+    def created_on(self) -> str:
+        return self.created.strftime('%Y-%m-%d %H:%M') if self.created else ''
+
+    @property
+    def display_author(self) -> str:
+        if self.author is None:
+            return ''
+        return self.author.display_name or self.author.account_id or ''
+
+
+@dataclass
+class PaginatedWorkItemHistory(BaseModel):
+    entries: list[WorkItemHistoryEntry]
+    max_results: int
+    start_at: int
+    is_last: bool
+
+
+@dataclass
 class RelatedJiraWorkItem(BaseModel):
     id: str
     key: str

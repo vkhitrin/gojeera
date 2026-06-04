@@ -1054,6 +1054,20 @@ class JiraAPI:
             ),
         )
 
+    async def get_work_item_changelog(
+        self, work_item_id_or_key: str, offset: int | None = None, limit: int | None = None
+    ) -> dict:
+        """Retrieves the changelog history of a work item."""
+        params: dict[str, Any] = self._add_pagination_params({}, offset, limit)
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/changelog',
+                params=params,
+            ),
+        )
+
     async def delete_comment(self, work_item_id_or_key: str, comment_id: str) -> None:
         """Deletes a comment.
 

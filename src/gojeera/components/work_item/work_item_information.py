@@ -11,6 +11,7 @@ from gojeera.components.work_item.work_item_description import (
     WorkItemSummary,
 )
 from gojeera.components.work_item.work_item_fields import WorkItemFields
+from gojeera.components.work_item.work_item_history import WorkItemHistoryWidget
 from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
@@ -67,6 +68,8 @@ class WorkItemInformation(Container, can_focus=True):
                 yield WorkItemRemoteLinksWidget()
             with Vertical(id='pane-comments', classes='work-item-tab-pane'):
                 yield WorkItemCommentsWidget()
+            with Vertical(id='pane-history', classes='work-item-tab-pane'):
+                yield WorkItemHistoryWidget()
 
     @property
     def breadcrumb_widget(self) -> WorkItemBreadcrumb:
@@ -90,6 +93,11 @@ class WorkItemInformation(Container, can_focus=True):
 
     def set_active_tab(self, tab_id: str) -> None:
         self.content_switcher.current = self.pane_id_for_tab(tab_id)
+        history_widget = self.query_one(WorkItemHistoryWidget)
+        if tab_id == 'tab-history':
+            history_widget.load_if_needed()
+        else:
+            history_widget.cancel_loading()
 
     def get_active_pane(self):
         return self.query_one(f'#{self.content_switcher.current}')

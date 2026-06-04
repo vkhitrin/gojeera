@@ -26,8 +26,6 @@ from gojeera.commands.binding_provider import (
     register_binding_in_command_palette,
 )
 from gojeera.components.search.unified_search import UnifiedSearchBar
-from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
-from gojeera.components.work_item.work_item_comments import WorkItemCommentsWidget
 from gojeera.components.work_item.work_item_description import (
     WorkItemInfoContainer,
     WorkItemSummary,
@@ -72,7 +70,10 @@ from gojeera.widgets.search.work_items_container import WorkItemsContainer
 if TYPE_CHECKING:
     from textual.command import Provider
 
+    from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
+    from gojeera.components.work_item.work_item_comments import WorkItemCommentsWidget
     from gojeera.components.work_item.work_item_fields import WorkItemUpdated
+    from gojeera.components.work_item.work_item_history import WorkItemHistoryWidget
     from gojeera.internal.jira.controller import APIControllerResponse
     from gojeera.internal.models.jira import JiraMyselfInfo
     from gojeera.internal.models.work_items import (
@@ -305,7 +306,7 @@ class WorkspaceMixin(App):
 
     @property
     def work_item_comments_widget(self) -> WorkItemCommentsWidget:
-        return self.query_one(WorkItemCommentsWidget)
+        return cast('WorkItemCommentsWidget', self.query_one('#work_item_comments'))
 
     @property
     def related_work_items_widget(self) -> RelatedWorkItemsWidget:
@@ -325,7 +326,11 @@ class WorkspaceMixin(App):
 
     @property
     def work_item_attachments_widget(self) -> WorkItemAttachmentsWidget:
-        return self.query_one(WorkItemAttachmentsWidget)
+        return cast('WorkItemAttachmentsWidget', self.query_one('#attachments'))
+
+    @property
+    def work_item_history_widget(self) -> WorkItemHistoryWidget:
+        return cast('WorkItemHistoryWidget', self.query_one('#work_item_history'))
 
     @property
     def unified_search_bar(self) -> UnifiedSearchBar:
@@ -386,6 +391,8 @@ class WorkspaceMixin(App):
                             with TabPane('Web Links', id='tab-links'):
                                 pass
                             with TabPane('Comments', id='tab-comments'):
+                                pass
+                            with TabPane('History', id='tab-history'):
                                 pass
 
                     with Horizontal(id='details-content-row'):
@@ -493,6 +500,7 @@ class WorkspaceMixin(App):
         self.watch(
             self.work_item_comments_widget, 'displayed_count', self._update_comments_tab_title
         )
+        self.watch(self.work_item_history_widget, 'displayed_count', self._update_history_tab_title)
 
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
         self.atlassian_context.user_info = user_info
@@ -515,6 +523,9 @@ class WorkspaceMixin(App):
 
     def _update_comments_tab_title(self, count: int) -> None:
         self._update_information_tab_badge('tab-comments', count)
+
+    def _update_history_tab_title(self, count: int) -> None:
+        self._update_information_tab_badge('tab-history', count)
 
     def _update_information_tab_badge(self, tab_id: str, count: int) -> None:
         self.tabs.set_tab_badge(tab_id, count)
@@ -1131,6 +1142,8 @@ class WorkspaceMixin(App):
                 self.work_item_attachments_widget.attachments = None
                 self.work_item_attachments_widget.work_item_key = None
 
+                self.work_item_history_widget.work_item_key = None
+
                 self.work_item_child_work_items_widget.work_items = None
                 self.work_item_child_work_items_widget.work_item_key = None
 
@@ -1402,11 +1415,16 @@ class WorkspaceMixin(App):
             self.work_item_attachments_widget.work_item_key = work_item.key
             self.work_item_attachments_widget.attachments = work_item.attachments
 
+            self.work_item_history_widget.work_item_key = work_item.key
+
             self.work_item_child_work_items_widget.work_item_key = work_item.key
             self.work_item_child_work_items_widget.work_items = work_item.subtasks
 
             if CONFIGURATION.get().show_work_item_web_links:
                 self.work_item_remote_links_widget.work_item_key = work_item.key
+
+        if self.tabs.active == 'tab-history':
+            self.work_item_history_widget.load_if_needed()
 
         self.call_after_refresh(self._bind_loaded_work_item_fields, work_item)
         self._apply_pending_work_item_navigation_target()

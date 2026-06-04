@@ -247,6 +247,7 @@ The information panel contains multiple tabs:
 - Subtasks
 - Web Links
 - Comments
+- History
 
 Several shortcuts are contextual and depend on the active tab:
 
@@ -330,6 +331,12 @@ Manage work item comments.
 - User mentions via `@username` (use command palette to insert)
 - Decision markers for meeting notes
 - Panels/alerts (NOTE, TIP, IMPORTANT, WARNING, CAUTION)
+
+#### History Tab
+
+![Work item history tab](/static/work_item_history_tab.svg)
+
+Shows work item changelog history.
 
 ## Time Tracking
 

@@ -1,0 +1,83 @@
+[
+  {
+    "startAt": 0,
+    "maxResults": 1,
+    "isLast": false,
+    "values": [
+      {
+        "id": "10001",
+        "created": "2026-06-04T19:16:00.000+0300",
+        "author": {
+          "accountId": "555000:22222222-2222-2222-2222-222222222222",
+          "active": true,
+          "displayName": "Nyx Basilisk",
+          "emailAddress": "nyx.basilisk@acme.example.com"
+        },
+        "items": [
+          {
+            "field": "status",
+            "fieldtype": "jira",
+            "fromString": "Ready For Dev",
+            "toString": "Done"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "startAt": 1,
+    "maxResults": 1,
+    "isLast": false,
+    "values": [
+      {
+        "id": "10002",
+        "created": "2026-06-04T18:42:00.000+0300",
+        "author": {
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "active": true,
+          "displayName": "Rook Hydra",
+          "emailAddress": "rook.hydra@acme.example.com"
+        },
+        "items": [
+          {
+            "field": "status",
+            "fieldtype": "jira",
+            "fromString": "Backlog",
+            "toString": "Ready For Dev"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "startAt": 2,
+    "maxResults": 1,
+    "isLast": true,
+    "values": [
+      {
+        "id": "10003",
+        "created": "2026-06-04T17:10:00.000+0300",
+        "author": {
+          "accountId": "555000:11111111-1111-1111-1111-111111111111",
+          "active": true,
+          "displayName": "Rook Hydra",
+          "emailAddress": "rook.hydra@acme.example.com"
+        },
+        "items": [
+          {
+            "field": "assignee",
+            "fieldtype": "jira",
+            "fromString": "Unassigned",
+            "toString": "Nyx Basilisk"
+          },
+          {
+            "field": "labels",
+            "fieldtype": "jira",
+            "fromString": "",
+            "toString": "creature-rig, motion-cues"
+          }
+        ]
+      }
+    ]
+  }
+]

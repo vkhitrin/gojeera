@@ -10,6 +10,8 @@ import sys
 import xml.etree.ElementTree as ET
 
 SVG_NS = 'http://www.w3.org/2000/svg'
+TERMINAL_CELL_WIDTH = 12.2
+ARTIFICIAL_SCROLLBAR_THUMB_FILL = '#1E1E1E'
 ET.register_namespace('', SVG_NS)
 
 
@@ -36,6 +38,8 @@ class StaticSvgScenario:
     crop_line_count: int | None = None
     crop_min_x: float | None = None
     crop_max_x: float | None = None
+    crop_body_start_line: int | None = None
+    crop_body_max_x: float | None = None
 
 
 STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
@@ -148,6 +152,20 @@ STATIC_SVG_SCENARIOS: dict[str, StaticSvgScenario] = {
         crop_line_count=13,
         crop_min_x=24.4,
         crop_max_x=963.0,
+    ),
+    'work_item_history_tab': StaticSvgScenario(
+        name='work_item_history_tab',
+        output='static/work_item_history_tab.svg',
+        source='tests/__snapshots__/test_work_item_history/TestWorkItemHistory.test_work_item_history_initial_state.svg',
+        source_kind='snapshot',
+        template='static/work_item_history_tab.svg',
+        widget='src/gojeera/components/work_item_history.py',
+        crop_start_line=6,
+        crop_line_count=7,
+        crop_min_x=24.4,
+        crop_max_x=1122.0,
+        crop_body_start_line=8,
+        crop_body_max_x=950.8,
     ),
     'log_work_screen': StaticSvgScenario(
         name='log_work_screen',
@@ -309,12 +327,69 @@ def _rect_intersects_crop(
     )
 
 
+def _body_crop_start_y(
+    defs: ET.Element, terminal_prefix: str, line_index: int | None
+) -> float | None:
+    if line_index is None:
+        return None
+    rect = _find_clip_rect(defs, f'{terminal_prefix}-line-{line_index}')
+    return float(rect.get('y', '0'))
+
+
+def _clone_rect_for_crop(
+    rect: ET.Element,
+    *,
+    body_crop_start_y: float | None,
+    crop_body_max_x: float | None,
+) -> ET.Element | None:
+    clone = _clone_element(rect)
+    if body_crop_start_y is None or crop_body_max_x is None:
+        return clone
+
+    y = float(rect.get('y', '0'))
+    x = float(rect.get('x', '0'))
+    width = float(rect.get('width', '0'))
+    if y >= body_crop_start_y:
+        if x >= crop_body_max_x:
+            return None
+        if x + width > crop_body_max_x:
+            clone.set('width', str(crop_body_max_x - x))
+    return clone
+
+
+def _append_artificial_scrollbar_thumb(
+    cropped_group: ET.Element,
+    terminal_group: ET.Element,
+    *,
+    body_crop_start_y: float | None,
+    crop_max_x: float,
+    crop_end_y: float,
+) -> None:
+    if body_crop_start_y is None:
+        return
+
+    thumb_x = crop_max_x - TERMINAL_CELL_WIDTH
+    for rect in terminal_group.findall(_qname('rect')):
+        if rect.get('fill') != '#0053aa':
+            continue
+        y = float(rect.get('y', '0'))
+        if y < body_crop_start_y or y >= crop_end_y:
+            continue
+
+        clone = _clone_element(rect)
+        clone.set('x', str(thumb_x))
+        clone.set('fill', ARTIFICIAL_SCROLLBAR_THUMB_FILL)
+        cropped_group.append(clone)
+
+
 def _text_intersects_crop(
     text: ET.Element,
     crop_min_x: float,
     crop_max_x: float,
     crop_start_line: int,
     crop_end_line: int,
+    crop_body_start_line: int | None = None,
+    crop_body_max_x: float | None = None,
 ) -> bool:
     line_index = _line_index_from_clip_path(text.get('clip-path'))
     if line_index is None or not (crop_start_line <= line_index < crop_end_line):
@@ -322,7 +397,14 @@ def _text_intersects_crop(
 
     x = float(text.get('x', '0'))
     text_length = float(text.get('textLength', '0'))
-    return x < crop_max_x and (x + text_length) > crop_min_x
+    effective_crop_max_x = crop_max_x
+    if (
+        crop_body_start_line is not None
+        and crop_body_max_x is not None
+        and line_index >= crop_body_start_line
+    ):
+        effective_crop_max_x = crop_body_max_x
+    return x < effective_crop_max_x and (x + text_length) > crop_min_x
 
 
 def _get_terminal_metrics(
@@ -379,6 +461,11 @@ def _build_cropped_terminal_svg(scenario: StaticSvgScenario) -> ET.Element:
     )
     crop_min_x = scenario.crop_min_x if scenario.crop_min_x is not None else 0.0
     crop_max_x = scenario.crop_max_x if scenario.crop_max_x is not None else width
+    body_crop_start_y = _body_crop_start_y(
+        defs,
+        terminal_prefix,
+        scenario.crop_body_start_line,
+    )
     width = crop_max_x - crop_min_x
     crop_end_y = start_y + height
     crop_end_line = crop_start_line + crop_line_count
@@ -401,6 +488,20 @@ def _build_cropped_terminal_svg(scenario: StaticSvgScenario) -> ET.Element:
         if key != 'transform':
             cropped_group.set(key, value)
     cropped_group.set('transform', f'translate(-{crop_min_x},-{start_y})')
+    if body_crop_start_y is not None and scenario.crop_body_max_x is not None:
+        cropped_group.append(
+            ET.Element(
+                _qname('rect'),
+                {
+                    'fill': '#121212',
+                    'x': str(scenario.crop_body_max_x),
+                    'y': str(body_crop_start_y),
+                    'width': str(crop_max_x - scenario.crop_body_max_x),
+                    'height': str(crop_end_y - body_crop_start_y),
+                    'shape-rendering': 'crispEdges',
+                },
+            )
+        )
 
     for child in terminal_group:
         if child.tag == _qname('rect') and _rect_intersects_crop(
@@ -410,11 +511,25 @@ def _build_cropped_terminal_svg(scenario: StaticSvgScenario) -> ET.Element:
             start_y,
             crop_end_y,
         ):
-            cropped_group.append(_clone_element(child))
+            cropped_rect = _clone_rect_for_crop(
+                child,
+                body_crop_start_y=body_crop_start_y,
+                crop_body_max_x=scenario.crop_body_max_x,
+            )
+            if cropped_rect is not None:
+                cropped_group.append(cropped_rect)
             continue
 
         if child.tag != _qname('g'):
             continue
+
+        _append_artificial_scrollbar_thumb(
+            cropped_group,
+            terminal_group,
+            body_crop_start_y=body_crop_start_y,
+            crop_max_x=crop_max_x,
+            crop_end_y=crop_end_y,
+        )
 
         text_group = ET.Element(_qname('g'))
         for key, value in child.attrib.items():
@@ -426,6 +541,8 @@ def _build_cropped_terminal_svg(scenario: StaticSvgScenario) -> ET.Element:
                 crop_max_x,
                 crop_start_line,
                 crop_end_line,
+                scenario.crop_body_start_line,
+                scenario.crop_body_max_x,
             ):
                 text_group.append(_clone_element(text))
         if len(text_group):

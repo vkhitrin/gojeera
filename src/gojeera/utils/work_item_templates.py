@@ -7,11 +7,30 @@ from typing import Any, Protocol, cast
 import yaml
 
 from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.models.jira import JiraUser
+from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.files import get_templates_directory, list_yaml_files, load_yaml_mapping
 from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.yaml import compact_mapping, dump_yaml
 
 TEMPLATE_NAME_FIELD = 'template_name'
+WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS = {
+    'aggregateprogress',
+    'creator',
+    'progress',
+    'reporter',
+    'statusCategory',
+    'statuscategorychangedate',
+    'votes',
+    'watches',
+    'worklog',
+    'workratio',
+}
+WORK_ITEM_TEMPLATE_COPY_SKIP_VALUE_KEYS = {
+    'avatarUrls',
+    'self',
+}
 
 WorkItemTemplate = dict[str, Any]
 
@@ -52,6 +71,112 @@ def load_work_item_template(path: Path) -> WorkItemTemplate:
         raise WorkItemTemplateError(f'Work item template contains invalid YAML: {path}') from error
     except TypeError as error:
         raise WorkItemTemplateError(f'Work item template must be a mapping: {path}') from error
+
+
+def _user_template_value(user: JiraUser | None) -> dict[str, str] | None:
+    if user is None:
+        return None
+    return compact_mapping(
+        {
+            'accountId': user.account_id,
+            'displayName': user.display_name,
+            'email': user.email,
+        }
+    )
+
+
+def _copy_template_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return compact_mapping(
+            {
+                str(key): _copy_template_value(item_value)
+                for key, item_value in value.items()
+                if key not in WORK_ITEM_TEMPLATE_COPY_SKIP_VALUE_KEYS
+            }
+        )
+    if isinstance(value, list):
+        return [
+            sanitized_value
+            for item in value
+            if (sanitized_value := _copy_template_value(item)) not in (None, '', [], {})
+        ]
+    return value
+
+
+def _custom_field_comments(work_item: JiraWorkItem) -> dict[str, str]:
+    edit_fields = work_item.get_edit_metadata() or {}
+    comments: dict[str, str] = {}
+    for field_id, field_value in work_item.get_custom_fields().items():
+        if field_id in WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS or field_value in (None, '', [], {}):
+            continue
+        field_metadata = edit_fields.get(field_id, {})
+        field_name = field_metadata.get('name')
+        if field_name:
+            comments[field_id] = str(field_name)
+    return comments
+
+
+def _work_item_template_mapping(work_item: JiraWorkItem) -> WorkItemTemplate:
+    template: WorkItemTemplate = compact_mapping(
+        {
+            TEMPLATE_NAME_FIELD: f'{work_item.key} Template' if work_item.key else None,
+            'project': compact_mapping(
+                {
+                    'key': work_item.project.key if work_item.project else None,
+                    'name': work_item.project.name if work_item.project else None,
+                }
+            ),
+            'issuetype': compact_mapping(
+                {
+                    'id': work_item.work_item_type.id if work_item.work_item_type else None,
+                    'name': work_item.work_item_type.name if work_item.work_item_type else None,
+                }
+            ),
+            'summary': work_item.summary,
+            'description': work_item.get_description(),
+            'assignee': _user_template_value(work_item.assignee),
+            'priority': compact_mapping(
+                {
+                    'id': work_item.priority.id if work_item.priority else None,
+                    'name': work_item.priority.name if work_item.priority else None,
+                }
+            ),
+            'labels': work_item.labels,
+            'components': [
+                compact_mapping({'id': component.id, 'name': component.name})
+                for component in work_item.components or []
+            ],
+            'duedate': work_item.due_date.isoformat() if work_item.due_date else None,
+        }
+    )
+
+    for field_id, field_value in work_item.get_custom_fields().items():
+        if field_id not in WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS and field_value not in (
+            None,
+            '',
+            [],
+            {},
+        ):
+            template[field_id] = _copy_template_value(field_value)
+
+    for field_id, field_value in work_item.get_additional_fields().items():
+        if (
+            field_id not in WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS
+            and field_id not in template
+            and field_value not in (None, '', [], {})
+        ):
+            template[field_id] = _copy_template_value(field_value)
+
+    return template
+
+
+def dump_work_item_template(work_item: JiraWorkItem) -> str:
+    """Return a YAML template payload for recreating the given work item."""
+    return dump_yaml(
+        _work_item_template_mapping(work_item),
+        multiline_strings=True,
+        top_level_key_comments=_custom_field_comments(work_item),
+    )
 
 
 class WorkItemTemplatePayloadError(RuntimeError):

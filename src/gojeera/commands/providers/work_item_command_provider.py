@@ -43,6 +43,11 @@ class WorkItemCommandProvider(ActionCommandProvider):
                 'Copy work item URL to the clipboard',
             ),
             (
+                f'{work_item_key} > Copy As Template',
+                'copy_loaded_work_item_as_template',
+                'Copy work item template YAML to the clipboard',
+            ),
+            (
                 f'{work_item_key} > Clone Work Item',
                 'clone_loaded_work_item',
                 'Clone work item',

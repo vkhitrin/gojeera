@@ -1,14 +1,26 @@
 from __future__ import annotations
 
-import pytest
+import json
+from pathlib import Path
+from typing import cast
 
+import pytest
+import yaml
+
+from gojeera.commands.providers.work_item_command_provider import WorkItemCommandProvider
 from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.jira.factories import WorkItemFactory
 from gojeera.internal.models.jira import WorkItemType
 from gojeera.utils import work_item_templates
 from gojeera.utils.work_item_templates import (
     WorkItemTemplatePayloadError,
+    WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS,
+    WORK_ITEM_TEMPLATE_COPY_SKIP_VALUE_KEYS,
+    dump_work_item_template,
     prepare_work_item_template_payload,
 )
+
+FIXTURES_DIR = Path(__file__).parent / 'fixtures'
 
 
 class FakeTemplateAPI:
@@ -140,3 +152,99 @@ async def test_prepare_work_item_template_payload_fetches_metadata_per_call() ->
     await prepare_work_item_template_payload(api, template)
 
     assert api.metadata_calls == [('ENG', '10002'), ('ENG', '10002')]
+
+
+def test_dump_work_item_template_copies_creatable_work_item_fields() -> None:
+    work_item_data = json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
+    work_item_data['fields']['description']['content'].append(
+        {
+            'type': 'paragraph',
+            'content': [
+                {
+                    'type': 'text',
+                    'text': (
+                        'Site: [\u200bHttps://fifththird.us1.plainid.io/app ]'
+                        '(Https://fifththird.us1.plainid.io/app)  '
+                    ),
+                }
+            ],
+        }
+    )
+    work_item_data['fields']['customfield_99999'] = 'metadata unavailable'
+    work_item = WorkItemFactory.create_work_item(work_item_data)
+
+    dumped_template = dump_work_item_template(work_item)
+    template = yaml.safe_load(dumped_template)
+
+    assert template['template_name'] == 'ENG-3 Template'
+    assert template['project'] == {
+        'key': 'ENG',
+        'name': 'Engineering Project',
+    }
+    assert template['issuetype'] == {
+        'id': '10001',
+        'name': 'Story',
+    }
+    assert template['summary'] == 'Review approval workflow for motion cue releases'
+    assert 'description: |\n' in dumped_template
+    assert 'Update documentation for merge approval process' in template['description']
+    assert 'Site: [Https://fifththird.us1.plainid.io/app ]' in dumped_template
+    assert '\u200b' not in dumped_template
+    assert '\\n' not in dumped_template
+    assert '# Story Points\ncustomfield_10016:' in dumped_template
+    assert '# Organizations\ncustomfield_10727:' in dumped_template
+    assert 'customfield_99999: metadata unavailable' in dumped_template
+    assert template['assignee']['accountId'] == ('555000:22222222-2222-2222-2222-222222222222')
+    assert template['priority'] == {'id': '3', 'name': 'Medium'}
+    assert template['labels'] == ['creature-rig', 'motion-cues']
+    assert template['components'] == [
+        {'id': '10002', 'name': 'Frontend'},
+        {'id': '10003', 'name': 'API'},
+    ]
+    assert 'key' not in template
+    assert 'status' not in template
+    assert 'attachment' not in template
+    for field_id in WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS:
+        assert field_id not in template
+    assert_template_value_keys_stripped(template)
+
+
+def test_work_item_command_provider_includes_copy_as_template_action() -> None:
+    command_actions = [
+        action
+        for _label, action, _help_text, _screen in WorkItemCommandProvider._iter_commands(
+            cast(WorkItemCommandProvider, FakeWorkItemCommandProvider())
+        )
+    ]
+
+    assert 'copy_loaded_work_item_as_template' in command_actions
+
+
+class FakeWorkItemCommandProvider:
+    def _get_main_screen(self):
+        return FakeWorkItemScreen()
+
+    def _get_loaded_work_item_key(self):
+        return 'ENG-3'
+
+
+class FakeWorkItemScreen:
+    information_panel = type(
+        'FakeInformationPanel',
+        (),
+        {
+            'work_item': WorkItemFactory.create_work_item(
+                json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
+            )
+        },
+    )()
+
+
+def assert_template_value_keys_stripped(value) -> None:
+    if isinstance(value, dict):
+        assert not WORK_ITEM_TEMPLATE_COPY_SKIP_VALUE_KEYS.intersection(value)
+        for child_value in value.values():
+            assert_template_value_keys_stripped(child_value)
+    elif isinstance(value, list):
+        for child_value in value:
+            assert_template_value_keys_stripped(child_value)

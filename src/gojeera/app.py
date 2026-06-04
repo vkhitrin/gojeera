@@ -1232,6 +1232,16 @@ class WorkspaceMixin(App):
             app.copy_to_clipboard(url)
             self.notify('URL copied to clipboard', title=self.current_loaded_work_item_key)
 
+    def action_copy_loaded_work_item_as_template(self) -> None:
+        work_item = self.information_panel.work_item
+        if work_item is None:
+            return
+
+        from gojeera.utils.work_item_templates import dump_work_item_template
+
+        self.app.copy_to_clipboard(dump_work_item_template(work_item))
+        self.notify('Template copied to clipboard', title=work_item.key)
+
     def action_clone_loaded_work_item(self) -> None:
         if not self.current_loaded_work_item_key:
             return

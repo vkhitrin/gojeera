@@ -423,6 +423,11 @@ class WorkspaceMixin(App):
             return self.current_loaded_work_item_key is not None
         if action == 'reload_loaded_work_item':
             return self.current_loaded_work_item_key is not None
+        if action == 'new_comment':
+            return (
+                self.current_loaded_work_item_key is not None
+                and self.work_item_comments_widget.can_add_comment
+            )
         if action in ('view_worklog', 'log_work'):
             return self.current_loaded_work_item_key is not None
         if action in ('apply_changes', 'discard_changes'):
@@ -1147,6 +1152,7 @@ class WorkspaceMixin(App):
 
                 self.work_item_comments_widget.comments = None
                 self.work_item_comments_widget.work_item_key = None
+                self.work_item_comments_widget.work_item_is_service_desk = False
 
                 self.work_item_attachments_widget.attachments = None
                 self.work_item_attachments_widget.work_item_key = None
@@ -1320,6 +1326,8 @@ class WorkspaceMixin(App):
     def action_new_comment(self) -> None:
         if not self.current_loaded_work_item_key:
             return
+        if not self.work_item_comments_widget.can_add_comment:
+            return
         self.work_item_comments_widget.action_add_comment()
 
     def action_view_worklog(self) -> None:
@@ -1429,6 +1437,9 @@ class WorkspaceMixin(App):
             self.related_work_items_widget.work_items = work_item.related_work_items
 
             self.work_item_comments_widget.work_item_key = work_item.key
+            self.work_item_comments_widget.work_item_is_service_desk = (
+                work_item.project.is_service_desk if work_item.project else False
+            )
             self.work_item_comments_widget.comments = work_item.comments
 
             self.work_item_attachments_widget.work_item_key = work_item.key
@@ -1463,6 +1474,9 @@ class WorkspaceMixin(App):
         self._cancel_progressive_work_item_detail_loads()
 
         self.work_item_comments_widget.work_item_key = work_item.key
+        self.work_item_comments_widget.work_item_is_service_desk = (
+            work_item.project.is_service_desk if work_item.project else False
+        )
         self.work_item_child_work_items_widget.work_item_key = work_item.key
 
         if not work_item.comments:

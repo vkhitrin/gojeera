@@ -1,6 +1,8 @@
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 from httpx import Response
+import pytest
 import respx
 from textual.widgets import TextArea
 
@@ -11,12 +13,15 @@ from gojeera.components.work_item.work_item_comments import (
     CommentsScrollView,
     WorkItemCommentsWidget,
 )
+from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import JiraUser
 from gojeera.internal.models.work_items import WorkItemComment
 from gojeera.widgets.markdown.gojeera_markdown import (
     ExtendedMarkdownParagraph,
     get_attachment_reference_filename,
 )
+from gojeera.widgets.navigation.extended_tabbed_content import ExtendedTabbedContent
+from gojeera.widgets.selection.vim_select import VimSelect
 
 from .test_comment_screen import with_comment_snapshot_assertion
 from .test_helpers import (
@@ -27,6 +32,14 @@ from .test_helpers import (
     wait_for_screen_to_settle,
     wait_for_worker_idle,
     wait_until,
+)
+
+SUPPORT_WORK_ITEM_KEY = 'SUP-1'
+MISSING_ADD_COMMENT_PERMISSION_ERROR = (
+    'Missing required permission(s) to add comments: ADD_COMMENTS'
+)
+SUPPORT_INTERNAL_COMMENT_TEXT = (
+    'Follow-up internal note: dispatch checklist is ready for field engineering.'
 )
 
 
@@ -97,6 +110,10 @@ def _assert_rendered_comments_snapshot(
     )
 
 
+def _assert_comments_snapshot(snap_compare, app: JiraApp, run_before) -> None:
+    assert snap_compare(app, terminal_size=(120, 40), run_before=run_before)
+
+
 def _build_rendered_comments_snapshot_test(rendered_comment: dict):
     def decorator(_):
         def test_case(
@@ -117,6 +134,57 @@ def _build_rendered_comments_snapshot_test(rendered_comment: dict):
         return test_case
 
     return decorator
+
+
+@pytest.fixture
+def mock_missing_add_comment_permission(monkeypatch):
+    def apply(app: JiraApp) -> AsyncMock:
+        validate_permissions = AsyncMock(
+            return_value=APIControllerResponse(
+                success=False,
+                error=MISSING_ADD_COMMENT_PERMISSION_ERROR,
+            )
+        )
+        monkeypatch.setattr(
+            app.api,
+            'validate_add_comment_permissions',
+            validate_permissions,
+        )
+        return validate_permissions
+
+    return apply
+
+
+@pytest.fixture
+def created_internal_support_comment() -> WorkItemComment:
+    return WorkItemComment(
+        id='231771',
+        author=JiraUser(
+            account_id='555000:11111111-1111-1111-1111-111111111111',
+            active=True,
+            display_name='Rook Hydra',
+            email='rook.hydra@acme.example.com',
+        ),
+        created=datetime.fromisoformat('2026-02-02T10:20:00+02:00'),
+        updated=datetime.fromisoformat('2026-02-02T10:20:00+02:00'),
+        body=SUPPORT_INTERNAL_COMMENT_TEXT,
+        jsd_public=False,
+    )
+
+
+@pytest.fixture
+def mock_created_internal_support_comment(monkeypatch, created_internal_support_comment):
+    def apply(app: JiraApp) -> AsyncMock:
+        add_comment = AsyncMock(
+            return_value=APIControllerResponse(
+                success=True,
+                result=created_internal_support_comment,
+            )
+        )
+        monkeypatch.setattr(app.api, 'add_comment', add_comment)
+        return add_comment
+
+    return apply
 
 
 INLINE_FILE_RENDERED_COMMENT = _build_rendered_comment(
@@ -321,6 +389,85 @@ class TestWorkItemComments:
     ):
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
         assert snap_compare(app, terminal_size=(120, 40), run_before=create_comment_and_verify)
+
+    async def test_add_comment_action_is_hidden_without_add_comment_permission(
+        self,
+        mock_configuration,
+        mock_jira_api_with_search_results,
+        mock_missing_add_comment_permission,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        validate_permissions = mock_missing_add_comment_permission(app)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await navigate_to_comments_tab(pilot, SUPPORT_WORK_ITEM_KEY)
+            await wait_until(lambda: validate_permissions.await_count == 1, timeout=3.0)
+
+            comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
+            assert not comments_widget.can_add_comment
+            assert pilot.app.check_action('new_comment', ()) is False
+
+            comments_scroll_view = pilot.app.screen.query_one(CommentsScrollView)
+            assert comments_scroll_view.check_action('new_comment', ()) is False
+
+            tabs = pilot.app.screen.query_one(ExtendedTabbedContent)
+            assert tabs.check_action('add_comment', ()) is False
+
+            await pilot.press('ctrl+n')
+            await pilot.app.workers.wait_for_complete()
+            await pilot.pause()
+
+            assert not isinstance(pilot.app.screen, CommentScreen)
+            validate_permissions.assert_awaited_once_with(SUPPORT_WORK_ITEM_KEY)
+
+    def test_service_desk_internal_comment_creation_displays_two_comments(
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_created_internal_support_comment,
+        mock_jira_api_with_search_results,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        add_comment = mock_created_internal_support_comment(app)
+
+        async def create_internal_service_desk_comment(pilot):
+            await navigate_to_comments_tab(pilot, SUPPORT_WORK_ITEM_KEY)
+            comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
+            await wait_until(lambda: comments_widget.displayed_count == 1, timeout=3.0)
+
+            await pilot.press('ctrl+n')
+            await wait_until(lambda: isinstance(pilot.app.screen, CommentScreen), timeout=3.0)
+            screen = pilot.app.screen
+            assert isinstance(screen, CommentScreen)
+            assert screen.show_service_desk_visibility_toggle
+
+            visibility_select = screen.query_one('#comment-visibility-select', VimSelect)
+            visibility_select.value = 'internal'
+            await pilot.pause()
+            assert screen.jsd_public is False
+
+            textarea = screen.query_one(TextArea)
+            textarea.insert(SUPPORT_INTERNAL_COMMENT_TEXT)
+            await wait_until(lambda: not screen.save_button.disabled, timeout=3.0)
+            screen.save_button.press()
+
+            await wait_until(lambda: not isinstance(pilot.app.screen, CommentScreen), timeout=3.0)
+            await wait_for_screen_to_settle(pilot)
+            comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
+            await wait_until(lambda: comments_widget.displayed_count == 2, timeout=3.0)
+
+        _assert_comments_snapshot(
+            snap_compare,
+            app,
+            create_internal_service_desk_comment,
+        )
+        add_comment.assert_awaited_once_with(
+            SUPPORT_WORK_ITEM_KEY,
+            SUPPORT_INTERNAL_COMMENT_TEXT,
+            jsd_public=False,
+        )
 
     @with_comment_snapshot_assertion(
         open_comments_tab_and_hover_attachment_tooltip,

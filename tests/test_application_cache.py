@@ -5,6 +5,13 @@ import pytest
 from gojeera.internal.models import jira as jira_models
 from gojeera.internal.store.cache import ApplicationCache
 
+ENGINEERING_PROJECT = jira_models.JiraProject(
+    id='10000',
+    key='ENG',
+    name='Engineering',
+    project_type_key='software',
+)
+
 
 @pytest.fixture
 def cache_path(tmp_path: Path) -> Path:
@@ -113,16 +120,14 @@ def test_multiple_project_scopes_do_not_overlap(cache: ApplicationCache):
 def test_cache_persists_across_instances(cache_path: Path):
     first = ApplicationCache(cache_path)
     first.set_profile('test-profile')
-    first.set_projects([jira_models.JiraProject(id='10000', key='ENG', name='Engineering')])
+    first.set_projects([ENGINEERING_PROJECT])
     first.set_work_item_types([jira_models.WorkItemType(id='1', name='Bug')])
     first.close()
 
     second = ApplicationCache(cache_path)
     second.set_profile('test-profile')
     try:
-        assert second.get_projects() == [
-            jira_models.JiraProject(id='10000', key='ENG', name='Engineering')
-        ]
+        assert second.get_projects() == [ENGINEERING_PROJECT]
         assert second.get_work_item_types() == [jira_models.WorkItemType(id='1', name='Bug')]
     finally:
         second.close()

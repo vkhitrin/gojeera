@@ -6,6 +6,7 @@ from gojeera.app import JiraApp
 from gojeera.components.screens.comment_screen import CommentScreen
 from gojeera.components.work_item.work_item_comments import CommentsScrollView
 from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
+from gojeera.widgets.selection.vim_select import VimSelect
 
 from .test_helpers import (
     navigate_to_comments_tab,
@@ -154,4 +155,40 @@ class TestCommentScreen:
         assert (
             b'https://example.atlassian.acme.net/secure/attachment/66812/clipboard-upload.png'
             in comment_create_route.calls[-1].request.content
+        )
+
+    def test_service_desk_comment_visibility_internal_state(
+        self,
+        snap_compare,
+        mock_configuration,
+        mock_user_info,
+    ):
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+        async def open_internal_service_desk_comment(pilot):
+            await pilot.app.push_screen(
+                CommentScreen(
+                    mode='new',
+                    work_item_key='SUP-1',
+                    work_item_is_service_desk=True,
+                ),
+            )
+            screen = pilot.app.screen
+            assert isinstance(screen, CommentScreen)
+            assert screen.show_service_desk_visibility_toggle
+            assert screen.query_one('#comment-visibility-select', VimSelect).value == 'public'
+
+            screen.query_one('#comment-visibility-select', VimSelect).value = 'internal'
+            await pilot.pause()
+            assert screen.jsd_public is False
+
+            textarea = screen.query_one(TextArea)
+            textarea.insert('Internal service desk note')
+            await wait_until(lambda: not screen.save_button.disabled, timeout=3.0)
+            assert not screen.save_button.disabled
+
+        assert snap_compare(
+            app,
+            terminal_size=(120, 40),
+            run_before=open_internal_service_desk_comment,
         )

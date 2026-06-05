@@ -821,9 +821,9 @@ QuitScreen #modal_footer {
 }
 
 CommentScreen #modal_outer {
-  width: 70%;
+  width: 60%;
   max-width: 100;
-  height: 80%;
+  height: auto;
   max-height: 50;
 }
 
@@ -853,7 +853,8 @@ LogWorkScreen #modal-form-scroll > * {
 }
 
 CommentScreen #modal-form-scroll {
-  padding: 0 2 1 2;
+  height: auto;
+  padding: 0 2 0 2;
 }
 
 CommentScreen #comment-field-container {
@@ -862,8 +863,56 @@ CommentScreen #comment-field-container {
   margin-bottom: 0;
 }
 
+CommentScreen #comment-header-row {
+  width: 100%;
+  height: 1;
+  margin: 0 0 1 0;
+  padding: 0;
+  align-vertical: middle;
+}
+
+CommentScreen #comment-header-row > .field_label {
+  width: auto;
+  height: 1;
+  margin: 0 1 0 0;
+}
+
+CommentScreen #comment-visibility-select {
+  width: 14;
+  min-width: 14;
+  height: 1;
+  margin: 0;
+}
+
+CommentScreen #comment-visibility-select > SelectCurrent {
+  background: $surface-lighten-1;
+}
+
+CommentScreen ExtendedADFMarkdownTextArea,
+CommentScreen ExtendedADFMarkdownTextArea TabbedContent {
+  height: 9;
+  min-height: 9;
+  max-height: 9;
+}
+
+CommentScreen ExtendedADFMarkdownTextArea TabPane {
+  height: 9;
+}
+
+CommentScreen ExtendedADFMarkdownTextArea TextArea,
+CommentScreen ExtendedADFMarkdownTextArea VerticalScroll {
+  height: 7;
+  min-height: 7;
+  max-height: 7;
+}
+
 .modal-footer-spaced {
   margin-bottom: 1;
+}
+
+CommentScreen #modal_footer {
+  margin-top: 1;
+  padding-bottom: 1;
 }
 
 .modal-form {

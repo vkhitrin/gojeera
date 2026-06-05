@@ -170,6 +170,7 @@ class WorkItemFactory:
                 id=_optional_string(project.get('id')) or '',
                 name=_optional_string(project.get('name')) or '',
                 key=_optional_string(project.get('key')) or '',
+                project_type_key=_optional_string(project.get('projectTypeKey')),
             )
             if project
             else None,
@@ -281,6 +282,7 @@ def build_comments(raw_comments: list[dict]) -> list[WorkItemComment]:
                     update_author=WorkItemFactory.build_jira_user(update_author),
                     body=comment.get('body'),
                     rendered_body=comment.get('renderedBody'),
+                    jsd_public=comment.get('jsdPublic'),
                 )
             )
         except Exception:

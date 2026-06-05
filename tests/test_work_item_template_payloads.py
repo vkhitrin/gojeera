@@ -220,24 +220,47 @@ def test_work_item_command_provider_includes_copy_as_template_action() -> None:
     assert 'copy_loaded_work_item_as_template' in command_actions
 
 
+def test_work_item_command_provider_hides_new_comment_when_commenting_is_not_allowed() -> None:
+    command_actions = [
+        action
+        for _label, action, _help_text, _screen in WorkItemCommandProvider._iter_commands(
+            cast(
+                WorkItemCommandProvider,
+                FakeWorkItemCommandProvider(can_add_comment=False),
+            )
+        )
+    ]
+
+    assert 'new_comment' not in command_actions
+
+
 class FakeWorkItemCommandProvider:
+    def __init__(self, can_add_comment: bool = True):
+        self._can_add_comment = can_add_comment
+
     def _get_main_screen(self):
-        return FakeWorkItemScreen()
+        return FakeWorkItemScreen(can_add_comment=self._can_add_comment)
 
     def _get_loaded_work_item_key(self):
         return 'ENG-3'
 
 
 class FakeWorkItemScreen:
-    information_panel = type(
-        'FakeInformationPanel',
-        (),
-        {
-            'work_item': WorkItemFactory.create_work_item(
-                json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
-            )
-        },
-    )()
+    def __init__(self, can_add_comment: bool = True):
+        self.information_panel = type(
+            'FakeInformationPanel',
+            (),
+            {
+                'work_item': WorkItemFactory.create_work_item(
+                    json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
+                )
+            },
+        )()
+        self.work_item_comments_widget = type(
+            'FakeWorkItemCommentsWidget',
+            (),
+            {'can_add_comment': can_add_comment},
+        )()
 
 
 def assert_template_value_keys_stripped(value) -> None:

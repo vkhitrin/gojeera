@@ -50,6 +50,19 @@ CACHE_TYPES = {
     'search_history',
     'recently_viewed_work_items',
 }
+PROFILE_CACHE_TABLES = {
+    'projects',
+    'users',
+    'project_users',
+    'work_item_types',
+    'work_item_status',
+    'boards',
+    'sprints',
+    'remote_filters',
+    'fields',
+    'search_history',
+    'recently_viewed_work_items',
+}
 
 
 class CacheMigrationError(RuntimeError):
@@ -594,11 +607,12 @@ class ApplicationCache:
 
     def _get_projects(self) -> list[JiraProject] | None:
         rows = self._connection.execute(
-            'SELECT id, key, name FROM projects WHERE profile_key = ?',
+            'SELECT id, key, name, project_type_key FROM projects WHERE profile_key = ?',
             (self._profile_key,),
         ).fetchall()
         return [
-            JiraProject(id=str(row[0]), key=str(row[1]), name=str(row[2])) for row in rows
+            JiraProject(id=str(row[0]), key=str(row[1]), name=str(row[2]), project_type_key=row[3])
+            for row in rows
         ] or None
 
     def _set_projects(
@@ -607,10 +621,10 @@ class ApplicationCache:
         self._connection.execute('DELETE FROM projects WHERE profile_key = ?', (self._profile_key,))
         self._connection.executemany(
             """
-            INSERT OR REPLACE INTO projects (profile_key, id, key, name)
-            VALUES (?, ?, ?, ?)
+            INSERT OR REPLACE INTO projects (profile_key, id, key, name, project_type_key)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            [(self._profile_key, p.id, p.key, p.name) for p in projects],
+            [(self._profile_key, p.id, p.key, p.name, p.project_type_key) for p in projects],
         )
 
     def _get_users(self, project_key: str | None) -> list[JiraUser] | None:
@@ -1043,19 +1057,7 @@ class ApplicationCache:
 
     def clear(self) -> None:
         with self._lock, self._connection:
-            for table_name in {
-                'projects',
-                'users',
-                'project_users',
-                'work_item_types',
-                'work_item_status',
-                'boards',
-                'sprints',
-                'remote_filters',
-                'fields',
-                'search_history',
-                'recently_viewed_work_items',
-            }:
+            for table_name in PROFILE_CACHE_TABLES:
                 self._connection.execute(
                     f'DELETE FROM {table_name} WHERE profile_key = ?', (self._profile_key,)
                 )

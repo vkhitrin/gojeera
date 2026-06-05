@@ -229,6 +229,7 @@ class APIController:
             update_author=WorkItemFactory.build_jira_user(comment_data.get('updateAuthor')),
             body=comment_data.get('body'),
             rendered_body=comment_data.get('renderedBody'),
+            jsd_public=comment_data.get('jsdPublic'),
         )
 
     def _build_worklog(self, worklog_data: dict[str, Any]) -> JiraWorklog:
@@ -345,6 +346,37 @@ class APIController:
     def _validate_message_presence(message: str) -> APIControllerResponse | None:
         if not message:
             return APIControllerResponse(success=False, error='Missing required message.')
+        return None
+
+    async def validate_add_comment_permissions(
+        self,
+        work_item_key_or_id: str,
+    ) -> APIControllerResponse | None:
+        required_permissions = ['BROWSE_PROJECTS', 'ADD_COMMENTS']
+        try:
+            response = await self.client.get_my_permissions(
+                work_item_id_or_key=work_item_key_or_id,
+                permissions=required_permissions,
+            )
+        except Exception as e:
+            return self._failed_api_response(
+                e,
+                error_message='Unable to validate comment permissions',
+                extra={'work_item_key_or_id': work_item_key_or_id},
+            )
+
+        permissions = response.get('permissions', {})
+        missing_permissions = [
+            permission
+            for permission in required_permissions
+            if not permissions.get(permission, {}).get('havePermission', False)
+        ]
+        if missing_permissions:
+            return APIControllerResponse(
+                success=False,
+                error='Missing required permission(s) to add comments: '
+                + ', '.join(missing_permissions),
+            )
         return None
 
     def _build_work_item_remote_links(
@@ -483,6 +515,7 @@ class APIController:
                 id=str(response.get('id', '')),
                 name=response.get('name', ''),
                 key=response.get('key', ''),
+                project_type_key=response.get('projectTypeKey'),
             ),
         )
 
@@ -538,7 +571,10 @@ class APIController:
                 for project in response.get('values', []):
                     projects.append(
                         JiraProject(
-                            id=project.get('id'), key=project.get('key'), name=project.get('name')
+                            id=project.get('id'),
+                            key=project.get('key'),
+                            name=project.get('name'),
+                            project_type_key=project.get('projectTypeKey'),
                         )
                     )
                 is_last = response.get('isLast')
@@ -1701,6 +1737,7 @@ class APIController:
         self,
         work_item_key_or_id: str,
         message: str,
+        jsd_public: bool | None = None,
     ) -> APIControllerResponse:
         """Adds a comment to a work item.
 
@@ -1717,6 +1754,7 @@ class APIController:
             self.client.add_comment(
                 work_item_key_or_id,
                 message,
+                jsd_public=jsd_public,
             ),
             result_builder=self._build_work_item_comment,
             error_message='Unable to create the comment',

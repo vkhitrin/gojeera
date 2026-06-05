@@ -532,23 +532,21 @@ class WidgetBuilder:
         current_value: Any = None,
     ) -> Widget:
         def create_widget():
+            user_kwargs = WidgetBuilder._field_kwargs(
+                metadata,
+                mode=mode,
+                original_value=WidgetBuilder._extract_user_account_id(current_value),
+            )
+            display_name = WidgetBuilder._extract_user_display_name(current_value)
             return WidgetBuilder._build_mode_widget(
                 mode,
                 create_factory=lambda: UserPicker(
-                    **WidgetBuilder._field_kwargs(
-                        metadata,
-                        mode=mode,
-                        original_value=WidgetBuilder._extract_user_account_id(current_value),
-                    ),
-                    original_display_name=WidgetBuilder._extract_user_display_name(current_value),
+                    **user_kwargs,
+                    original_display_name=display_name,
                 ),
                 update_factory=lambda: UserPicker(
-                    **WidgetBuilder._field_kwargs(
-                        metadata,
-                        mode=mode,
-                        original_value=WidgetBuilder._extract_user_account_id(current_value),
-                    ),
-                    original_display_name=WidgetBuilder._extract_user_display_name(current_value),
+                    **user_kwargs,
+                    original_display_name=display_name,
                 ),
             )
 
@@ -642,23 +640,16 @@ class WidgetBuilder:
         current_value: Any = None,
     ) -> Widget:
         update_value = WidgetBuilder._normalize_update_string_value(current_value)
+        text_kwargs = WidgetBuilder._field_kwargs(
+            metadata,
+            mode=mode,
+            original_value=update_value,
+        )
         return WidgetBuilder._wrap_dynamic_field(
             lambda: WidgetBuilder._build_mode_widget(
                 mode,
-                create_factory=lambda: TextInput(
-                    **WidgetBuilder._field_kwargs(
-                        metadata,
-                        mode=mode,
-                        original_value=update_value,
-                    )
-                ),
-                update_factory=lambda: TextInput(
-                    **WidgetBuilder._field_kwargs(
-                        metadata,
-                        mode=mode,
-                        original_value=update_value,
-                    )
-                ),
+                create_factory=lambda: TextInput(**text_kwargs),
+                update_factory=lambda: TextInput(**text_kwargs),
             ),
             metadata,
         )
@@ -823,7 +814,10 @@ def map_field_to_widget(
         elif custom_type == CustomFieldType.MULTI_CHECKBOXES.value:
             return builder.build_multicheckboxes(mode, metadata, current_value)
 
-        elif custom_type == CustomFieldType.MULTI_SELECT.value:
+        elif custom_type in (
+            CustomFieldType.MULTI_SELECT.value,
+            CustomFieldType.SD_CUSTOMER_ORGANIZATIONS.value,
+        ):
             return builder.build_multicheckboxes(mode, metadata, current_value)
 
         elif custom_type == CustomFieldType.SD_REQUEST_LANGUAGE.value:

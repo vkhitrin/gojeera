@@ -55,6 +55,7 @@ class WorkItemComment(BaseModel):
     update_author: JiraUser | None = None
     body: dict | str | None = None
     rendered_body: str | None = None
+    jsd_public: bool | None = None
 
     def updated_on(self) -> str:
         if not self.update_author:

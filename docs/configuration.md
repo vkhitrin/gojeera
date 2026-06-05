@@ -44,13 +44,15 @@ derived during the authentication check when Jira returns them.
 ### OAuth2 Scope Requirements
 
 gojeera's default OAuth2 flow requests Jira platform scopes and Jira Software
-Agile scopes. The Agile scopes are required for sprint selection and board /
+Agile scopes, plus Jira Service Management request scopes for public/internal
+request comments. The Agile scopes are required for sprint selection and board /
 sprint discovery:
 
 - `read:project:jira`
 - `read:board-scope:jira-software`
 - `read:sprint:jira-software`
 - `write:sprint:jira-software`
+- `write:servicedesk-request`
 
 If you update the OAuth2 scopes for an existing profile, you must run
 `gojeera auth login` again and complete the browser consent flow to obtain a

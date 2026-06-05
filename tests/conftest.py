@@ -375,6 +375,20 @@ def mock_myself(mock_jira_myself):
     )
 
 
+def mock_add_comment_permissions_allowed():
+    respx.get(path='/rest/api/3/mypermissions').mock(
+        return_value=Response(
+            200,
+            json={
+                'permissions': {
+                    'BROWSE_PROJECTS': {'havePermission': True},
+                    'ADD_COMMENTS': {'havePermission': True},
+                }
+            },
+        )
+    )
+
+
 def mock_search_empty(mock_jira_search_empty):
     respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
         return_value=Response(200, json=mock_jira_search_empty)
@@ -2161,6 +2175,7 @@ async def mock_jira_api_with_search_results(
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_myself(mock_jira_myself)
+        mock_add_comment_permissions_allowed()
         mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
 
         # Mock Agile API endpoints for sprints (needed since sprint setup runs unconditionally
@@ -2448,6 +2463,7 @@ async def mock_jira_api_with_related_work_item_link(
 ):
     async with respx.mock:
         mock_search_results_agile_context(**mock_search_results_agile_context_args)
+        mock_add_comment_permissions_allowed()
         search_results = mock_search_results_agile_context_args['mock_jira_search_with_results']
 
         # Mock GET work item endpoint with updated issuelinks field for ENG-3
@@ -2601,6 +2617,7 @@ async def mock_jira_api_with_comment_creation(
 ):
     async with respx.mock:
         mock_search_results_agile_context(**mock_search_results_agile_context_args)
+        mock_add_comment_permissions_allowed()
         search_results = mock_search_results_agile_context_args['mock_jira_search_with_results']
 
         # TODO: (vkhitrin) revisit this comment.

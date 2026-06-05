@@ -256,7 +256,15 @@ class ExtendedTabbedContent(TabbedContent):
         if action == 'add_remote_link':
             return self.active == 'tab-links'
         if action == 'add_comment':
-            return self.active == 'tab-comments'
+            if self.active != 'tab-comments':
+                return False
+            from gojeera.components.work_item.work_item_comments import WorkItemCommentsWidget
+
+            try:
+                comments_widget = self.screen.query_one(WorkItemCommentsWidget)
+            except NoMatches:
+                return False
+            return comments_widget.can_add_comment
         return True
 
     async def action_edit_work_item_info(self) -> None:

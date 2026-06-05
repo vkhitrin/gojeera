@@ -56,6 +56,7 @@ OAUTH2_SCOPES = [
     'write:sprint:jira-software',
     'manage:jira-data-provider',
     'read:servicedesk-request',
+    'write:servicedesk-request',
     'read:servicemanagement-insight-objects',
     'offline_access',
     'read:me',

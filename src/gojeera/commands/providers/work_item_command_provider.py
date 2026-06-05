@@ -78,11 +78,6 @@ class WorkItemCommandProvider(ActionCommandProvider):
                 'Add a web link to work item',
             ),
             (
-                f'{work_item_key} > New Comment',
-                'new_comment',
-                'Add a comment to work item',
-            ),
-            (
                 f'{work_item_key} > View Worklog',
                 'view_worklog',
                 'Open the worklog list for the loaded work item',
@@ -111,6 +106,15 @@ class WorkItemCommandProvider(ActionCommandProvider):
                     'create_work_item_subtask',
                     'Create a subtask under work item',
                 ),
+            )
+
+        if screen.work_item_comments_widget.can_add_comment:
+            commands.append(
+                (
+                    f'{work_item_key} > New Comment',
+                    'new_comment',
+                    'Add a comment to work item',
+                )
             )
 
         if work_item.parent_key.strip():

@@ -54,6 +54,11 @@ class JiraProject(BaseModel):
     id: str
     name: str
     key: str
+    project_type_key: str | None = None
+
+    @property
+    def is_service_desk(self) -> bool:
+        return self.project_type_key == 'service_desk'
 
     def __str__(self):
         return f'[{self.key}] {self.name}'

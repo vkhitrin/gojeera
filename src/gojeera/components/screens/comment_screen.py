@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Label, Static, TextArea
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Button, Label, Select, Static, TextArea
 
 from gojeera.components.screens.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.screens.panel_picker_screen import PanelPickerScreen
@@ -29,6 +29,7 @@ from gojeera.widgets.layout.modal_buttons import (
 from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
+from gojeera.widgets.selection.vim_select import VimSelect
 
 logger = logging.getLogger('gojeera')
 
@@ -56,12 +57,16 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         work_item_key: str | None = None,
         comment_id: str | None = None,
         initial_text: str = '',
+        work_item_is_service_desk: bool = False,
+        jsd_public: bool = True,
     ):
         super().__init__()
         self.mode = mode
         self.work_item_key = work_item_key
         self.comment_id = comment_id
         self.initial_text = initial_text
+        self.work_item_is_service_desk = work_item_is_service_desk
+        self.jsd_public = jsd_public
         self._modal_title: str
 
         title_prefix = 'Edit Comment' if mode == 'edit' else 'New Comment'
@@ -96,6 +101,10 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         )
         return self.query_one(button_id, expect_type=Button)
 
+    @property
+    def show_service_desk_visibility_toggle(self) -> bool:
+        return self.mode == 'new' and self.work_item_is_service_desk
+
     def compose(self) -> ComposeResult:
         save_button_id = (
             'edit-comment-button-save' if self.mode == 'edit' else 'add-comment-button-save'
@@ -109,11 +118,21 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(id='modal-form-scroll'):
+            with Vertical(id='modal-form-scroll'):
                 with Vertical(id='comment-field-container'):
-                    comment_label = Label('Comment')
-                    comment_label.add_class('field_label')
-                    yield comment_label
+                    if self.show_service_desk_visibility_toggle:
+                        with Horizontal(id='comment-header-row'):
+                            yield Label('Visibility', classes='field_label')
+                            yield VimSelect(
+                                options=[
+                                    ('Public', 'public'),
+                                    ('Internal', 'internal'),
+                                ],
+                                value='public' if self.jsd_public else 'internal',
+                                id='comment-visibility-select',
+                                allow_blank=False,
+                                compact=True,
+                            )
 
                     yield ExtendedADFMarkdownTextArea(field_id='comment', required=False)
 
@@ -133,6 +152,8 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
 
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.cancel_button, 'click')
+            if self.show_service_desk_visibility_toggle:
+                set_jump_mode(self.query_one('#comment-visibility-select', VimSelect), 'click')
         self.call_after_refresh(lambda: focus_first_available(self.comment_field))
 
     def action_insert_mention(self) -> None:
@@ -219,7 +240,11 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             return None
 
         application = cast('JiraApp', self.app)
-        response = await application.api.add_comment(self.work_item_key, comment_text)
+        response = await application.api.add_comment(
+            self.work_item_key,
+            comment_text,
+            jsd_public=self.jsd_public if self.show_service_desk_visibility_toggle else None,
+        )
         if not response.success or not isinstance(response.result, WorkItemComment):
             return self._handle_comment_submit_failure('add', response.error)
 
@@ -336,6 +361,10 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
     def validate_comment(self, _event: TextArea.Changed):
         value = self.comment_field.text
         self.save_button.disabled = False if (value and value.strip()) else True
+
+    @on(Select.Changed, '#comment-visibility-select')
+    def handle_comment_visibility_changed(self, event: Select.Changed) -> None:
+        self.jsd_public = event.value != 'internal'
 
     @on(Button.Pressed, '#add-comment-button-save')
     def handle_save_new(self) -> None:

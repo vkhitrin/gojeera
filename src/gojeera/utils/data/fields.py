@@ -31,6 +31,7 @@ class CustomFieldType(Enum):
     URL = 'com.atlassian.jira.plugin.system.customfieldtypes:url'
     MULTI_CHECKBOXES = 'com.atlassian.jira.plugin.system.customfieldtypes:multicheckboxes'
     MULTI_SELECT = 'com.atlassian.jira.plugin.system.customfieldtypes:multiselect'
+    SD_CUSTOMER_ORGANIZATIONS = 'com.atlassian.servicedesk:sd-customer-organizations'
     SD_REQUEST_LANGUAGE = (
         'com.atlassian.servicedesk.servicedesk-lingo-integration-plugin:sd-request-language'
     )

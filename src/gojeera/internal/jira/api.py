@@ -81,6 +81,7 @@ class JiraAPI:
 
     REST_API_PATH_PREFIX = '/rest/api/3/'
     AGILE_API_PATH_PREFIX = '/rest/agile/1.0/'
+    SERVICE_DESK_API_PATH_PREFIX = '/rest/servicedeskapi/'
 
     def __init__(
         self,
@@ -119,6 +120,17 @@ class JiraAPI:
             base_url=f'{auth.api_base_url.rstrip("/")}{agile_api_path_prefix}',
             oauth2_token_refresher=oauth2_token_refresher,
         )
+        service_desk_api_path_prefix = rest_api_path_prefix.replace(
+            self.REST_API_PATH_PREFIX,
+            self.SERVICE_DESK_API_PATH_PREFIX,
+        )
+        self._service_desk_client = self._build_http_client(
+            AsyncJiraClient,
+            auth=auth,
+            configuration=configuration,
+            base_url=f'{auth.api_base_url.rstrip("/")}{service_desk_api_path_prefix}',
+            oauth2_token_refresher=oauth2_token_refresher,
+        )
 
         self._base_url = auth.api_base_url
         self._auth = auth
@@ -154,6 +166,7 @@ class JiraAPI:
         self._sync_client.set_bearer_token(bearer_token)
         self._async_http_client.set_bearer_token(bearer_token)
         self._agile_client.set_bearer_token(bearer_token)
+        self._service_desk_client.set_bearer_token(bearer_token)
 
     @property
     def base_url(self) -> str:
@@ -944,6 +957,7 @@ class JiraAPI:
         self,
         work_item_id_or_key: str,
         message: str,
+        jsd_public: bool | None = None,
     ) -> dict:
         """Adds a comment to a work item.
 
@@ -954,6 +968,13 @@ class JiraAPI:
         Returns:
             A dictionary with the details of the comment.
         """
+        if jsd_public is not None:
+            return await self.add_service_desk_comment(
+                work_item_id_or_key,
+                message,
+                public=jsd_public,
+            )
+
         payload = self._build_payload_to_add_comment(message)
         return cast(
             dict,
@@ -961,6 +982,26 @@ class JiraAPI:
                 method=httpx.AsyncClient.post,
                 url=f'issue/{work_item_id_or_key}/comment',
                 data=json.dumps(payload),
+            ),
+        )
+
+    async def get_my_permissions(
+        self,
+        *,
+        work_item_id_or_key: str,
+        permissions: list[str],
+    ) -> dict:
+        """Retrieves current-user permissions in an issue context."""
+        params = {
+            'issueKey': work_item_id_or_key,
+            'permissions': ','.join(permissions),
+        }
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url='mypermissions',
+                params=params,
             ),
         )
 
@@ -981,6 +1022,24 @@ class JiraAPI:
         adf_doc = text_to_adf(message, track_warnings=False)
 
         return {'body': adf_doc}
+
+    async def add_service_desk_comment(
+        self,
+        work_item_id_or_key: str,
+        message: str,
+        *,
+        public: bool,
+    ) -> dict:
+        """Adds a public or internal Jira Service Management request comment."""
+        payload = {'body': message, 'public': public}
+        return cast(
+            dict,
+            await self._service_desk_client.make_request(
+                method=httpx.AsyncClient.post,
+                url=f'request/{work_item_id_or_key}/comment',
+                data=json.dumps(payload),
+            ),
+        )
 
     async def update_comment(
         self,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from textual.command import DiscoveryHit, Hit, Hits
+from textual.command import Hit, Hits
 
 from gojeera.commands.providers.action_command_provider import ActionCommandProvider
 
@@ -65,14 +65,6 @@ class SearchCommandProvider(ActionCommandProvider):
                     'Type "page N" in the command palette to load a page',
                     screen,
                 )
-
-    async def discover(self) -> Hits:
-        for label, action, help_text, screen in self._iter_commands():
-            yield DiscoveryHit(
-                label,
-                self._make_callback(action, screen),
-                help=help_text,
-            )
 
     async def search(self, query: str) -> Hits:
         screen = self._get_main_screen()

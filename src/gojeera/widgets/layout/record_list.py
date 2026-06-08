@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, TypeVar, cast
 
 from rich.style import Style
 from textual import events
@@ -19,6 +20,8 @@ from gojeera.widgets.layout.card_scroll_view_mixin import (
     OVERFLOW_SCROLLBAR_CSS,
     CardScrollViewMixin,
 )
+
+T = TypeVar('T')
 
 
 @dataclass(slots=True)
@@ -38,6 +41,20 @@ class RecordRowLayout:
     meta_lines: list[str]
     title_lines: list[str]
     footer_lines: list[str]
+
+
+def update_record_list_from_items(
+    *,
+    items: Sequence[T] | None,
+    record_list: RecordList,
+    build_record: Callable[[T], Record],
+) -> int:
+    if not items:
+        record_list.clear_records()
+        return 0
+
+    record_list.set_records([build_record(item) for item in items])
+    return len(items)
 
 
 class RecordList(CardScrollViewMixin, ScrollView):

@@ -1,6 +1,7 @@
 import asyncio
 
 from httpx import Response
+import pytest
 import respx
 
 from gojeera.app import JiraApp
@@ -97,6 +98,12 @@ async def quick_navigation_rejects_missing_work_item(pilot):
     assert main_screen._active_work_item_load_key is None
 
 
+async def run_quick_navigation_check(mock_configuration, mock_user_info, check):
+    app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await check(pilot)
+
+
 class TestQuickNavigationScreen:
     def test_extract_work_item_key_accepts_browse_url(self, mock_configuration):
         base_url = mock_configuration.jira.api_base_url
@@ -138,49 +145,27 @@ class TestQuickNavigationScreen:
         assert get_markdown_link_work_item_key(browse_style) == 'ENG-1'
         assert get_markdown_link_tooltip(regular_style) is None
 
-    async def test_quick_navigation_palette_initial_state(
+    @pytest.mark.parametrize(
+        'check',
+        [
+            open_quick_navigation_palette,
+            quick_navigation_load_valid_work_item,
+            quick_navigation_loads_work_item_from_url,
+            quick_navigation_loads_focused_comment_from_url,
+        ],
+    )
+    async def test_quick_navigation_actions(
         self,
+        check,
         mock_configuration,
         mock_jira_api_with_search_results,
         mock_user_info,
     ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            await open_quick_navigation_palette(pilot)
-
-    async def test_quick_navigation_loads_valid_work_item(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            await quick_navigation_load_valid_work_item(pilot)
-
-    async def test_quick_navigation_loads_work_item_from_url(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            await quick_navigation_loads_work_item_from_url(pilot)
-
-    async def test_quick_navigation_loads_focused_comment_from_url(
-        self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
-    ):
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            await quick_navigation_loads_focused_comment_from_url(pilot)
+        await run_quick_navigation_check(
+            mock_configuration,
+            mock_user_info,
+            check,
+        )
 
     async def test_quick_navigation_rejects_missing_work_item(
         self,

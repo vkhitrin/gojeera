@@ -128,35 +128,20 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
         )
 
     def watch_work_items(self, items: list[JiraWorkItem] | None) -> None:
-        with self.app.batch_update():
-            if not items:
-                self.is_loading = False
-                self.record_list.clear_records()
-                self.displayed_count = 0
-                return
-
-            self.is_loading = False
-            records: list[Record] = []
-            for item in items:
-                work_item_type_name = item.work_item_type.name if item.work_item_type else 'Unknown'
-                assignee_display = ''
-                if item.assignee:
-                    assignee_display = (
-                        item.assignee.display_name
-                        or item.assignee.email
-                        or item.assignee.account_id
-                    )
-                footer_parts = [part for part in (item.status_name, assignee_display) if part]
-                records.append(
-                    Record(
-                        key=item.key,
-                        meta=f'[{work_item_type_name}] {item.key}',
-                        title=item.cleaned_summary(max_length=80),
-                        footer=' • '.join(footer_parts),
-                        payload=item,
-                    )
+        def build_record(item: JiraWorkItem) -> Record:
+            work_item_type_name = item.work_item_type.name if item.work_item_type else 'Unknown'
+            assignee_display = ''
+            if item.assignee:
+                assignee_display = (
+                    item.assignee.display_name or item.assignee.email or item.assignee.account_id
                 )
-            self.record_list.set_records(records)
+            footer_parts = [part for part in (item.status_name, assignee_display) if part]
+            return Record(
+                key=item.key,
+                meta=f'[{work_item_type_name}] {item.key}',
+                title=item.cleaned_summary(max_length=80),
+                footer=' • '.join(footer_parts),
+                payload=item,
+            )
 
-            self.is_loading = False
-            self.displayed_count = len(items)
+        self.displayed_count = self.update_records_from_items(items, build_record)

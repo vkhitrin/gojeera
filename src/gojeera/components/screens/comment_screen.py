@@ -17,6 +17,7 @@ from gojeera.utils.system.clipboard_attachments import (
     cleanup_staged_clipboard_attachments,
     materialize_uploaded_attachment_references,
     stage_clipboard_attachments_into_textarea,
+    upload_staged_clipboard_attachments_for_submission,
 )
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.textarea_insertion import insert_picker_markup_from_getter
@@ -225,15 +226,21 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             app=application,
         )
 
-    async def _upload_clipboard_attachments(self) -> tuple[list[Attachment], list[str], list[str]]:
+    async def _upload_clipboard_attachments(self) -> bool:
         if not self.work_item_key or not self._clipboard_attachment_paths:
-            return [], [], []
+            return True
 
         application = cast('JiraApp', self.app)
-        return await application.upload_staged_attachments(
+        uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
+            application,
             self.work_item_key,
-            [str(path) for path in self._clipboard_attachment_paths],
+            self._clipboard_attachment_paths,
+            self._uploaded_clipboard_attachments,
+            self.notify,
+            self._set_submitting,
+            notify_success=False,
         )
+        return uploaded_attachments is not None
 
     async def _create_comment(self, comment_text: str) -> WorkItemComment | None:
         if not self.work_item_key:
@@ -313,21 +320,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
                 return
 
         if self._clipboard_attachment_paths:
-            (
-                uploaded_attachments,
-                upload_errors,
-                failed_file_paths,
-            ) = await self._upload_clipboard_attachments()
-            self._uploaded_clipboard_attachments.extend(uploaded_attachments)
-            self._clipboard_attachment_paths = [Path(path) for path in failed_file_paths]
-
-            if upload_errors:
-                self.notify(
-                    f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
-                    severity='error',
-                    title=self.work_item_key,
-                )
-                self._set_submitting(False)
+            if not await self._upload_clipboard_attachments():
                 return
 
         final_text = (

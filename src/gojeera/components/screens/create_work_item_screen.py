@@ -31,6 +31,7 @@ from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown, text_to_
 from gojeera.utils.system.clipboard import prepare_staged_attachment_text
 from gojeera.utils.system.clipboard_attachments import (
     materialize_uploaded_attachment_references,
+    upload_staged_clipboard_attachments_for_submission,
 )
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.widgets_factory_utils import (
@@ -1376,29 +1377,15 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             )
 
         if self._clipboard_attachment_paths and self._created_work_item_key:
-            (
-                uploaded_attachments,
-                upload_errors,
-                failed_file_paths,
-            ) = await application.upload_staged_attachments(
+            uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
+                application,
                 self._created_work_item_key,
-                [str(path) for path in self._clipboard_attachment_paths],
+                self._clipboard_attachment_paths,
+                self._uploaded_clipboard_attachments,
+                self.notify,
+                self._set_submitting,
             )
-            self._uploaded_clipboard_attachments.extend(uploaded_attachments)
-            self._clipboard_attachment_paths = [Path(path) for path in failed_file_paths]
-
-            if uploaded_attachments:
-                self.notify(
-                    f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
-                    title=self._created_work_item_key,
-                )
-            if upload_errors:
-                self.notify(
-                    f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
-                    severity='error',
-                    title=self._created_work_item_key,
-                )
-                self._set_submitting(False)
+            if uploaded_attachments is None:
                 return
 
         if (

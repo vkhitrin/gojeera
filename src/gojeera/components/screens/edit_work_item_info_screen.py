@@ -18,6 +18,7 @@ from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
 from gojeera.utils.system.clipboard import prepare_staged_attachment_text
 from gojeera.utils.system.clipboard_attachments import (
     materialize_uploaded_attachment_references,
+    upload_staged_clipboard_attachments_for_submission,
 )
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.widgets.inputs.extended_input import ExtendedInput
@@ -229,30 +230,15 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
         if self._clipboard_attachment_paths:
             application = cast('JiraApp', self.app)
             description_template = prepare_staged_attachment_text(description)
-            (
-                uploaded_attachments,
-                upload_errors,
-                failed_file_paths,
-            ) = await application.upload_staged_attachments(
+            uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
+                application,
                 work_item.key,
-                [str(path) for path in self._clipboard_attachment_paths],
+                self._clipboard_attachment_paths,
+                self._uploaded_clipboard_attachments,
+                self.notify,
+                self._set_submitting,
             )
-            self._uploaded_clipboard_attachments.extend(uploaded_attachments)
-            self._clipboard_attachment_paths = [Path(path) for path in failed_file_paths]
-
-            if uploaded_attachments:
-                self.notify(
-                    f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
-                    title=work_item.key,
-                )
-
-            if upload_errors:
-                self.notify(
-                    f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
-                    severity='error',
-                    title=work_item.key,
-                )
-                self._set_submitting(False)
+            if uploaded_attachments is None:
                 return
 
             if uploaded_attachments and description_template:

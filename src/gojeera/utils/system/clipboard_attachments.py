@@ -110,6 +110,62 @@ def cleanup_staged_clipboard_attachments(
     uploaded_clipboard_attachments.clear()
 
 
+async def upload_staged_clipboard_attachments(
+    app: JiraApp,
+    work_item_key: str,
+    clipboard_attachment_paths: list[Path],
+    uploaded_clipboard_attachments: list[Attachment],
+    notify: Callable[..., None],
+    *,
+    notify_success: bool = True,
+) -> tuple[list[Attachment], list[str]]:
+    uploaded_attachments, upload_errors, failed_file_paths = await app.upload_staged_attachments(
+        work_item_key,
+        [str(path) for path in clipboard_attachment_paths],
+    )
+    uploaded_clipboard_attachments.extend(uploaded_attachments)
+    clipboard_attachment_paths[:] = [Path(path) for path in failed_file_paths]
+
+    if notify_success and uploaded_attachments:
+        notify(
+            f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
+            title=work_item_key,
+        )
+
+    if upload_errors:
+        notify(
+            f'Failed to upload clipboard attachments: {"; ".join(upload_errors)}',
+            severity='error',
+            title=work_item_key,
+        )
+
+    return uploaded_attachments, upload_errors
+
+
+async def upload_staged_clipboard_attachments_for_submission(
+    app: JiraApp,
+    work_item_key: str,
+    clipboard_attachment_paths: list[Path],
+    uploaded_clipboard_attachments: list[Attachment],
+    notify: Callable[..., None],
+    set_submitting: Callable[[bool], None],
+    *,
+    notify_success: bool = True,
+) -> list[Attachment] | None:
+    uploaded_attachments, upload_errors = await upload_staged_clipboard_attachments(
+        app,
+        work_item_key,
+        clipboard_attachment_paths,
+        uploaded_clipboard_attachments,
+        notify,
+        notify_success=notify_success,
+    )
+    if upload_errors:
+        set_submitting(False)
+        return None
+    return uploaded_attachments
+
+
 def materialize_uploaded_attachment_references(
     *,
     raw_text: str,

@@ -154,31 +154,19 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
             self.work_items = [i for i in self.work_items or [] if i.id != link_id]
 
     def watch_work_items(self, items: list[RelatedJiraWorkItem] | None) -> None:
-        with self.app.batch_update():
-            if not items:
-                self.is_loading = False
-                self.record_list.clear_records()
-                self.displayed_count = 0
-                return
+        def build_record(work_item: RelatedJiraWorkItem) -> Record:
+            footer_parts = [
+                part for part in (work_item.display_status(), work_item.priority_name) if part
+            ]
+            return Record(
+                key=work_item.id,
+                meta=f'{work_item.link_type} • {work_item.key}',
+                title=work_item.cleaned_summary(),
+                footer=' • '.join(footer_parts),
+                payload=work_item,
+            )
 
-            records: list[Record] = []
-            for work_item in items:
-                footer_parts = [
-                    part for part in (work_item.display_status(), work_item.priority_name) if part
-                ]
-                records.append(
-                    Record(
-                        key=work_item.id,
-                        meta=f'{work_item.link_type} • {work_item.key}',
-                        title=work_item.cleaned_summary(),
-                        footer=' • '.join(footer_parts),
-                        payload=work_item,
-                    )
-                )
-            self.record_list.set_records(records)
-
-            self.is_loading = False
-            self.displayed_count = len(items)
+        self.displayed_count = self.update_records_from_items(items, build_record)
 
     @on(RecordList.RowInvoked)
     def on_row_invoked(self, event: RecordList.RowInvoked) -> None:

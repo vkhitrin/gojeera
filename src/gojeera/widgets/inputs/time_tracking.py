@@ -1,10 +1,41 @@
 import logging
+from dataclasses import dataclass
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Label, ProgressBar
 
 logger = logging.getLogger('gojeera')
+
+
+@dataclass(slots=True)
+class TimeTrackingValues:
+    original_estimate: str = ''
+    time_spent: str = ''
+    remaining_estimate: str = ''
+    original_estimate_seconds: int | None = None
+    time_spent_seconds: int = 0
+    remaining_estimate_seconds: int | None = None
+
+    @classmethod
+    def from_raw(
+        cls,
+        *,
+        original_estimate: str | None = None,
+        time_spent: str | None = None,
+        remaining_estimate: str | None = None,
+        original_estimate_seconds: int | None = None,
+        time_spent_seconds: int | None = None,
+        remaining_estimate_seconds: int | None = None,
+    ) -> 'TimeTrackingValues':
+        return cls(
+            original_estimate=original_estimate or '',
+            time_spent=time_spent or '',
+            remaining_estimate=remaining_estimate or '',
+            original_estimate_seconds=original_estimate_seconds,
+            time_spent_seconds=time_spent_seconds or 0,
+            remaining_estimate_seconds=remaining_estimate_seconds,
+        )
 
 
 class TimeTrackingWidget(Vertical):
@@ -63,7 +94,7 @@ class TimeTrackingWidget(Vertical):
         remaining_estimate_seconds: int | None = None,
     ):
         super().__init__()
-        self._set_tracking_values(
+        self._tracking_values = TimeTrackingValues.from_raw(
             original_estimate=original_estimate,
             time_spent=time_spent,
             remaining_estimate=remaining_estimate,
@@ -99,16 +130,20 @@ class TimeTrackingWidget(Vertical):
             self.meta_label.display = meta_visible
 
     def _derive_logged_text(self) -> str:
-        if self._time_spent:
-            return self._time_spent.removesuffix(' logged')
-        if self._time_spent_seconds > 0:
-            return self._format_duration(self._time_spent_seconds)
+        if self._tracking_values.time_spent:
+            return self._tracking_values.time_spent.removesuffix(' logged')
+        if self._tracking_values.time_spent_seconds > 0:
+            return self._format_duration(self._tracking_values.time_spent_seconds)
         if (
-            self._original_estimate_seconds is not None
-            and self._remaining_estimate_seconds is not None
-            and self._original_estimate_seconds > self._remaining_estimate_seconds
+            self._tracking_values.original_estimate_seconds is not None
+            and self._tracking_values.remaining_estimate_seconds is not None
+            and self._tracking_values.original_estimate_seconds
+            > self._tracking_values.remaining_estimate_seconds
         ):
-            logged_seconds = self._original_estimate_seconds - self._remaining_estimate_seconds
+            logged_seconds = (
+                self._tracking_values.original_estimate_seconds
+                - self._tracking_values.remaining_estimate_seconds
+            )
             return self._format_duration(logged_seconds)
         return ''
 
@@ -136,36 +171,28 @@ class TimeTrackingWidget(Vertical):
 
     def _build_remaining_text(self) -> str:
         logged_text = self._derive_logged_text()
-        has_remaining = bool(self._remaining_estimate) and self._remaining_estimate != '0m'
+        has_remaining = (
+            bool(self._tracking_values.remaining_estimate)
+            and self._tracking_values.remaining_estimate != '0m'
+        )
         if has_remaining:
-            return f'{self._remaining_estimate} remaining'
-        if self._original_estimate and self._original_estimate != '0m':
-            return f'{self._original_estimate} remaining'
+            return f'{self._tracking_values.remaining_estimate} remaining'
+        if (
+            self._tracking_values.original_estimate
+            and self._tracking_values.original_estimate != '0m'
+        ):
+            return f'{self._tracking_values.original_estimate} remaining'
         if logged_text:
             return '0m remaining'
         return ''
 
     def _build_second_row_text(self) -> str:
-        if self._original_estimate and self._original_estimate != '0m':
-            return f'Original estimate {self._original_estimate}'
+        if (
+            self._tracking_values.original_estimate
+            and self._tracking_values.original_estimate != '0m'
+        ):
+            return f'Original estimate {self._tracking_values.original_estimate}'
         return ''
-
-    def _set_tracking_values(
-        self,
-        *,
-        original_estimate: str | None,
-        time_spent: str | None,
-        remaining_estimate: str | None,
-        original_estimate_seconds: int | None,
-        time_spent_seconds: int | None,
-        remaining_estimate_seconds: int | None,
-    ) -> None:
-        self._original_estimate = original_estimate or ''
-        self._time_spent = time_spent or ''
-        self._remaining_estimate = remaining_estimate or ''
-        self._original_estimate_seconds = original_estimate_seconds
-        self._time_spent_seconds = time_spent_seconds or 0
-        self._remaining_estimate_seconds = remaining_estimate_seconds
 
     def compose(self) -> ComposeResult:
         pb = ProgressBar(total=100, show_percentage=False, show_eta=False)
@@ -187,34 +214,23 @@ class TimeTrackingWidget(Vertical):
         self._update_progress()
 
     def _update_progress(self):
-        if self._remaining_estimate_seconds is not None and self._time_spent_seconds:
-            self.progress_bar.progress = (self._time_spent_seconds * 100) / (
-                self._remaining_estimate_seconds + self._time_spent_seconds
+        if (
+            self._tracking_values.remaining_estimate_seconds is not None
+            and self._tracking_values.time_spent_seconds
+        ):
+            self.progress_bar.progress = (self._tracking_values.time_spent_seconds * 100) / (
+                self._tracking_values.remaining_estimate_seconds
+                + self._tracking_values.time_spent_seconds
             )
-        elif self._original_estimate_seconds:
+        elif self._tracking_values.original_estimate_seconds:
             self.progress_bar.progress = (
-                self._time_spent_seconds * 100
-            ) / self._original_estimate_seconds
-        elif self._time_spent_seconds:
+                self._tracking_values.time_spent_seconds * 100
+            ) / self._tracking_values.original_estimate_seconds
+        elif self._tracking_values.time_spent_seconds:
             self.progress_bar.progress = 100
         else:
             self.progress_bar.progress = 0
 
-    def update_time_tracking(
-        self,
-        original_estimate: str | None = None,
-        time_spent: str | None = None,
-        remaining_estimate: str | None = None,
-        original_estimate_seconds: int | None = None,
-        time_spent_seconds: int | None = None,
-        remaining_estimate_seconds: int | None = None,
-    ):
-        self._set_tracking_values(
-            original_estimate=original_estimate,
-            time_spent=time_spent,
-            remaining_estimate=remaining_estimate,
-            original_estimate_seconds=original_estimate_seconds,
-            time_spent_seconds=time_spent_seconds,
-            remaining_estimate_seconds=remaining_estimate_seconds,
-        )
+    def update_time_tracking(self, values: TimeTrackingValues) -> None:
+        self._tracking_values = values
         self._refresh_tracking_display()

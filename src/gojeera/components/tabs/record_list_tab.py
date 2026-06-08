@@ -1,3 +1,4 @@
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from textual.app import ComposeResult
@@ -5,7 +6,7 @@ from textual.binding import Binding
 from textual.containers import Vertical, VerticalGroup
 
 from gojeera.utils.jira.urls import build_external_url_for_work_item
-from gojeera.widgets.layout.record_list import RecordList
+from gojeera.widgets.layout.record_list import Record, RecordList, update_record_list_from_items
 
 T = TypeVar('T')
 
@@ -92,6 +93,20 @@ class RecordListTabWidget(Vertical, can_focus=False):
 
     def hide_loading(self) -> None:
         self.is_loading = False
+
+    def update_records_from_items(
+        self,
+        items: Sequence[T] | None,
+        build_record: Callable[[T], Record],
+    ) -> int:
+        with self.app.batch_update():
+            displayed_count = update_record_list_from_items(
+                items=items,
+                record_list=self.record_list,
+                build_record=build_record,
+            )
+            self.is_loading = False
+            return displayed_count
 
     def watch_is_loading(self, loading: bool) -> None:
         self.content_container.loading = loading and not self.has_records

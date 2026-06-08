@@ -60,7 +60,7 @@ from gojeera.widgets.inputs.date_time_input import DateTimeInput
 from gojeera.widgets.inputs.numeric_input import NumericInput
 from gojeera.widgets.inputs.read_only_input_field import ReadOnlyInputField
 from gojeera.widgets.inputs.text_input import TextInput
-from gojeera.widgets.inputs.time_tracking import TimeTrackingWidget
+from gojeera.widgets.inputs.time_tracking import TimeTrackingValues, TimeTrackingWidget
 from gojeera.widgets.inputs.url import URL
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.selection.multi_select import MultiSelect, extract_sprint_entries
@@ -2261,14 +2261,7 @@ class WorkItemFields(Container, can_focus=False):
             self._show_time_tracking_after_load = False
             if self.time_tracking_container.display:
                 self.time_tracking_container.display = False
-            widget.update_time_tracking(
-                original_estimate=None,
-                time_spent=None,
-                remaining_estimate=None,
-                original_estimate_seconds=None,
-                time_spent_seconds=None,
-                remaining_estimate_seconds=None,
-            )
+            widget.update_time_tracking(TimeTrackingValues())
             self._schedule_field_spacing_refresh()
             return
 
@@ -2276,12 +2269,14 @@ class WorkItemFields(Container, can_focus=False):
         if not self.time_tracking_container.display:
             self.time_tracking_container.display = True
         widget.update_time_tracking(
-            original_estimate,
-            time_spent,
-            remaining_estimate,
-            original_estimate_seconds,
-            time_spent_seconds,
-            remaining_estimate_seconds,
+            TimeTrackingValues.from_raw(
+                original_estimate=original_estimate,
+                time_spent=time_spent,
+                remaining_estimate=remaining_estimate,
+                original_estimate_seconds=original_estimate_seconds,
+                time_spent_seconds=time_spent_seconds,
+                remaining_estimate_seconds=remaining_estimate_seconds,
+            )
         )
         self._schedule_field_spacing_refresh()
 

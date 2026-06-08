@@ -118,6 +118,14 @@ def _mock_oauth2_refresh_response(monkeypatch, refresh_token: str) -> list[tuple
     return refresh_token_writes
 
 
+def _raise_unexpected_call(message: str):
+    return (_ for _ in ()).throw(AssertionError(message))
+
+
+def _profile_status_subject() -> tuple[AuthService, OAuth2AuthProfile]:
+    return AuthService(), _oauth2_profile()
+
+
 def test_refresh_oauth2_access_token_reads_store_bundle_once(monkeypatch):
     auth_service, profile, calls = _mock_oauth2_store_credentials(
         monkeypatch,
@@ -254,8 +262,7 @@ def test_should_not_refresh_oauth2_access_token_when_environment_token_is_set(mo
 
 
 def test_get_profile_status_does_not_refresh_invalid_oauth2_token(monkeypatch):
-    auth_service = AuthService()
-    profile = _oauth2_profile()
+    auth_service, profile = _profile_status_subject()
 
     monkeypatch.setattr(
         auth_service,
@@ -270,7 +277,7 @@ def test_get_profile_status_does_not_refresh_invalid_oauth2_token(monkeypatch):
     monkeypatch.setattr(
         auth_service,
         'refresh_oauth2_access_token',
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('unexpected refresh')),
+        lambda *args, **kwargs: _raise_unexpected_call('unexpected refresh'),
     )
 
     status = auth_service.get_profile_status('work', profile, active_profile_name='work')
@@ -280,8 +287,7 @@ def test_get_profile_status_does_not_refresh_invalid_oauth2_token(monkeypatch):
 
 
 def test_get_profile_status_refreshes_missing_oauth2_access_token(monkeypatch):
-    auth_service = AuthService()
-    profile = _oauth2_profile()
+    auth_service, profile = _profile_status_subject()
 
     monkeypatch.setattr(auth_service, 'get_oauth2_access_token', lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -302,8 +308,7 @@ def test_get_profile_status_refreshes_missing_oauth2_access_token(monkeypatch):
 
 
 def test_get_profile_status_reports_oauth2_refresh_failure(monkeypatch):
-    auth_service = AuthService()
-    profile = _oauth2_profile()
+    auth_service, profile = _profile_status_subject()
 
     monkeypatch.setattr(auth_service, 'get_oauth2_access_token', lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -314,7 +319,7 @@ def test_get_profile_status_reports_oauth2_refresh_failure(monkeypatch):
     monkeypatch.setattr(
         auth_service,
         'validate_profile',
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('unexpected validation')),
+        lambda *args, **kwargs: _raise_unexpected_call('unexpected validation'),
     )
 
     status = auth_service.get_profile_status('work', profile, active_profile_name='work')

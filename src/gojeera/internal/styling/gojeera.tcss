@@ -1199,7 +1199,6 @@ AddWorkItemRelationshipScreen #modal_outer {
 EditWorkItemInfoScreen #modal_outer {
   width: 74%;
   max-width: 110;
-  height: 80%;
   max-height: 44;
 }
 

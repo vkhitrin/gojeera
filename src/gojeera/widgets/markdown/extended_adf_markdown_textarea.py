@@ -88,6 +88,8 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         field_id: str = 'description',
         required: bool = False,
         mode: FieldMode = FieldMode.CREATE,
+        initial_text: str = '',
+        initial_wrap_width_hint: int | None = None,
     ):
         super().__init__(id=field_id)
 
@@ -99,25 +101,31 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         )
 
         self._required = required
-        self._text = ''
+        self._text = initial_text
+        self._initial_text = initial_text
+        self._initial_wrap_width_hint = initial_wrap_width_hint
+        self._suppress_initial_textarea_change = bool(initial_text)
         self._adf_warnings: list[str] = []
 
     def compose(self) -> ComposeResult:
         with ExtendedTabbedContent(id=f'{self.id}-tabs'):
             with TabPane('Edit', id=f'{self.id}-edit-tab'):
                 textarea = ExtendedTextArea(
+                    self._text,
                     id=f'{self.id}-textarea',
                     language='markdown',
                     compact=True,
+                    initial_wrap_width_hint=self._initial_wrap_width_hint,
                 )
-                textarea.text = ''
                 yield textarea
 
             with TabPane('Preview', id=f'{self.id}-preview-tab'):
                 with VerticalScroll(id=f'{self.id}-preview-scroll'):
                     yield GojeeraMarkdown('_No content to preview_', id=f'{self.id}-markdown')
 
-        yield Label('', id=f'{self.id}-warnings', classes='adf-warning')
+        warning_label = Label('', id=f'{self.id}-warnings', classes='adf-warning')
+        warning_label.display = False
+        yield warning_label
 
     @property
     def textarea(self) -> TextArea:
@@ -162,6 +170,16 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
     def handle_textarea_changed(self, event: TextArea.Changed) -> None:
         if event.text_area.id == f'{self.id}-textarea':
             self._text = event.text_area.text
+            if (
+                self._suppress_initial_textarea_change
+                and event.text_area.text == self._initial_text
+            ):
+                self._suppress_initial_textarea_change = False
+                self._adf_warnings = []
+                self._update_warning_display()
+                self._update_tab_label()
+                return
+            self._suppress_initial_textarea_change = False
 
             if self._text.strip():
                 self._check_adf_warnings(self._text)

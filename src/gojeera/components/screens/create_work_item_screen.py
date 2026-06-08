@@ -491,7 +491,10 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 )
                 yield build_modal_cancel_button(Button, button_id='add-work-item-button-quit')
 
-            yield Static('Required: 0 pending', id='required-fields-tracker')
+            yield Static(
+                'Required fields will appear after selecting a project',
+                id='required-fields-tracker',
+            )
         yield ExtendedFooter()
 
     def on_mount(self):
@@ -568,6 +571,23 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         self.schedule_dynamic_modal_layout()
         self.save_button.disabled = not self._validate_required_fields()
         self.call_after_refresh(lambda: focus_first_available(self.summary_field))
+
+    def _apply_single_available_subtask_type(
+        self,
+        types_list: list[tuple[str, str]],
+        project_key: str,
+    ) -> None:
+        if (
+            not self._requires_subtask_issue_type
+            or self._selected_work_item_type_id
+            or len(types_list) != 1
+        ):
+            return
+
+        work_item_type_id = types_list[0][1]
+        self.call_after_refresh(
+            lambda: self._apply_prefilled_subtask_type(project_key, work_item_type_id)
+        )
 
     def _make_dynamic_widgets_jumpable(self) -> None:
         from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
@@ -683,6 +703,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     with self.prevent(Select.Changed):
                         self.work_item_type_selector.set_options(types_list)
                     self._apply_template_work_item_type_selection(types_list, project_key)
+                    self._apply_single_available_subtask_type(types_list, project_key)
                     return
 
                 application = cast('JiraApp', self.app)  # noqa: F821
@@ -703,14 +724,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                         self.work_item_type_selector.set_options(types_list)
                     self._types_fetched_for_project = project_key
                     self._apply_template_work_item_type_selection(types_list, project_key)
-
-                    if self._requires_subtask_issue_type and types_list:
-                        work_item_type_id = types_list[0][1]
-                        self.call_after_refresh(
-                            lambda: self._apply_prefilled_subtask_type(
-                                project_key, work_item_type_id
-                            )
-                        )
+                    self._apply_single_available_subtask_type(types_list, project_key)
                 else:
                     self.notify(
                         f'Failed to fetch work item types: {response.error}',

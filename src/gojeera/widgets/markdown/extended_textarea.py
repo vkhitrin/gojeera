@@ -16,8 +16,16 @@ class ExtendedTextArea(ExternalEditorMixin, TextArea):
     BINDINGS = TextArea.BINDINGS + [EXTERNAL_EDITOR_BINDING]
 
     def __init__(self, *args, **kwargs):
+        self._initial_wrap_width_hint = kwargs.pop('initial_wrap_width_hint', None)
         super().__init__(*args, **kwargs)
         self._suppressed_paste_insert: str | None = None
+
+    @property
+    def wrap_width(self) -> int:
+        wrap_width = super().wrap_width
+        if wrap_width <= 0 and self._initial_wrap_width_hint is not None:
+            return self._initial_wrap_width_hint
+        return wrap_width
 
     def action_open_external_editor(self) -> None:
         if getattr(self, 'read_only', False):

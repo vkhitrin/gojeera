@@ -16,18 +16,12 @@ from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
 from gojeera.utils.system.clipboard import prepare_staged_attachment_text
-from gojeera.utils.system.clipboard_attachments import (
-    materialize_uploaded_attachment_references,
-    upload_staged_clipboard_attachments_for_submission,
-)
+from gojeera.utils.system.clipboard_attachments import materialize_uploaded_attachment_references
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.widgets.inputs.extended_input import ExtendedInput
+from gojeera.widgets.layout import modal_buttons
+from gojeera.widgets.layout.dynamic_modal_screen import DynamicModalScreen
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
 from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
@@ -38,8 +32,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger('gojeera')
 
 
-class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[str, str]]):
-    BINDINGS = ExtendedModalScreen.BINDINGS + [
+class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, str]]):
+    BINDINGS = DynamicModalScreen.BINDINGS + [
         ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
     ]
     TITLE = 'Edit Work Item Info'
@@ -55,7 +49,7 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
             self._modal_title = self.TITLE
 
         self._original_summary = self.work_item.summary if self.work_item else ''
-        self._original_description = ''
+        self._original_description = self._initial_description_text()
         self._clipboard_attachment_paths: list[Path] = []
         self._clipboard_attachment_names: list[str] = []
         self._uploaded_clipboard_attachments: list[Attachment] = []
@@ -81,9 +75,46 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
     def cancel_button(self) -> Button:
         return self.query_one('#edit-work-item-button-quit', expect_type=Button)
 
+    @property
+    def modal_outer(self) -> VerticalSuppressClicks:
+        return self.query_one('#modal_outer', VerticalSuppressClicks)
+
+    def _field_exists_in_edit_metadata(self, field_id: str) -> bool:
+        edit_metadata = self.work_item.get_edit_metadata() if self.work_item else None
+        return bool(edit_metadata and field_id in edit_metadata)
+
+    @property
+    def _description_exists_in_edit_metadata(self) -> bool:
+        return self._field_exists_in_edit_metadata(JiraWorkItemGenericFields.DESCRIPTION.value)
+
+    def _rendered_edit_field_count(self) -> int:
+        return 1 + int(self._description_exists_in_edit_metadata)
+
+    def _calculate_modal_height(self) -> int:
+        if self._rendered_edit_field_count() == 1:
+            return min(8, max(6, int(self.screen.size.height * 0.35)))
+
+        return min(44, max(20, int(self.screen.size.height * 0.8)))
+
+    def _calculate_modal_width(self) -> int:
+        return min(110, max(1, int(self.screen.size.width * 0.74)))
+
+    def _description_initial_wrap_width_hint(self) -> int:
+        body_horizontal_padding = 2
+        cursor_width = 1
+        scrollbar_width = 1
+        return max(
+            1,
+            self._calculate_modal_width()
+            - body_horizontal_padding
+            - cursor_width
+            - scrollbar_width,
+        )
+
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with VerticalSuppressClicks(id='modal_outer') as modal_outer:
+            modal_outer.styles.height = self._calculate_modal_height()
             yield Static(self._modal_title, id='modal_title')
             with Vertical(id='edit-work-item-body'):
                 with Vertical(id='summary-field-container'):
@@ -98,40 +129,53 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
                     )
                     yield summary_widget
 
-                yield from self.compose_description_field()
+                if self._description_exists_in_edit_metadata:
+                    yield from self.compose_description_field(
+                        initial_text=self._original_description,
+                        initial_wrap_width_hint=self._description_initial_wrap_width_hint(),
+                    )
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_buttons.build_modal_confirm_button(
                     Button, button_id='edit-work-item-button-save', disabled=True
                 )
-                yield build_modal_cancel_button(Button, button_id='edit-work-item-button-quit')
+                yield modal_buttons.build_modal_cancel_button(
+                    Button, button_id='edit-work-item-button-quit'
+                )
         yield ExtendedFooter()
 
     def on_mount(self) -> None:
-        if self.work_item and self.work_item.description:
-            description_value = self._extract_markdown_from_description(self.work_item.description)
-            self.description_field.text = description_value
-
-            self._original_description = description_value
-
         self._update_button_state()
 
         if CONFIGURATION.get().jumper.enabled:
             set_jump_mode(self.summary_input, 'focus')
 
-            self.description_field.make_jumpable()
+            if self._description_exists_in_edit_metadata:
+                self.description_field.make_jumpable()
 
             set_jump_mode(self.save_button, 'click')
             set_jump_mode(self.cancel_button, 'click')
         self.call_after_refresh(
-            lambda: focus_first_available(self.summary_input, self.description_field)
+            lambda: focus_first_available(
+                self.summary_input,
+                self.description_field if self._description_exists_in_edit_metadata else None,
+            )
         )
+        self.initialize_dynamic_modal()
+
+    def apply_dynamic_modal_layout(self) -> None:
+        self.modal_outer.styles.height = self._calculate_modal_height()
 
     def _extract_markdown_from_description(self, description) -> str:
         if isinstance(description, dict):
             try:
+                application = self.app
+            except Exception:
+                application = None
+
+            try:
                 base_url = getattr(
-                    getattr(getattr(self.app, 'atlassian', None), 'server_info', None),
+                    getattr(getattr(application, 'atlassian', None), 'server_info', None),
                     'base_url',
                     None,
                 )
@@ -142,13 +186,25 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
             return description
         return ''
 
+    def _initial_description_text(self) -> str:
+        if (
+            not self._description_exists_in_edit_metadata
+            or not self.work_item
+            or not self.work_item.description
+        ):
+            return ''
+
+        return self._extract_markdown_from_description(self.work_item.description)
+
     def _has_changes(self) -> bool:
         current_summary = self.summary_input.value.strip()
-        current_description = self.description_field.text.strip()
+        current_description = (
+            self.description_field.text.strip() if self._description_exists_in_edit_metadata else ''
+        )
 
-        return (
-            current_summary != self._original_summary.strip()
-            or current_description != self._original_description.strip()
+        return current_summary != self._original_summary.strip() or (
+            self._description_exists_in_edit_metadata
+            and current_description != self._original_description.strip()
         )
 
     def _update_button_state(self) -> None:
@@ -185,6 +241,9 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
         self.dismiss()
 
     async def action_insert_mention(self) -> None:
+        if not self._description_exists_in_edit_metadata:
+            return
+
         from gojeera.utils.ui.mention_helpers import insert_user_mention
 
         try:
@@ -215,7 +274,9 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
 
     async def _submit_work_item_updates(self) -> None:
         summary = self.summary_input.value
-        description = self.description_field.text
+        description = (
+            self.description_field.text if self._description_exists_in_edit_metadata else ''
+        )
         work_item = self.work_item
 
         if not work_item:
@@ -227,15 +288,12 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
         description_changed = description.strip() != self._original_description.strip()
         description_to_save = description
 
-        if self._clipboard_attachment_paths:
+        if self._description_exists_in_edit_metadata and self._clipboard_attachment_paths:
             application = cast('JiraApp', self.app)
             description_template = prepare_staged_attachment_text(description)
-            uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
+            uploaded_attachments = await self._upload_staged_clipboard_attachments_for_work_item(
                 application,
                 work_item.key,
-                self._clipboard_attachment_paths,
-                self._uploaded_clipboard_attachments,
-                self.notify,
                 self._set_submitting,
             )
             if uploaded_attachments is None:
@@ -255,7 +313,7 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, ExtendedModalScreen[dict[s
         updates = {}
         if summary_changed:
             updates[JiraWorkItemGenericFields.SUMMARY.value] = summary
-        if description_changed:
+        if self._description_exists_in_edit_metadata and description_changed:
             updates[JiraWorkItemGenericFields.DESCRIPTION.value] = description_to_save
 
         self.dismiss(updates)

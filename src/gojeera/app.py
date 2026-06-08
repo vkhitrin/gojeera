@@ -414,30 +414,34 @@ class WorkspaceMixin(App):
                         yield footer_label
         yield ExtendedFooter(show_command_palette=False)
 
+    @property
+    def ready_work_item_key(self) -> str | None:
+        if self.is_loading:
+            return None
+        return self.current_loaded_work_item_key
+
+    @property
+    def is_work_item_ready(self) -> bool:
+        return self.ready_work_item_key is not None
+
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == 'clear_search':
             return self.search_results_container.search_active
         if action == 'unload_work_item':
-            return self.current_loaded_work_item_key is not None
+            return self.is_work_item_ready
         if action == 'edit_work_item_info':
-            return self.current_loaded_work_item_key is not None
+            return self.is_work_item_ready
         if action == 'reload_loaded_work_item':
-            return self.current_loaded_work_item_key is not None
+            return self.is_work_item_ready
         if action == 'new_comment':
-            return (
-                self.current_loaded_work_item_key is not None
-                and self.work_item_comments_widget.can_add_comment
-            )
+            return self.is_work_item_ready and self.work_item_comments_widget.can_add_comment
         if action in ('view_worklog', 'log_work'):
-            return self.current_loaded_work_item_key is not None
+            return self.is_work_item_ready
         if action in ('apply_changes', 'discard_changes'):
-            return (
-                self.current_loaded_work_item_key is not None
-                and self.work_item_fields_widget.has_pending_changes
-            )
+            return self.is_work_item_ready and self.work_item_fields_widget.has_pending_changes
         if action == 'go_to_parent_work_item':
             work_item = self.information_panel.work_item
-            return bool(work_item and work_item.parent_key.strip())
+            return bool(self.is_work_item_ready and work_item and work_item.parent_key.strip())
         return super().check_action(action, parameters)
 
     async def on_mount(self) -> None:
@@ -1232,22 +1236,23 @@ class WorkspaceMixin(App):
         )
 
     async def action_edit_work_item_info(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         await self.work_item_info_container.action_edit_work_item_info()
 
     def action_reload_loaded_work_item(self) -> None:
-        if not self.current_loaded_work_item_key:
+        work_item_key = self.ready_work_item_key
+        if work_item_key is None:
             return
 
         self.run_worker(
-            self.load_work_item(self.current_loaded_work_item_key, force_reload=True),
+            self.load_work_item(work_item_key, force_reload=True),
             exclusive=True,
             group='work-item',
         )
 
     def action_watch_loaded_work_item(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
 
         self.run_worker(
@@ -1257,37 +1262,40 @@ class WorkspaceMixin(App):
         )
 
     async def action_flag_work_item(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         await self.work_item_fields_widget.toggle_work_item_flag()
 
     def action_open_loaded_work_item_in_browser(self) -> None:
-        if not self.current_loaded_work_item_key:
+        work_item_key = self.ready_work_item_key
+        if work_item_key is None:
             return
 
         app = cast('JiraApp', self.app)
-        if url := build_external_url_for_work_item(self.current_loaded_work_item_key, app):
+        if url := build_external_url_for_work_item(work_item_key, app):
             app.open_url(url)
 
     def action_copy_loaded_work_item_key(self) -> None:
-        if not self.current_loaded_work_item_key:
+        work_item_key = self.ready_work_item_key
+        if work_item_key is None:
             return
 
-        self.app.copy_to_clipboard(self.current_loaded_work_item_key)
-        self.notify('Key copied to clipboard', title=self.current_loaded_work_item_key)
+        self.app.copy_to_clipboard(work_item_key)
+        self.notify('Key copied to clipboard', title=work_item_key)
 
     def action_copy_loaded_work_item_url(self) -> None:
-        if not self.current_loaded_work_item_key:
+        work_item_key = self.ready_work_item_key
+        if work_item_key is None:
             return
 
         app = cast('JiraApp', self.app)
-        if url := build_external_url_for_work_item(self.current_loaded_work_item_key, app):
+        if url := build_external_url_for_work_item(work_item_key, app):
             app.copy_to_clipboard(url)
-            self.notify('URL copied to clipboard', title=self.current_loaded_work_item_key)
+            self.notify('URL copied to clipboard', title=work_item_key)
 
     def action_copy_loaded_work_item_as_template(self) -> None:
         work_item = self.information_panel.work_item
-        if work_item is None:
+        if not self.is_work_item_ready or work_item is None:
             return
 
         from gojeera.utils.work_item_templates import dump_work_item_template
@@ -1296,17 +1304,21 @@ class WorkspaceMixin(App):
         self.notify('Template copied to clipboard', title=work_item.key)
 
     def action_clone_loaded_work_item(self) -> None:
-        if not self.current_loaded_work_item_key:
+        work_item_key = self.ready_work_item_key
+        if work_item_key is None:
             return
 
-        self.run_worker(self.clone_work_item(self.current_loaded_work_item_key))
+        self.run_worker(self.clone_work_item(work_item_key))
 
     async def action_add_attachment(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         await self.work_item_attachments_widget.action_add_attachment()
 
     async def action_create_work_item_subtask(self) -> None:
+        if not self.is_work_item_ready:
+            return
+
         work_item = self.work_item_info_container.work_item
         if not work_item or (work_item.work_item_type and work_item.work_item_type.subtask):
             return
@@ -1329,43 +1341,46 @@ class WorkspaceMixin(App):
         )
 
     async def action_new_related_work_item(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         await self.related_work_items_widget.action_link_work_item()
 
     async def action_new_web_link(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         await self.work_item_remote_links_widget.action_add_remote_link()
 
     def action_new_comment(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         if not self.work_item_comments_widget.can_add_comment:
             return
         self.work_item_comments_widget.action_add_comment()
 
     def action_view_worklog(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         self.information_panel.action_view_worklog()
 
     def action_log_work(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         self.information_panel.action_log_work()
 
     def action_apply_changes(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         self.work_item_fields_widget.action_save_work_item()
 
     def action_discard_changes(self) -> None:
-        if not self.current_loaded_work_item_key:
+        if not self.is_work_item_ready:
             return
         self.work_item_fields_widget.action_discard_pending_changes()
 
     async def action_go_to_parent_work_item(self) -> None:
+        if not self.is_work_item_ready:
+            return
+
         if self.focused_work_item_link_key:
             self.run_worker(
                 self.load_work_item(self.focused_work_item_link_key),
@@ -1706,6 +1721,7 @@ class WorkspaceMixin(App):
         if loading:
             self.details_breadcrumb_row.display = False
             self.details_tabs_row.display = False
+        self.call_after_refresh(self.refresh_bindings)
 
     async def clone_work_item(self, work_item_key: str) -> None:
         if not work_item_key:

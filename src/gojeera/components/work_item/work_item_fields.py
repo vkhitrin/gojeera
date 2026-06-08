@@ -281,7 +281,6 @@ class WorkItemFields(Container, can_focus=False):
     #dynamic-fields-section {
         width: 100%;
         height: auto;
-        min-height: 3;
         margin: 0;
         padding: 0;
     }
@@ -1124,6 +1123,18 @@ class WorkItemFields(Container, can_focus=False):
     def _set_dynamic_fields_section_visibility(self, visible: bool) -> None:
         if self.dynamic_fields_section_container.display != visible:
             self.dynamic_fields_section_container.display = visible
+
+    def _dynamic_fields_have_visible_rows(self) -> bool:
+        return bool(
+            self.dynamic_fields_widgets_container.display
+            and any(
+                getattr(child, 'display', True)
+                for child in self.dynamic_fields_widgets_container.children
+            )
+        )
+
+    def _sync_dynamic_fields_section_visibility(self) -> None:
+        self._set_dynamic_fields_section_visibility(self._dynamic_fields_have_visible_rows())
 
     def _apply_static_schema_visibility(
         self,
@@ -3543,11 +3554,7 @@ class WorkItemFields(Container, can_focus=False):
         if self.work_item is None or self.work_item.key != work_item_key:
             return
 
-        has_dynamic_rows = self.dynamic_fields_widgets_container.display and any(
-            getattr(child, 'display', True)
-            for child in self.dynamic_fields_widgets_container.children
-        )
-        self._set_dynamic_fields_section_visibility(has_dynamic_rows)
+        self._sync_dynamic_fields_section_visibility()
         if self.has_pending_changes:
             self.has_pending_changes = False
         self._dynamic_loading_worker = None
@@ -3691,6 +3698,7 @@ class WorkItemFields(Container, can_focus=False):
                 and await self._update_readonly_dynamic_fields(readonly_fields)
             ):
                 self.dynamic_fields_widgets_container.display = bool(readonly_fields)
+                self._sync_dynamic_fields_section_visibility()
                 self._schedule_field_spacing_refresh()
                 return False
 
@@ -3708,6 +3716,7 @@ class WorkItemFields(Container, can_focus=False):
                     self.dynamic_fields_widgets_container.display = True
             else:
                 self.dynamic_fields_widgets_container.display = False
+            self._sync_dynamic_fields_section_visibility()
             self._schedule_field_spacing_refresh()
             return True
 
@@ -3731,6 +3740,7 @@ class WorkItemFields(Container, can_focus=False):
                 editable_fields,
             )
             await self._update_dynamic_widgets_values(work_item, editable_fields)
+            self._sync_dynamic_fields_section_visibility()
             self._schedule_field_spacing_refresh()
             return False
 
@@ -3778,6 +3788,7 @@ class WorkItemFields(Container, can_focus=False):
                 self.dynamic_fields_widgets_container.display = bool(
                     other_widgets or adf_textarea_widgets
                 )
+                self._sync_dynamic_fields_section_visibility()
             if adf_textarea_widgets:
                 self._deferred_adf_mount_worker = self.run_worker(
                     self._mount_deferred_adf_widgets(work_item.key, adf_textarea_widgets),
@@ -3785,6 +3796,7 @@ class WorkItemFields(Container, can_focus=False):
                 )
         else:
             self.dynamic_fields_widgets_container.display = False
+            self._sync_dynamic_fields_section_visibility()
         self._schedule_field_spacing_refresh()
         return True
 
@@ -3872,6 +3884,7 @@ class WorkItemFields(Container, can_focus=False):
             with self.app.batch_update():
                 await self.dynamic_fields_widgets_container.mount(*adf_widgets)
             self.dynamic_fields_widgets_container.display = True
+            self._sync_dynamic_fields_section_visibility()
             self._invalidate_dynamic_field_wrapper_cache()
             self._update_all_field_labels_styling()
             self._setup_jump_mode()

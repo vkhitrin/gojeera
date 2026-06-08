@@ -10,7 +10,7 @@ class WorkItemCommandProvider(ActionCommandProvider):
 
     def _get_loaded_work_item_key(self) -> str | None:
         screen = self._get_main_screen()
-        if not screen:
+        if not screen or not screen.is_work_item_ready:
             return None
         work_item = screen.information_panel.work_item
         if not work_item:

@@ -41,6 +41,7 @@ from gojeera.internal.models.jira import (
     WorkItemTransition,
     WorkItemTransitionState,
     WorkItemType,
+    WorkItemWatchers,
 )
 from gojeera.internal.models.work_items import (
     JiraWorkItem,
@@ -56,6 +57,7 @@ from gojeera.internal.auth.profiles import OAuth2AuthProfile
 from gojeera.internal.auth.service import AuthService
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
+from gojeera.utils.jira.jql import work_item_flagged_jql
 from gojeera.utils.data.mappings import get_nested
 from gojeera.utils.system.logging_utils import (
     ExceptionLogDetails,
@@ -305,6 +307,22 @@ class APIController:
             extra['worklog_id'] = worklog_id
         return extra
 
+    def _worklog_request_kwargs(
+        self,
+        worklog_fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        time_remaining = worklog_fields.get('time_remaining')
+        current_remaining_estimate = worklog_fields.get('current_remaining_estimate')
+        return {
+            'work_item_id_or_key': worklog_fields.get('work_item_key_or_id'),
+            'started': worklog_fields.get('started'),
+            'time_spent': worklog_fields.get('time_spent'),
+            'time_remaining': self._resolve_remaining_time_estimate(
+                time_remaining, current_remaining_estimate
+            ),
+            'comment': worklog_fields.get('comment'),
+        }
+
     async def _execute_void_api_operation(
         self,
         operation: Awaitable[Any],
@@ -352,7 +370,47 @@ class APIController:
         self,
         work_item_key_or_id: str,
     ) -> APIControllerResponse | None:
-        required_permissions = ['BROWSE_PROJECTS', 'ADD_COMMENTS']
+        return await self.validate_work_item_permissions(
+            work_item_key_or_id=work_item_key_or_id,
+            required_permissions=['BROWSE_PROJECTS', 'ADD_COMMENTS'],
+            action_name='add comments',
+            error_message='Unable to validate comment permissions',
+        )
+
+    async def validate_view_watchers_permissions(
+        self,
+        work_item_key_or_id: str,
+    ) -> APIControllerResponse | None:
+        return await self.validate_work_item_permissions(
+            work_item_key_or_id=work_item_key_or_id,
+            required_permissions=['BROWSE_PROJECTS', 'VIEW_VOTERS_AND_WATCHERS'],
+            action_name='view watchers',
+            error_message='Unable to validate watcher permissions',
+        )
+
+    async def validate_work_item_permissions(
+        self,
+        work_item_key_or_id: str,
+        required_permissions: list[str],
+        *,
+        action_name: str,
+        error_message: str = 'Unable to validate work item permissions',
+    ) -> APIControllerResponse | None:
+        return await self._validate_work_item_permissions(
+            work_item_key_or_id=work_item_key_or_id,
+            required_permissions=required_permissions,
+            action_name=action_name,
+            error_message=error_message,
+        )
+
+    async def _validate_work_item_permissions(
+        self,
+        *,
+        work_item_key_or_id: str,
+        required_permissions: list[str],
+        action_name: str,
+        error_message: str,
+    ) -> APIControllerResponse | None:
         try:
             response = await self.client.get_my_permissions(
                 work_item_id_or_key=work_item_key_or_id,
@@ -361,7 +419,7 @@ class APIController:
         except Exception as e:
             return self._failed_api_response(
                 e,
-                error_message='Unable to validate comment permissions',
+                error_message=error_message,
                 extra={'work_item_key_or_id': work_item_key_or_id},
             )
 
@@ -374,7 +432,7 @@ class APIController:
         if missing_permissions:
             return APIControllerResponse(
                 success=False,
-                error='Missing required permission(s) to add comments: '
+                error=f'Missing required permission(s) to {action_name}: '
                 + ', '.join(missing_permissions),
             )
         return None
@@ -383,6 +441,48 @@ class APIController:
         self, response: list[dict[str, Any]]
     ) -> list[WorkItemRemoteLink]:
         return [self._build_work_item_remote_link(item) for item in response]
+
+    def _build_work_item_watchers(self, response: dict[str, Any]) -> WorkItemWatchers:
+        return WorkItemWatchers(
+            is_watching=bool(response.get('isWatching', False)),
+            watch_count=int(response.get('watchCount', 0) or 0),
+            watchers=self._build_jira_users(response.get('watchers', [])),
+        )
+
+    @staticmethod
+    def get_work_item_flagged_field(
+        work_item: JiraWorkItem,
+    ) -> tuple[str, dict[str, Any]] | None:
+        edit_metadata = work_item.get_edit_metadata() or {}
+        for field_id, field_metadata in edit_metadata.items():
+            if str(field_metadata.get('name', '')).casefold() == 'flagged':
+                return field_id, field_metadata
+        return None
+
+    async def get_work_item_flagged_state(self, work_item_key: str) -> APIControllerResponse:
+        """Returns whether Jira considers a work item flagged."""
+        # NOTE: Using a workaround to fetch flag field "reliably", in the future we
+        # should try to migrate to GraphQL.
+        jql_query = work_item_flagged_jql(work_item_key)
+        try:
+            response = await self.client.search_work_items(
+                jql_query=jql_query,
+                fields=['key'],
+                limit=1,
+            )
+        except Exception as e:
+            exception_details: dict = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to retrieve the Flagged state of the work item',
+                extra={
+                    'work_item_key': work_item_key,
+                    'jql_query': jql_query,
+                    **exception_details.get('extra', {}),
+                },
+            )
+            return APIControllerResponse(success=False, error=exception_details.get('message'))
+
+        return APIControllerResponse(result=bool(response.get('issues', [])))
 
     def _build_work_item_transitions(self, response: dict[str, Any]) -> list[WorkItemTransition]:
         transitions: list[WorkItemTransition] = []
@@ -907,6 +1007,9 @@ class APIController:
             `success = False` and the error message in the `error` key.
         """
 
+        should_fetch_flagged_state = fields is None
+        if fields is None:
+            fields = ['*all', 'watches']
         fields_strings: str | None = ','.join(fields) if fields else None
         try:
             work_item: dict = await self.client.get_work_item(
@@ -929,6 +1032,10 @@ class APIController:
         else:
             try:
                 instance: JiraWorkItem = WorkItemFactory.create_work_item(work_item)
+                if should_fetch_flagged_state:
+                    flagged_response = await self.get_work_item_flagged_state(instance.key)
+                    if flagged_response.success:
+                        instance.flagged = bool(flagged_response.result)
             except Exception as e:
                 self.logger.error(
                     'There was an error while extracting data from a work item',
@@ -972,6 +1079,30 @@ class APIController:
                         return {'jql': jql_expression, 'updated_from': None}
 
         return {}
+
+    async def _prepared_search_kwargs_or_response(
+        self,
+        search_filters: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, APIControllerResponse | None]:
+        search_kwargs, validation_error = await self._prepare_search_work_item_api_kwargs(
+            project_key=search_filters.get('project_key'),
+            created_from=search_filters.get('created_from'),
+            created_until=search_filters.get('created_until'),
+            status=search_filters.get('status'),
+            assignee=search_filters.get('assignee'),
+            work_item_type=search_filters.get('work_item_type'),
+            jql_query=search_filters.get('jql_query'),
+        )
+        return cast(dict[str, Any], search_kwargs), validation_error
+
+    @staticmethod
+    def _updated_fields_response(response: dict) -> APIControllerResponse:
+        updated_fields: list[str] = []
+        if fields := response.get('fields', {}):
+            updated_fields = list(fields.keys())
+        return APIControllerResponse(
+            result=UpdateWorkItemResponse(success=True, updated_fields=updated_fields)
+        )
 
     async def validate_jql_query(self, jql_query: str) -> APIControllerResponse:
         """Validates a JQL query by parsing it using Jira's JQL parse API.
@@ -1026,17 +1157,17 @@ class APIController:
 
     async def search_work_items(
         self,
-        project_key: str | None = None,
-        created_from: date | None = None,
-        created_until: date | None = None,
-        status: int | None = None,
-        assignee: str | None = None,
-        work_item_type: int | None = None,
-        search_in_active_sprint: bool = False,
         jql_query: str | None = None,
+        search_in_active_sprint: bool = False,
+        project_key: str | None = None,
+        status: int | None = None,
+        created_from: date | None = None,
+        assignee: str | None = None,
+        created_until: date | None = None,
+        work_item_type: int | None = None,
         next_page_token: str | None = None,
-        limit: int | None = None,
         fields: list[str] | None = None,
+        limit: int | None = None,
     ) -> APIControllerResponse:
         """Searches for work items matching specified JQL query and other criteria.
 
@@ -1060,21 +1191,15 @@ class APIController:
             An instance of `APIControllerResponse` with the work items found or, en error if the search can not be
             performed.
         """
-        search_kwargs, validation_error = await self._prepare_search_work_item_api_kwargs(
-            project_key=project_key,
-            created_from=created_from,
-            created_until=created_until,
-            status=status,
-            assignee=assignee,
-            work_item_type=work_item_type,
-            jql_query=jql_query,
-        )
+        prepared_search = await self._prepared_search_kwargs_or_response(locals())
+        search_kwargs, validation_error = prepared_search
         if validation_error:
             return validation_error
+        assert search_kwargs is not None
 
         try:
             response: dict = await self.client.search_work_items(
-                **cast(dict[str, Any], search_kwargs),
+                **search_kwargs,
                 search_in_active_sprint=search_in_active_sprint,
                 fields=fields
                 if fields
@@ -1124,45 +1249,35 @@ class APIController:
 
     async def count_work_items(
         self,
-        project_key: str | None = None,
-        created_from: date | None = None,
-        created_until: date | None = None,
-        status: int | None = None,
-        assignee: str | None = None,
-        work_item_type: int | None = None,
         jql_query: str | None = None,
+        project_key: str | None = None,
+        status: int | None = None,
+        created_from: date | None = None,
+        work_item_type: int | None = None,
+        created_until: date | None = None,
+        assignee: str | None = None,
     ) -> APIControllerResponse:
         """Estimates the number of work items yield by a search.
 
         Args:
-            project_key: the case-sensitive key of the project whose work items we want to search.
-            created_from: search work items created from this date forward (inclusive).
-            created_until: search work items created until this date (inclusive).
-            status: search work items with this status.
-            assignee: search work items assigned to this user's account ID.
-            work_item_type: search work items of this type.
-            jql_query: search work items using this (additional) JQL query.
+            jql_query: additional JQL expression used to constrain the count.
+            project_key: project key filter.
+            status: Jira status id filter.
+            created_from: inclusive lower creation date bound.
+            work_item_type: Jira work item type id filter.
+            created_until: inclusive upper creation date bound.
+            assignee: Jira account id filter.
 
         Returns:
-            An instance of `APIControllerResponse` with the count of work items or, en error if the estimation can not
-            be calculated.
+            The approximate count response, or an error response when Jira rejects the query.
         """
-        search_kwargs, validation_error = await self._prepare_search_work_item_api_kwargs(
-            project_key=project_key,
-            created_from=created_from,
-            created_until=created_until,
-            status=status,
-            assignee=assignee,
-            work_item_type=work_item_type,
-            jql_query=jql_query,
-        )
+        search_kwargs, validation_error = await self._prepared_search_kwargs_or_response(locals())
         if validation_error:
             return validation_error
+        assert search_kwargs is not None
 
         try:
-            response: dict = await self.client.work_items_search_approximate_count(
-                **cast(dict[str, Any], search_kwargs)
-            )
+            response: dict = await self.client.work_items_search_approximate_count(**search_kwargs)
         except NotImplementedError:
             return APIControllerResponse(result=0)
         except Exception as e:
@@ -1262,6 +1377,41 @@ class APIController:
                 'link_id': link_id,
                 'url': url,
                 'title': title,
+            },
+        )
+
+    async def get_work_item_watchers(self, work_item_key_or_id: str) -> APIControllerResponse:
+        """Retrieves the watchers of a work item."""
+        return await self._execute_result_api_operation(
+            self.client.get_work_item_watchers(work_item_key_or_id),
+            result_builder=self._build_work_item_watchers,
+            error_message='Unable to retrieve the watchers of a work item',
+            extra={'work_item_key_or_id': work_item_key_or_id},
+        )
+
+    async def add_work_item_watcher(
+        self, work_item_key_or_id: str, account_id: str | None = None
+    ) -> APIControllerResponse:
+        """Adds a watcher to a work item. Defaults to the authenticated user."""
+        return await self._execute_void_api_operation(
+            self.client.add_work_item_watcher(work_item_key_or_id, account_id),
+            error_message='Unable to add watcher',
+            extra={
+                'work_item_key_or_id': work_item_key_or_id,
+                'account_id': account_id,
+            },
+        )
+
+    async def remove_work_item_watcher(
+        self, work_item_key_or_id: str, account_id: str
+    ) -> APIControllerResponse:
+        """Removes a watcher from a work item."""
+        return await self._execute_void_api_operation(
+            self.client.remove_work_item_watcher(work_item_key_or_id, account_id),
+            error_message='Unable to remove watcher',
+            extra={
+                'work_item_key_or_id': work_item_key_or_id,
+                'account_id': account_id,
             },
         )
 
@@ -1621,13 +1771,58 @@ class APIController:
                         success=False,
                         error='Jira accepted the request but the parent work item was not changed.',
                     )
-            updated_fields: list[str] = []
-            if fields := response.get('fields', {}):
-                updated_fields = list(fields.keys())
-            return APIControllerResponse(
-                result=UpdateWorkItemResponse(success=True, updated_fields=updated_fields)
-            )
+            return self._updated_fields_response(response)
         return APIControllerResponse(result=UpdateWorkItemResponse(success=True))
+
+    async def set_work_item_flagged(
+        self, work_item: JiraWorkItem, flagged: bool
+    ) -> APIControllerResponse:
+        """Sets or clears the Jira Software Flagged field for a work item."""
+
+        fields_response = await self.get_fields('flagged')
+        if not fields_response.success or not fields_response.result:
+            return APIControllerResponse(
+                success=False,
+                error='Unable to flag the item. Missing fields configuration.',
+            )
+
+        fields = cast(list[JiraField], fields_response.result)
+        if not fields:
+            return APIControllerResponse(
+                success=False,
+                error='Unable to flag the item. Missing fields configuration.',
+            )
+
+        field_configuration = fields[0]
+        if not field_configuration.key:
+            return APIControllerResponse(
+                success=False,
+                error='Unable to flag the item. Missing configuration for "flagged" field.',
+            )
+
+        field_value: list[dict[str, str]]
+        if flagged:
+            field_value = [{'value': 'Impediment'}]
+        else:
+            field_value = []
+
+        try:
+            response: dict = await self.client.update_work_item(
+                work_item.key,
+                fields={field_configuration.key: field_value},
+            )
+            return self._updated_fields_response(response)
+        except Exception as e:
+            exception_details: dict = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to update the Flagged field of the work item',
+                extra={
+                    'work_item_key': work_item.key,
+                    'flagged': flagged,
+                    **exception_details.get('extra', {}),
+                },
+            )
+            return APIControllerResponse(success=False, error=exception_details.get('message'))
 
     async def transitions(self, work_item_id_or_key: str) -> APIControllerResponse:
         """Retrieves the applicable (status) transitions of a work item.
@@ -1739,15 +1934,7 @@ class APIController:
         message: str,
         jsd_public: bool | None = None,
     ) -> APIControllerResponse:
-        """Adds a comment to a work item.
-
-        Args:
-            work_item_key_or_id: the case-sensitive key or id of a work item.
-            message: the text of the comment.
-
-        Returns:
-            An instance of `APIControllerResponse` with the result of the operation.
-        """
+        """Adds a comment to a work item."""
         if validation_error := self._validate_message_presence(message):
             return validation_error
         return await self._execute_result_api_operation(
@@ -1767,16 +1954,7 @@ class APIController:
         comment_id: str,
         message: str,
     ) -> APIControllerResponse:
-        """Updates a comment on a work item.
-
-        Args:
-            work_item_key_or_id: the case-sensitive key or id of a work item.
-            comment_id: the id of the comment to update.
-            message: the new text of the comment in markdown format.
-
-        Returns:
-            An instance of `APIControllerResponse` with the result of the operation.
-        """
+        """Updates a comment on a work item."""
         if validation_error := self._validate_message_presence(message):
             return validation_error
         return await self._execute_result_api_operation(
@@ -2413,15 +2591,7 @@ class APIController:
         """
 
         return await self._execute_result_api_operation(
-            self.client.add_work_item_work_log(
-                work_item_id_or_key=work_item_key_or_id,
-                started=started,
-                time_spent=time_spent,
-                time_remaining=self._resolve_remaining_time_estimate(
-                    time_remaining, current_remaining_estimate
-                ),
-                comment=comment,
-            ),
+            self.client.add_work_item_work_log(**self._worklog_request_kwargs(locals())),
             result_builder=self._build_worklog,
             error_message='Unable to add worklog',
             extra=self._worklog_log_context(
@@ -2462,14 +2632,8 @@ class APIController:
 
         return await self._execute_result_api_operation(
             self.client.update_work_log(
-                work_item_id_or_key=work_item_key_or_id,
                 worklog_id=worklog_id,
-                started=started,
-                time_spent=time_spent,
-                time_remaining=self._resolve_remaining_time_estimate(
-                    time_remaining, current_remaining_estimate
-                ),
-                comment=comment,
+                **self._worklog_request_kwargs(locals()),
             ),
             result_builder=self._build_worklog,
             error_message='Unable to update worklog',

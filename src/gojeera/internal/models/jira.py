@@ -97,6 +97,13 @@ class JiraUser(BaseModel):
 
 
 @dataclass
+class WorkItemWatchers(BaseModel):
+    is_watching: bool
+    watch_count: int
+    watchers: list[JiraUser]
+
+
+@dataclass
 class WorkItemPriority(BaseModel):
     id: str
     name: str

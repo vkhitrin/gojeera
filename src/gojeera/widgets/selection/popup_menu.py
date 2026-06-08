@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -27,6 +27,7 @@ class PopupMenuItem:
     shortcut: str = ''
     icon: str = ''
     payload: Any = None
+    separator: bool = False
 
 
 class PopupMenuItemWidget(Static):
@@ -34,7 +35,7 @@ class PopupMenuItemWidget(Static):
 
     DEFAULT_CSS = """
     PopupMenuItemWidget {
-        height: 2;
+        height: auto;
         background: $surface-lighten-1;
         color: $text;
     }
@@ -58,13 +59,20 @@ class PopupMenuItemWidget(Static):
     def render(self) -> Text:
         menu = self.menu
         width = max(1, self.size.width or (menu.content_width if menu else 1))
+        if self.item.separator:
+            return Text('─' * width)
+
         text = Text()
         text.append(self._title[:width].ljust(width))
-        text.append('\n')
-        text.append(self._description[:width].ljust(width))
+        if self._description:
+            text.append('\n')
+            text.append(self._description[:width].ljust(width))
         return text
 
     def _on_mouse_move(self, event: events.MouseMove) -> None:
+        if self.item.separator:
+            event.stop()
+            return
         if menu := self.menu:
             menu.highlighted_index = self.item_index
             menu.refresh_items()
@@ -73,6 +81,8 @@ class PopupMenuItemWidget(Static):
     async def _on_click(self, event: events.Click) -> None:
         event.prevent_default()
         event.stop()
+        if self.item.separator:
+            return
         if menu := self.menu:
             menu.highlighted_index = self.item_index
             menu._take_focus()
@@ -96,6 +106,8 @@ class PopupMenu(Static, can_focus=True):
     PopupMenu {
         width: auto;
         height: auto;
+        min-width: 1;
+        min-height: 1;
         background: $surface-lighten-1;
         color: $text;
         padding: 0;
@@ -104,6 +116,17 @@ class PopupMenu(Static, can_focus=True):
         constrain: none inside;
         position: absolute;
         layer: overlay;
+    }
+
+    PopupMenu.loading {
+        min-width: 18;
+        min-height: 1;
+    }
+
+    .popup-menu-loading-indicator,
+    .popup-menu-loading-indicator.-textual-loading-indicator {
+        background: $surface-lighten-1;
+        color: $accent;
     }
     """
 
@@ -148,7 +171,7 @@ class PopupMenu(Static, can_focus=True):
         self._anchor: Widget | Callable[[], Widget] | None = anchor
         super().__init__('', id=id, classes=classes)
         self.display = False
-        self.styles.height = max(1, len(self.items) * 2)
+        self.styles.height = self.content_height
         self.styles.width = self.content_width
         self.highlighted_index = 0 if self.items else None
 
@@ -166,12 +189,25 @@ class PopupMenu(Static, can_focus=True):
         lines = [line for item in self.items for line in self.item_lines(item)]
         return max([1, *map(len, lines)]) + 1
 
+    @property
+    def content_height(self) -> int:
+        return max(
+            1, sum(2 if item.description and not item.separator else 1 for item in self.items)
+        )
+
     def compose(self) -> ComposeResult:
         for index, item in enumerate(self.items):
             yield PopupMenuItemWidget(item, index)
 
     def on_mount(self) -> None:
         self.refresh_items()
+
+    def set_menu_loading(self, loading: bool) -> None:
+        self.set_class(loading, 'loading')
+        self.loading = loading
+        if loading and self._cover_widget is not None:
+            self._cover_widget.add_class('popup-menu-loading-indicator')
+            self._cover_widget.styles.background = self.styles.background
 
     def _take_focus(self) -> None:
         if self.is_attached:
@@ -226,7 +262,7 @@ class PopupMenu(Static, can_focus=True):
 
     async def replace_options(self, items: Iterable[PopupMenuItem]) -> None:
         self.items = list(items)
-        self.styles.height = max(1, len(self.items) * 2)
+        self.styles.height = self.content_height
         self.styles.width = self.content_width
         self.highlighted_index = 0 if self.items else None
         await self.remove_children()
@@ -235,11 +271,32 @@ class PopupMenu(Static, can_focus=True):
         )
         self.refresh()
 
+    async def toggle_with_loader(
+        self,
+        loader: Callable[[], Awaitable[Iterable[PopupMenuItem]]],
+    ) -> None:
+        """Toggle this menu, loading options asynchronously when opened."""
+        self.toggle()
+        if not self.expanded:
+            return
+
+        self.set_menu_loading(True)
+        try:
+            await self.replace_options(await loader())
+        finally:
+            self.set_menu_loading(False)
+
+        if self.expanded:
+            self._take_focus()
+
     def _highlight_delta(self, delta: int) -> None:
-        if not self.items:
+        if not self.items or all(item.separator for item in self.items):
             return
         current = self.highlighted_index if self.highlighted_index is not None else 0
-        self.highlighted_index = (current + delta) % len(self.items)
+        next_index = (current + delta) % len(self.items)
+        while self.items[next_index].separator:
+            next_index = (next_index + delta) % len(self.items)
+        self.highlighted_index = next_index
 
     def action_cursor_down(self) -> None:
         self._highlight_delta(1)
@@ -251,6 +308,8 @@ class PopupMenu(Static, can_focus=True):
         if self.highlighted_index is None or not self.items:
             return
         item = self.items[self.highlighted_index]
+        if item.separator:
+            return
         self.expanded = False
         self.post_message(self.Selected(self, item))
 

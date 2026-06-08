@@ -18,6 +18,7 @@ import magic  # noqa: E402
 from gojeera.internal.jira.client import AsyncHTTPClient, AsyncJiraClient, JiraClient  # noqa: E402
 from gojeera.internal.models.exceptions import FileUploadException  # noqa: E402
 from gojeera.internal.store.cache import get_cache, run_cache_io  # noqa: E402
+from gojeera.utils.jira.jql import build_work_item_search_jql  # noqa: E402
 from gojeera.utils.system.logging_utils import build_log_extra  # noqa: E402
 
 if TYPE_CHECKING:
@@ -25,55 +26,6 @@ if TYPE_CHECKING:
 
 ClientT = TypeVar('ClientT', AsyncJiraClient, JiraClient, AsyncHTTPClient)
 WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS = 50
-
-
-def _build_work_item_search_jql(
-    project_key: str | None = None,
-    created_from: date | None = None,
-    created_until: date | None = None,
-    updated_from: date | None = None,
-    updated_until: date | None = None,
-    status: int | None = None,
-    assignee: str | None = None,
-    work_item_type: int | None = None,
-    jql_query: str | None = None,
-    search_in_active_sprint: bool = False,
-) -> str:
-    fields: list[str] = []
-    if project_key:
-        fields.append(f'project = "{project_key}"')
-    if created_from:
-        value = date.strftime(created_from, '%Y-%m-%d')
-        fields.append(f'created >= "{value}"')
-    if created_until:
-        value = date.strftime(created_until, '%Y-%m-%d')
-        fields.append(f'created <= "{value}"')
-    if updated_from:
-        value = date.strftime(updated_from, '%Y-%m-%d')
-        fields.append(f'updated >= "{value}"')
-    if updated_until:
-        value = date.strftime(updated_until, '%Y-%m-%d')
-        fields.append(f'updated <= "{value}"')
-    if status:
-        fields.append(f'status = "{status}"')
-    if assignee:
-        fields.append(f'assignee = "{assignee}"')
-    if work_item_type:
-        fields.append(f'type = {work_item_type}')
-    if search_in_active_sprint:
-        fields.append('sprint in openSprints()')
-
-    jql = ' and '.join(fields)
-    if jql_query:
-        normalized_jql_query = jql_query.strip()
-        if jql:
-            if normalized_jql_query.lower().startswith('order by '):
-                jql = f'{jql} {normalized_jql_query}'
-            else:
-                jql = f'{jql} and {normalized_jql_query}'
-        else:
-            jql = normalized_jql_query
-    return jql
 
 
 class JiraAPI:
@@ -131,7 +83,6 @@ class JiraAPI:
             base_url=f'{auth.api_base_url.rstrip("/")}{service_desk_api_path_prefix}',
             oauth2_token_refresher=oauth2_token_refresher,
         )
-
         self._base_url = auth.api_base_url
         self._auth = auth
         self.logger = logging.getLogger('gojeera')
@@ -489,6 +440,37 @@ class JiraAPI:
             ),
         )
 
+    async def get_work_item_watchers(self, work_item_id_or_key: str) -> dict:
+        """Retrieves the watchers for a work item."""
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'issue/{work_item_id_or_key}/watchers',
+            ),
+        )
+
+    async def add_work_item_watcher(
+        self, work_item_id_or_key: str, account_id: str | None = None
+    ) -> None:
+        """Adds a watcher to a work item.
+
+        Jira accepts a JSON string account ID. An empty string adds the calling user.
+        """
+        await self._client.make_request(
+            method=httpx.AsyncClient.post,
+            url=f'issue/{work_item_id_or_key}/watchers',
+            data=json.dumps(account_id or ''),
+        )
+
+    async def remove_work_item_watcher(self, work_item_id_or_key: str, account_id: str) -> None:
+        """Removes a watcher from a work item."""
+        await self._client.make_request(
+            method=httpx.AsyncClient.delete,
+            url=f'issue/{work_item_id_or_key}/watchers',
+            params={'accountId': account_id},
+        )
+
     @staticmethod
     def _build_work_item_remote_link_payload(url: str, title: str) -> dict[str, Any]:
         return {
@@ -576,17 +558,17 @@ class JiraAPI:
             A dictionary with the results.
         """
         del offset
-        jql: str = _build_work_item_search_jql(
-            project_key,
-            created_from,
-            created_until,
-            updated_from,
-            updated_until,
-            status,
-            assignee,
-            work_item_type,
-            jql_query,
-            search_in_active_sprint,
+        jql: str = build_work_item_search_jql(
+            project_key=project_key,
+            created_from=created_from,
+            created_until=created_until,
+            updated_from=updated_from,
+            updated_until=updated_until,
+            status=status,
+            assignee=assignee,
+            work_item_type=work_item_type,
+            jql_query=jql_query,
+            search_in_active_sprint=search_in_active_sprint,
         )
         payload: dict[str, Any] = {
             'jql': jql,
@@ -631,7 +613,7 @@ class JiraAPI:
         Returns:
             A dictionary with the estimated number of items that match the search criteria.
         """
-        jql: str = _build_work_item_search_jql(
+        jql: str = build_work_item_search_jql(
             project_key=project_key,
             created_from=created_from,
             created_until=created_until,
@@ -1164,6 +1146,8 @@ class JiraAPI:
         work_item_id_or_key: str,
         payload: dict | None = None,
         fields: dict | None = None,
+        override_screen_security: bool = False,
+        override_editable_flag: bool = False,
     ) -> dict:
         """Updates a work item.
 
@@ -1180,13 +1164,19 @@ class JiraAPI:
             data['update'] = payload
         if fields:
             data['fields'] = fields
+        params: dict[str, Any] = {'returnIssue': True}
+        if override_screen_security:
+            params['overrideScreenSecurity'] = True
+        if override_editable_flag:
+            params['overrideEditableFlag'] = True
+
         return cast(
             dict,
             await self._client.make_request(
                 method=httpx.AsyncClient.put,
                 url=f'issue/{work_item_id_or_key}',
                 data=json.dumps(data),
-                params={'returnIssue': True},
+                params=params,
             ),
         )
 

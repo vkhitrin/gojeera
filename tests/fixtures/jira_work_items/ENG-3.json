@@ -3,6 +3,11 @@
   "self": "https://example.atlassian.acme.net/rest/api/3/issue/94266",
   "key": "ENG-3",
   "fields": {
+    "watches": {
+      "self": "https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/watchers",
+      "watchCount": 1,
+      "isWatching": true
+    },
     "assignee": {
       "self": "https://example.atlassian.acme.net/rest/api/3/user?accountId=555000%3A22222222-2222-2222-2222-222222222222",
       "accountId": "555000:22222222-2222-2222-2222-222222222222",
@@ -170,7 +175,7 @@
     ],
     "created": "2026-02-05T09:00:00.000+0200",
     "creator": null,
-    "customfield_10016": 5.0,
+    "customfield_10016": 5,
     "customfield_10020": [
       {
         "id": 2,

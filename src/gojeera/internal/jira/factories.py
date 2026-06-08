@@ -7,10 +7,10 @@ from dateutil.parser import isoparse
 from gojeera.internal.models.jira import (
     Attachment,
     JiraSprint,
+    JiraProject,
     JiraUser,
     JiraWorkItemComponent,
     JiraWorkItemGenericFields,
-    JiraProject,
     TimeTracking,
     WorkItemPriority,
     WorkItemStatus,
@@ -129,6 +129,8 @@ class WorkItemFactory:
                 )
             )
 
+        watches: dict[str, Any] = fields.get('watches', {}) or {}
+
         custom_fields_values: dict[str, Any] | None = None
         if editmeta := data.get('editmeta', {}):
             custom_fields_values = get_custom_fields_values(fields, editmeta.get('fields', {}))
@@ -232,6 +234,8 @@ class WorkItemFactory:
             custom_fields=custom_fields_values,
             additional_fields=additional_fields,
             components=components,
+            watch_count=int(watches.get('watchCount', 0) or 0) if watches else None,
+            is_watching=bool(watches.get('isWatching')) if watches else None,
         )
 
 

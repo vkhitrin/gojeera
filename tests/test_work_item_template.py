@@ -190,8 +190,15 @@ def mock_template_created_work_item_search(mock_jira_search_with_results: dict) 
 
     def search_handler(request):
         body = json.loads(request.content)
-        jql = str(body.get('jql', '')).strip().lower()
-        if 'key = eng-9' in jql or 'key=eng-9' in jql:
+        raw_jql = str(body.get('jql', ''))
+        jql = raw_jql.strip().lower()
+        if '"flagged[checkboxes]" = impediment' in jql:
+            issues = [
+                work_item
+                for work_item in all_work_items
+                if work_item.get('key') == 'ENG-5' and 'key = "eng-5"' in jql
+            ]
+        elif 'key = eng-9' in jql or 'key=eng-9' in jql:
             issues = [created_work_item]
         else:
             issues = all_work_items

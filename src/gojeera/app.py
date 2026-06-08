@@ -1246,6 +1246,21 @@ class WorkspaceMixin(App):
             group='work-item',
         )
 
+    def action_watch_loaded_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+
+        self.run_worker(
+            self.work_item_fields_widget.toggle_current_user_watching(),
+            exclusive=True,
+            group='work-item-watchers',
+        )
+
+    async def action_flag_work_item(self) -> None:
+        if not self.current_loaded_work_item_key:
+            return
+        await self.work_item_fields_widget.toggle_work_item_flag()
+
     def action_open_loaded_work_item_in_browser(self) -> None:
         if not self.current_loaded_work_item_key:
             return
@@ -1453,19 +1468,14 @@ class WorkspaceMixin(App):
             if CONFIGURATION.get().show_work_item_web_links:
                 self.work_item_remote_links_widget.work_item_key = work_item.key
 
+            self.work_item_fields_widget.available_users = self.available_users
+            self.work_item_fields_widget.work_item = work_item
+
         if self.tabs.active == 'tab-history':
             self.work_item_history_widget.load_if_needed()
 
-        self.call_after_refresh(self._bind_loaded_work_item_fields, work_item)
         self._apply_pending_work_item_navigation_target()
         self._start_progressive_work_item_detail_loads(work_item)
-
-    def _bind_loaded_work_item_fields(self, work_item: JiraWorkItem) -> None:
-        if not self._is_current_loaded_work_item(work_item.key):
-            return
-
-        self.work_item_fields_widget.available_users = self.available_users
-        self.work_item_fields_widget.work_item = work_item
 
     def _start_progressive_work_item_detail_loads(
         self,

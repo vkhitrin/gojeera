@@ -23,15 +23,27 @@ def extract_exception_details(exception: Exception) -> ExceptionLogDetails:
     details = getattr(exception, 'details', None)
     if isinstance(details, APIErrorDetails):
         remote_payload = details.remote_payload or {}
-        error_messages = remote_payload.get('errorMessages', [])
-        message = error_messages[0] if error_messages else str(exception)
-        return ExceptionLogDetails(message=message, extra=details.to_log_extra())
+        return ExceptionLogDetails(
+            message=_extract_error_message(remote_payload, exception),
+            extra=details.to_log_extra(),
+        )
 
     raw_extra: dict[str, Any] = getattr(exception, 'extra', {}) or {}
-    error_messages = raw_extra.get('errorMessages', [])
-    message = error_messages[0] if error_messages else str(exception)
     extra = {'error_context': raw_extra} if raw_extra else {}
-    return ExceptionLogDetails(message=message, extra=extra)
+    return ExceptionLogDetails(
+        message=_extract_error_message(raw_extra, exception),
+        extra=extra,
+    )
+
+
+def _extract_error_message(payload: dict[str, Any], exception: Exception) -> str:
+    error_messages = payload.get('errorMessages', [])
+    field_errors = payload.get('errors', {})
+    if error_messages:
+        return str(error_messages[0])
+    if isinstance(field_errors, dict) and field_errors:
+        return '; '.join(f'{field}: {error}' for field, error in field_errors.items())
+    return str(exception)
 
 
 def build_log_extra(

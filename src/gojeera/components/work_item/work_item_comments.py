@@ -19,6 +19,11 @@ from textual.widgets import Static
 
 from gojeera.components.screens.comment_screen import CommentScreen
 from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+from gojeera.internal.jira.work_item_permissions import (
+    ADD_COMMENT_PERMISSIONS,
+    MISSING_ADD_COMMENT_PERMISSION_ERROR_PREFIX,
+    WorkItemPermissionCache,
+)
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import Attachment
 from gojeera.internal.models.work_items import (
@@ -34,8 +39,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-MISSING_ADD_COMMENT_PERMISSION_ERROR_PREFIX = 'Missing required permission(s) to add comments:'
 
 
 def _merge_uploaded_attachments_into_widget(widget, uploaded_attachments: list[Attachment]) -> None:
@@ -509,9 +512,13 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         super().__init__(id='work_item_comments')
         self._work_item_key = None
         self._work_item_is_service_desk = False
-        self._add_comment_permission_cache: dict[str, APIControllerResponse | None] = {}
-        self._add_comment_permission_worker = None
-        self._add_comment_permission_worker_key: str | None = None
+        self._permission_cache = WorkItemPermissionCache(
+            app_getter=lambda: cast('JiraApp', self.app),
+            run_worker=lambda: self.run_worker,
+            is_mounted=lambda: self.is_mounted,
+            group='add-comment-permission-load',
+            on_loaded=self._handle_permission_loaded,
+        )
         self._last_comment_fingerprint: set[tuple[str, datetime | None]] | None = None
         self._comment_indices: dict[str, int] = {}
         self._comment_containers: list[CommentContainer] = []
@@ -530,9 +537,8 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         self._work_item_key = value
         if value:
             self._start_add_comment_permission_load(value)
-        else:
-            self._add_comment_permission_worker = None
-            self._add_comment_permission_worker_key = None
+            if self.is_attached:
+                self.call_after_refresh(self._start_add_comment_permission_load, value)
         if self.is_mounted:
             self.screen.refresh_bindings()
 
@@ -563,7 +569,12 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
     def can_add_comment(self) -> bool:
         if not self.work_item_key:
             return False
-        permission_response = self._add_comment_permission_cache.get(self.work_item_key)
+        permission_response = self._permission_cache.cached_response(
+            self.work_item_key,
+            ADD_COMMENT_PERMISSIONS,
+        )
+        if permission_response is None:
+            self._start_add_comment_permission_load(self.work_item_key)
         return (
             permission_response is None
             or permission_response.success
@@ -615,50 +626,32 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
                 group='add-comment-permission',
             )
 
-    def _start_add_comment_permission_load(self, work_item_key: str) -> None:
-        if work_item_key in self._add_comment_permission_cache or not self.is_mounted:
-            return
-        if (
-            self._add_comment_permission_worker is not None
-            and not self._add_comment_permission_worker.is_finished
-            and self._add_comment_permission_worker_key == work_item_key
-        ):
-            return
-
-        self._add_comment_permission_worker_key = work_item_key
-        self._add_comment_permission_worker = self.run_worker(
-            self._load_add_comment_permission(work_item_key),
-            exclusive=True,
-            group='add-comment-permission-load',
-        )
-
-    async def _load_add_comment_permission(
+    def _handle_permission_loaded(
         self,
         work_item_key: str,
-    ) -> APIControllerResponse | None:
-        if work_item_key in self._add_comment_permission_cache:
-            return self._add_comment_permission_cache[work_item_key]
-
-        application = cast('JiraApp', self.app)  # noqa: F821
-        permission_response = await application.api.validate_add_comment_permissions(work_item_key)
-        self._add_comment_permission_cache[work_item_key] = permission_response
+        _permissions: tuple[str, ...],
+        _permission_response: APIControllerResponse | None,
+    ) -> None:
         if self.is_mounted and work_item_key == self.work_item_key:
             self.screen.refresh_bindings()
-        return permission_response
+
+    def _start_add_comment_permission_load(self, work_item_key: str) -> None:
+        self._permission_cache.start_load(
+            work_item_key,
+            ADD_COMMENT_PERMISSIONS,
+            action_name='add comments',
+            exclusive=True,
+        )
 
     async def _get_add_comment_permission(
         self,
         work_item_key: str,
     ) -> APIControllerResponse | None:
-        if work_item_key in self._add_comment_permission_cache:
-            return self._add_comment_permission_cache[work_item_key]
-        if (
-            self._add_comment_permission_worker is not None
-            and not self._add_comment_permission_worker.is_finished
-            and self._add_comment_permission_worker_key == work_item_key
-        ):
-            return await self._add_comment_permission_worker.wait()
-        return await self._load_add_comment_permission(work_item_key)
+        return await self._permission_cache.get(
+            work_item_key,
+            ADD_COMMENT_PERMISSIONS,
+            action_name='add comments',
+        )
 
     async def _open_add_comment_screen_if_permitted(self, work_item_key: str) -> None:
         permission_response = await self._get_add_comment_permission(work_item_key)

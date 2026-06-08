@@ -2,6 +2,7 @@ import asyncio
 import copy
 import inspect
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -402,14 +403,85 @@ def mock_search_empty_results():
     )
 
 
+def mock_jql_search(search_handler: Callable) -> None:
+    respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
+        side_effect=search_handler
+    )
+
+
 def get_search_results_payload(mock_payload: dict) -> dict:
     return mock_payload.get('_search_page', mock_payload)
 
 
+def is_flagged_state_search_jql(jql: str) -> bool:
+    return '"flagged[checkboxes]" = impediment' in jql.casefold()
+
+
+def request_jql(request) -> str:
+    body = json.loads(request.content)
+    return str(body.get('jql', ''))
+
+
+FLAGGED_WORK_ITEM_KEYS = {'ENG-5'}
+
+
+def flagged_state_search_response_or_none(jql: str, issues: list[dict]) -> Response | None:
+    if not is_flagged_state_search_jql(jql):
+        return None
+
+    match = re.search(r'key\s*=\s*"?(?P<key>[A-Z][A-Z0-9]+-\d+)"?', jql, re.IGNORECASE)
+    if match and match.group('key').upper() in FLAGGED_WORK_ITEM_KEYS:
+        issue = next(
+            (
+                candidate
+                for candidate in issues
+                if str(candidate.get('key', '')).upper() == match.group('key').upper()
+            ),
+            {'key': match.group('key').upper()},
+        )
+        return Response(200, json=build_search_results_page([issue]))
+
+    return empty_search_results_response()
+
+
+def request_jql_with_flagged_response(request, issues: list[dict]) -> tuple[str, Response | None]:
+    jql = request_jql(request)
+    return jql, flagged_state_search_response_or_none(jql, issues)
+
+
+def search_response_with_flagged_state(
+    request, issues: list[dict], response_for_jql: Callable[[str], Response]
+) -> Response:
+    jql, flagged_response = request_jql_with_flagged_response(request, issues)
+    if flagged_response:
+        return flagged_response
+    return response_for_jql(jql)
+
+
+def mock_jql_search_with_flagged_state(
+    issues: list[dict], response_for_jql: Callable[[str], Response]
+) -> None:
+    def search_handler(request):
+        return search_response_with_flagged_state(request, issues, response_for_jql)
+
+    mock_jql_search(search_handler)
+
+
+def empty_search_results_response() -> Response:
+    return Response(200, json=load_fixture('jira_search_empty.json'))
+
+
 def mock_search_with_results(mock_jira_search_with_results):
-    respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
-        return_value=Response(200, json=get_search_results_payload(mock_jira_search_with_results))
-    )
+    def handler(request):
+        return search_response_with_flagged_state(
+            request,
+            mock_jira_search_with_results.get('issues', []),
+            lambda _jql: Response(
+                200, json=get_search_results_payload(mock_jira_search_with_results)
+            ),
+        )
+
+    respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(side_effect=handler)
 
 
 def mock_approximate_count_empty():
@@ -1801,6 +1873,99 @@ async def mock_jira_api_with_saved_work_item_field_update(
 
 
 @pytest.fixture
+async def mock_jira_api_with_unflagged_work_item_update(
+    mock_jira_search_with_results,
+    mock_jira_fields_search,
+    mock_search_results_project_fixture_args,
+):
+    async with respx.mock:
+        flagged_issue = get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-5')
+        unflagged_issue = copy.deepcopy(flagged_issue)
+
+        mock_search_results_base(
+            **mock_search_results_project_fixture_args['mock_search_results_base_with_fields_args']
+        )
+        mock_search_results_issue_details(
+            mock_search_results_project_fixture_args['mock_jira_search_with_results'],
+            mock_search_results_project_fixture_args['mock_transitions_data'],
+            overrides={
+                'ENG-5': {
+                    'issue_side_effect': [
+                        Response(200, json=flagged_issue),
+                        Response(200, json=unflagged_issue),
+                    ]
+                },
+            },
+        )
+        mock_project_issue_types_metadata(
+            build_project_metadata_args(
+                mock_jira_projects=mock_search_results_project_fixture_args['mock_jira_projects'],
+                mock_project_issue_types=mock_search_results_project_fixture_args[
+                    'mock_project_issue_types'
+                ],
+                mock_jira_issue_types=mock_search_results_project_fixture_args[
+                    'mock_jira_issue_types'
+                ],
+                mock_jira_statuses=mock_search_results_project_fixture_args['mock_jira_statuses'],
+                mock_jira_users=mock_search_results_project_fixture_args['mock_jira_users'],
+                mock_engineering_createmeta_fields=mock_search_results_project_fixture_args[
+                    'mock_engineering_createmeta_fields'
+                ],
+            )
+        )
+        mock_work_item_link_types(
+            mock_search_results_project_fixture_args['mock_jira_work_item_link_types']
+        )
+
+        flagged_field = {
+            'id': 'customfield_10114',
+            'key': 'customfield_10114',
+            'name': 'Flagged',
+            'schema': {
+                'type': 'array',
+                'items': 'option',
+            },
+        }
+        respx.get('https://example.atlassian.acme.net/rest/api/3/field').mock(
+            return_value=Response(200, json=[flagged_field])
+        )
+        respx.get('https://example.atlassian.acme.net/rest/api/3/field/search').mock(
+            return_value=Response(200, json=mock_jira_fields_search)
+        )
+        respx.put(
+            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-5\?returnIssue=true$'
+        ).mock(return_value=Response(200, json=unflagged_issue))
+
+        yield
+
+
+@pytest.fixture
+async def mock_jira_api_with_added_work_item_watcher(
+    mock_jira_search_with_results,
+    mock_search_results_project_fixture_args,
+):
+    async with respx.mock:
+        unwatched_issue = copy.deepcopy(
+            get_issue_by_key(mock_jira_search_with_results['issues'], 'ENG-3')
+        )
+        unwatched_issue['fields']['watches'] = {
+            'self': 'https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/watchers',
+            'watchCount': 1,
+            'isWatching': False,
+        }
+
+        mock_search_results_project_fixture(
+            mock_search_results_project_fixture_args,
+            eng_3_override={'issue_response': unwatched_issue},
+        )
+        respx.post('https://example.atlassian.acme.net/rest/api/3/issue/ENG-3/watchers').mock(
+            return_value=Response(204)
+        )
+
+        yield
+
+
+@pytest.fixture
 async def mock_jira_api_with_issue_link_deletion(
     mock_jira_server_info,
     mock_jira_search_with_results,
@@ -2190,11 +2355,7 @@ async def mock_jira_api_with_search_results(
             if parent_key:
                 subtasks_by_parent.setdefault(parent_key, []).append(issue)
 
-        # Custom handler for JQL search to return subtasks when querying by parent
-        def search_handler(request):
-            body = json.loads(request.content)
-            jql = body.get('jql', '')
-
+        def response_for_jql(jql: str) -> Response:
             if jql.startswith('parent='):
                 parent_key = jql.removeprefix('parent=').strip()
                 subtasks_for_jql = subtasks_by_parent.get(parent_key, [])
@@ -2203,12 +2364,10 @@ async def mock_jira_api_with_search_results(
             if 'issuetype in (10000)' in jql and 'key != ENG-3' in jql:
                 return Response(200, json=get_search_results_payload(mock_jira_parent_candidates))
 
-            # Return main search results for other queries
             return Response(200, json=get_search_results_payload(mock_jira_search_with_results))
 
-        # Mock search endpoint with custom handler
-        respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
-            side_effect=search_handler
+        mock_jql_search_with_flagged_state(
+            mock_jira_search_with_results.get('issues', []), response_for_jql
         )
 
         # Mock approximate count with custom handler
@@ -2425,8 +2584,14 @@ async def mock_jira_api_with_clone_work_item(
         ).mock(return_value=Response(200, json=cloned_work_item))
 
         def clone_search_handler(request):
-            body = json.loads(request.content)
-            jql = str(body.get('jql', '')).strip().lower()
+            raw_jql, flagged_response = request_jql_with_flagged_response(
+                request,
+                mock_jira_search_with_results.get('issues', []) + [cloned_work_item],
+            )
+            if flagged_response:
+                return flagged_response
+
+            jql = raw_jql.strip().lower()
 
             if 'key = eng-9' in jql or 'key=eng-9' in jql:
                 return Response(200, json=build_search_results_page([cloned_work_item]))
@@ -2770,24 +2935,17 @@ async def mock_jira_api_with_subtask_creation(
         # Custom handler to check for parent=ENG-4 JQL query
         search_call_count = [0]
 
-        def search_handler(request):
-            body = json.loads(request.content)
-            jql = body.get('jql', '')
-
-            # Return subtasks for parent search
+        def response_for_jql(jql: str) -> Response:
             if 'parent=ENG-4' in jql:
                 search_call_count[0] += 1
                 if search_call_count[0] == 1:
                     return Response(200, json=initial_subtasks_response)
-                else:
-                    return Response(200, json=after_create_subtasks_response)
+                return Response(200, json=after_create_subtasks_response)
 
-            # Return main search results for other queries
             return Response(200, json=get_search_results_payload(mock_jira_search_with_results))
 
-        # Mock search endpoint with custom handler
-        respx.post('https://example.atlassian.acme.net/rest/api/3/search/jql').mock(
-            side_effect=search_handler
+        mock_jql_search_with_flagged_state(
+            mock_jira_search_with_results.get('issues', []), response_for_jql
         )
 
         # Mock approximate count

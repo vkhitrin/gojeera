@@ -19,11 +19,16 @@ from textual_tags import Tag, TagAutoComplete
 from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
 from gojeera.components.screens.work_log_screen import LogWorkScreen
 from gojeera.components.work_item.work_item_description import WorkItemInfoContainer
-from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.jira.work_item_permissions import (
+    VIEW_WATCHERS_PERMISSIONS,
+    WorkItemPermissionCache,
+)
+from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.models.exceptions import UpdateWorkItemException, ValidationError
 from gojeera.internal.models.jira import (
     JiraUser,
     WorkItemPriority,
+    WorkItemWatchers,
 )
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.internal.store.config import CONFIGURATION
@@ -49,6 +54,7 @@ from gojeera.utils.ui.widgets_factory_utils import (
     build_dynamic_widgets,
     build_field_tooltip,
 )
+from gojeera.widgets.button_with_metadata import ButtonWithMetadata
 from gojeera.widgets.inputs.date_input import DateInput
 from gojeera.widgets.inputs.date_time_input import DateTimeInput
 from gojeera.widgets.inputs.numeric_input import NumericInput
@@ -58,6 +64,7 @@ from gojeera.widgets.inputs.time_tracking import TimeTrackingWidget
 from gojeera.widgets.inputs.url import URL
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.selection.multi_select import MultiSelect, extract_sprint_entries
+from gojeera.widgets.selection.popup_menu import PopupMenu, PopupMenuItem
 from gojeera.widgets.selection.selection import SelectionWidget
 from gojeera.widgets.selection.user_picker import UserPicker
 from gojeera.widgets.selection.user_selection_input import UNASSIGNED_VALUE, UserSelectionInput
@@ -69,6 +76,11 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 logger = logging.getLogger('gojeera')
+
+FLAGGED_FIELD_VALUE = 'Impediment'
+FLAGGED_GLYPH = '⚑'
+UNFLAGGED_GLYPH = '⚐'
+WATCHERS_GLYPH = '◉'
 
 
 class WorkItemManualUpdateFieldKeys(Enum):
@@ -279,6 +291,19 @@ class WorkItemFields(Container, can_focus=False):
         height: auto;
     }
 
+    #work-item-fields-actions {
+        width: 100%;
+        height: auto;
+        margin: 0 1 1 0;
+        padding: 0;
+        align: left middle;
+    }
+
+    #work-item-fields-actions-spacer {
+        width: 1;
+        height: 1;
+    }
+
     #work-item-fields-stack > #work-item-fields-preview {
         position: absolute;
         layer: overlay;
@@ -358,6 +383,13 @@ class WorkItemFields(Container, can_focus=False):
         self._dynamic_loading_worker = None
         self._user_picker_population_worker = None
         self._deferred_adf_mount_worker = None
+        self._permission_cache = WorkItemPermissionCache(
+            app_getter=lambda: cast('JiraApp', self.app),
+            run_worker=lambda: self.run_worker,
+            is_mounted=lambda: self.is_mounted,
+            group='view-watchers-permission-load',
+        )
+        self._flagged_state: bool | None = None
         self._pending_work_item_key_for_deferred_load: str | None = None
         self._deferred_fields_start_timer = None
         self._last_pending_changes_footer_state: tuple[bool, bool] | None = None
@@ -507,6 +539,18 @@ class WorkItemFields(Container, can_focus=False):
     @property
     def pending_changes_container(self) -> Horizontal:
         return self.query_one('#work-item-fields-pending-changes-container', expect_type=Horizontal)
+
+    @property
+    def watchers_button(self) -> Button:
+        return self.query_one('#work-item-fields-watchers-button', expect_type=Button)
+
+    @property
+    def flag_button(self) -> Button:
+        return self.query_one('#work-item-fields-flag-button', expect_type=Button)
+
+    @property
+    def watchers_menu(self) -> PopupMenu:
+        return self.query_one('#work-item-fields-watchers-menu', expect_type=PopupMenu)
 
     @property
     def resolution_field_container(self) -> FieldRowSlot:
@@ -828,6 +872,24 @@ class WorkItemFields(Container, can_focus=False):
             yield WorkItemFieldsPreview()
             with VerticalScroll(id='work-item-fields-form') as fields_form:
                 fields_form.can_focus = False
+                with Horizontal(id='work-item-fields-actions'):
+                    yield Button(
+                        UNFLAGGED_GLYPH,
+                        id='work-item-fields-flag-button',
+                        classes='action-button-chrome icon-action-button',
+                        compact=True,
+                    )
+                    yield Label('', id='work-item-fields-actions-spacer')
+                    yield ButtonWithMetadata(
+                        icon=WATCHERS_GLYPH,
+                        metadata=self._watchers_metadata(self.work_item),
+                        id='work-item-fields-watchers-button',
+                    )
+                    watchers_menu = PopupMenu(
+                        id='work-item-fields-watchers-menu',
+                        anchor=lambda: self.watchers_button,
+                    )
+                    yield watchers_menu
                 with Vertical(id='time-tracking-container') as time_tracking_container:
                     time_tracking_container.display = False
                     yield TimeTrackingWidget()
@@ -1021,6 +1083,10 @@ class WorkItemFields(Container, can_focus=False):
             if button.can_focus and not button.disabled:
                 set_jump_mode(button, 'click')
 
+        for button in (self.watchers_button, self.flag_button):
+            if button.can_focus and not button.disabled:
+                set_jump_mode(button, 'click')
+
     def _update_layout_mode(self) -> None:
         try:
             screen_width = (
@@ -1134,6 +1200,11 @@ class WorkItemFields(Container, can_focus=False):
         self.fields_stack.display = False
         self.preview_widget.styles.opacity = 0
         self.content_container.styles.opacity = 0
+        if self.work_item is not None:
+            self.watch_work_item(self.work_item)
+        else:
+            self._sync_flag_button(None)
+            self._sync_watchers_action(None)
         self.call_after_refresh(self._setup_jump_mode)
         self._update_layout_mode()
 
@@ -2333,6 +2404,303 @@ class WorkItemFields(Container, can_focus=False):
     def handle_discard_changes_button_pressed(self) -> None:
         self.action_discard_pending_changes()
 
+    @on(Button.Pressed, '#work-item-fields-watchers-button')
+    async def handle_watchers_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        if not self.work_item:
+            return
+
+        if not await self._can_view_watchers(self.work_item.key):
+            await self._toggle_current_user_watching()
+            return
+
+        await self.watchers_menu.toggle_with_loader(self._load_watchers_menu_items)
+
+    def _start_view_watchers_permission_load(self, work_item_key: str) -> None:
+        self._permission_cache.start_load(
+            work_item_key,
+            VIEW_WATCHERS_PERMISSIONS,
+            action_name='view watchers',
+            exclusive=False,
+        )
+
+    async def _get_view_watchers_permission(
+        self,
+        work_item_key: str,
+    ) -> APIControllerResponse | None:
+        return await self._permission_cache.get(
+            work_item_key,
+            VIEW_WATCHERS_PERMISSIONS,
+            action_name='view watchers',
+        )
+
+    async def _can_view_watchers(self, work_item_key: str) -> bool:
+        response = await self._get_view_watchers_permission(work_item_key)
+        if response is None:
+            return True
+        if response.success:
+            return True
+        logger.debug('Cannot view watchers for %s: %s', work_item_key, response.error)
+        return False
+
+    async def _toggle_current_user_watching(self) -> bool | None:
+        if not self.work_item:
+            return None
+
+        return await self._set_current_user_watching(not self.work_item.is_watching)
+
+    async def toggle_current_user_watching(self) -> bool | None:
+        """Toggle whether the current user watches the loaded work item."""
+        return await self._toggle_current_user_watching()
+
+    async def _set_current_user_watching(self, is_watching: bool) -> bool | None:
+        if not self.work_item:
+            return None
+
+        response = (
+            await self._start_watching_work_item()
+            if is_watching
+            else await self._stop_watching_work_item()
+        )
+
+        if response is None:
+            return None
+        if not response.success:
+            self.notify(
+                f'Failed to update watcher state: {response.error}',
+                severity='error',
+                title=self.work_item.key,
+            )
+            return None
+
+        self._apply_watching_state_after_toggle(is_watching)
+        self._sync_watchers_action(self.work_item)
+        self.notify(
+            'You are now watching this work item'
+            if is_watching
+            else 'You are no longer watching this work item',
+            title=self.work_item.key,
+        )
+        return is_watching
+
+    def _apply_watching_state_after_toggle(self, is_watching: bool) -> None:
+        if not self.work_item:
+            return
+        current_count = self.work_item.watch_count or 0
+        self.work_item.is_watching = is_watching
+        if is_watching:
+            self.work_item.watch_count = current_count + 1
+        else:
+            self.work_item.watch_count = max(0, current_count - 1)
+
+    @on(Button.Pressed, '#work-item-fields-flag-button')
+    async def handle_flag_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        await self.toggle_work_item_flag()
+
+    async def toggle_work_item_flag(self) -> None:
+        """Toggle the loaded work item's Jira flag state."""
+        if not self.work_item:
+            return
+
+        self.flag_button.disabled = True
+        should_flag = not self._current_work_item_flagged_state()
+        application = cast('JiraApp', self.app)
+        response = await application.api.set_work_item_flagged(self.work_item, should_flag)
+        if not response.success:
+            self.notify(
+                f'Failed to update flag state: {response.error}',
+                severity='error',
+                title=self.work_item.key,
+            )
+            self._sync_flag_button(self.work_item)
+            return
+
+        self._flagged_state = should_flag
+        self.work_item.flagged = should_flag
+        self._sync_flag_button(self.work_item)
+        self.post_message(WorkItemUpdated(self.work_item))
+        self.notify(
+            'Work item flagged' if should_flag else 'Work item unflagged',
+            title=self.work_item.key,
+        )
+
+    def _sync_watchers_action(self, work_item: JiraWorkItem | None) -> None:
+        if not self.is_mounted:
+            return
+
+        button = self.watchers_button
+        if work_item is None:
+            if isinstance(button, ButtonWithMetadata):
+                button.metadata = ''
+            else:
+                button.label = WATCHERS_GLYPH
+            button.disabled = True
+            return
+
+        if isinstance(button, ButtonWithMetadata):
+            button.metadata = self._watchers_metadata(work_item)
+        else:
+            button.label = WATCHERS_GLYPH
+        button.disabled = False
+
+    @staticmethod
+    def _watchers_metadata(work_item: JiraWorkItem | None) -> str:
+        watch_count = work_item.watch_count or 0 if work_item else 0
+        return str(watch_count) if watch_count > 0 else ''
+
+    @on(PopupMenu.Selected, '#work-item-fields-watchers-menu')
+    async def handle_watchers_menu_selected(self, event: PopupMenu.Selected) -> None:
+        event.stop()
+        if event.item.id not in {'start-watching', 'stop-watching'} or not self.work_item:
+            return
+
+        if await self._set_current_user_watching(event.item.id == 'start-watching') is None:
+            return
+
+        await self.watchers_menu.replace_options(self._current_watching_action_menu_items())
+        self.watchers_menu.open()
+
+    async def _start_watching_work_item(self) -> APIControllerResponse | None:
+        if not self.work_item:
+            return None
+        application = cast('JiraApp', self.app)
+        return await application.api.add_work_item_watcher(self.work_item.key)
+
+    async def _stop_watching_work_item(self) -> APIControllerResponse | None:
+        if not self.work_item:
+            return None
+
+        application = cast('JiraApp', self.app)
+        user_info = application.atlassian_context.user_info
+        assert user_info is not None
+        return await application.api.remove_work_item_watcher(
+            self.work_item.key,
+            user_info.account_id,
+        )
+
+    @on(PopupMenu.Dismissed, '#work-item-fields-watchers-menu')
+    def handle_watchers_menu_dismissed(self, event: PopupMenu.Dismissed) -> None:
+        event.stop()
+
+    async def _load_watchers_menu_items(self) -> list[PopupMenuItem]:
+        if not self.work_item:
+            return []
+
+        application = cast('JiraApp', self.app)
+        response: APIControllerResponse = await application.api.get_work_item_watchers(
+            self.work_item.key
+        )
+        if not response.success:
+            self.notify(
+                f'Failed to fetch watchers: {response.error}',
+                severity='error',
+                title=self.work_item.key,
+            )
+            return [self._watching_action_menu_item()]
+
+        watchers = cast(WorkItemWatchers, response.result)
+        self.work_item.watch_count = watchers.watch_count
+        self.work_item.is_watching = watchers.is_watching
+        watcher_items = [
+            PopupMenuItem(
+                id=f'watcher-{index}',
+                title=user.display_name or user.account_id,
+                payload=user,
+            )
+            for index, user in enumerate(watchers.watchers)
+        ]
+        items = [self._watching_action_menu_item(watchers.is_watching)]
+        if watcher_items:
+            items.append(self._watchers_menu_separator())
+            items.extend(watcher_items)
+        return items
+
+    def _current_watching_action_menu_items(self) -> list[PopupMenuItem]:
+        return [
+            self._watching_action_menu_item(bool(self.work_item and self.work_item.is_watching))
+        ]
+
+    @staticmethod
+    def _watching_action_menu_item(is_watching: bool = False) -> PopupMenuItem:
+        return PopupMenuItem(
+            id='stop-watching' if is_watching else 'start-watching',
+            title='Stop Watching' if is_watching else 'Start Watching',
+        )
+
+    @staticmethod
+    def _watchers_menu_separator() -> PopupMenuItem:
+        return PopupMenuItem(id='watchers-separator', title='', separator=True)
+
+    def _sync_flag_button(self, work_item: JiraWorkItem | None) -> None:
+        if not self.is_mounted:
+            return
+
+        button = self.flag_button
+        if work_item is None:
+            button.label = UNFLAGGED_GLYPH
+            button.disabled = True
+            return
+
+        is_flagged = self._current_work_item_flagged_state()
+        button.label = FLAGGED_GLYPH if is_flagged else UNFLAGGED_GLYPH
+        button.disabled = False
+
+    def _current_work_item_flagged_state(self) -> bool:
+        if self._flagged_state is not None:
+            return self._flagged_state
+        if not self.work_item:
+            return False
+        if self.work_item.flagged is not None:
+            return self.work_item.flagged
+        return self._work_item_is_flagged(self.work_item)
+
+    async def _refresh_flag_button_state(self, work_item_key: str) -> None:
+        self._sync_flag_button(self.work_item)
+        try:
+            application = cast('JiraApp', self.app)
+            response = await application.api.get_work_item_flagged_state(work_item_key)
+            if response.success and self.work_item and self.work_item.key == work_item_key:
+                is_flagged = bool(response.result)
+                self._flagged_state = is_flagged
+                self.work_item.flagged = is_flagged
+        except Exception:
+            logger.debug('Failed to refresh flag button state', exc_info=True)
+
+        if self.work_item and self.work_item.key == work_item_key:
+            self._sync_flag_button(self.work_item)
+
+    def _start_flag_button_state_refresh_if_needed(self, work_item: JiraWorkItem) -> None:
+        if work_item.flagged is not None:
+            return
+        self.run_worker(self._refresh_flag_button_state(work_item.key), exclusive=False)
+
+    @staticmethod
+    def _work_item_is_flagged(
+        work_item: JiraWorkItem, flagged_field_key: str | None = None
+    ) -> bool:
+        if not flagged_field_key:
+            flagged_field = APIController.get_work_item_flagged_field(work_item)
+            if not flagged_field:
+                return False
+            flagged_field_key = flagged_field[0]
+
+        if not flagged_field_key:
+            return False
+
+        field_value = work_item.get_additional_field_value(flagged_field_key)
+        if field_value is None:
+            field_value = work_item.get_custom_field_value(flagged_field_key)
+        if isinstance(field_value, list):
+            return any(WorkItemFields._flagged_value_matches(option) for option in field_value)
+        return WorkItemFields._flagged_value_matches(field_value)
+
+    @staticmethod
+    def _flagged_value_matches(value: Any) -> bool:
+        if isinstance(value, dict):
+            return str(value.get('value', '')).casefold() == FLAGGED_FIELD_VALUE.casefold()
+        return str(value or '').casefold() == FLAGGED_FIELD_VALUE.casefold()
+
     async def _discard_pending_changes_locally(self) -> None:
         if not self.work_item:
             return
@@ -2859,6 +3227,9 @@ class WorkItemFields(Container, can_focus=False):
             status_selector.disabled = True
 
     def watch_work_item(self, work_item: JiraWorkItem | None) -> None:
+        if not self.is_mounted:
+            return
+
         if self._current_loading_worker is not None:
             self._current_loading_worker.cancel()
             self._current_loading_worker = None
@@ -2883,6 +3254,9 @@ class WorkItemFields(Container, can_focus=False):
         self._pending_work_item_key_for_deferred_load = None
 
         if not work_item:
+            self._sync_flag_button(None)
+            self._sync_watchers_action(None)
+            self._flagged_state = None
             self.preview_widget.set_work_item(None)
             self.fields_stack.display = False
             self.preview_widget.styles.opacity = 0
@@ -2897,6 +3271,11 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         self.is_loading = True
+        self._flagged_state = work_item.flagged
+        self._sync_flag_button(work_item)
+        self._sync_watchers_action(work_item)
+        self._start_view_watchers_permission_load(work_item.key)
+        self._start_flag_button_state_refresh_if_needed(work_item)
         self._set_preview_overlay_visible(True)
         self.preview_widget.set_work_item(work_item, self._field_names_by_id)
 
@@ -3025,6 +3404,7 @@ class WorkItemFields(Container, can_focus=False):
         editable_fields: dict = self._determine_editable_fields(work_item)
         edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
         self._apply_static_schema_visibility(edit_meta_fields, work_item)
+        self._sync_flag_button(work_item)
 
         async_setup_tasks = []
 

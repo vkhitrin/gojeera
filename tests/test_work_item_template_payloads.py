@@ -211,50 +211,112 @@ def test_dump_work_item_template_copies_creatable_work_item_fields() -> None:
 
 def test_work_item_command_provider_includes_copy_as_template_action() -> None:
     command_actions = [
-        action
-        for _label, action, _help_text, _screen in WorkItemCommandProvider._iter_commands(
-            cast(WorkItemCommandProvider, FakeWorkItemCommandProvider())
-        )
+        action for _label, action, _help_text, _screen in _iter_fake_work_item_commands()
     ]
 
     assert 'copy_loaded_work_item_as_template' in command_actions
 
 
+def test_work_item_command_provider_shows_add_flag_when_not_flagged() -> None:
+    flag_command = _find_fake_work_item_command('flag_work_item')
+
+    assert flag_command[0] == 'ENG-3 > Add Flag'
+    assert flag_command[2] == ''
+
+
+def test_work_item_command_provider_shows_remove_flag_when_flagged() -> None:
+    flag_command = _find_fake_work_item_command('flag_work_item', flagged=True)
+
+    assert flag_command[0] == 'ENG-3 > Remove Flag'
+    assert flag_command[2] == ''
+
+
+def test_work_item_command_provider_shows_start_watching_when_not_watching() -> None:
+    watch_command = _find_fake_work_item_command('watch_loaded_work_item', is_watching=False)
+
+    assert watch_command[0] == 'ENG-3 > Start Watching'
+    assert watch_command[2] == ''
+
+
+def test_work_item_command_provider_shows_stop_watching_when_watching() -> None:
+    watch_command = _find_fake_work_item_command('watch_loaded_work_item', is_watching=True)
+
+    assert watch_command[0] == 'ENG-3 > Stop Watching'
+    assert watch_command[2] == ''
+
+
 def test_work_item_command_provider_hides_new_comment_when_commenting_is_not_allowed() -> None:
     command_actions = [
         action
-        for _label, action, _help_text, _screen in WorkItemCommandProvider._iter_commands(
-            cast(
-                WorkItemCommandProvider,
-                FakeWorkItemCommandProvider(can_add_comment=False),
-            )
+        for _label, action, _help_text, _screen in _iter_fake_work_item_commands(
+            can_add_comment=False
         )
     ]
 
     assert 'new_comment' not in command_actions
 
 
-class FakeWorkItemCommandProvider:
-    def __init__(self, can_add_comment: bool = True):
-        self._can_add_comment = can_add_comment
+def _find_fake_work_item_command(
+    action: str,
+    *,
+    can_add_comment: bool = True,
+    flagged: bool = False,
+    is_watching: bool = False,
+):
+    return next(
+        command
+        for command in _iter_fake_work_item_commands(
+            can_add_comment=can_add_comment,
+            flagged=flagged,
+            is_watching=is_watching,
+        )
+        if command[1] == action
+    )
 
-    def _get_main_screen(self):
-        return FakeWorkItemScreen(can_add_comment=self._can_add_comment)
 
-    def _get_loaded_work_item_key(self):
-        return 'ENG-3'
+def _iter_fake_work_item_commands(
+    *,
+    can_add_comment: bool = True,
+    flagged: bool = False,
+    is_watching: bool = False,
+):
+    fake_provider = type(
+        'FakeWorkItemCommandProvider',
+        (),
+        {
+            '_get_main_screen': lambda _self: FakeWorkItemScreen(
+                can_add_comment=can_add_comment,
+                flagged=flagged,
+                is_watching=is_watching,
+            ),
+            '_get_loaded_work_item_key': lambda _self: 'ENG-3',
+        },
+    )()
+    return WorkItemCommandProvider._iter_commands(cast(WorkItemCommandProvider, fake_provider))
 
 
 class FakeWorkItemScreen:
-    def __init__(self, can_add_comment: bool = True):
+    def __init__(
+        self,
+        can_add_comment: bool = True,
+        flagged: bool = False,
+        is_watching: bool = False,
+    ):
+        work_item = WorkItemFactory.create_work_item(
+            json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
+        )
+        work_item.is_watching = is_watching
+        if flagged:
+            if work_item.custom_fields is None:
+                work_item.custom_fields = {}
+            work_item.custom_fields['customfield_10114'] = [{'value': 'Impediment'}]
+            work_item.edit_meta = work_item.edit_meta or {'fields': {}}
+            work_item.edit_meta.setdefault('fields', {})['customfield_10114'] = {'name': 'Flagged'}
+
         self.information_panel = type(
             'FakeInformationPanel',
             (),
-            {
-                'work_item': WorkItemFactory.create_work_item(
-                    json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
-                )
-            },
+            {'work_item': work_item},
         )()
         self.work_item_comments_widget = type(
             'FakeWorkItemCommentsWidget',

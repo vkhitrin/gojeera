@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from gojeera.commands.providers.action_command_provider import ActionCommandProvider
+from gojeera.components.work_item.work_item_fields import WorkItemFields
 from gojeera.utils.data.fields import supports_parent_work_item
 
 
@@ -26,6 +27,10 @@ class WorkItemCommandProvider(ActionCommandProvider):
         if work_item is None:
             return
 
+        flag_action_label = (
+            'Remove Flag' if WorkItemFields._work_item_is_flagged(work_item) else 'Add Flag'
+        )
+        watch_action_label = 'Stop Watching' if work_item.is_watching else 'Start Watching'
         commands: list[tuple[str, str, str]] = [
             (
                 f'{work_item_key} > Open In Browser',
@@ -56,6 +61,16 @@ class WorkItemCommandProvider(ActionCommandProvider):
                 f'{work_item_key} > Reload Work Item',
                 'reload_loaded_work_item',
                 'Reload the active work item from Jira',
+            ),
+            (
+                f'{work_item_key} > {watch_action_label}',
+                'watch_loaded_work_item',
+                '',
+            ),
+            (
+                f'{work_item_key} > {flag_action_label}',
+                'flag_work_item',
+                '',
             ),
             (
                 f'{work_item_key} > Edit Information',

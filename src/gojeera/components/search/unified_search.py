@@ -14,6 +14,7 @@ from textual.worker import get_current_worker
 from gojeera.internal.models.jira import JiraFilterDict
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION
+from gojeera.utils.jira.jql import text_search_jql
 from gojeera.utils.jira.urls import extract_work_item_key
 from gojeera.widgets.inputs.extended_input import ExtendedInput
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
@@ -124,6 +125,7 @@ class UnifiedSearchBar(Container):
             yield Button(
                 '+',
                 id='unified-search-new-work-item-button',
+                classes='action-button-chrome icon-action-button',
                 compact=True,
             )
             menu = self._build_create_work_item_menu()
@@ -923,7 +925,7 @@ class UnifiedSearchBar(Container):
 
             return {
                 'mode': 'text',
-                'jql': f'textfields ~ "{text}"' if text else '',
+                'jql': text_search_jql(text),
             }
         elif mode == 'jql':
             return {

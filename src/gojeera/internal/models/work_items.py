@@ -167,6 +167,9 @@ class JiraWorkItem(JiraBaseWorkItem):
     custom_fields: dict[str, Any] | None = None
     additional_fields: dict[str, Any] | None = None
     components: list[JiraWorkItemComponent] | None = None
+    flagged: bool | None = None
+    watch_count: int | None = None
+    is_watching: bool | None = None
 
     def cleaned_summary(self, max_length: int | None = None) -> str:
         if max_length is not None:

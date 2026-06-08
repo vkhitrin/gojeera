@@ -13,7 +13,7 @@ from gojeera.components.work_item.work_item_comments import (
     CommentsScrollView,
     WorkItemCommentsWidget,
 )
-from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.models.jira import JiraUser
 from gojeera.internal.models.work_items import WorkItemComment
 from gojeera.widgets.markdown.gojeera_markdown import (
@@ -145,11 +145,7 @@ def mock_missing_add_comment_permission(monkeypatch):
                 error=MISSING_ADD_COMMENT_PERMISSION_ERROR,
             )
         )
-        monkeypatch.setattr(
-            app.api,
-            'validate_add_comment_permissions',
-            validate_permissions,
-        )
+        monkeypatch.setattr(APIController, 'validate_work_item_permissions', validate_permissions)
         return validate_permissions
 
     return apply
@@ -402,9 +398,10 @@ class TestWorkItemComments:
 
         async with app.run_test(size=(120, 40)) as pilot:
             await navigate_to_comments_tab(pilot, SUPPORT_WORK_ITEM_KEY)
-            await wait_until(lambda: validate_permissions.await_count == 1, timeout=3.0)
-
             comments_widget = pilot.app.screen.query_one(WorkItemCommentsWidget)
+            await wait_until(lambda: not comments_widget.can_add_comment, timeout=3.0)
+
+            assert validate_permissions.await_count >= 1
             assert not comments_widget.can_add_comment
             assert pilot.app.check_action('new_comment', ()) is False
 
@@ -419,7 +416,10 @@ class TestWorkItemComments:
             await pilot.pause()
 
             assert not isinstance(pilot.app.screen, CommentScreen)
-            validate_permissions.assert_awaited_once_with(SUPPORT_WORK_ITEM_KEY)
+            assert any(
+                call.args and call.args[0] == SUPPORT_WORK_ITEM_KEY
+                for call in validate_permissions.await_args_list
+            )
 
     def test_service_desk_internal_comment_creation_displays_two_comments(
         self,

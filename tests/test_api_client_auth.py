@@ -3,8 +3,10 @@ from pydantic import SecretStr
 import pytest
 import respx
 
+from gojeera.internal.models.exceptions import ServiceInvalidRequestException
 from gojeera.internal.jira.client import AsyncJiraClient, JiraClient
 from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
+from gojeera.utils.system.logging_utils import extract_exception_details
 
 
 def _configuration() -> ApplicationConfiguration:
@@ -74,6 +76,31 @@ async def test_async_jira_client_retries_after_oauth2_refresh():
         await client.close_async_client()
 
     _assert_retry_result(route, refresh_calls(), response)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_jira_client_handles_empty_error_messages():
+    respx.put('https://api.atlassian.com/test').mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                'errorMessages': [],
+                'errors': {'customfield_10021': "Field 'customfield_10021' cannot be set."},
+            },
+        )
+    )
+    client = AsyncJiraClient(**_oauth2_client_kwargs(None))
+
+    try:
+        with pytest.raises(ServiceInvalidRequestException) as exc_info:
+            await client.make_request(method=httpx.AsyncClient.put, url='test')
+    finally:
+        await client.close_async_client()
+
+    assert 'list index out of range' not in str(exc_info.value)
+    details = extract_exception_details(exc_info.value)
+    assert details.message == "customfield_10021: Field 'customfield_10021' cannot be set."
 
 
 @respx.mock

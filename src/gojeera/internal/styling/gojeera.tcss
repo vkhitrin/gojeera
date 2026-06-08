@@ -119,6 +119,75 @@ Footer FooterKey > .footer-key--description {
   text-style: bold;
 }
 
+.action-button-chrome {
+  height: 1;
+  margin: 0;
+  padding: 0;
+  background: $primary-muted;
+  color: $text-primary;
+  text-align: center;
+  content-align: center middle;
+}
+
+.action-button-chrome > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
+.action-button-chrome:hover {
+  background: $primary;
+  color: $text;
+}
+
+.action-button-chrome:hover > Static {
+  color: $text;
+  background: transparent;
+  text-style: bold;
+}
+
+.action-button-chrome:disabled {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+.action-button-chrome:disabled > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+.action-button-chrome:disabled:hover {
+  background: $primary-darken-3;
+  color: $text-disabled;
+}
+
+.action-button-chrome:disabled:hover > Static {
+  color: $text-disabled;
+  background: transparent;
+  text-style: bold;
+}
+
+.action-button-chrome:focus {
+  background: $primary-muted;
+  color: $text-primary;
+  text-style: bold;
+  border: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.action-button-chrome:focus > Static {
+  color: $text-primary;
+  background: transparent;
+  text-style: bold;
+}
+
+.icon-action-button {
+  width: 3;
+  min-width: 3;
+}
+
 #main-container {
   height: auto;
   padding: 1 1;
@@ -216,13 +285,6 @@ UnifiedSearchBar > #unified-search-new-work-item-menu-anchor {
   margin: 0;
 }
 
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button#unified-search-new-work-item-button {
-  width: 3;
-  min-width: 3;
-  margin: 0;
-  padding: 0;
-}
-
 UnifiedSearchBar > Input#unified-search-input {
   &.-invalid {
     background: $error 40%;
@@ -264,8 +326,7 @@ SearchAutoComplete > AutoCompleteList > .option-list--option:hover {
   text-style: bold;
 }
 
-UnifiedSearchBar > Button,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button {
+UnifiedSearchBar > Button {
   column-span: 1;
   width: 100%;
   min-width: 8;
@@ -277,54 +338,46 @@ UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button {
   content-align: center middle;
 }
 
-UnifiedSearchBar > Button > Static,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button > Static {
+UnifiedSearchBar > Button > Static {
   color: $text-primary;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar > Button:hover,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:hover {
+UnifiedSearchBar > Button:hover {
   background: $primary;
   color: $text;
 }
 
-UnifiedSearchBar > Button:hover > Static,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:hover > Static {
+UnifiedSearchBar > Button:hover > Static {
   color: $text;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar > Button:disabled,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:disabled {
+UnifiedSearchBar > Button:disabled {
   background: $primary-darken-3;
   color: $text-disabled;
 }
 
-UnifiedSearchBar > Button:disabled > Static,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:disabled > Static {
+UnifiedSearchBar > Button:disabled > Static {
   color: $text-disabled;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar > Button:disabled:hover,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:disabled:hover {
+UnifiedSearchBar > Button:disabled:hover {
   background: $primary-darken-3;
   color: $text-disabled;
 }
 
-UnifiedSearchBar > Button:disabled:hover > Static,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:disabled:hover > Static {
+UnifiedSearchBar > Button:disabled:hover > Static {
   color: $text-disabled;
   background: transparent;
   text-style: bold;
 }
 
-UnifiedSearchBar > Button:focus,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:focus {
+UnifiedSearchBar > Button:focus {
   background: $primary-muted;
   color: $text-primary;
   text-style: bold;
@@ -333,8 +386,7 @@ UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:focus {
   border-bottom: none;
 }
 
-UnifiedSearchBar > Button:focus > Static,
-UnifiedSearchBar > #unified-search-new-work-item-menu-anchor > Button:focus > Static {
+UnifiedSearchBar > Button:focus > Static {
   color: $text-primary;
   background: transparent;
   text-style: bold;

@@ -184,8 +184,8 @@ class BaseHTTPClient:
         if (
             response.status_code == 400
             and isinstance(error_details, dict)
-            and 'does not support sprints'
-            in str(error_details.get('errorMessages', [''])[0]).lower()
+            and (error_messages := error_details.get('errorMessages', []))
+            and 'does not support sprints' in str(error_messages[0]).lower()
         ):
             log_method = self.logger.warning
 
@@ -567,12 +567,7 @@ class JiraClient(JSONResponseMixin, BaseHTTPClient):
         return self._merge_headers({'Accept': 'application/json'}, headers)
 
     def make_request(
-        self,
-        method: Callable,
-        url: str,
-        headers: dict | None = None,
-        timeout: int = 55,
-        **kwargs,
+        self, method: Callable, url: str, headers: dict | None = None, timeout: int = 55, **kwargs
     ) -> dict | list | None:
         return cast(
             dict | list | None,

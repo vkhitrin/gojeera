@@ -48,6 +48,7 @@ CACHE_TYPES = {
     'boards',
     'fields',
     'search_history',
+    'recent_searches',
     'recently_viewed_work_items',
 }
 PROFILE_CACHE_TABLES = {
@@ -61,6 +62,7 @@ PROFILE_CACHE_TABLES = {
     'remote_filters',
     'fields',
     'search_history',
+    'recent_searches',
     'recently_viewed_work_items',
 }
 
@@ -419,6 +421,60 @@ class ApplicationCache:
             ).fetchall()
         return [str(row[0]) for row in rows]
 
+    def add_recent_search(self, jql: str, source_mode: str | None = None) -> None:
+        normalized_jql = jql.strip()
+        if not normalized_jql:
+            return
+
+        normalized_source_mode = (source_mode or '').strip() or None
+        if normalized_source_mode not in {None, 'basic', 'text', 'jql'}:
+            raise ValueError(f'Unsupported recent search source mode: {source_mode}')
+
+        searched_at = time.time()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO recent_searches (profile_key, jql, source_mode, searched_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(profile_key, jql) DO UPDATE SET
+                    source_mode = excluded.source_mode,
+                    searched_at = excluded.searched_at
+                """,
+                (self._profile_key, normalized_jql, normalized_source_mode, searched_at),
+            )
+            self._connection.execute(
+                """
+                DELETE FROM recent_searches
+                WHERE profile_key = ?
+                  AND jql NOT IN (
+                      SELECT jql FROM recent_searches
+                      WHERE profile_key = ?
+                      ORDER BY searched_at DESC
+                      LIMIT 10
+                  )
+                """,
+                (self._profile_key, self._profile_key),
+            )
+
+    def get_recent_searches(self) -> list[dict[str, str | float | None]]:
+        rows = self._fetch_recent_profile_rows(
+            """
+            SELECT jql, source_mode, searched_at
+            FROM recent_searches
+            WHERE profile_key = ?
+            ORDER BY searched_at DESC
+            LIMIT 10
+            """
+        )
+        return [
+            {
+                'jql': str(row[0]),
+                'source_mode': row[1],
+                'searched_at': float(row[2]),
+            }
+            for row in rows
+        ]
+
     def add_recently_viewed_work_item(
         self,
         work_item_key: str,
@@ -465,17 +521,15 @@ class ApplicationCache:
             )
 
     def get_recently_viewed_work_items(self) -> list[dict[str, str | float | None]]:
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT work_item_key, work_item_type, summary, viewed_at
-                FROM recently_viewed_work_items
-                WHERE profile_key = ?
-                ORDER BY viewed_at DESC
-                LIMIT 10
-                """,
-                (self._profile_key,),
-            ).fetchall()
+        rows = self._fetch_recent_profile_rows(
+            """
+            SELECT work_item_key, work_item_type, summary, viewed_at
+            FROM recently_viewed_work_items
+            WHERE profile_key = ?
+            ORDER BY viewed_at DESC
+            LIMIT 10
+            """
+        )
         return [
             {
                 'key': str(row[0]),
@@ -485,6 +539,10 @@ class ApplicationCache:
             }
             for row in rows
         ]
+
+    def _fetch_recent_profile_rows(self, query: str) -> list[sqlite3.Row]:
+        with self._lock:
+            return self._connection.execute(query, (self._profile_key,)).fetchall()
 
     def invalidate_profile(self) -> None:
         with self._lock, self._connection:

@@ -66,6 +66,7 @@ class UnifiedSearchBar(Container):
         self._jql_autocomplete: SearchAutoComplete | None = None
         self._search_history_autocomplete: SearchAutoComplete | None = None
         self._work_item_key: str | None = None
+        self._account_id: str | None = None
         self._remote_filters_fetched = not CONFIGURATION.get().fetch_remote_filters.enabled
         self._create_work_item_menu: PopupMenu | None = None
 
@@ -221,6 +222,11 @@ class UnifiedSearchBar(Container):
         self.search_button.disabled = self.search_in_progress or not self._is_query_valid()
         set_jump_mode(self.search_button, None if self.search_button.disabled else 'click')
 
+    def action_switch_search_mode(self, mode: str) -> None:
+        available_modes = {value for _label, value in self.search_modes}
+        if mode in available_modes:
+            self.mode_selector.value = mode
+
     @staticmethod
     def _normalized_input_value(value: str | None) -> str:
         return value.strip() if value else ''
@@ -350,11 +356,14 @@ class UnifiedSearchBar(Container):
 
     @on(ProfileIsReady)
     def _handle_account_id_ready(self, message: ProfileIsReady) -> None:
+        self._account_id = message.account_id
+
+    def _ensure_remote_filters_loaded(self) -> None:
         config = CONFIGURATION.get()
 
-        if config.fetch_remote_filters.enabled:
-            self._account_id = message.account_id
-
+        if config.fetch_remote_filters.enabled and not self._remote_filters_fetched:
+            if not self._account_id:
+                return
             self._fetch_remote_filters(
                 account_id=self._account_id,
                 starred_only=config.fetch_remote_filters.starred_only,
@@ -604,6 +613,7 @@ class UnifiedSearchBar(Container):
                     self.unified_input.placeholder = placeholder
                 self._set_invalid_class(self.unified_input, not self.unified_input.value.strip())
             elif mode == 'jql':
+                self._ensure_remote_filters_loaded()
                 self._set_widget_display(self.project_selector, False)
                 self._set_widget_display(self.assignee_selector, False)
                 self._set_widget_display(self.type_selector, False)

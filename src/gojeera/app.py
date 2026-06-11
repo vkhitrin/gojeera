@@ -128,6 +128,12 @@ def get_search_command_provider() -> type[Provider]:
     return SearchCommandProvider
 
 
+def get_jql_filters_provider() -> type[Provider]:
+    from gojeera.commands.providers.jql_filters_provider import JQLFiltersProvider
+
+    return JQLFiltersProvider
+
+
 def get_quick_navigation_provider() -> type[Provider]:
     from gojeera.commands.providers.quick_navigation_provider import QuickNavigationProvider
 
@@ -140,6 +146,12 @@ def get_recently_viewed_work_items_provider() -> type[Provider]:
     )
 
     return RecentlyViewedWorkItemsProvider
+
+
+def get_recent_searches_provider() -> type[Provider]:
+    from gojeera.commands.providers.recent_searches_provider import RecentSearchesProvider
+
+    return RecentSearchesProvider
 
 
 class WorkspaceMixin(App):
@@ -719,6 +731,9 @@ class WorkspaceMixin(App):
             )
             return WorkItemSearchResult(total=0, start=0, end=0, response=None)
 
+        if jql_query:
+            self._record_recent_search(jql_query, mode)
+
         result: JiraWorkItemSearchResponse = response.result
         estimated_total_work_items: int = 0
         if calculate_total:
@@ -771,6 +786,13 @@ class WorkspaceMixin(App):
         if ' order by ' in f' {jql_query.lower()} ':
             return jql_query
         return f'{jql_query} ORDER BY {stripped_order_by}'
+
+    def _record_recent_search(self, jql: str, source_mode: str | None) -> None:
+        self.run_worker(
+            run_cache_io(lambda: get_cache().add_recent_search(jql, source_mode)),
+            exclusive=False,
+            group='store-recent-search',
+        )
 
     async def _search_single_work_item(self, work_item_key: str) -> WorkItemSearchResult:
         response: APIControllerResponse = await self.api.get_work_item(
@@ -929,6 +951,23 @@ class WorkspaceMixin(App):
         ):
             return
         container.page_input.focus()
+
+    def action_switch_search_mode(self, mode: str) -> None:
+        self.unified_search_bar.action_switch_search_mode(mode)
+
+    async def action_run_recent_search(self, jql: str) -> None:
+        normalized_jql = jql.strip()
+        if not normalized_jql:
+            return
+
+        self.unified_search_bar.mode_selector.value = 'jql'
+        self.unified_search_bar.search_mode = 'jql'
+        self.unified_search_bar._update_mode_display('jql')
+        self.unified_search_bar.unified_input.value = normalized_jql
+        await self.action_search()
+
+    async def action_run_jql_filter(self, expression: str) -> None:
+        await self.action_run_recent_search(expression)
 
     def _is_any_select_expanded(self) -> bool:
         for widget in self.query(Widget):
@@ -1880,8 +1919,10 @@ class JiraApp(WorkspaceMixin, App):
         get_work_item_command_provider,
         get_create_command_provider,
         get_search_command_provider,
+        get_jql_filters_provider,
         get_quick_navigation_provider,
         get_recently_viewed_work_items_provider,
+        get_recent_searches_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,
@@ -2143,7 +2184,7 @@ class JiraApp(WorkspaceMixin, App):
             self._push_screen_exclusive_sync(
                 ExtendedPalette(
                     id='--command-palette',
-                    placeholder='Search actions, navigate to page, or enter a work item key/URL…',
+                    placeholder='Search actions or navigate to page…',
                 )
             )
 
@@ -2158,7 +2199,7 @@ class JiraApp(WorkspaceMixin, App):
         if isinstance(self.screen, ExtendedPalette):
             self.screen.switch_palette_context(
                 sub_palette_id=None,
-                placeholder='Search actions, navigate to page, or enter a work item key/URL…',
+                placeholder='Search actions or navigate to page…',
             )
             return
         self.active_sub_command_palette_id = None
@@ -2184,6 +2225,32 @@ class JiraApp(WorkspaceMixin, App):
         self._open_sub_command_palette(
             RECENTLY_VIEWED_WORK_ITEMS_PALETTE_ID,
             'Search recently viewed work items…',
+        )
+
+    def action_show_recent_searches_palette(self) -> None:
+        from gojeera.commands.providers.recent_searches_provider import RECENT_SEARCHES_PALETTE_ID
+
+        self._open_sub_command_palette(
+            RECENT_SEARCHES_PALETTE_ID,
+            'Search recent JQL searches…',
+        )
+
+    def action_show_jql_filters_palette(self) -> None:
+        from gojeera.commands.providers.jql_filters_provider import JQL_FILTERS_PALETTE_ID
+
+        self._open_sub_command_palette(
+            JQL_FILTERS_PALETTE_ID,
+            'Search JQL filters…',
+        )
+
+    def action_show_browse_work_item_palette(self) -> None:
+        from gojeera.commands.providers.quick_navigation_provider import (
+            QUICK_NAVIGATION_BROWSE_WORK_ITEM_PALETTE_ID,
+        )
+
+        self._open_sub_command_palette(
+            QUICK_NAVIGATION_BROWSE_WORK_ITEM_PALETTE_ID,
+            'Enter a work item key or Jira browse URL…',
         )
 
     def action_toggle_footer_visibility(self) -> None:

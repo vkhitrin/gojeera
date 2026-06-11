@@ -27,13 +27,10 @@ async def open_quick_navigation_palette(pilot):
     assert isinstance(pilot.app.screen, ExtendedPalette)
 
 
-async def load_work_item_via_quick_navigation(
-    pilot,
-    *,
-    reference: str,
-    expected_key: str,
-):
+async def submit_browse_work_item_reference(pilot, reference: str) -> None:
     await open_quick_navigation_palette(pilot)
+    pilot.app.action_show_browse_work_item_palette()
+    await asyncio.sleep(0.3)
 
     await pilot.press(*reference)
     await asyncio.sleep(0.2)
@@ -43,6 +40,15 @@ async def load_work_item_via_quick_navigation(
 
     await pilot.app.workers.wait_for_complete()
     await asyncio.sleep(0.5)
+
+
+async def load_work_item_via_quick_navigation(
+    pilot,
+    *,
+    reference: str,
+    expected_key: str,
+):
+    await submit_browse_work_item_reference(pilot, reference)
 
     main_screen = pilot.app
     assert main_screen.current_loaded_work_item_key == expected_key
@@ -81,16 +87,7 @@ async def quick_navigation_loads_focused_comment_from_url(pilot):
 
 
 async def quick_navigation_rejects_missing_work_item(pilot):
-    await open_quick_navigation_palette(pilot)
-
-    await pilot.press(*'ENG-0')
-    await asyncio.sleep(0.2)
-
-    await pilot.press('enter')
-    await asyncio.sleep(0.5)
-
-    await pilot.app.workers.wait_for_complete()
-    await asyncio.sleep(0.5)
+    await submit_browse_work_item_reference(pilot, 'ENG-0')
 
     main_screen = pilot.app
     assert main_screen.current_loaded_work_item_key is None

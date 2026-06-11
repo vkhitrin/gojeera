@@ -43,6 +43,22 @@ class SearchCommandProvider(ActionCommandProvider):
         if not screen:
             return
 
+        current_search_mode = screen.unified_search_bar.search_mode
+        for mode, label in (
+            ('basic', 'Search > Switch to Basic Search Mode'),
+            ('text', 'Search > Switch to Text Search Mode'),
+            ('jql', 'Search > Switch to JQL Search Mode'),
+        ):
+            if mode == current_search_mode:
+                continue
+
+            yield (
+                label,
+                f"switch_search_mode('{mode}')",
+                '',
+                screen,
+            )
+
         if screen.current_loaded_work_item_key:
             yield (
                 'Unload Work Item',

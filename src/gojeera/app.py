@@ -40,7 +40,6 @@ from gojeera.components.work_item.work_item_related_work_items import RelatedWor
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.internal.jira.controller import APIController
-from gojeera.internal.models.jira import Attachment
 from gojeera.internal.models.work_items import WorkItemSearchResult
 from gojeera.internal.models.atlassian import AtlassianContext
 from gojeera.internal.store.cache import get_cache, run_cache_io
@@ -1972,32 +1971,6 @@ class JiraApp(WorkspaceMixin, App):
         self._setup_logging()
         self._register_custom_themes()
         self._setup_theme(user_theme)
-
-    async def upload_staged_attachments(
-        self,
-        work_item_key: str,
-        file_paths: list[str],
-    ) -> tuple[list[Attachment], list[str], list[str]]:
-        uploaded_attachments: list[Attachment] = []
-        errors: list[str] = []
-        failed_file_paths: list[str] = []
-
-        for file_path in file_paths:
-            response = await asyncio.to_thread(self.api.add_attachment, work_item_key, file_path)
-            if response.success and isinstance(response.result, Attachment):
-                uploaded_attachments.append(response.result)
-                try:
-                    Path(file_path).unlink(missing_ok=True)
-                    parent_dir = Path(file_path).parent
-                    if parent_dir.name.startswith('gojeera-clipboard-'):
-                        parent_dir.rmdir()
-                except OSError:
-                    pass
-            else:
-                errors.append(response.error or Path(file_path).name)
-                failed_file_paths.append(file_path)
-
-        return uploaded_attachments, errors, failed_file_paths
 
     def search_themes(self) -> None:
         """Show the theme picker with the extended command palette."""

@@ -25,7 +25,6 @@ from gojeera.internal.jira.work_item_permissions import (
     WorkItemPermissionCache,
 )
 from gojeera.internal.jira.controller import APIControllerResponse
-from gojeera.internal.models.jira import Attachment
 from gojeera.internal.models.work_items import (
     WorkItemComment,
     _build_attachment_markdown_details,
@@ -39,20 +38,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-def _merge_uploaded_attachments_into_widget(widget, uploaded_attachments: list[Attachment]) -> None:
-    if not uploaded_attachments:
-        return
-
-    attachments_widget = getattr(widget.app, 'work_item_attachments_widget', None)
-    if attachments_widget is None:
-        screen = getattr(widget.app, 'screen', None)
-        attachments_widget = getattr(screen, 'work_item_attachments_widget', None)
-    if attachments_widget is None:
-        return
-    current_attachments = attachments_widget.attachments or []
-    attachments_widget.attachments = current_attachments + uploaded_attachments
 
 
 def _apply_comment_result_to_collection(
@@ -85,7 +70,7 @@ def _apply_comment_body_override(
 
 def _resolve_comment_screen_result(
     result: dict[str, object] | str | None,
-) -> tuple[WorkItemComment, list[Attachment]] | None:
+) -> WorkItemComment | None:
     if not isinstance(result, dict):
         return None
 
@@ -97,8 +82,7 @@ def _resolve_comment_screen_result(
     if comment_body_markdown is not None and not isinstance(comment_body_markdown, str):
         comment_body_markdown = str(comment_body_markdown)
 
-    uploaded_attachments = cast(list[Attachment], result.get('uploaded_attachments') or [])
-    return _apply_comment_body_override(comment, comment_body_markdown), uploaded_attachments
+    return _apply_comment_body_override(comment, comment_body_markdown)
 
 
 def _handle_comment_screen_result(
@@ -112,13 +96,7 @@ def _handle_comment_screen_result(
     if resolved is None:
         return None
 
-    comment, uploaded_attachments = resolved
-    _merge_uploaded_attachments_into_widget(widget, uploaded_attachments)
-    if uploaded_attachments and work_item_key:
-        widget.notify(
-            f'Uploaded {len(uploaded_attachments)} clipboard attachment(s)',
-            title=work_item_key,
-        )
+    comment = resolved
     if success_message:
         widget.notify(success_message, title=work_item_key or '')
     return comment

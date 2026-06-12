@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -17,7 +16,6 @@ from textual_tags import Tag
 
 from gojeera.components.screens.description_actions import DescriptionActionsMixin
 from gojeera.internal.jira.controller import APIControllerResponse
-from gojeera.internal.models.jira import Attachment
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.data.fields import (
@@ -27,12 +25,7 @@ from gojeera.utils.data.fields import (
     get_sprint_field_id_from_fields_data,
     is_epic_work_item_type,
 )
-from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown, text_to_adf
-from gojeera.utils.system.clipboard import prepare_staged_attachment_text
-from gojeera.utils.system.clipboard_attachments import (
-    materialize_uploaded_attachment_references,
-    upload_staged_clipboard_attachments_for_submission,
-)
+from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.widgets_factory_utils import (
     DynamicFieldsWidgets,
@@ -70,9 +63,6 @@ PROCESS_OPTIONAL_FIELDS = ['duedate', 'priority']
 
 
 class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, object | None]]):
-    BINDINGS = DynamicModalScreen.BINDINGS + [
-        ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
-    ]
     TITLE = 'Create Work Item'
 
     def __init__(
@@ -103,9 +93,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         self._sprint_field_id: str | None = None
 
         self._cache = get_cache()
-        self._clipboard_attachment_paths: list[Path] = []
-        self._clipboard_attachment_names: list[str] = []
-        self._uploaded_clipboard_attachments: list[Attachment] = []
         self._created_work_item_key: str | None = None
         self._is_submitting: bool = False
 
@@ -1260,12 +1247,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             return
         self.dismiss()
 
-    def _clipboard_attachment_title(self) -> str | None:
-        return self._created_work_item_key
-
-    def on_unmount(self) -> None:
-        self._cleanup_staged_attachments()
-
     def _set_submitting(self, submitting: bool) -> None:
         self._is_submitting = submitting
         self.modal_footer.loading = submitting
@@ -1348,12 +1329,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         application = cast('JiraApp', self.app)
         data = self._collect_create_payload()
 
-        description_attachment_template = ''
-        description = data.get('description')
-        if self._clipboard_attachment_paths and isinstance(description, str):
-            description_attachment_template = description
-            data['description'] = prepare_staged_attachment_text(description)
-
         base_fields = {
             'project_key',
             'parent_key',
@@ -1390,49 +1365,10 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                 title=response.result.key,
             )
 
-        if self._clipboard_attachment_paths and self._created_work_item_key:
-            uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
-                application,
-                self._created_work_item_key,
-                self._clipboard_attachment_paths,
-                self._uploaded_clipboard_attachments,
-                self.notify,
-                self._set_submitting,
-            )
-            if uploaded_attachments is None:
-                return
-
-        if (
-            self._created_work_item_key
-            and self._uploaded_clipboard_attachments
-            and description_attachment_template
-        ):
-            reference_description = materialize_uploaded_attachment_references(
-                raw_text=description_attachment_template,
-                clipboard_attachment_names=self._clipboard_attachment_names,
-                uploaded_clipboard_attachments=self._uploaded_clipboard_attachments,
-                app=application,
-            )
-            if reference_description:
-                try:
-                    await application.api.client.update_work_item(
-                        self._created_work_item_key,
-                        fields={'description': text_to_adf(reference_description)},
-                    )
-                except Exception as e:
-                    self.notify(
-                        f'Failed to update work item description: {e}',
-                        severity='error',
-                        title='Create Work Item',
-                    )
-                    self._set_submitting(False)
-                    return
-
         self.dismiss(
             {
                 'created_work_item_key': self._created_work_item_key,
                 'parent_key': data.get('parent_key'),
-                'uploaded_attachments': self._uploaded_clipboard_attachments,
             }
         )
 

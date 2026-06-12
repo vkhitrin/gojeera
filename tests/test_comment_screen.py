@@ -5,12 +5,10 @@ from textual.widgets import TextArea
 from gojeera.app import JiraApp
 from gojeera.components.screens.comment_screen import CommentScreen
 from gojeera.components.work_item.work_item_comments import CommentsScrollView
-from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
 from gojeera.widgets.selection.vim_select import VimSelect
 
 from .test_helpers import (
     navigate_to_comments_tab,
-    stage_clipboard_upload,
     wait_until,
     with_snapshot_assertion,
 )
@@ -66,34 +64,6 @@ async def open_edit_comment_screen(pilot):
     await wait_until(lambda: textarea.has_focus, timeout=1.0)
 
 
-async def paste_clipboard_attachment_and_verify(pilot):
-    await open_add_comment_screen(pilot)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, CommentScreen)
-
-    await screen.action_paste_clipboard_attachment()
-    await asyncio.sleep(0.3)
-
-    assert '<!-- gojeera:staged-clipboard-attachment -->' in screen.comment_field.text
-    assert not screen.save_button.disabled
-
-
-async def create_comment_with_clipboard_attachment_and_verify(pilot):
-    await open_add_comment_screen(pilot)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, CommentScreen)
-
-    await screen.action_paste_clipboard_attachment()
-    await asyncio.sleep(0.3)
-
-    screen.save_button.press()
-    await asyncio.sleep(1.5)
-
-    assert not isinstance(pilot.app.screen, CommentScreen)
-
-
 def with_comment_snapshot_assertion(run_before, *, configure_app=None):
     return with_snapshot_assertion(run_before, configure_app=configure_app)
 
@@ -107,55 +77,6 @@ class TestCommentScreen:
 
     @with_comment_snapshot_assertion(open_edit_comment_screen)
     def test_edit_comment_screen_with_existing_text(self): ...
-
-    def test_add_comment_screen_with_clipboard_attachment(
-        self,
-        snap_compare,
-        monkeypatch,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_search_with_results,
-        mock_jira_api_with_search_results,
-        staged_upload_file,
-    ):
-        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
-
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=paste_clipboard_attachment_and_verify,
-        )
-
-    def test_create_comment_uploads_clipboard_attachment(
-        self,
-        snap_compare,
-        monkeypatch,
-        mock_configuration,
-        mock_user_info,
-        mock_jira_api_with_comment_creation,
-        staged_upload_file,
-        mock_attachment_upload,
-    ):
-        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
-
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        upload_route = mock_attachment_upload('ENG-3')
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=create_comment_with_clipboard_attachment_and_verify,
-        )
-        assert upload_route.called
-        assert upload_route.call_count == 1
-        assert b'filename="clipboard-upload.png"' in upload_route.calls[0].request.content
-        comment_create_route = mock_jira_api_with_comment_creation['comment_create_route']
-        assert comment_create_route.called
-        assert (
-            b'https://example.atlassian.acme.net/secure/attachment/66812/clipboard-upload.png'
-            in comment_create_route.calls[-1].request.content
-        )
 
     def test_service_desk_comment_visibility_internal_state(
         self,

@@ -1,6 +1,4 @@
 import logging
-from pathlib import Path
-from typing import TYPE_CHECKING, cast
 
 from textual import on
 from textual.app import ComposeResult
@@ -9,14 +7,11 @@ from textual.widgets import Button, Input, Label, Static, TextArea
 
 from gojeera.components.screens.description_actions import DescriptionActionsMixin
 from gojeera.internal.models.jira import (
-    Attachment,
     JiraWorkItemGenericFields,
 )
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
-from gojeera.utils.system.clipboard import prepare_staged_attachment_text
-from gojeera.utils.system.clipboard_attachments import materialize_uploaded_attachment_references
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.widgets.inputs.extended_input import ExtendedInput
 from gojeera.widgets.layout import modal_buttons
@@ -26,16 +21,10 @@ from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClic
 from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 
-if TYPE_CHECKING:
-    from gojeera.app import JiraApp
-
 logger = logging.getLogger('gojeera')
 
 
 class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, str]]):
-    BINDINGS = DynamicModalScreen.BINDINGS + [
-        ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
-    ]
     TITLE = 'Edit Work Item Info'
 
     def __init__(self, work_item: JiraWorkItem | None = None):
@@ -50,9 +39,6 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[st
 
         self._original_summary = self.work_item.summary if self.work_item else ''
         self._original_description = self._initial_description_text()
-        self._clipboard_attachment_paths: list[Path] = []
-        self._clipboard_attachment_names: list[str] = []
-        self._uploaded_clipboard_attachments: list[Attachment] = []
         self._is_submitting = False
 
     @property
@@ -260,12 +246,6 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[st
             work_item_key=work_item_key,
         )
 
-    def _clipboard_attachment_title(self) -> str | None:
-        return self.work_item.key if self.work_item else None
-
-    def on_unmount(self) -> None:
-        self._cleanup_staged_attachments()
-
     def _set_submitting(self, submitting: bool) -> None:
         self._is_submitting = submitting
         self.query_one('#modal_footer').loading = submitting
@@ -287,28 +267,6 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[st
         summary_changed = summary.strip() != self._original_summary.strip()
         description_changed = description.strip() != self._original_description.strip()
         description_to_save = description
-
-        if self._description_exists_in_edit_metadata and self._clipboard_attachment_paths:
-            application = cast('JiraApp', self.app)
-            description_template = prepare_staged_attachment_text(description)
-            uploaded_attachments = await self._upload_staged_clipboard_attachments_for_work_item(
-                application,
-                work_item.key,
-                self._set_submitting,
-            )
-            if uploaded_attachments is None:
-                return
-
-            if uploaded_attachments and description_template:
-                description_to_save = materialize_uploaded_attachment_references(
-                    raw_text=description_template,
-                    clipboard_attachment_names=self._clipboard_attachment_names,
-                    uploaded_clipboard_attachments=self._uploaded_clipboard_attachments,
-                    app=application,
-                )
-                description_changed = (
-                    description_to_save.strip() != self._original_description.strip()
-                )
 
         updates = {}
         if summary_changed:

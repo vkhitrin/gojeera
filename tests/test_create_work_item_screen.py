@@ -2,20 +2,15 @@ import asyncio
 import json
 from pathlib import Path
 
-from httpx import Response
-import respx
-
 from gojeera.app import JiraApp
 from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 from gojeera.components.search.unified_search import UnifiedSearchBar
-from gojeera.utils.system import clipboard_attachments as clipboard_attachments_module
 from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
 from gojeera.widgets.selection.popup_menu import PopupMenu
 from gojeera.widgets.selection.selection import SelectionWidget
 
 from .test_helpers import (
     search_for_work_item_key_and_assert_single_result,
-    stage_clipboard_upload,
     wait_for_mount,
     wait_for_screen_to_settle,
     wait_for_worker_idle,
@@ -25,9 +20,6 @@ from .test_helpers import (
 ENG_8_SUMMARY = json.loads(
     Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
 )['fields']['summary']
-ENG_8_WORK_ITEM = json.loads(
-    Path(__file__).parent.joinpath('fixtures', 'jira_work_items', 'ENG-8.json').read_text()
-)
 
 
 async def open_create_work_item_screen(pilot):
@@ -158,41 +150,6 @@ async def fill_save_and_search_work_item(pilot):
     )
 
 
-async def fill_save_and_upload_clipboard_attachment(pilot):
-    await fill_required_fields(pilot)
-
-    screen = pilot.app.screen
-    assert isinstance(screen, AddWorkItemScreen)
-
-    await screen.action_paste_clipboard_attachment()
-    await pilot.pause()
-
-    screen.save_button.press()
-    await wait_until(lambda: not isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
-    await wait_for_screen_to_settle(pilot)
-
-    assert not isinstance(pilot.app.screen, AddWorkItemScreen)
-
-
-async def fill_save_and_open_created_work_item_attachments(pilot):
-    await fill_save_and_upload_clipboard_attachment(pilot)
-
-    await pilot.app.load_work_item('ENG-8')
-    await wait_for_worker_idle(pilot)
-    await wait_until(lambda: pilot.app.current_loaded_work_item_key == 'ENG-8', timeout=3.0)
-
-    pilot.app.tabs.active = 'tab-attachments'
-    pilot.app.information_panel.set_active_tab('tab-attachments')
-    await wait_until(
-        lambda: pilot.app.work_item_attachments_widget.record_list is not None,
-        timeout=3.0,
-    )
-    await wait_until(
-        lambda: not pilot.app.work_item_attachments_widget.is_loading,
-        timeout=3.0,
-    )
-
-
 class TestCreateWorkItemScreen:
     """Snapshot tests to verify create work item screen display and interactions."""
 
@@ -236,49 +193,3 @@ class TestCreateWorkItemScreen:
         app = JiraApp(settings=config, user_info=mock_user_info)
 
         assert snap_compare(app, terminal_size=(120, 40), run_before=fill_save_and_search_work_item)
-
-    def test_create_work_item_uploads_clipboard_attachment_after_creation(
-        self,
-        snap_compare,
-        monkeypatch,
-        mock_configuration,
-        mock_jira_api_with_create_work_item,
-        mock_jira_new_attachment,
-        mock_user_info,
-        staged_upload_file,
-        mock_attachment_upload,
-    ):
-        stage_clipboard_upload(monkeypatch, clipboard_attachments_module, staged_upload_file)
-
-        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
-        created_work_item = json.loads(json.dumps(ENG_8_WORK_ITEM))
-        uploaded_attachment = json.loads(json.dumps(mock_jira_new_attachment))
-        uploaded_attachment['filename'] = 'clipboard-upload.png'
-        uploaded_attachment['mimeType'] = 'image/png'
-        uploaded_attachment['size'] = 3
-        created_work_item['fields']['attachment'] = [
-            *created_work_item['fields'].get('attachment', []),
-            uploaded_attachment,
-        ]
-        upload_route = mock_attachment_upload('ENG-8')
-        respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-8(?:\?.*)?$'
-        ).mock(return_value=Response(200, json=created_work_item))
-        update_route = respx.put(
-            'https://example.atlassian.acme.net/rest/api/3/issue/ENG-8',
-            params={'returnIssue': 'true'},
-        ).mock(return_value=Response(200, json=created_work_item))
-
-        assert snap_compare(
-            app,
-            terminal_size=(120, 40),
-            run_before=fill_save_and_open_created_work_item_attachments,
-        )
-        assert upload_route.called
-        assert upload_route.call_count == 1
-        assert b'filename="clipboard-upload.png"' in upload_route.calls[0].request.content
-        assert update_route.called
-        assert (
-            b'https://example.atlassian.acme.net/secure/attachment/66812/clipboard-upload.png'
-            in update_route.calls[0].request.content
-        )

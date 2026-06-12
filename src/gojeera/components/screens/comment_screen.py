@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from textual import on
@@ -9,16 +8,8 @@ from textual.widgets import Button, Label, Select, Static, TextArea
 
 from gojeera.components.screens.decision_picker_screen import DecisionPickerScreen
 from gojeera.components.screens.panel_picker_screen import PanelPickerScreen
-from gojeera.internal.models.jira import Attachment
 from gojeera.internal.models.work_items import WorkItemComment
 from gojeera.internal.store.config import CONFIGURATION
-from gojeera.utils.system.clipboard import prepare_staged_attachment_text
-from gojeera.utils.system.clipboard_attachments import (
-    cleanup_staged_clipboard_attachments,
-    materialize_uploaded_attachment_references,
-    stage_clipboard_attachments_into_textarea,
-    upload_staged_clipboard_attachments_for_submission,
-)
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.textarea_insertion import insert_picker_markup_from_getter
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
@@ -48,10 +39,6 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         initial_text: Initial text for the comment (only used in edit mode).
     """
 
-    BINDINGS = ExtendedModalScreen.BINDINGS + [
-        ('ctrl+y', 'paste_clipboard_attachment', 'Clipboard'),
-    ]
-
     def __init__(
         self,
         mode: str = 'new',
@@ -75,9 +62,6 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             self._modal_title = f'{title_prefix} - Work Item {work_item_key}'
         else:
             self._modal_title = title_prefix
-        self._clipboard_attachment_paths: list[Path] = []
-        self._clipboard_attachment_names: list[str] = []
-        self._uploaded_clipboard_attachments: list[Attachment] = []
         self._submitted_comment: WorkItemComment | None = None
 
     @property
@@ -197,50 +181,10 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             build_insertion_text=lambda result: f'> {result[0]}\n> ',
         )
 
-    async def action_paste_clipboard_attachment(self) -> None:
-        stage_clipboard_attachments_into_textarea(
-            textarea=self.comment_textarea,
-            clipboard_attachment_paths=self._clipboard_attachment_paths,
-            clipboard_attachment_names=self._clipboard_attachment_names,
-            notify=self.notify,
-        )
-
-    def on_unmount(self) -> None:
-        cleanup_staged_clipboard_attachments(
-            clipboard_attachment_paths=self._clipboard_attachment_paths,
-            clipboard_attachment_names=self._clipboard_attachment_names,
-            uploaded_clipboard_attachments=self._uploaded_clipboard_attachments,
-        )
-
     def _set_submitting(self, submitting: bool) -> None:
         self.query_one('#modal_footer').loading = submitting
         self.save_button.disabled = submitting
         self.cancel_button.disabled = submitting
-
-    def _build_final_comment_text(self, raw_text: str) -> str:
-        application = cast('JiraApp', self.app)
-        return materialize_uploaded_attachment_references(
-            raw_text=raw_text,
-            clipboard_attachment_names=self._clipboard_attachment_names,
-            uploaded_clipboard_attachments=self._uploaded_clipboard_attachments,
-            app=application,
-        )
-
-    async def _upload_clipboard_attachments(self) -> bool:
-        if not self.work_item_key or not self._clipboard_attachment_paths:
-            return True
-
-        application = cast('JiraApp', self.app)
-        uploaded_attachments = await upload_staged_clipboard_attachments_for_submission(
-            application,
-            self.work_item_key,
-            self._clipboard_attachment_paths,
-            self._uploaded_clipboard_attachments,
-            self.notify,
-            self._set_submitting,
-            notify_success=False,
-        )
-        return uploaded_attachments is not None
 
     async def _create_comment(self, comment_text: str) -> WorkItemComment | None:
         if not self.work_item_key:
@@ -297,12 +241,8 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         raw_text = self.comment_field.text or ''
         self._set_submitting(True)
 
-        base_text = (
-            prepare_staged_attachment_text(raw_text).strip()
-            if self._clipboard_attachment_names
-            else raw_text.strip()
-        )
-        if not base_text and not self._clipboard_attachment_names:
+        comment_text = raw_text.strip()
+        if not comment_text:
             self._set_submitting(False)
             return
 
@@ -311,41 +251,18 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             if not self.comment_id:
                 self._set_submitting(False)
                 return
-            current_comment = await self._update_comment(base_text, comment_id=self.comment_id)
+            current_comment = await self._update_comment(comment_text, comment_id=self.comment_id)
             if current_comment is None:
                 return
-        elif self._submitted_comment is None and base_text:
-            current_comment = await self._create_comment(base_text)
-            if current_comment is None:
-                return
-
-        if self._clipboard_attachment_paths:
-            if not await self._upload_clipboard_attachments():
-                return
-
-        final_text = (
-            self._build_final_comment_text(raw_text)
-            if self._clipboard_attachment_names
-            else base_text
-        )
-        if not final_text:
-            self._set_submitting(False)
-            return
-
-        if self._submitted_comment is None:
-            current_comment = await self._create_comment(final_text)
-            if current_comment is None:
-                return
-        elif final_text != base_text or self.mode == 'edit':
-            current_comment = await self._update_comment(final_text)
+        else:
+            current_comment = await self._create_comment(comment_text)
             if current_comment is None:
                 return
 
         self.dismiss(
             {
                 'comment': current_comment,
-                'comment_body_markdown': final_text,
-                'uploaded_attachments': self._uploaded_clipboard_attachments,
+                'comment_body_markdown': comment_text,
                 'mode': self.mode,
             }
         )

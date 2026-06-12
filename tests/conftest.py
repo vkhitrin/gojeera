@@ -1652,27 +1652,6 @@ def mock_jira_new_attachment():
 
 
 @pytest.fixture
-def staged_upload_file(tmp_path: Path) -> Path:
-    file_path = tmp_path / 'clipboard-upload.png'
-    file_path.write_bytes(b'png')
-    return file_path
-
-
-@pytest.fixture
-def mock_attachment_upload(mock_jira_new_attachment):
-    def _mock(work_item_key: str, filename: str = 'clipboard-upload.png'):
-        attachment = copy.deepcopy(mock_jira_new_attachment)
-        attachment['filename'] = filename
-        attachment['mimeType'] = 'image/png'
-        attachment['size'] = 3
-        return respx.post(
-            f'https://example.atlassian.acme.net/rest/api/3/issue/{work_item_key}/attachments'
-        ).mock(return_value=Response(200, json=[attachment]))
-
-    return _mock
-
-
-@pytest.fixture
 def mock_jira_new_worklog():
     return load_fixture('jira_new_worklog.json')
 

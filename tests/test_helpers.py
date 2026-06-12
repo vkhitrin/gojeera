@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, NamedTuple
 
 from textual.widgets import Button, Input, TextArea
@@ -103,14 +102,6 @@ async def wait_for_markdown_paragraph_containing_text(
     )
     await asyncio.sleep(render_delay)
     return find_markdown_paragraph_containing_text(pilot.app.screen, text)
-
-
-def stage_clipboard_upload(monkeypatch, clipboard_module: Any, staged_upload_file: Path) -> None:
-    monkeypatch.setattr(
-        clipboard_module,
-        'stage_clipboard_attachments',
-        lambda: [staged_upload_file],
-    )
 
 
 async def search_for_work_item_key_and_assert_single_result(

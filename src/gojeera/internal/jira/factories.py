@@ -147,7 +147,7 @@ class WorkItemFactory:
             if sprint_field_id:
                 sprint_value = fields.get(sprint_field_id)
                 if sprint_value and isinstance(sprint_value, list) and len(sprint_value) > 0:
-                    sprint_data = sprint_value[0]
+                    sprint_data = sprint_value[-1]
                     if isinstance(sprint_data, dict):
                         try:
                             sprint = JiraSprint(

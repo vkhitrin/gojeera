@@ -4240,8 +4240,10 @@ class WorkItemFields(Container, can_focus=False):
     ) -> None:
         config = CONFIGURATION.get()
         edit_meta_fields = work_item.edit_meta.get('fields', {}) if work_item.edit_meta else {}
-        current_readonly_sprints = self._extract_current_sprint_entries(work_item, None)
         sprint_field_id_from_meta = get_sprint_field_id_from_editmeta(edit_meta_fields)
+        current_readonly_sprints = self._extract_current_sprint_entries(
+            work_item, sprint_field_id_from_meta
+        )
 
         if (
             not self.sprint_field_container.display
@@ -4261,7 +4263,7 @@ class WorkItemFields(Container, can_focus=False):
             current_sprints: list[tuple[str, str]] | None = None,
         ) -> None:
             readonly_sprints = current_sprints or self._extract_current_sprint_entries(
-                work_item, None
+                work_item, sprint_field_id_from_meta
             )
             if not readonly_sprints:
                 hide_sprint_field()
@@ -4293,7 +4295,7 @@ class WorkItemFields(Container, can_focus=False):
         ) and not is_epic_work_item_type(work_item.parent_work_item_type)
 
         if parent_has_locked_sprint or is_subtask_with_non_epic_parent:
-            show_current_sprint_readonly()
+            show_current_sprint_readonly(current_readonly_sprints[-1:])
             return
 
         if not edit_meta_fields:

@@ -65,8 +65,8 @@ debug = [
 ]
 dev = [
     "textual-dev>=1.8.0",
-    "ruff>=0.15.16",
-    "ty>=0.0.44",
+    "ruff>=0.15.17",
+    "ty>=0.0.50",
     "vulture>=2.16",
     "deadcode>=2.4.1",
 ]

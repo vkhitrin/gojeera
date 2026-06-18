@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
 
-from textual import events
+from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widget import Widget
+from textual.widgets import Button, Input, Select, TextArea
 
 from gojeera.commands.binding_provider import build_toggle_footer_binding
 from gojeera.internal.store.config import CONFIGURATION
@@ -23,6 +24,8 @@ T = TypeVar('T')
 
 class ExtendedModalScreen(ModalScreen[T], Generic[T]):
     """Modal screen with global overlay bindings that remain available in modals."""
+
+    ENABLE_CTRL_S_POSITIVE_BUTTON = True
 
     DEFAULT_CSS = """
     ExtendedModalScreen {
@@ -78,11 +81,19 @@ class ExtendedModalScreen(ModalScreen[T], Generic[T]):
     """
 
     BINDINGS = [
+        Binding('ctrl+c', 'dismiss_screen_with_ctrl_c', 'Close', show=False),
+        Binding('ctrl+s', 'press_positive_button', 'Save', show=False),
         ('escape', 'dismiss_screen', 'Close'),
         Binding('f12', 'app.debug_info', 'Debug', show=False),
         Binding('ctrl+backslash', 'show_overlay', 'Jump', show=False),
         build_toggle_footer_binding(),
     ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.dirty = False
+        self._dirty_baseline: dict[int, object] = {}
+        self._dirty_tracked_widgets: list[Widget] = []
 
     def action_toggle_footer_visibility(self) -> None:
         app = cast('JiraApp', self.app)
@@ -90,6 +101,121 @@ class ExtendedModalScreen(ModalScreen[T], Generic[T]):
 
     def action_dismiss_screen(self) -> None:
         self.dismiss()
+
+    def action_press_positive_button(self) -> None:
+        if not self.ENABLE_CTRL_S_POSITIVE_BUTTON:
+            return
+
+        try:
+            positive_buttons = self.query(Button).filter('.modal-action-button--confirm')
+        except Exception:
+            return
+
+        for button in positive_buttons:
+            if not button.disabled and button.display:
+                button.press()
+                return
+
+    @on(events.Mount)
+    def _on_mount_dirty_tracking(self) -> None:
+        self.call_after_refresh(self.reset_dirty_state)
+
+    def action_dismiss_screen_with_ctrl_c(self) -> None:
+        if not self.is_dirty():
+            self.dismiss()
+            return
+
+        from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+
+        self.app.push_screen(
+            ConfirmationScreen('Discard unsaved changes and close this screen?'),
+            self._handle_dirty_dismiss_confirmation,
+        )
+
+    def _handle_dirty_dismiss_confirmation(self, should_close: bool | None = None) -> None:
+        if should_close:
+            self.dismiss()
+
+    def reset_dirty_state(self) -> None:
+        """Mark the current widget values as clean."""
+
+        tracked_widgets = self._collect_dirty_tracked_widgets()
+        self._dirty_tracked_widgets = [widget for widget, _value in tracked_widgets]
+        self._dirty_baseline = {id(widget): value for widget, value in tracked_widgets}
+        self.dirty = False
+
+    def is_dirty(self) -> bool:
+        self._refresh_dirty_state()
+        return self.dirty
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self._refresh_dirty_state_from_event(event.input)
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self._refresh_dirty_state_from_event(event.text_area)
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        self._refresh_dirty_state_from_event(event.select)
+
+    def _refresh_dirty_state_from_event(self, widget: Widget) -> None:
+        if any(widget is tracked_widget for tracked_widget in self._dirty_tracked_widgets):
+            self._refresh_dirty_state()
+
+    def _refresh_dirty_state(self) -> None:
+        self.dirty = any(self._widget_is_dirty(widget) for widget in self._dirty_tracked_widgets)
+
+    def _widget_is_dirty(self, widget: Widget) -> bool:
+        try:
+            value_has_changed = getattr(widget, 'value_has_changed', None)
+            if isinstance(value_has_changed, bool):
+                return value_has_changed
+        except Exception:
+            pass
+
+        current_value = self._dirty_widget_value(widget)
+        if current_value is None:
+            return False
+        return current_value != self._dirty_baseline.get(id(widget), current_value)
+
+    def _collect_dirty_tracked_widgets(self) -> list[tuple[Widget, object]]:
+        tracked_widgets: list[tuple[Widget, object]] = []
+
+        for widget in self.query(Widget):
+            value = self._dirty_widget_value(widget)
+            if value is not None:
+                tracked_widgets.append((widget, value))
+
+        return tracked_widgets
+
+    @staticmethod
+    def _dirty_widget_value(widget: Widget) -> object | None:
+        if isinstance(widget, TextArea):
+            return widget.text
+
+        if isinstance(widget, Input | Select):
+            return widget.value
+
+        if hasattr(widget, 'text'):
+            try:
+                text = getattr(widget, 'text')
+            except Exception:
+                text = None
+            if isinstance(text, str):
+                return text
+
+        if hasattr(widget, 'selection'):
+            try:
+                return getattr(widget, 'selection')
+            except Exception:
+                return None
+
+        if hasattr(widget, 'value'):
+            try:
+                return getattr(widget, 'value')
+            except Exception:
+                return None
+
+        return None
 
     def compose_modal_jumper(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:

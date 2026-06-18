@@ -56,4 +56,7 @@ class BaseConfirmationDialogScreen(ExtendedModalScreen[T], Generic[T]):
                 )
 
     def on_mount(self) -> None:
+        self.call_after_refresh(self._activate_dialog_actions)
+
+    def _activate_dialog_actions(self) -> None:
         self.activate_modal_actions(self.cancel_button, self.confirm_button)

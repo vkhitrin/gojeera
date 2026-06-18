@@ -56,6 +56,8 @@ class InvalidWorkItemTemplateRecord:
 class WorkItemTemplatePickerScreen(ExtendedModalScreen[tuple[str, WorkItemTemplate] | None]):
     """Modal screen for selecting a configured work item template."""
 
+    ENABLE_CTRL_S_POSITIVE_BUTTON = False
+
     is_submitting: reactive[bool] = reactive(False)
     templates_loaded: reactive[bool] = reactive(False)
 

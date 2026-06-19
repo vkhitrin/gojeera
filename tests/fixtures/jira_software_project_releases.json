@@ -1,0 +1,96 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 5,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://example.atlassian.acme.net/rest/api/3/version/10001",
+      "id": "10001",
+      "name": "Platform 5.26 Q1",
+      "description": "Production release for Q1 platform work",
+      "archived": false,
+      "released": true,
+      "overdue": false,
+      "startDate": "2026-01-02",
+      "releaseDate": "2026-03-31",
+      "projectId": 60001,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 0,
+        "inProgress": 2,
+        "done": 38
+      }
+    },
+    {
+      "self": "https://example.atlassian.acme.net/rest/api/3/version/10002",
+      "id": "10002",
+      "name": "Platform 5.26 Q2 RC1",
+      "description": "Release candidate with overdue open work",
+      "archived": false,
+      "released": false,
+      "overdue": true,
+      "startDate": "2026-05-04",
+      "releaseDate": "2026-06-07",
+      "projectId": 60001,
+      "issuesStatusForFixVersion": {
+        "unmapped": 1,
+        "toDo": 3,
+        "inProgress": 4,
+        "done": 27
+      }
+    },
+    {
+      "self": "https://example.atlassian.acme.net/rest/api/3/version/10003",
+      "id": "10003",
+      "name": "Platform 5.26 Q2 RC2",
+      "description": "Upcoming release candidate",
+      "archived": false,
+      "released": false,
+      "overdue": false,
+      "startDate": "2026-06-10",
+      "releaseDate": "2026-06-28",
+      "projectId": 60001,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 7,
+        "inProgress": 12,
+        "done": 18
+      }
+    },
+    {
+      "self": "https://example.atlassian.acme.net/rest/api/3/version/10004",
+      "id": "10004",
+      "name": "Platform 5.26 Backlog",
+      "description": "Unscheduled work without a release date",
+      "archived": false,
+      "released": false,
+      "overdue": false,
+      "projectId": 60001,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 11,
+        "inProgress": 1,
+        "done": 0
+      }
+    },
+    {
+      "self": "https://example.atlassian.acme.net/rest/api/3/version/10005",
+      "id": "10005",
+      "name": "Platform 5.25 Archived",
+      "description": "Archived historical release",
+      "archived": true,
+      "released": true,
+      "overdue": false,
+      "startDate": "2025-10-01",
+      "releaseDate": "2025-12-15",
+      "projectId": 60001,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 0,
+        "inProgress": 0,
+        "done": 44
+      }
+    }
+  ]
+}

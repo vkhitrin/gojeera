@@ -65,6 +65,32 @@ class JiraProject(BaseModel):
 
 
 @dataclass
+class JiraProjectRelease(BaseModel):
+    id: str
+    name: str
+    archived: bool = False
+    released: bool = False
+    overdue: bool = False
+    description: str | None = None
+    start_date: str | None = None
+    release_date: str | None = None
+    todo_count: int | None = None
+    in_progress_count: int | None = None
+    done_count: int | None = None
+    unmapped_count: int | None = None
+
+    @property
+    def status(self) -> str:
+        if self.archived:
+            return 'Archived'
+        if self.released:
+            return 'Released'
+        if self.overdue:
+            return 'Overdue'
+        return 'Unreleased'
+
+
+@dataclass
 class WorkItemStatus(BaseModel):
     id: str
     name: str

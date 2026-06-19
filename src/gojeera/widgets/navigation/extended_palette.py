@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from rich.align import Align
 from rich.text import Text
+
 from textual import events
 from textual.binding import Binding
 from textual.command import Command, CommandInput, CommandList, CommandPalette
 from textual.widgets import Input
 from textual.widgets.option_list import Option
 
-from gojeera.widgets.layout.sub_palette import is_sub_command_palette_hit
+from gojeera.widgets.layout.sub_palette import (
+    get_sub_command_palette_launch,
+    is_sub_command_palette_hit,
+)
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
@@ -20,6 +24,8 @@ if TYPE_CHECKING:
 
 class ExtendedPalette(CommandPalette):
     """Command palette that supports vim-style navigation and sub-palette switching."""
+
+    _LOADING = '--loading'
 
     BINDINGS = [
         *CommandPalette.BINDINGS,
@@ -41,9 +47,35 @@ class ExtendedPalette(CommandPalette):
 
         command_list = self.query_one(CommandList)
         command_list.clear_options()
-        self._list_visible = False
+        self._set_command_list_loading(command_list, bool(sub_palette_id))
+        self._list_visible = bool(sub_palette_id)
         self._hit_count = 0
         self._gather_commands('')
+
+    def _set_command_list_loading(self, command_list: CommandList, loading: bool) -> None:
+        command_list.loading = loading
+        command_list.set_class(loading, self._LOADING)
+
+    def _start_busy_countdown(self) -> None:
+        if getattr(self.app, 'active_sub_command_palette_id', None):
+            self._stop_busy_countdown()
+            return
+        super()._start_busy_countdown()
+
+    def _select_or_command(self, event: Any = None) -> None:
+        if event is not None:
+            event.stop()
+
+        if self._list_visible or self._selected_command is None:
+            return super()._select_or_command()
+
+        launch_details = get_sub_command_palette_launch(self._selected_command)
+        if launch_details is None:
+            return super()._select_or_command()
+
+        palette_id, placeholder = launch_details
+        self._selected_command = None
+        self.switch_palette_context(sub_palette_id=palette_id, placeholder=placeholder)
 
     def _is_loaded_work_item_command(self, command: Command) -> bool:
         hit_text = command.hit.text or ''
@@ -66,6 +98,7 @@ class ExtendedPalette(CommandPalette):
         self, command_list: CommandList, commands: list[Command], clear_current: bool
     ) -> None:
         del clear_current
+        self._set_command_list_loading(command_list, False)
         sub_command_palette_id = getattr(self.app, 'active_sub_command_palette_id', None)
         if sub_command_palette_id:
             commands = [

@@ -223,6 +223,7 @@ class JiraAPI:
         limit: int | None = None,
         query: str | None = None,
         keys: list[str] | None = None,
+        project_type_key: str | None = None,
     ) -> dict:
         """Retrieves a paginated list of projects visible to the user (making the request).
 
@@ -232,6 +233,7 @@ class JiraAPI:
             query: filter the results using a literal string. Projects with a matching key or name are returned
             (case-insensitive).
             keys: the project keys to filter the results by.
+            project_type_key: filter the results by project type.
 
         Returns:
             A dictionary with the details of the projects.
@@ -241,6 +243,8 @@ class JiraAPI:
             params['query'] = query
         if keys:
             params['keys'] = ','.join(keys[:50])
+        if project_type_key is not None:
+            params['typeKey'] = project_type_key
 
         return cast(
             dict,
@@ -296,6 +300,40 @@ class JiraAPI:
         return cast(
             dict,
             await self._client.make_request(method=httpx.AsyncClient.get, url=f'project/{key}'),
+        )
+
+    async def get_project_versions(
+        self,
+        project_id_or_key: str,
+        offset: int | None = None,
+        limit: int | None = None,
+        *,
+        order_by: str | None = 'sequence',
+        query: str | None = None,
+        status: str | None = None,
+        expand: str | None = 'issuesstatus',
+    ) -> dict:
+        """Retrieves a paginated list of project versions.
+
+        Jira's UI calls these releases.
+        """
+        params: dict[str, Any] = self._add_pagination_params({}, offset, limit)
+        if order_by is not None:
+            params['orderBy'] = order_by
+        if query is not None:
+            params['query'] = query
+        if status is not None:
+            params['status'] = status
+        if expand is not None:
+            params['expand'] = expand
+
+        return cast(
+            dict,
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'project/{project_id_or_key}/version',
+                params=params,
+            ),
         )
 
     async def user_assignable_search(

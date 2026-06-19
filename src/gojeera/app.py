@@ -153,6 +153,12 @@ def get_recent_searches_provider() -> type[Provider]:
     return RecentSearchesProvider
 
 
+def get_release_command_provider() -> type[Provider]:
+    from gojeera.commands.providers.release_provider import ReleaseCommandProvider
+
+    return ReleaseCommandProvider
+
+
 class WorkspaceMixin(App):
     """Workspace behavior hosted directly on the application."""
 
@@ -1922,6 +1928,7 @@ class JiraApp(WorkspaceMixin, App):
         get_quick_navigation_provider,
         get_recently_viewed_work_items_provider,
         get_recent_searches_provider,
+        get_release_command_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,
@@ -2215,6 +2222,22 @@ class JiraApp(WorkspaceMixin, App):
             JQL_FILTERS_PALETTE_ID,
             'Search JQL filters…',
         )
+
+    def action_show_releases_palette(self) -> None:
+        from gojeera.commands.providers.release_provider import (
+            RELEASES_PALETTE_ID,
+            RELEASES_PALETTE_PLACEHOLDER,
+        )
+
+        self._open_sub_command_palette(
+            RELEASES_PALETTE_ID,
+            RELEASES_PALETTE_PLACEHOLDER,
+        )
+
+    async def action_view_project_releases(self, project_key: str) -> None:
+        from gojeera.components.screens.project_releases_screen import ProjectReleasesScreen
+
+        await self._push_screen_exclusive(ProjectReleasesScreen(project_key))
 
     def action_show_browse_work_item_palette(self) -> None:
         from gojeera.commands.providers.quick_navigation_provider import (

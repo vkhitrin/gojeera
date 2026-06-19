@@ -1566,6 +1566,16 @@ def mock_jira_projects():
 
 
 @pytest.fixture
+def mock_jira_software_project_releases():
+    return load_fixture('jira_software_project_releases.json')
+
+
+@pytest.fixture
+def mock_jira_software_project_releases_empty():
+    return load_fixture('jira_software_project_releases_empty.json')
+
+
+@pytest.fixture
 def mock_jira_issue_types():
     return load_fixture('jira_engineering_issue_types.json')
 

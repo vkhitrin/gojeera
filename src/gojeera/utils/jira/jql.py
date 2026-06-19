@@ -23,6 +23,13 @@ def work_item_flagged_jql(work_item_key: str) -> str:
     )
 
 
+def release_work_items_jql(project_key: str, release_name: str) -> str:
+    return (
+        f'project = {quote_jql_string(project_key)} '
+        f'AND fixVersion = {quote_jql_string(release_name)}'
+    )
+
+
 def build_work_item_search_jql(
     jql_query: str | None = None,
     search_in_active_sprint: bool = False,

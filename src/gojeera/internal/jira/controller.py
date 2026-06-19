@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Iterable
+import asyncio
 import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -27,6 +28,7 @@ from gojeera.internal.models.jira import (
     JiraField,
     JiraGlobalSettings,
     JiraMyselfInfo,
+    JiraProjectRelease,
     JiraServerInfo,
     JiraSprint,
     JiraTimeTrackingConfiguration,
@@ -72,6 +74,9 @@ from gojeera.utils.system.logging_utils import (
 ATTACHMENT_MAXIMUM_FILE_SIZE_IN_BYTES = 10485760
 RECORDS_PER_PAGE_SEARCH_PROJECTS = 100
 MAXIMUM_PAGE_NUMBER_SEARCH_PROJECTS = 10
+RECORDS_PER_PAGE_PROJECT_RELEASES = 50
+MAXIMUM_PAGE_NUMBER_PROJECT_RELEASES = 20
+MAXIMUM_CONCURRENT_PROJECT_RELEASE_CHECKS = 8
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_PROJECTS = 1000
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_WORK_ITEMS = 1000
 
@@ -257,6 +262,24 @@ class APIController:
             summary=get_nested(remote_link_data, 'object', 'summary'),
             url=get_nested(remote_link_data, 'object', 'url'),
             status_resolved=get_nested(remote_link_data, 'object', 'status', 'resolved'),
+        )
+
+    @staticmethod
+    def _build_project_release(release_data: dict[str, Any]) -> JiraProjectRelease:
+        issues_status = release_data.get('issuesStatusForFixVersion') or {}
+        return JiraProjectRelease(
+            id=str(release_data.get('id', '')),
+            name=str(release_data.get('name', '')),
+            archived=bool(release_data.get('archived', False)),
+            released=bool(release_data.get('released', False)),
+            overdue=bool(release_data.get('overdue', False)),
+            description=release_data.get('description'),
+            start_date=release_data.get('startDate'),
+            release_date=release_data.get('releaseDate'),
+            todo_count=issues_status.get('toDo'),
+            in_progress_count=issues_status.get('inProgress'),
+            done_count=issues_status.get('done'),
+            unmapped_count=issues_status.get('unmapped'),
         )
 
     @staticmethod
@@ -623,6 +646,7 @@ class APIController:
         self,
         query: str | None = None,
         keys: list[str] | None = None,
+        project_type_key: str | None = None,
     ) -> APIControllerResponse:
         """Searches for projects using different filters.
 
@@ -630,13 +654,14 @@ class APIController:
             query: filter the results using a literal string. Projects with a matching key or name are returned
             (case-insensitive).
             keys: the project keys to filter the results by.
+            project_type_key: filter the results by project type.
 
         Returns:
             An instance of `APIControllerResponse` with the list of `JiraProject` instances. If an error occurs an
             instance of `APIControllerResponse` with the `error` message.
         """
 
-        if query is None and not keys:
+        if query is None and not keys and project_type_key is None:
             cached_projects = await run_cache_io(self.cache.get_projects)
             if cached_projects is not None:
                 return APIControllerResponse(result=cached_projects)
@@ -651,6 +676,7 @@ class APIController:
                     limit=RECORDS_PER_PAGE_SEARCH_PROJECTS,
                     query=query,
                     keys=keys,
+                    project_type_key=project_type_key,
                 )
             except Exception as e:
                 exception_details = self._extract_exception_details(e)
@@ -661,6 +687,7 @@ class APIController:
                             'error': str(e),
                             'query': query,
                             'keys': keys,
+                            'project_type_key': project_type_key,
                             'limit': RECORDS_PER_PAGE_SEARCH_PROJECTS,
                         },
                         exception_details,
@@ -680,10 +707,80 @@ class APIController:
                 is_last = response.get('isLast')
                 i += 1
 
-        if query is None and not keys:
+        if query is None and not keys and project_type_key is None:
             await run_cache_io(lambda: self.cache.set_projects(projects))
 
         return APIControllerResponse(result=projects)
+
+    async def get_project_releases(
+        self,
+        project_key: str,
+        *,
+        limit: int | None = None,
+        status: str | None = None,
+        order_by: str | None = 'sequence',
+    ) -> APIControllerResponse:
+        """Retrieves project releases from Jira project versions."""
+
+        releases: list[JiraProjectRelease] = []
+        is_last = False
+        i = 0
+        page_size = limit or RECORDS_PER_PAGE_PROJECT_RELEASES
+
+        while not is_last and i < MAXIMUM_PAGE_NUMBER_PROJECT_RELEASES:
+            try:
+                response: dict = await self.client.get_project_versions(
+                    project_key,
+                    offset=i * page_size,
+                    limit=page_size,
+                    status=status,
+                    order_by=order_by,
+                )
+            except Exception as e:
+                exception_details = self._extract_exception_details(e)
+                self.logger.error(
+                    'Unable to retrieve project releases',
+                    extra=self._build_log_extra({'project_key': project_key}, exception_details),
+                )
+                return APIControllerResponse(
+                    success=False,
+                    result=releases,
+                    error=exception_details.message,
+                )
+
+            releases.extend(
+                self._build_project_release(release_data)
+                for release_data in response.get('values', [])
+            )
+            is_last = bool(response.get('isLast', True))
+            i += 1
+
+            if limit is not None and len(releases) >= limit:
+                return APIControllerResponse(result=releases[:limit])
+
+        return APIControllerResponse(result=releases)
+
+    async def search_projects_with_releases(self) -> APIControllerResponse:
+        projects_response = await self.search_projects(project_type_key='software')
+        if not projects_response.success:
+            return projects_response
+
+        projects = cast(list[JiraProject], projects_response.result or [])
+        semaphore = asyncio.Semaphore(MAXIMUM_CONCURRENT_PROJECT_RELEASE_CHECKS)
+
+        async def has_releases(project: JiraProject) -> bool:
+            async with semaphore:
+                releases_response = await self.get_project_releases(project.key, limit=1)
+                return bool(releases_response.success and releases_response.result)
+
+        release_checks = await asyncio.gather(*(has_releases(project) for project in projects))
+        projects_with_releases = [
+            project
+            for project, has_release in zip(projects, release_checks, strict=True)
+            if has_release
+        ]
+
+        return APIControllerResponse(result=projects_with_releases)
 
     async def get_project_statuses(self, project_key: str) -> APIControllerResponse:
         """Retrieves the statues applicable to work items of a project.

@@ -36,11 +36,11 @@ dependencies = [
     "defusedxml>=0.7.1",
     "gitpython>=3.1.50",
     "httpx>=0.28.1",
-    "humanize>=4.15.0",
+    "humanize>=4.16.0",
     "keyring>=25.7.0",
     "mdit-py-plugins>=0.6.1",
     "prompt-toolkit>=3.0.52",
-    "pydantic-settings[yaml]>=2.14.1",
+    "pydantic-settings[yaml]>=2.14.2",
     "python-dateutil>=2.9.0.post0",
     "python-json-logger>=4.1.0",
     "python-magic>=0.4.27",
@@ -48,7 +48,7 @@ dependencies = [
     "textual-fspicker>=1.0.1",
     "textual-jumper>=0.2.1",
     "textual-tags>=0.3.3",
-    "textual[syntax]>=8.2.7",
+    "textual[syntax]>=8.2.8",
     "xdg-base-dirs>=6.0.2",
 ]
 
@@ -65,8 +65,8 @@ debug = [
 ]
 dev = [
     "textual-dev>=1.8.0",
-    "ruff>=0.15.17",
-    "ty>=0.0.50",
+    "ruff>=0.15.20",
+    "ty>=0.0.56",
     "vulture>=2.16",
     "deadcode>=2.4.1",
 ]

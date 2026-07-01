@@ -18,8 +18,8 @@ def test_text_search_jql_quotes_user_text() -> None:
 
 def test_work_item_flagged_jql_uses_native_flagged_field_name() -> None:
     assert (
-        work_item_flagged_jql('PLAT-25346')
-        == 'key = "PLAT-25346" AND "Flagged[Checkboxes]" = Impediment'
+        work_item_flagged_jql('ENG-25346')
+        == 'key = "ENG-25346" AND "Flagged[Checkboxes]" = Impediment'
     )
 
 

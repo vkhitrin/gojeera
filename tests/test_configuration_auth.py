@@ -281,6 +281,44 @@ def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monke
     assert config.jira.oauth2_access_token is None
 
 
+def test_build_api_token_auth_context_resolves_named_fallback_profile(monkeypatch, tmp_path):
+    profiles_file = tmp_path / 'auth_profiles.yaml'
+    _write_acli_oauth_profile(
+        profiles_file,
+        extra_profile_lines=('    api_token_fallback_profile: "basic"',),
+        extra_profiles=(
+            '  - name: "basic"',
+            '    auth_type: "api_token"',
+            '    site: "https://example.atlassian.acme.net"',
+            '    email: "basic@example.com"',
+            '    cloud_id: "cloud-basic"',
+            '    account_id: "account-basic"',
+        ),
+    )
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
+    _set_runtime_secrets_provider(
+        monkeypatch,
+        lambda profile, **kwargs: (
+            {'api_token': 'basic-api-token'}
+            if profile.auth_type == 'basic'
+            else {'oauth2_access_token': 'oauth-access-token'}
+        ),
+    )
+
+    config = ApplicationConfiguration()
+    auth_context = config.jira.build_api_token_auth_context('basic')
+
+    assert config.jira.api_token_fallback_profile == 'basic'
+    assert config.jira.auth_type == 'oauth2'
+    assert auth_context.auth_type == 'basic'
+    assert auth_context.profile_name == 'basic'
+    assert auth_context.api_base_url == 'https://example.atlassian.acme.net'
+    assert auth_context.api_email == 'basic@example.com'
+    assert auth_context.api_token == 'basic-api-token'
+    assert auth_context.cloud_id == 'cloud-basic'
+    assert auth_context.account_id == 'account-basic'
+
+
 def test_profiles_require_active_profile_when_registry_exists(monkeypatch, tmp_path):
     profiles_file = tmp_path / 'auth_profiles.yaml'
     _write_acli_oauth_profile(profiles_file, current_profile=None)

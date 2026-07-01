@@ -1,0 +1,22 @@
+[
+  {
+    "id": "repo-1",
+    "name": "platform-api",
+    "url": "https://gitlab.example/platform-api",
+    "provider_id": "gitlab",
+    "provider_name": "GitLab",
+    "external_id": "1001",
+    "relationship_id": "association-1",
+    "repository_type": "ExternalRepository"
+  },
+  {
+    "id": "repo-2",
+    "name": "platform-ui",
+    "url": "https://bitbucket.example/platform-ui",
+    "provider_id": "bitbucket",
+    "provider_name": null,
+    "external_id": "2002",
+    "relationship_id": "association-2",
+    "repository_type": "DevOpsRepository"
+  }
+]

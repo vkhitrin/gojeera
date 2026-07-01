@@ -7,6 +7,7 @@ from io import BufferedReader, BytesIO
 import json
 import logging
 from pathlib import Path
+import re
 import sys
 from typing import TYPE_CHECKING, Any, Awaitable, BinaryIO, Callable, TypeVar, cast
 
@@ -15,17 +16,39 @@ sys.modules['httpx._main'] = cast(Any, None)
 import httpx  # noqa: E402
 import magic  # noqa: E402
 
-from gojeera.internal.jira.client import AsyncHTTPClient, AsyncJiraClient, JiraClient  # noqa: E402
-from gojeera.internal.models.exceptions import FileUploadException  # noqa: E402
+from gojeera.internal.jira.client import (  # noqa: E402
+    AsyncHTTPClient,
+    AsyncJiraClient,
+    GraphQLClient,
+    JiraClient,
+)
+from gojeera.internal.models.exceptions import (  # noqa: E402
+    FileUploadException,
+    ServiceInvalidRequestException,
+    ServiceInvalidResponseException,
+)
 from gojeera.internal.store.cache import get_cache, run_cache_io  # noqa: E402
+from gojeera.utils.jira.graphql import (  # noqa: E402
+    GRAPHQL_PROJECT_BY_KEY_QUERY,
+    GRAPHQL_PROJECT_PULL_REQUEST_MAX_PAGES,
+    GRAPHQL_PROJECT_PULL_REQUEST_PAGE_SIZE,
+    GRAPHQL_PROJECT_PULL_REQUESTS_OAUTH_ERROR,
+    GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR,
+    GRAPHQL_PROJECT_REPOSITORIES_QUERY,
+    GRAPHQL_PROJECT_REPOSITORY_PAGE_SIZE,
+    GRAPHQL_PROJECT_SPACE_PULL_REQUESTS_QUERY,
+    GRAPHQL_WORK_ITEM_PULL_REQUESTS_OAUTH_ERROR,
+    GRAPHQL_WORK_ITEM_PULL_REQUESTS_QUERY,
+)
 from gojeera.utils.jira.jql import build_work_item_search_jql  # noqa: E402
 from gojeera.utils.system.logging_utils import build_log_extra  # noqa: E402
 
 if TYPE_CHECKING:
     from gojeera.internal.store.config import ApplicationConfiguration, JiraAuthContext
 
-ClientT = TypeVar('ClientT', AsyncJiraClient, JiraClient, AsyncHTTPClient)
+ClientT = TypeVar('ClientT', AsyncJiraClient, JiraClient, AsyncHTTPClient, GraphQLClient)
 WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS = 50
+WORK_ITEM_KEY_SEARCH_PATTERN = re.compile(r'(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])')
 
 
 class JiraAPI:
@@ -83,6 +106,13 @@ class JiraAPI:
             base_url=f'{auth.api_base_url.rstrip("/")}{service_desk_api_path_prefix}',
             oauth2_token_refresher=oauth2_token_refresher,
         )
+        self._graphql_client = self._build_http_client(
+            GraphQLClient,
+            auth=auth,
+            configuration=configuration,
+            base_url=self._graphql_base_url(auth),
+            oauth2_token_refresher=oauth2_token_refresher,
+        )
         self._base_url = auth.api_base_url
         self._auth = auth
         self.logger = logging.getLogger('gojeera')
@@ -91,6 +121,13 @@ class JiraAPI:
 
     def _cache_profile_key(self) -> str:
         return f'{self._auth.cloud_id}:{self._auth.account_id}'
+
+    @staticmethod
+    def _graphql_base_url(auth: JiraAuthContext) -> str:
+        if auth.auth_type == 'oauth2':
+            return 'https://api.atlassian.com/graphql'
+        instance_base_url = auth.instance_base_url or auth.api_base_url
+        return f'{instance_base_url.rstrip("/")}/gateway/api/graphql'
 
     @staticmethod
     def _build_http_client(
@@ -118,6 +155,7 @@ class JiraAPI:
         self._async_http_client.set_bearer_token(bearer_token)
         self._agile_client.set_bearer_token(bearer_token)
         self._service_desk_client.set_bearer_token(bearer_token)
+        self._graphql_client.set_bearer_token(bearer_token)
 
     @property
     def base_url(self) -> str:
@@ -142,6 +180,13 @@ class JiraAPI:
     @property
     def agile_client(self) -> AsyncJiraClient:
         return self._agile_client
+
+    @property
+    def graphql_client(self) -> GraphQLClient:
+        return self._graphql_client
+
+    def _graphql_site_context_ari(self) -> str:
+        return f'ari:cloud:platform::site/{self._auth.cloud_id}'
 
     @staticmethod
     def _add_pagination_params(
@@ -301,6 +346,329 @@ class JiraAPI:
             dict,
             await self._client.make_request(method=httpx.AsyncClient.get, url=f'project/{key}'),
         )
+
+    async def get_project_features(self, project_id_or_key: str) -> dict[str, Any]:
+        """Retrieves Jira Software feature flags for a project."""
+        return cast(
+            dict[str, Any],
+            await self._client.make_request(
+                method=httpx.AsyncClient.get,
+                url=f'project/{project_id_or_key}/features',
+            ),
+        )
+
+    async def _get_graphql_project_ari(self, project_key: str) -> str:
+        cached_project_ari = await run_cache_io(
+            lambda: self.cache.get_project_graphql_ari(project_key)
+        )
+        if cached_project_ari:
+            return cached_project_ari
+
+        project_response = await self._graphql_client.execute(
+            GRAPHQL_PROJECT_BY_KEY_QUERY,
+            variables={'cloudId': self._auth.cloud_id, 'projectKey': project_key},
+        )
+        project = project_response.get('data', {}).get('jira_projectByIdOrKey')
+        if isinstance(project, dict) and project.get('id'):
+            project_ari = str(project['id'])
+            await run_cache_io(
+                lambda: self.cache.set_project_graphql_ari(
+                    project_key=str(project.get('key') or project_key),
+                    graphql_ari=project_ari,
+                )
+            )
+            return project_ari
+        raise ServiceInvalidResponseException(
+            f'Project {project_key} was not found in GraphQL response',
+            context={'project_key': project_key},
+            remote_payload=project_response,
+        )
+
+    @staticmethod
+    def _next_graphql_page_cursor(
+        connection: dict[str, Any],
+        *,
+        context: dict[str, Any],
+        remote_payload: dict[str, Any],
+        missing_cursor_message: str,
+    ) -> str | None:
+        page_info = connection.get('pageInfo') or {}
+        if not page_info.get('hasNextPage'):
+            return None
+        after = page_info.get('endCursor')
+        if after:
+            return str(after)
+        raise ServiceInvalidResponseException(
+            missing_cursor_message,
+            context=context,
+            remote_payload=remote_payload,
+        )
+
+    @staticmethod
+    def _extend_graphql_edge_results(
+        results: list[dict[str, Any]],
+        connection: dict[str, Any],
+        build_edge_data: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> None:
+        for edge in connection.get('edges') or []:
+            if isinstance(edge, dict):
+                results.append(build_edge_data(edge))
+
+    async def get_project_repositories(self, project_key: str) -> list[dict[str, Any]]:
+        if self._auth.auth_type == 'oauth2':
+            raise ServiceInvalidRequestException(
+                GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR,
+                context={'project_key': project_key, 'auth_type': self._auth.auth_type},
+            )
+
+        project_ari = await self._get_graphql_project_ari(project_key)
+        repositories: list[dict[str, Any]] = []
+        after: str | None = None
+        while True:
+            repositories_response = await self._graphql_client.execute(
+                GRAPHQL_PROJECT_REPOSITORIES_QUERY,
+                variables={
+                    'projectAri': project_ari,
+                    'first': GRAPHQL_PROJECT_REPOSITORY_PAGE_SIZE,
+                    'after': after,
+                },
+                headers={'X-Query-Context': self._graphql_site_context_ari()},
+            )
+            connection = (
+                repositories_response.get('data', {})
+                .get('graphStore', {})
+                .get('projectAssociatedRepo')
+            )
+            if not isinstance(connection, dict):
+                raise ServiceInvalidResponseException(
+                    'Project repositories were not found in GraphQL response',
+                    context={'project_key': project_key},
+                    remote_payload=repositories_response,
+                )
+
+            self._extend_graphql_edge_results(
+                repositories,
+                connection,
+                self._build_project_repository_data,
+            )
+
+            after = self._next_graphql_page_cursor(
+                connection,
+                context={'project_key': project_key},
+                remote_payload=repositories_response,
+                missing_cursor_message='GraphQL repositories page is missing an end cursor',
+            )
+            if after is None:
+                return repositories
+
+    @staticmethod
+    def _build_project_repository_data(edge: dict[str, Any]) -> dict[str, Any]:
+        node = edge.get('node') or {}
+        provider = node.get('provider') or {}
+        return {
+            'id': str(node.get('id', '')),
+            'name': str(node.get('name') or node.get('displayName') or ''),
+            'url': node.get('devOpsUrl') or node.get('externalUrl'),
+            'provider_id': node.get('providerId') or provider.get('providerId'),
+            'provider_name': provider.get('name'),
+            'external_id': node.get('externalId')
+            or node.get('repositoryId')
+            or node.get('thirdPartyId'),
+            'relationship_id': edge.get('id'),
+            'repository_type': node.get('__typename'),
+        }
+
+    async def get_project_space_pull_requests(self, project_key: str) -> list[dict[str, Any]]:
+        if self._auth.auth_type == 'oauth2':
+            raise ServiceInvalidRequestException(
+                GRAPHQL_PROJECT_PULL_REQUESTS_OAUTH_ERROR,
+                context={'project_key': project_key, 'auth_type': self._auth.auth_type},
+            )
+
+        project_ari = await self._get_graphql_project_ari(project_key)
+        pull_requests: list[dict[str, Any]] = []
+        after: str | None = None
+        page_count = 0
+        while page_count < GRAPHQL_PROJECT_PULL_REQUEST_MAX_PAGES:
+            pull_requests_response = await self._graphql_client.execute(
+                GRAPHQL_PROJECT_SPACE_PULL_REQUESTS_QUERY,
+                variables={
+                    'projectAri': project_ari,
+                    'first': GRAPHQL_PROJECT_PULL_REQUEST_PAGE_SIZE,
+                    'after': after,
+                },
+                headers={'X-Query-Context': self._graphql_site_context_ari()},
+            )
+            connection = (
+                pull_requests_response.get('data', {})
+                .get('graphStoreV2', {})
+                .get('jiraSpaceLinksExternalPullRequest')
+            )
+            if not isinstance(connection, dict):
+                raise ServiceInvalidResponseException(
+                    'Project pull requests were not found in GraphQL response',
+                    context={'project_key': project_key},
+                    remote_payload=pull_requests_response,
+                )
+
+            self._extend_graphql_edge_results(
+                pull_requests,
+                connection,
+                self._build_project_space_pull_request_data,
+            )
+
+            after = self._next_graphql_page_cursor(
+                connection,
+                context={'project_key': project_key},
+                remote_payload=pull_requests_response,
+                missing_cursor_message='GraphQL pull requests page is missing an end cursor',
+            )
+            if after is None:
+                return pull_requests
+            page_count += 1
+        return pull_requests
+
+    async def get_work_item_pull_requests(self, work_item_id: str) -> list[dict[str, Any]]:
+        if self._auth.auth_type == 'oauth2':
+            raise ServiceInvalidRequestException(
+                GRAPHQL_WORK_ITEM_PULL_REQUESTS_OAUTH_ERROR,
+                context={'work_item_id': work_item_id, 'auth_type': self._auth.auth_type},
+            )
+
+        issue_ari = f'ari:cloud:jira:{self._auth.cloud_id}:issue/{work_item_id}'
+        pull_requests: list[dict[str, Any]] = []
+        after: str | None = None
+        while True:
+            pull_requests_response = await self._graphql_client.execute(
+                GRAPHQL_WORK_ITEM_PULL_REQUESTS_QUERY,
+                variables={
+                    'issueAri': issue_ari,
+                    'first': GRAPHQL_PROJECT_PULL_REQUEST_PAGE_SIZE,
+                    'after': after,
+                },
+                headers={'X-Query-Context': self._graphql_site_context_ari()},
+            )
+            connection = pull_requests_response.get('data', {}).get(
+                'graphStoreV2_jiraWorkItemLinksExternalPullRequest'
+            )
+            if not isinstance(connection, dict):
+                raise ServiceInvalidResponseException(
+                    'Work item pull requests were not found in GraphQL response',
+                    context={'work_item_id': work_item_id},
+                    remote_payload=pull_requests_response,
+                )
+
+            self._extend_graphql_edge_results(
+                pull_requests,
+                connection,
+                lambda edge: self._build_graphql_pull_request_data(
+                    (edge.get('node') or {}) if isinstance(edge, dict) else {},
+                    edge,
+                    work_item_id=work_item_id,
+                    work_item_ari=issue_ari,
+                ),
+            )
+
+            after = self._next_graphql_page_cursor(
+                connection,
+                context={'work_item_id': work_item_id},
+                remote_payload=pull_requests_response,
+                missing_cursor_message='GraphQL work item pull requests page is missing an end cursor',
+            )
+            if after is None:
+                return pull_requests
+
+    @staticmethod
+    def _extract_associated_jira_issue(
+        pull_request: dict[str, Any],
+    ) -> tuple[str, str]:
+        associated_with = pull_request.get('associatedWith') or {}
+        for edge in associated_with.get('edges') or []:
+            if not isinstance(edge, dict):
+                continue
+
+            node = edge.get('node') or {}
+            entity = node.get('entity') or {}
+            if entity.get('__typename') == 'JiraIssue':
+                return str(entity.get('key') or ''), str(entity.get('issueId') or '')
+        return '', ''
+
+    @staticmethod
+    def _build_project_space_pull_request_data(edge: dict[str, Any]) -> dict[str, Any]:
+        pull_request = edge.get('node') or {}
+        work_item_key, work_item_id = JiraAPI._extract_associated_jira_issue(pull_request)
+        pull_request_data = JiraAPI._build_graphql_pull_request_data(
+            pull_request,
+            edge,
+            work_item_id=work_item_id,
+            work_item_ari=None,
+        )
+        if work_item_key:
+            pull_request_data['work_item_key'] = work_item_key
+        return pull_request_data
+
+    @staticmethod
+    def _extract_work_item_key_from_pull_request_text(
+        pull_request: dict[str, Any],
+    ) -> str:
+        source_branch = pull_request.get('sourceBranch') or {}
+        destination_branch = pull_request.get('destinationBranch') or {}
+        candidates = (
+            pull_request.get('title'),
+            source_branch.get('name'),
+            destination_branch.get('name'),
+        )
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if match := WORK_ITEM_KEY_SEARCH_PATTERN.search(str(candidate)):
+                return match.group(1).upper()
+        return ''
+
+    @staticmethod
+    def _build_graphql_pull_request_data(
+        pull_request: dict[str, Any],
+        edge: dict[str, Any],
+        *,
+        work_item_id: str,
+        work_item_ari: Any,
+    ) -> dict[str, Any]:
+        provider = pull_request.get('provider') or {}
+        source_branch = pull_request.get('sourceBranch') or {}
+        destination_branch = pull_request.get('destinationBranch') or {}
+        author = pull_request.get('author') or {}
+        return {
+            'id': str(
+                pull_request.get('id')
+                or pull_request.get('pullRequestInternalId')
+                or pull_request.get('pullRequestId')
+                or pull_request.get('thirdPartyId')
+                or pull_request.get('url')
+                or ''
+            ),
+            'title': str(pull_request.get('title') or ''),
+            'work_item_key': JiraAPI._extract_work_item_key_from_pull_request_text(pull_request),
+            'work_item_id': work_item_id,
+            'work_item_ari': work_item_ari,
+            'status': pull_request.get('devOpsStatus')
+            or pull_request.get('externalStatus')
+            or pull_request.get('status'),
+            'url': pull_request.get('url'),
+            'author': author.get('name'),
+            'repository_id': pull_request.get('devOpsRepositoryId')
+            or pull_request.get('externalRepositoryId')
+            or pull_request.get('repositoryId')
+            or pull_request.get('repositoryInternalId'),
+            'repository_name': pull_request.get('repositoryName'),
+            'repository_url': pull_request.get('repositoryUrl'),
+            'provider_id': pull_request.get('providerId') or provider.get('providerId'),
+            'provider_name': pull_request.get('providerName') or provider.get('name'),
+            'source_branch': source_branch.get('name'),
+            'destination_branch': destination_branch.get('name'),
+            'last_updated': pull_request.get('lastUpdated')
+            or pull_request.get('lastUpdate')
+            or edge.get('lastUpdated'),
+        }
 
     async def get_project_versions(
         self,

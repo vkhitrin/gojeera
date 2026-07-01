@@ -1,6 +1,7 @@
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
 import asyncio
+from contextlib import asynccontextmanager
 import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -28,6 +29,7 @@ from gojeera.internal.models.jira import (
     JiraField,
     JiraGlobalSettings,
     JiraMyselfInfo,
+    JiraProjectFeature,
     JiraProjectRelease,
     JiraServerInfo,
     JiraSprint,
@@ -37,6 +39,8 @@ from gojeera.internal.models.jira import (
     JiraWorkItemGenericFields,
     LinkWorkItemType,
     JiraProject,
+    JiraProjectRepository,
+    JiraRepositoryPullRequest,
     UpdateWorkItemResponse,
     WorkItemRemoteLink,
     WorkItemStatus,
@@ -77,8 +81,15 @@ MAXIMUM_PAGE_NUMBER_SEARCH_PROJECTS = 10
 RECORDS_PER_PAGE_PROJECT_RELEASES = 50
 MAXIMUM_PAGE_NUMBER_PROJECT_RELEASES = 20
 MAXIMUM_CONCURRENT_PROJECT_RELEASE_CHECKS = 8
+DEVELOPMENT_PROJECT_FEATURE_KEYS = frozenset({'jsw.classic.code', 'jsw.classic.development'})
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_PROJECTS = 1000
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_WORK_ITEMS = 1000
+API_TOKEN_FALLBACK_REQUIRED_ERROR = (
+    'This feature requires an API-token fallback profile for OAuth2 profiles.'
+)
+PROJECT_DEVELOPMENT_FEATURE_DISABLED_ERROR = (
+    'Development features are not enabled for project {project_key}.'
+)
 
 
 @dataclass
@@ -177,8 +188,41 @@ class APIController:
     async def close(self) -> None:
         await self.client.client.close_async_client()
         await self.client.async_http_client.close_async_client()
+        await self.client.graphql_client.close_async_client()
         if self.identity_api is not None:
             await self.identity_api.close_async_client()
+
+    async def _close_jira_api_clients(self, client: JiraAPI) -> None:
+        await client.client.close_async_client()
+        await client.async_http_client.close_async_client()
+        await client.graphql_client.close_async_client()
+
+    def _build_api_token_fallback_client(self) -> JiraAPI | None:
+        fallback_profile = self.config.jira.api_token_fallback_profile
+        if self.auth.auth_type != 'oauth2' or fallback_profile is None:
+            return None
+
+        fallback_auth = self.config.jira.build_api_token_auth_context(fallback_profile)
+        return JiraAPI(auth=fallback_auth, configuration=self.config)
+
+    @asynccontextmanager
+    async def _client_with_api_token_fallback(self) -> AsyncIterator[JiraAPI]:
+        fallback_client = self._build_api_token_fallback_client()
+        try:
+            yield fallback_client or self.client
+        finally:
+            if fallback_client is not None:
+                await self._close_jira_api_clients(fallback_client)
+
+    def _api_token_fallback_required_response(self) -> APIControllerResponse | None:
+        if self.auth.auth_type != 'oauth2':
+            return None
+        if self.config.jira.api_token_fallback_profile is not None:
+            return None
+        return APIControllerResponse(
+            success=False,
+            error=API_TOKEN_FALLBACK_REQUIRED_ERROR,
+        )
 
     @staticmethod
     def _extract_exception_details(exception: Exception) -> ExceptionLogDetails:
@@ -280,6 +324,155 @@ class APIController:
             in_progress_count=issues_status.get('inProgress'),
             done_count=issues_status.get('done'),
             unmapped_count=issues_status.get('unmapped'),
+        )
+
+    @staticmethod
+    def _build_project_repository(
+        repository_data: dict[str, Any],
+    ) -> JiraProjectRepository:
+        return JiraProjectRepository(
+            id=str(repository_data.get('id', '')),
+            name=str(repository_data.get('name', '')),
+            url=repository_data.get('url'),
+            provider_id=repository_data.get('provider_id'),
+            provider_name=repository_data.get('provider_name'),
+            external_id=repository_data.get('external_id'),
+            relationship_id=repository_data.get('relationship_id'),
+            repository_type=repository_data.get('repository_type'),
+        )
+
+    @staticmethod
+    def _normalise_repository_match_value(value: str | None) -> str | None:
+        if not value:
+            return None
+        return value.rstrip('/').casefold()
+
+    @classmethod
+    def _repository_matches_pull_request(
+        cls,
+        repository: JiraProjectRepository,
+        pull_request: dict[str, Any],
+    ) -> bool:
+        repository_values = {
+            cls._normalise_repository_match_value(repository.id),
+            cls._normalise_repository_match_value(repository.external_id),
+            cls._normalise_repository_match_value(repository.url),
+            cls._normalise_repository_match_value(repository.name),
+        }
+        repository_values.discard(None)
+
+        pull_request_values = {
+            cls._normalise_repository_match_value(pull_request.get('repositoryId')),
+            cls._normalise_repository_match_value(pull_request.get('repositoryInternalId')),
+            cls._normalise_repository_match_value(pull_request.get('repositoryUrl')),
+            cls._normalise_repository_match_value(pull_request.get('repositoryName')),
+            cls._normalise_repository_match_value(pull_request.get('repository_id')),
+            cls._normalise_repository_match_value(pull_request.get('repository_url')),
+            cls._normalise_repository_match_value(pull_request.get('repository_name')),
+        }
+        pull_request_values.discard(None)
+        return bool(repository_values & pull_request_values)
+
+    @staticmethod
+    def _pull_request_branch_name(branch: Any) -> str | None:
+        if isinstance(branch, dict):
+            return branch.get('name')
+        if isinstance(branch, str):
+            return branch
+        return None
+
+    @staticmethod
+    def _pull_request_author_name(author: Any) -> str | None:
+        if isinstance(author, dict):
+            return author.get('name') or author.get('displayName') or author.get('emailAddress')
+        if isinstance(author, str):
+            return author
+        return None
+
+    @classmethod
+    def _build_repository_pull_request(
+        cls,
+        pull_request_data: dict[str, Any],
+    ) -> JiraRepositoryPullRequest:
+        return JiraRepositoryPullRequest(
+            id=str(
+                pull_request_data.get('id')
+                or pull_request_data.get('pullRequestInternalId')
+                or pull_request_data.get('url')
+                or ''
+            ),
+            title=str(pull_request_data.get('title') or pull_request_data.get('name') or ''),
+            work_item_key=str(pull_request_data.get('work_item_key') or ''),
+            work_item_id=str(pull_request_data.get('work_item_id') or ''),
+            status=pull_request_data.get('status'),
+            url=pull_request_data.get('url'),
+            author=cls._pull_request_author_name(pull_request_data.get('author')),
+            repository_id=pull_request_data.get('repository_id')
+            or pull_request_data.get('repositoryId')
+            or pull_request_data.get('repositoryInternalId'),
+            repository_name=pull_request_data.get('repository_name')
+            or pull_request_data.get('repositoryName'),
+            repository_url=pull_request_data.get('repository_url')
+            or pull_request_data.get('repositoryUrl'),
+            provider_id=pull_request_data.get('provider_id') or pull_request_data.get('providerId'),
+            provider_name=pull_request_data.get('provider_name')
+            or pull_request_data.get('providerName'),
+            source_branch=cls._pull_request_branch_name(
+                pull_request_data.get('sourceBranch') or pull_request_data.get('source_branch')
+            ),
+            destination_branch=cls._pull_request_branch_name(
+                pull_request_data.get('destinationBranch')
+                or pull_request_data.get('destination_branch')
+            ),
+            last_updated=pull_request_data.get('lastUpdated')
+            or pull_request_data.get('updatedDate')
+            or pull_request_data.get('last_updated'),
+        )
+
+    @classmethod
+    def _build_pull_request_response(
+        cls,
+        pull_requests_data: list[dict[str, Any]],
+        *,
+        include_work_item_key_in_sort: bool,
+    ) -> APIControllerResponse:
+        pull_requests = [
+            cls._build_repository_pull_request(pull_request_data)
+            for pull_request_data in pull_requests_data
+        ]
+
+        def sort_key(pull_request: JiraRepositoryPullRequest) -> tuple[str, ...]:
+            if include_work_item_key_in_sort:
+                return (
+                    pull_request.last_updated or '',
+                    pull_request.work_item_key,
+                    pull_request.title,
+                )
+            return (pull_request.last_updated or '', pull_request.title)
+
+        pull_requests.sort(key=sort_key, reverse=True)
+        return APIControllerResponse(result=pull_requests)
+
+    @staticmethod
+    def _build_project_feature(
+        project_key: str, feature_data: dict[str, Any]
+    ) -> JiraProjectFeature:
+        return JiraProjectFeature(
+            project_key=project_key,
+            feature=str(feature_data.get('feature', '')),
+            state=str(feature_data.get('state', '')),
+            toggle_locked=bool(feature_data.get('toggleLocked', False)),
+            localised_name=feature_data.get('localisedName'),
+            localised_description=feature_data.get('localisedDescription'),
+            image_uri=feature_data.get('imageUri'),
+            prerequisites=feature_data.get('prerequisites') or [],
+        )
+
+    @staticmethod
+    def _project_development_feature_enabled(features: list[JiraProjectFeature]) -> bool:
+        return any(
+            feature.feature in DEVELOPMENT_PROJECT_FEATURE_KEYS and feature.is_enabled
+            for feature in features
         )
 
     @staticmethod
@@ -642,6 +835,175 @@ class APIController:
             ),
         )
 
+    async def _ensure_project_cached(self, project_key: str) -> None:
+        cached_project = await run_cache_io(
+            lambda: self.cache.get_stale_project_by_key(project_key)
+        )
+        if cached_project is not None:
+            return
+
+        project_response = await self.get_project(project_key)
+        project = project_response.result
+        if project_response.success and isinstance(project, JiraProject):
+            await run_cache_io(lambda: self.cache.upsert_projects([project]))
+            return
+
+        self.logger.debug(
+            'Unable to cache project metadata before repository lookup',
+            extra=self._build_log_extra(
+                {
+                    'project_key': project_key,
+                    'error': project_response.error,
+                }
+            ),
+        )
+
+    async def get_project_repositories(self, project_key: str) -> APIControllerResponse:
+        """Retrieves repositories associated with a Jira project."""
+
+        if fallback_response := self._api_token_fallback_required_response():
+            return fallback_response
+
+        feature_response = await self.project_development_feature_enabled(project_key)
+        if not feature_response.success:
+            return feature_response
+        if feature_response.result is not True:
+            return APIControllerResponse(
+                success=False,
+                error=PROJECT_DEVELOPMENT_FEATURE_DISABLED_ERROR.format(
+                    project_key=project_key,
+                ),
+            )
+
+        try:
+            await self._ensure_project_cached(project_key)
+            async with self._client_with_api_token_fallback() as client:
+                repositories_data = await client.get_project_repositories(project_key)
+        except Exception as e:
+            exception_details = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to retrieve project repositories',
+                extra=self._build_log_extra({'project_key': project_key}, exception_details),
+            )
+            return APIControllerResponse(success=False, error=exception_details.message)
+
+        return APIControllerResponse(
+            result=[
+                self._build_project_repository(repository_data)
+                for repository_data in repositories_data
+            ]
+        )
+
+    async def get_repository_pull_requests(
+        self,
+        project_key: str,
+        repository: JiraProjectRepository,
+    ) -> APIControllerResponse:
+        """Retrieves pull requests associated with a project repository."""
+
+        if fallback_response := self._api_token_fallback_required_response():
+            return fallback_response
+
+        try:
+            async with self._client_with_api_token_fallback() as client:
+                pull_requests_data = await client.get_project_space_pull_requests(project_key)
+                pull_requests_data = [
+                    pull_request_data
+                    for pull_request_data in pull_requests_data
+                    if self._repository_matches_pull_request(repository, pull_request_data)
+                ]
+                await self._populate_pull_request_work_item_keys(client, pull_requests_data)
+        except Exception as e:
+            exception_details = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to retrieve repository pull requests',
+                extra=self._build_log_extra({'project_key': project_key}, exception_details),
+            )
+            return APIControllerResponse(success=False, error=exception_details.message)
+
+        return self._build_pull_request_response(
+            pull_requests_data,
+            include_work_item_key_in_sort=True,
+        )
+
+    async def _populate_pull_request_work_item_keys(
+        self,
+        client: JiraAPI,
+        pull_requests_data: list[dict[str, Any]],
+    ) -> None:
+        unresolved_work_item_ids = {
+            str(pull_request_data.get('work_item_id') or '')
+            for pull_request_data in pull_requests_data
+            if pull_request_data.get('work_item_id') and not pull_request_data.get('work_item_key')
+        }
+        if not unresolved_work_item_ids:
+            return
+
+        work_item_keys_by_id: dict[str, str] = {}
+        for work_item_id in unresolved_work_item_ids:
+            work_item_data = await client.get_work_item(
+                work_item_id_or_key=work_item_id,
+                fields='key',
+            )
+            work_item_key = str(work_item_data.get('key') or '')
+            if work_item_key:
+                work_item_keys_by_id[work_item_id] = work_item_key
+
+        for pull_request_data in pull_requests_data:
+            work_item_id = str(pull_request_data.get('work_item_id') or '')
+            if work_item_id and not pull_request_data.get('work_item_key'):
+                pull_request_data['work_item_key'] = work_item_keys_by_id.get(work_item_id, '')
+
+    async def get_work_item_development_pull_requests(
+        self,
+        work_item_key: str,
+        work_item_id: str | None = None,
+        project_key: str | None = None,
+    ) -> APIControllerResponse:
+        """Retrieves pull requests associated with a work item."""
+
+        if fallback_response := self._api_token_fallback_required_response():
+            return fallback_response
+
+        try:
+            del project_key
+            async with self._client_with_api_token_fallback() as client:
+                resolved_work_item_id = str(work_item_id or '')
+                resolved_work_item_key = work_item_key
+
+                if not resolved_work_item_id:
+                    work_item_data = await client.get_work_item(
+                        work_item_id_or_key=work_item_key,
+                        fields='key',
+                    )
+                    resolved_work_item_id = str(work_item_data.get('id') or resolved_work_item_id)
+                    resolved_work_item_key = str(
+                        work_item_data.get('key') or resolved_work_item_key
+                    )
+
+                if not resolved_work_item_id:
+                    return APIControllerResponse(
+                        success=False,
+                        error='Unable to resolve work item id for development details.',
+                    )
+
+                pull_requests_data = await client.get_work_item_pull_requests(resolved_work_item_id)
+                for pull_request_data in pull_requests_data:
+                    pull_request_data['work_item_key'] = resolved_work_item_key
+                    pull_request_data['work_item_id'] = resolved_work_item_id
+        except Exception as e:
+            exception_details = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to retrieve work item development pull requests',
+                extra=self._build_log_extra({'work_item_key': work_item_key}, exception_details),
+            )
+            return APIControllerResponse(success=False, error=exception_details.message)
+
+        return self._build_pull_request_response(
+            pull_requests_data,
+            include_work_item_key_in_sort=False,
+        )
+
     async def search_projects(
         self,
         query: str | None = None,
@@ -665,6 +1027,23 @@ class APIController:
             cached_projects = await run_cache_io(self.cache.get_projects)
             if cached_projects is not None:
                 return APIControllerResponse(result=cached_projects)
+
+        if query is None and not keys and project_type_key is not None:
+            cached_projects_by_type = await run_cache_io(
+                lambda: self.cache.get_projects_by_type(project_type_key)
+            )
+            if cached_projects_by_type is not None:
+                return APIControllerResponse(result=cached_projects_by_type)
+
+            cached_projects = await run_cache_io(self.cache.get_projects)
+            if cached_projects is not None:
+                return APIControllerResponse(
+                    result=[
+                        project
+                        for project in cached_projects
+                        if project.project_type_key == project_type_key
+                    ]
+                )
 
         projects: list[JiraProject] = []
         is_last = False
@@ -709,6 +1088,8 @@ class APIController:
 
         if query is None and not keys and project_type_key is None:
             await run_cache_io(lambda: self.cache.set_projects(projects))
+        elif query is None and not keys and project_type_key is not None:
+            await run_cache_io(lambda: self.cache.sync_projects_by_type(project_type_key, projects))
 
         return APIControllerResponse(result=projects)
 
@@ -781,6 +1162,41 @@ class APIController:
         ]
 
         return APIControllerResponse(result=projects_with_releases)
+
+    async def get_project_features(self, project_key: str) -> APIControllerResponse:
+        """Retrieves Jira Software project features, using the local SQLite cache when fresh."""
+
+        cached_features = await run_cache_io(lambda: self.cache.get_project_features(project_key))
+        if cached_features is not None:
+            return APIControllerResponse(result=cached_features)
+
+        try:
+            response = await self.client.get_project_features(project_key)
+        except Exception as e:
+            exception_details = self._extract_exception_details(e)
+            self.logger.error(
+                'Unable to retrieve project features',
+                extra=self._build_log_extra({'project_key': project_key}, exception_details),
+            )
+            return APIControllerResponse(success=False, error=exception_details.message)
+
+        features = [
+            self._build_project_feature(project_key, feature_data)
+            for feature_data in response.get('features', [])
+            if isinstance(feature_data, dict)
+        ]
+        await run_cache_io(lambda: self.cache.set_project_features(project_key, features))
+        return APIControllerResponse(result=features)
+
+    async def project_development_feature_enabled(self, project_key: str) -> APIControllerResponse:
+        """Returns whether Jira Software development features are enabled for a project."""
+
+        features_response = await self.get_project_features(project_key)
+        if not features_response.success:
+            return features_response
+
+        features = cast(list[JiraProjectFeature], features_response.result or [])
+        return APIControllerResponse(result=self._project_development_feature_enabled(features))
 
     async def get_project_statuses(self, project_key: str) -> APIControllerResponse:
         """Retrieves the statues applicable to work items of a project.

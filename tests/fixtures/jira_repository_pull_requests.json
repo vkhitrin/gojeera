@@ -1,0 +1,36 @@
+[
+  {
+    "id": "pr-1",
+    "title": "Add platform API",
+    "work_item_key": "ENG-10001",
+    "work_item_id": "10001",
+    "status": "OPEN",
+    "url": "https://gitlab.example/platform-api/merge_requests/1",
+    "author": "Dev User",
+    "repository_id": "repo-1",
+    "repository_name": "platform-api",
+    "repository_url": "https://gitlab.example/platform-api",
+    "provider_id": "gitlab",
+    "provider_name": "GitLab",
+    "source_branch": "feature/api",
+    "destination_branch": "main",
+    "last_updated": "2026-06-19T08:00:00Z"
+  },
+  {
+    "id": "pr-2",
+    "title": "Secure service communication",
+    "work_item_key": "ENG-22332",
+    "work_item_id": "108321",
+    "status": "MERGED",
+    "url": "https://gitlab.example/platform-api/merge_requests/2",
+    "author": "Rook Hydra",
+    "repository_id": "repo-1",
+    "repository_name": "platform-api",
+    "repository_url": "https://gitlab.example/platform-api",
+    "provider_id": "gitlab",
+    "provider_name": "GitLab",
+    "source_branch": "ENG-22332-PAA",
+    "destination_branch": "main",
+    "last_updated": "2026-06-19T09:00:00Z"
+  }
+]

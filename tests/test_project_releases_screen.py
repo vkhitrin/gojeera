@@ -134,31 +134,46 @@ def assert_project_releases_snapshot(snap_compare, mock_configuration, mock_user
     )
 
 
-def build_project_releases_snapshot_test(run_before):
-    def test_project_releases_snapshot(
+class TestProjectReleasesScreen:
+    def test_project_releases_screen_initial_state(
         self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
     ):
-        del self
+        del self, mock_jira_api_with_project_releases
         assert_project_releases_snapshot(
-            snap_compare, mock_configuration, mock_user_info, run_before
+            snap_compare, mock_configuration, mock_user_info, open_project_releases_screen
         )
 
-    return test_project_releases_snapshot
+    def test_project_releases_screen_text_filter(
+        self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
+    ):
+        del self, mock_jira_api_with_project_releases
+        assert_project_releases_snapshot(
+            snap_compare, mock_configuration, mock_user_info, filter_project_releases_screen
+        )
 
+    def test_project_releases_screen_text_filter_empty(
+        self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
+    ):
+        del self, mock_jira_api_with_project_releases
+        assert_project_releases_snapshot(
+            snap_compare, mock_configuration, mock_user_info, filter_project_releases_screen_empty
+        )
 
-class TestProjectReleasesScreen:
-    test_project_releases_screen_initial_state = build_project_releases_snapshot_test(
-        open_project_releases_screen
-    )
-    test_project_releases_screen_text_filter = build_project_releases_snapshot_test(
-        filter_project_releases_screen
-    )
-    test_project_releases_screen_text_filter_empty = build_project_releases_snapshot_test(
-        filter_project_releases_screen_empty
-    )
-    test_project_releases_screen_status_filter_open = build_project_releases_snapshot_test(
-        open_project_releases_status_filter
-    )
-    test_project_releases_screen_status_filter_all_selected = build_project_releases_snapshot_test(
-        select_all_project_release_statuses
-    )
+    def test_project_releases_screen_status_filter_open(
+        self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
+    ):
+        del self, mock_jira_api_with_project_releases
+        assert_project_releases_snapshot(
+            snap_compare, mock_configuration, mock_user_info, open_project_releases_status_filter
+        )
+
+    def test_project_releases_screen_status_filter_all_selected(
+        self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
+    ):
+        del self, mock_jira_api_with_project_releases
+        assert_project_releases_snapshot(
+            snap_compare,
+            mock_configuration,
+            mock_user_info,
+            select_all_project_release_statuses,
+        )

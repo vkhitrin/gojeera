@@ -1,10 +1,12 @@
+import json
+
 import httpx
 from pydantic import SecretStr
 import pytest
 import respx
 
 from gojeera.internal.models.exceptions import ServiceInvalidRequestException
-from gojeera.internal.jira.client import AsyncJiraClient, JiraClient
+from gojeera.internal.jira.client import AsyncJiraClient, GraphQLClient, JiraClient
 from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
 from gojeera.utils.system.logging_utils import extract_exception_details
 
@@ -101,6 +103,64 @@ async def test_async_jira_client_handles_empty_error_messages():
     assert 'list index out of range' not in str(exc_info.value)
     details = extract_exception_details(exc_info.value)
     assert details.message == "customfield_10021: Field 'customfield_10021' cannot be set."
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_graphql_client_posts_query_payload():
+    route = respx.post('https://plainid.atlassian.net/gateway/api/graphql').mock(
+        return_value=httpx.Response(200, json={'data': {'ok': True}})
+    )
+    client = GraphQLClient(
+        base_url='https://plainid.atlassian.net/gateway/api/graphql',
+        api_email='user@example.com',
+        api_token='token',
+        configuration=_configuration(),
+    )
+
+    try:
+        response = await client.execute(
+            'query Test($id: ID!) { node(id: $id) { id } }',
+            variables={'id': 'ari:test'},
+            headers={'X-Query-Context': 'ari:cloud:platform::site/cloud-123'},
+        )
+    finally:
+        await client.close_async_client()
+
+    assert response == {'data': {'ok': True}}
+    request = route.calls[0].request
+    assert request.headers['Content-Type'] == 'application/json'
+    assert request.headers['X-Query-Context'] == 'ari:cloud:platform::site/cloud-123'
+    assert json.loads(request.content) == {
+        'query': 'query Test($id: ID!) { node(id: $id) { id } }',
+        'variables': {'id': 'ari:test'},
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_graphql_client_raises_for_graphql_errors():
+    respx.post('https://plainid.atlassian.net/gateway/api/graphql').mock(
+        return_value=httpx.Response(
+            200,
+            json={'errors': [{'message': 'Field is not available'}]},
+        )
+    )
+    client = GraphQLClient(
+        base_url='https://plainid.atlassian.net/gateway/api/graphql',
+        api_email='user@example.com',
+        api_token='token',
+        configuration=_configuration(),
+    )
+
+    try:
+        with pytest.raises(ServiceInvalidRequestException) as exc_info:
+            await client.execute('query Test { unavailable }')
+    finally:
+        await client.close_async_client()
+
+    details = extract_exception_details(exc_info.value)
+    assert details.message == 'Field is not available'
 
 
 @respx.mock

@@ -20,6 +20,7 @@ from textual.widgets import Input, TextArea
 from gojeera.internal.auth.profiles import BasicAuthProfile
 from gojeera.internal.models.jira import (
     JiraField,
+    JiraProjectFeature,
     JiraSprint,
     JiraUser,
     JiraProject,
@@ -614,6 +615,41 @@ def get_project_by_key(mock_jira_projects, project_key):
     return mock_jira_projects['values'][0]
 
 
+def cache_fixture_projects(application_cache, configuration, mock_jira_projects):
+    auth = configuration.jira.build_auth_context()
+    application_cache.set_profile(
+        ':'.join(
+            part
+            for part in (auth.cloud_id, auth.account_id or auth.api_email or auth.profile_name)
+            if part
+        )
+    )
+    projects = [
+        JiraProject(
+            id=str(project['id']),
+            key=str(project['key']),
+            name=str(project['name']),
+            project_type_key=project.get('projectTypeKey'),
+        )
+        for project in mock_jira_projects.get('values', [])
+    ]
+    application_cache.set_projects(projects)
+    for project in projects:
+        if project.project_type_key == 'software':
+            application_cache.set_project_features(
+                project.key,
+                [
+                    JiraProjectFeature(
+                        project_key=project.key,
+                        feature='jsw.classic.code',
+                        state='ENABLED',
+                        localised_name='Code',
+                    )
+                ],
+            )
+    return projects
+
+
 def get_issue_types_for_project(
     project_key, mock_jira_issue_types, mock_jira_support_issue_types=None
 ):
@@ -857,6 +893,156 @@ def mock_work_item_link_types(mock_jira_work_item_link_types) -> None:
     respx.get('https://example.atlassian.acme.net/rest/api/3/issueLinkType').mock(
         return_value=Response(200, json=mock_jira_work_item_link_types)
     )
+
+
+def graphql_project_by_key_response(
+    project_key: str = 'ENG',
+    *,
+    project_id: str = '10446',
+    cloud_id: str = 'cloud-123',
+    project_name: str = 'Engineering',
+) -> dict:
+    return {
+        'data': {
+            'jira_projectByIdOrKey': {
+                'id': f'ari:cloud:jira:{cloud_id}:project/{project_id}',
+                'key': project_key,
+                'projectId': project_id,
+                'name': project_name,
+            }
+        }
+    }
+
+
+def graphql_project_repositories_page(
+    *,
+    edges: list[dict],
+    has_next_page: bool = False,
+    end_cursor: str | None = None,
+) -> dict:
+    return {
+        'data': {
+            'graphStore': {
+                'projectAssociatedRepo': {
+                    'edges': edges,
+                    'pageInfo': {
+                        'hasNextPage': has_next_page,
+                        'endCursor': end_cursor,
+                    },
+                }
+            }
+        }
+    }
+
+
+def graphql_external_repository_edge(
+    *,
+    edge_id: str = 'association-1',
+    repository_id: str = 'repo-1',
+    name: str = 'platform-api',
+    display_name: str = 'Platform API',
+    url: str = 'https://gitlab.example/platform-api',
+    external_id: str = '1001',
+    third_party_id: str = 'third-party-1',
+    provider_id: str = 'gitlab',
+    provider_name: str = 'GitLab',
+) -> dict:
+    return {
+        'id': edge_id,
+        'node': {
+            '__typename': 'ExternalRepository',
+            'id': repository_id,
+            'name': name,
+            'displayName': display_name,
+            'externalUrl': url,
+            'repositoryId': external_id,
+            'thirdPartyId': third_party_id,
+            'provider': {
+                'providerId': provider_id,
+                'name': provider_name,
+            },
+        },
+    }
+
+
+def graphql_devops_repository_edge(
+    *,
+    edge_id: str = 'association-2',
+    repository_id: str = 'repo-2',
+    provider_id: str = 'bitbucket',
+    name: str = 'platform-ui',
+    url: str = 'https://bitbucket.example/platform-ui',
+    external_id: str = '2002',
+) -> dict:
+    return {
+        'id': edge_id,
+        'node': {
+            '__typename': 'DevOpsRepository',
+            'id': repository_id,
+            'providerId': provider_id,
+            'name': name,
+            'devOpsUrl': url,
+            'externalId': external_id,
+        },
+    }
+
+
+def default_graphql_project_repository_pages() -> list[dict]:
+    return [
+        graphql_project_repositories_page(
+            edges=[graphql_external_repository_edge()],
+            has_next_page=True,
+            end_cursor='cursor-1',
+        ),
+        graphql_project_repositories_page(edges=[graphql_devops_repository_edge()]),
+    ]
+
+
+@pytest.fixture
+def mock_jira_graphql_project_repositories_payload():
+    return load_fixture('jira_graphql_project_repositories.json')
+
+
+@pytest.fixture
+def mock_jira_repository_pull_requests_payload():
+    return load_fixture('jira_repository_pull_requests.json')
+
+
+def mock_graphql_project_repositories(
+    *,
+    site: str = 'https://example.atlassian.acme.net',
+    project_key: str = 'ENG',
+    project_id: str = '10446',
+    project_name: str = 'Engineering',
+    cloud_id: str = 'cloud-123',
+    pages: list[dict] | None = None,
+):
+    repository_pages = pages or default_graphql_project_repository_pages()
+
+    def handler(request):
+        payload = json.loads(request.content)
+        variables = payload.get('variables', {})
+        if 'projectKey' in variables:
+            return Response(
+                200,
+                json=graphql_project_by_key_response(
+                    project_key,
+                    project_id=project_id,
+                    cloud_id=cloud_id,
+                    project_name=project_name,
+                ),
+            )
+
+        after = variables.get('after')
+        page_index = 0 if after is None else 1
+        return Response(200, json=repository_pages[page_index])
+
+    return respx.post(f'{site}/gateway/api/graphql').mock(side_effect=handler)
+
+
+@pytest.fixture
+def mock_jira_graphql_project_repositories():
+    return mock_graphql_project_repositories
 
 
 def mock_project_issue_types_metadata(metadata_args: dict[str, Any]) -> None:
@@ -1706,20 +1892,7 @@ async def mock_jira_api_sync(
     mock_jira_engineering_agile_sprints,
     mock_jira_fields,
 ):
-    auth = mock_configuration.jira.build_auth_context()
-    application_cache.set_profile(
-        ':'.join(
-            part
-            for part in (auth.cloud_id, auth.account_id or auth.api_email or auth.profile_name)
-            if part
-        )
-    )
-
-    projects = [
-        JiraProject(id=str(project['id']), key=str(project['key']), name=str(project['name']))
-        for project in mock_jira_projects.get('values', [])
-    ]
-    application_cache.set_projects(projects)
+    projects = cache_fixture_projects(application_cache, mock_configuration, mock_jira_projects)
     project_key = projects[0].key if projects else 'ENG'
 
     users = [
@@ -2310,6 +2483,8 @@ async def mock_jira_api_with_worklog_creation(
 
 @pytest.fixture
 async def mock_jira_api_with_search_results(
+    application_cache,
+    mock_configuration,
     mock_jira_server_info,
     mock_jira_myself,
     mock_jira_search_with_results,
@@ -2325,12 +2500,16 @@ async def mock_jira_api_with_search_results(
     mock_project_issue_types,
     mock_engineering_createmeta_fields,
     mock_subtask_creation_metadata_args,
+    mock_jira_graphql_project_repositories,
 ):
+    cache_fixture_projects(application_cache, mock_configuration, mock_jira_projects)
+
     async with respx.mock:
         mock_server_info(mock_jira_server_info)
         mock_myself(mock_jira_myself)
         mock_add_comment_permissions_allowed()
         mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
+        mock_jira_graphql_project_repositories()
 
         # Mock Agile API endpoints for sprints (needed since sprint setup runs unconditionally
         # when enable_sprint_selection=True)

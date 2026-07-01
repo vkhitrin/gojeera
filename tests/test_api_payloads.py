@@ -327,16 +327,14 @@ async def test_controller_clear_work_item_flagged_sets_empty_list():
 async def test_controller_get_work_item_flagged_state_uses_jql_count():
     controller = APIController.__new__(APIController)
     controller.client = AsyncMock()
-    controller.client.search_work_items = AsyncMock(
-        return_value={'issues': [{'key': 'PLAT-25346'}]}
-    )
+    controller.client.search_work_items = AsyncMock(return_value={'issues': [{'key': 'ENG-25346'}]})
 
-    response = await controller.get_work_item_flagged_state('PLAT-25346')
+    response = await controller.get_work_item_flagged_state('ENG-25346')
 
     assert response.success
     assert response.result is True
     controller.client.search_work_items.assert_awaited_once_with(
-        jql_query='key = "PLAT-25346" AND "Flagged[Checkboxes]" = Impediment',
+        jql_query='key = "ENG-25346" AND "Flagged[Checkboxes]" = Impediment',
         fields=['key'],
         limit=1,
     )

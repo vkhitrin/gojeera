@@ -55,6 +55,7 @@ class JiraProject(BaseModel):
     name: str
     key: str
     project_type_key: str | None = None
+    graphql_ari: str | None = None
 
     @property
     def is_service_desk(self) -> bool:
@@ -62,6 +63,53 @@ class JiraProject(BaseModel):
 
     def __str__(self):
         return f'[{self.key}] {self.name}'
+
+
+@dataclass
+class JiraProjectRepository(BaseModel):
+    id: str
+    name: str
+    url: str | None = None
+    provider_id: str | None = None
+    provider_name: str | None = None
+    external_id: str | None = None
+    relationship_id: str | None = None
+    repository_type: str | None = None
+
+
+@dataclass
+class JiraRepositoryPullRequest(BaseModel):
+    id: str
+    title: str
+    work_item_key: str
+    work_item_id: str
+    status: str | None = None
+    url: str | None = None
+    author: str | None = None
+    repository_id: str | None = None
+    repository_name: str | None = None
+    repository_url: str | None = None
+    provider_id: str | None = None
+    provider_name: str | None = None
+    source_branch: str | None = None
+    destination_branch: str | None = None
+    last_updated: str | None = None
+
+
+@dataclass
+class JiraProjectFeature(BaseModel):
+    project_key: str
+    feature: str
+    state: str
+    toggle_locked: bool = False
+    localised_name: str | None = None
+    localised_description: str | None = None
+    image_uri: str | None = None
+    prerequisites: list[dict] | None = None
+
+    @property
+    def is_enabled(self) -> bool:
+        return self.state == 'ENABLED'
 
 
 @dataclass

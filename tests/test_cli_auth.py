@@ -511,7 +511,7 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     monkeypatch.setattr('gojeera.cli.list_profiles', lambda: (None, {}))
     monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
     monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
-    select_values = iter(['oauth2'])
+    select_values = iter(['oauth2', '__none__'])
     monkeypatch.setattr(
         'gojeera.cli._select_option',
         lambda title, options, **kwargs: (
@@ -601,9 +601,13 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     assert profile['data']['cloud_id'] == 'cloud-123'
     assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
     assert profile['data']['client_id'] == 'client-123'
+    assert profile['data']['api_token_fallback_profile'] is None
     assert profile['data']['oauth2_access_token_expiration_timestamp'] is not None
     assert 'scopes' not in profile['data']
-    assert selector_calls == [('Authentication type', ['basic', 'oauth2'])]
+    assert selector_calls == [
+        ('Authentication type', ['basic', 'oauth2']),
+        ('API-token fallback for OAuth-blocked features', ['__none__', '__create__']),
+    ]
     assert flow_calls == {
         'client_id': 'client-123',
         'client_secret': 'secret-123',
@@ -676,7 +680,8 @@ def test_auth_edit_oauth2_profile_skips_browser_flow_when_credentials_unchanged(
             True,
         ),
     )
-    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: 'oauth2')
+    select_values = iter(['oauth2', '__none__'])
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
     monkeypatch.setattr(
         'gojeera.cli._run_oauth2_login_flow',
         lambda **kwargs: flow_calls.update(kwargs),
@@ -692,6 +697,171 @@ def test_auth_edit_oauth2_profile_skips_browser_flow_when_credentials_unchanged(
     assert profile['data']['site'] == 'https://example.atlassian.net'
     assert profile['data']['account_id'] == '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857'
     assert profile['data']['display_name'] == 'OAuth User'
+    assert profile['data']['api_token_fallback_profile'] is None
+
+
+def test_auth_login_oauth2_can_select_existing_api_token_fallback(monkeypatch):
+    runner = _runner()
+
+    captured_profile = {}
+    prompt_values = iter(['client-123', 'secret-123'])
+    oauth_profile = _oauth2_profile(name='oauth')
+    basic_profile = _basic_profile(name='bot', site='https://example.atlassian.net')
+
+    monkeypatch.setattr(
+        'gojeera.cli._resolve_existing_profile_selection',
+        lambda: ('oauth', oauth_profile, True),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.list_profiles',
+        lambda: ('oauth', {'oauth': oauth_profile, 'bot': basic_profile}),
+    )
+    monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
+    monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
+    select_values = iter(['oauth2', 'bot'])
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
+    monkeypatch.setattr(
+        'gojeera.cli._run_oauth2_login_flow',
+        lambda **kwargs: SimpleNamespace(
+            access_token='oauth-access-token',
+            refresh_token='oauth-refresh-token',
+            access_token_expiration_timestamp=1234567890,
+        ),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.get_atlassian_accessible_resources',
+        lambda access_token: [
+            SimpleNamespace(
+                id='cloud-123',
+                name='Example',
+                url='https://example.atlassian.net',
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.auth_service',
+        SimpleNamespace(
+            validate_profile=lambda profile, **kwargs: AuthValidationResult(
+                True,
+                'OAuth User',
+                account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+            ),
+            get_oauth2_client_secret=lambda profile, **kwargs: None,
+            get_oauth2_client_id=lambda profile, **kwargs: None,
+        ),
+    )
+    monkeypatch.setattr('gojeera.cli.upsert_profile', _capture_upserted_profile(captured_profile))
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_refresh_token', lambda *args: None)
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_client_secret', lambda *args: None)
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_client_id', lambda *args: None)
+
+    result = runner.invoke(cli, ['auth', 'login'])
+
+    assert result.exit_code == 0
+    assert captured_profile['name'] == 'oauth'
+    assert captured_profile['data']['api_token_fallback_profile'] == 'bot'
+
+
+def test_auth_login_oauth2_can_create_api_token_fallback(monkeypatch):
+    runner = _runner()
+
+    upserts = []
+    stored = {}
+    prompt_values = iter(
+        [
+            'client-123',
+            'secret-123',
+            'oauth-api-token',
+            'https://example.atlassian.net',
+            'bot@example.com',
+            'api-token-123',
+        ]
+    )
+    oauth_profile = _oauth2_profile(name='oauth')
+
+    monkeypatch.setattr(
+        'gojeera.cli._resolve_existing_profile_selection',
+        lambda: ('oauth', oauth_profile, True),
+    )
+    monkeypatch.setattr('gojeera.cli.list_profiles', lambda: ('oauth', {'oauth': oauth_profile}))
+    monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
+    monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
+    select_values = iter(['oauth2', '__create__'])
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
+    monkeypatch.setattr(
+        'gojeera.cli._run_oauth2_login_flow',
+        lambda **kwargs: SimpleNamespace(
+            access_token='oauth-access-token',
+            refresh_token='oauth-refresh-token',
+            access_token_expiration_timestamp=1234567890,
+        ),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.get_atlassian_accessible_resources',
+        lambda access_token: [
+            SimpleNamespace(
+                id='cloud-123',
+                name='Example',
+                url='https://example.atlassian.net',
+            )
+        ],
+    )
+
+    def validate_profile(profile, **kwargs):
+        if profile.auth_type == 'basic':
+            assert kwargs['api_token'] == 'api-token-123'
+            return AuthValidationResult(
+                True,
+                'Bot User',
+                account_id='bot-account',
+                cloud_id='cloud-123',
+            )
+        return AuthValidationResult(
+            True,
+            'OAuth User',
+            account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+        )
+
+    monkeypatch.setattr(
+        'gojeera.cli.auth_service',
+        SimpleNamespace(
+            validate_profile=validate_profile,
+            get_oauth2_client_secret=lambda profile, **kwargs: None,
+            get_oauth2_client_id=lambda profile, **kwargs: None,
+        ),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.upsert_profile',
+        lambda profile_name, **kwargs: upserts.append((profile_name, kwargs)),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.set_jira_api_token',
+        lambda email, api_token: stored.update(api_token=(email, api_token)),
+    )
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_refresh_token', lambda *args: None)
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_client_secret', lambda *args: None)
+    monkeypatch.setattr('gojeera.cli.set_jira_oauth2_client_id', lambda *args: None)
+
+    result = runner.invoke(cli, ['auth', 'login'])
+
+    assert result.exit_code == 0
+    assert upserts[0] == (
+        'oauth-api-token',
+        {
+            'auth_type': 'basic',
+            'site': 'https://example.atlassian.net',
+            'email': 'bot@example.com',
+            'account_id': 'bot-account',
+            'display_name': 'Bot User',
+            'cloud_id': 'cloud-123',
+            'client_id': None,
+            'oauth2_access_token_expiration_timestamp': None,
+            'activate': False,
+        },
+    )
+    assert upserts[1][0] == 'oauth'
+    assert upserts[1][1]['api_token_fallback_profile'] == 'oauth-api-token'
+    assert stored['api_token'] == ('bot@example.com', 'api-token-123')
 
 
 def test_auth_edit_basic_profile_skips_validation_when_credentials_unchanged(monkeypatch):

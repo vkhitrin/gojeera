@@ -15,6 +15,7 @@ from gojeera.internal.models.jira import (
     JiraFilter,
     JiraFilterDict,
     JiraField,
+    JiraProjectFeature,
     JiraSprint,
     JiraUser,
     JiraProject,
@@ -24,9 +25,11 @@ from gojeera.internal.models.jira import (
 from gojeera.internal.store import migrations
 
 CACHE_TTL_PROJECTS = 3600
+CACHE_TTL_PROJECTS_BY_TYPE = 3600
 CACHE_TTL_TYPES = 3600
 CACHE_TTL_STATUSES = 3600
 CACHE_TTL_PROJECT_USERS = 1800
+CACHE_TTL_PROJECT_FEATURES = 86400
 CACHE_TTL_PROJECT_TYPES = 3600
 CACHE_TTL_PROJECT_STATUSES = 3600
 CACHE_TTL_REMOTE_FILTERS = 3600
@@ -38,7 +41,9 @@ T = TypeVar('T')
 
 CACHE_TYPES = {
     'projects',
+    'projects_by_type',
     'project_users',
+    'project_features',
     'types',
     'project_types',
     'statuses',
@@ -55,6 +60,7 @@ PROFILE_CACHE_TABLES = {
     'projects',
     'users',
     'project_users',
+    'project_features',
     'work_item_types',
     'work_item_status',
     'boards',
@@ -124,9 +130,11 @@ class ApplicationCache:
         self._profile_key = 'default'
         self._default_ttls = {
             'projects': CACHE_TTL_PROJECTS,
+            'projects_by_type': CACHE_TTL_PROJECTS_BY_TYPE,
             'types': CACHE_TTL_TYPES,
             'statuses': CACHE_TTL_STATUSES,
             'project_users': CACHE_TTL_PROJECT_USERS,
+            'project_features': CACHE_TTL_PROJECT_FEATURES,
             'project_types': CACHE_TTL_PROJECT_TYPES,
             'project_statuses': CACHE_TTL_PROJECT_STATUSES,
             'remote_filters': CACHE_TTL_REMOTE_FILTERS,
@@ -212,12 +220,23 @@ class ApplicationCache:
     ) -> Any | None:
         self._validate_cache_type(cache_type)
         with self._lock, self._connection:
-            if not allow_stale and self._needs_refresh(cache_type, identifier):
+            needs_refresh = self._needs_refresh(cache_type, identifier)
+            if not allow_stale and needs_refresh:
                 return None
             if cache_type == 'projects':
                 return self._get_projects()
+            if cache_type == 'projects_by_type':
+                return self._get_projects(
+                    project_type_key=identifier,
+                    return_empty=not needs_refresh,
+                )
             if cache_type == 'project_users':
                 return self._get_users(identifier)
+            if cache_type == 'project_features':
+                return self._get_project_features(
+                    identifier,
+                    return_empty=not needs_refresh,
+                )
             if cache_type in {'types', 'project_types'}:
                 return self._get_work_item_types(
                     identifier if cache_type == 'project_types' else None
@@ -250,8 +269,12 @@ class ApplicationCache:
         with self._lock, self._connection:
             if cache_type == 'projects':
                 self._set_projects(data, fetched_at, expires_at)
+            elif cache_type == 'projects_by_type':
+                self._upsert_projects(data)
             elif cache_type == 'project_users':
                 self._set_users(data, identifier, fetched_at, expires_at)
+            elif cache_type == 'project_features':
+                self._set_project_features(data, identifier, fetched_at, expires_at)
             elif cache_type in {'types', 'project_types'}:
                 self._set_work_item_types(
                     data,
@@ -286,6 +309,27 @@ class ApplicationCache:
 
     def set_projects(self, projects: list[JiraProject], ttl_seconds: int | None = None) -> None:
         self._set('projects', projects, ttl_seconds=ttl_seconds)
+
+    def get_projects_by_type(
+        self, project_type_key: str, *, allow_stale: bool = False
+    ) -> list[JiraProject] | None:
+        return self._get('projects_by_type', project_type_key, allow_stale=allow_stale)
+
+    def sync_projects_by_type(
+        self,
+        project_type_key: str,
+        projects: list[JiraProject],
+        ttl_seconds: int | None = None,
+    ) -> None:
+        self._set('projects_by_type', projects, project_type_key, ttl_seconds)
+
+    def get_stale_project_by_key(self, project_key: str) -> JiraProject | None:
+        with self._lock, self._connection:
+            return self._get_project_by_key(project_key)
+
+    def upsert_projects(self, projects: list[JiraProject]) -> None:
+        with self._lock, self._connection:
+            self._upsert_projects(projects)
 
     def get_work_item_types(self, *, allow_stale: bool = False) -> list[WorkItemType] | None:
         return self._get('types', allow_stale=allow_stale)
@@ -329,6 +373,49 @@ class ApplicationCache:
         self, project_key: str, users: list[JiraUser], ttl_seconds: int | None = None
     ) -> None:
         self._set('project_users', users, project_key, ttl_seconds)
+
+    def get_project_features(
+        self, project_key: str, *, allow_stale: bool = False
+    ) -> list[JiraProjectFeature] | None:
+        return self._get('project_features', project_key, allow_stale=allow_stale)
+
+    def set_project_features(
+        self,
+        project_key: str,
+        features: list[JiraProjectFeature],
+        ttl_seconds: int | None = None,
+    ) -> None:
+        self._set('project_features', features, project_key, ttl_seconds)
+
+    def get_project_graphql_ari(self, project_key: str) -> str | None:
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                """
+                SELECT graphql_ari
+                FROM projects
+                WHERE profile_key = ? AND key = ?
+                """,
+                (self._profile_key, project_key),
+            ).fetchone()
+        if row is None:
+            return None
+        return row[0]
+
+    def set_project_graphql_ari(
+        self,
+        *,
+        project_key: str,
+        graphql_ari: str,
+    ) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE projects
+                SET graphql_ari = ?
+                WHERE profile_key = ? AND key = ?
+                """,
+                (graphql_ari, self._profile_key, project_key),
+            )
 
     def get_project_work_item_types(
         self, project_key: str, *, allow_stale: bool = False
@@ -653,7 +740,9 @@ class ApplicationCache:
     @staticmethod
     def _sync_scope(cache_type: str, identifier: str | None = None) -> str:
         if cache_type in {
+            'projects_by_type',
             'project_users',
+            'project_features',
             'project_types',
             'project_statuses',
             'remote_filters',
@@ -663,26 +752,144 @@ class ApplicationCache:
             return identifier or ''
         return ''
 
-    def _get_projects(self) -> list[JiraProject] | None:
+    def _get_projects(
+        self,
+        project_type_key: str | None = None,
+        *,
+        return_empty: bool = False,
+    ) -> list[JiraProject] | None:
         rows = self._connection.execute(
-            'SELECT id, key, name, project_type_key FROM projects WHERE profile_key = ?',
-            (self._profile_key,),
+            """
+            SELECT id, key, name, project_type_key, graphql_ari
+            FROM projects
+            WHERE profile_key = ?
+              AND project_type_key IS NOT NULL
+              AND (? IS NULL OR project_type_key = ?)
+            """,
+            (self._profile_key, project_type_key, project_type_key),
         ).fetchall()
-        return [
-            JiraProject(id=str(row[0]), key=str(row[1]), name=str(row[2]), project_type_key=row[3])
+        projects = [
+            JiraProject(
+                id=str(row[0]),
+                key=str(row[1]),
+                name=str(row[2]),
+                project_type_key=row[3],
+                graphql_ari=row[4],
+            )
             for row in rows
-        ] or None
+        ]
+        if projects:
+            return projects
+        return [] if return_empty else None
+
+    def _get_project_by_key(self, project_key: str) -> JiraProject | None:
+        row = self._connection.execute(
+            """
+            SELECT id, key, name, project_type_key, graphql_ari
+            FROM projects
+            WHERE profile_key = ?
+              AND key = ?
+              AND project_type_key IS NOT NULL
+            """,
+            (self._profile_key, project_key),
+        ).fetchone()
+        if row is None:
+            return None
+        return JiraProject(
+            id=str(row[0]),
+            key=str(row[1]),
+            name=str(row[2]),
+            project_type_key=row[3],
+            graphql_ari=row[4],
+        )
 
     def _set_projects(
         self, projects: list[JiraProject], fetched_at: float, expires_at: float | None
     ) -> None:
+        existing_projects_by_id, existing_projects_by_key = self._existing_projects_by_id_and_key()
         self._connection.execute('DELETE FROM projects WHERE profile_key = ?', (self._profile_key,))
+        self._upsert_projects(
+            projects,
+            existing_projects_by_id=existing_projects_by_id,
+            existing_projects_by_key=existing_projects_by_key,
+        )
+        project_type_keys = {
+            project.project_type_key for project in projects if project.project_type_key
+        }
+        for project_type_key in project_type_keys:
+            self._record_sync('projects_by_type', project_type_key, fetched_at, expires_at)
+
+    def _existing_projects_by_id_and_key(
+        self,
+    ) -> tuple[dict[str, JiraProject], dict[str, JiraProject]]:
+        existing_projects_by_id: dict[str, JiraProject] = {}
+        existing_projects_by_key: dict[str, JiraProject] = {}
+        rows = self._connection.execute(
+            """
+            SELECT id, key, name, project_type_key, graphql_ari
+            FROM projects
+            WHERE profile_key = ?
+            """,
+            (self._profile_key,),
+        ).fetchall()
+        for project_id, project_key, project_name, project_type_key, graphql_ari in rows:
+            existing_project = JiraProject(
+                id=str(project_id),
+                key=str(project_key),
+                name=str(project_name),
+                project_type_key=project_type_key,
+                graphql_ari=graphql_ari,
+            )
+            existing_projects_by_id[existing_project.id] = existing_project
+            existing_projects_by_key[existing_project.key] = existing_project
+        return existing_projects_by_id, existing_projects_by_key
+
+    def _upsert_projects(
+        self,
+        projects: list[JiraProject],
+        *,
+        existing_projects_by_id: dict[str, JiraProject] | None = None,
+        existing_projects_by_key: dict[str, JiraProject] | None = None,
+    ) -> None:
+        if existing_projects_by_id is None or existing_projects_by_key is None:
+            existing_projects_by_id, existing_projects_by_key = (
+                self._existing_projects_by_id_and_key()
+            )
+
+        def project_graphql_ari(project: JiraProject) -> str | None:
+            existing_project = existing_projects_by_id.get(
+                project.id
+            ) or existing_projects_by_key.get(project.key)
+            return project.graphql_ari or (
+                existing_project.graphql_ari if existing_project is not None else None
+            )
+
+        def project_type_key(project: JiraProject) -> str | None:
+            existing_project = existing_projects_by_id.get(
+                project.id
+            ) or existing_projects_by_key.get(project.key)
+            return project.project_type_key or (
+                existing_project.project_type_key if existing_project is not None else None
+            )
+
         self._connection.executemany(
             """
-            INSERT OR REPLACE INTO projects (profile_key, id, key, name, project_type_key)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO projects (
+                profile_key, id, key, name, project_type_key, graphql_ari
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            [(self._profile_key, p.id, p.key, p.name, p.project_type_key) for p in projects],
+            [
+                (
+                    self._profile_key,
+                    p.id,
+                    p.key,
+                    p.name,
+                    project_type_key(p),
+                    project_graphql_ari(p),
+                )
+                for p in projects
+            ],
         )
 
     def _get_users(self, project_key: str | None) -> list[JiraUser] | None:
@@ -734,6 +941,85 @@ class ApplicationCache:
             VALUES (?, ?, ?)
             """,
             [(self._profile_key, project_key, u.account_id) for u in users],
+        )
+
+    def _get_project_features(
+        self,
+        project_key: str | None,
+        *,
+        return_empty: bool = False,
+    ) -> list[JiraProjectFeature] | None:
+        if project_key is None:
+            return None
+        rows = self._connection.execute(
+            """
+            SELECT feature, state, toggle_locked, localised_name, localised_description,
+                   image_uri, prerequisites_json
+            FROM project_features
+            WHERE profile_key = ? AND project_key = ?
+            ORDER BY feature
+            """,
+            (self._profile_key, project_key),
+        ).fetchall()
+        features = []
+        for row in rows:
+            try:
+                prerequisites = json.loads(row[6] or '[]')
+            except (TypeError, json.JSONDecodeError):
+                prerequisites = []
+            if not isinstance(prerequisites, list):
+                prerequisites = []
+            features.append(
+                JiraProjectFeature(
+                    project_key=project_key,
+                    feature=str(row[0]),
+                    state=str(row[1]),
+                    toggle_locked=bool(row[2]),
+                    localised_name=row[3],
+                    localised_description=row[4],
+                    image_uri=row[5],
+                    prerequisites=prerequisites,
+                )
+            )
+        if features:
+            return features
+        return [] if return_empty else None
+
+    def _set_project_features(
+        self,
+        features: list[JiraProjectFeature],
+        project_key: str | None,
+        fetched_at: float,
+        expires_at: float | None,
+    ) -> None:
+        if project_key is None:
+            return
+        self._connection.execute(
+            'DELETE FROM project_features WHERE profile_key = ? AND project_key = ?',
+            (self._profile_key, project_key),
+        )
+        self._connection.executemany(
+            """
+            INSERT OR REPLACE INTO project_features (
+                profile_key, project_key, feature, state, toggle_locked, localised_name,
+                localised_description, image_uri, prerequisites_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    self._profile_key,
+                    project_key,
+                    item.feature,
+                    item.state,
+                    int(item.toggle_locked),
+                    item.localised_name,
+                    item.localised_description,
+                    item.image_uri,
+                    json.dumps(item.prerequisites or []),
+                )
+                for item in features
+            ],
         )
 
     def _get_work_item_types(self, project_key: str | None) -> list[WorkItemType] | None:
@@ -1150,6 +1436,11 @@ class ApplicationCache:
         elif cache_type == 'project_users':
             self._connection.execute(
                 'DELETE FROM project_users WHERE profile_key = ? AND project_key = ?',
+                (self._profile_key, scope),
+            )
+        elif cache_type == 'project_features':
+            self._connection.execute(
+                'DELETE FROM project_features WHERE profile_key = ? AND project_key = ?',
                 (self._profile_key, scope),
             )
         elif cache_type == 'work_item_types':

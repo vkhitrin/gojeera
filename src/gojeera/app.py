@@ -71,6 +71,7 @@ if TYPE_CHECKING:
 
     from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
     from gojeera.components.work_item.work_item_comments import WorkItemCommentsWidget
+    from gojeera.components.work_item.work_item_development import WorkItemDevelopmentWidget
     from gojeera.components.work_item.work_item_fields import WorkItemUpdated
     from gojeera.components.work_item.work_item_history import WorkItemHistoryWidget
     from gojeera.internal.jira.controller import APIControllerResponse
@@ -157,6 +158,12 @@ def get_release_command_provider() -> type[Provider]:
     from gojeera.commands.providers.release_provider import ReleaseCommandProvider
 
     return ReleaseCommandProvider
+
+
+def get_repository_command_provider() -> type[Provider]:
+    from gojeera.commands.providers.repository_provider import RepositoryCommandProvider
+
+    return RepositoryCommandProvider
 
 
 class WorkspaceMixin(App):
@@ -357,6 +364,13 @@ class WorkspaceMixin(App):
         return cast('WorkItemHistoryWidget', self.query_one('#work_item_history'))
 
     @property
+    def work_item_development_widget(self) -> WorkItemDevelopmentWidget:
+        return cast(
+            'WorkItemDevelopmentWidget',
+            self.query_one('#work-item-development'),
+        )
+
+    @property
     def unified_search_bar(self) -> UnifiedSearchBar:
         return self.query_one(UnifiedSearchBar)
 
@@ -416,6 +430,8 @@ class WorkspaceMixin(App):
                                 pass
                             with TabPane('Comments', id='tab-comments'):
                                 pass
+                            with TabPane('Development', id='tab-development'):
+                                pass
                             with TabPane('History', id='tab-history'):
                                 pass
 
@@ -472,6 +488,7 @@ class WorkspaceMixin(App):
         tabs = self.tabs
         tabs.can_focus = True
         tabs.tabs_widget.can_focus = True
+        tabs.hide_tab('tab-development')
         for tab in tabs.query(ContentTab):
             tab.can_focus = False
             if CONFIGURATION.get().jumper.enabled:
@@ -535,6 +552,11 @@ class WorkspaceMixin(App):
         self.watch(
             self.work_item_comments_widget, 'displayed_count', self._update_comments_tab_title
         )
+        self.watch(
+            self.work_item_development_widget,
+            'displayed_count',
+            self._update_development_tab_title,
+        )
         self.watch(self.work_item_history_widget, 'displayed_count', self._update_history_tab_title)
 
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
@@ -559,11 +581,37 @@ class WorkspaceMixin(App):
     def _update_comments_tab_title(self, count: int) -> None:
         self._update_information_tab_badge('tab-comments', count)
 
+    def _update_development_tab_title(self, count: int) -> None:
+        self._update_information_tab_badge('tab-development', count)
+
     def _update_history_tab_title(self, count: int) -> None:
         self._update_information_tab_badge('tab-history', count)
 
     def _update_information_tab_badge(self, tab_id: str, count: int) -> None:
         self.tabs.set_tab_badge(tab_id, count)
+
+    def _hide_development_tab(self) -> None:
+        self.tabs.hide_tab('tab-development')
+        self.work_item_development_widget.work_item = None
+
+    async def _sync_development_tab_for_work_item(self, work_item: JiraWorkItem) -> None:
+        project = work_item.project
+        if project is None or project.project_type_key != 'software':
+            self._hide_development_tab()
+            return
+
+        response = await self.api.project_development_feature_enabled(project.key)
+        if not self._is_current_loaded_work_item(work_item.key):
+            return
+
+        if not response.success or response.result is not True:
+            self._hide_development_tab()
+            return
+
+        self.tabs.show_tab('tab-development')
+        self.work_item_development_widget.work_item = work_item
+        if self.tabs.active == 'tab-development':
+            self.work_item_development_widget.load_if_needed()
 
     def navigate_to_attachment(self, filename: str) -> None:
         self.tabs.active = 'tab-attachments'
@@ -619,6 +667,9 @@ class WorkspaceMixin(App):
             'action_open_worklog_in_browser',
             'action_open_work_item_browser',
             'action_open_work_item_in_browser',
+            'action_open_repository_in_browser',
+            'action_open_pull_request_in_browser',
+            'action_open_remote_link',
             'action_open_loaded_work_item_in_browser',
         )
 
@@ -1206,6 +1257,7 @@ class WorkspaceMixin(App):
                 self.work_item_attachments_widget.work_item_key = None
 
                 self.work_item_history_widget.work_item_key = None
+                self._hide_development_tab()
 
                 self.work_item_child_work_items_widget.work_items = None
                 self.work_item_child_work_items_widget.work_item_key = None
@@ -1520,6 +1572,7 @@ class WorkspaceMixin(App):
             self.work_item_attachments_widget.attachments = work_item.attachments
 
             self.work_item_history_widget.work_item_key = work_item.key
+            self._hide_development_tab()
 
             self.work_item_child_work_items_widget.work_item_key = work_item.key
             self.work_item_child_work_items_widget.work_items = work_item.subtasks
@@ -1532,6 +1585,11 @@ class WorkspaceMixin(App):
 
         if self.tabs.active == 'tab-history':
             self.work_item_history_widget.load_if_needed()
+        self.run_worker(
+            self._sync_development_tab_for_work_item(work_item),
+            exclusive=True,
+            group='work-item-development-tab',
+        )
 
         self._apply_pending_work_item_navigation_target()
         self._start_progressive_work_item_detail_loads(work_item)
@@ -1929,6 +1987,7 @@ class JiraApp(WorkspaceMixin, App):
         get_recently_viewed_work_items_provider,
         get_recent_searches_provider,
         get_release_command_provider,
+        get_repository_command_provider,
         get_panel_command_provider,
         get_decision_command_provider,
         get_registered_binding_command_provider,
@@ -2234,10 +2293,28 @@ class JiraApp(WorkspaceMixin, App):
             RELEASES_PALETTE_PLACEHOLDER,
         )
 
+    def action_show_repositories_palette(self) -> None:
+        from gojeera.commands.providers.repository_provider import (
+            REPOSITORIES_PALETTE_ID,
+            REPOSITORIES_PALETTE_PLACEHOLDER,
+        )
+
+        self._open_sub_command_palette(
+            REPOSITORIES_PALETTE_ID,
+            REPOSITORIES_PALETTE_PLACEHOLDER,
+        )
+
     async def action_view_project_releases(self, project_key: str) -> None:
         from gojeera.components.screens.project_releases_screen import ProjectReleasesScreen
 
         await self._push_screen_exclusive(ProjectReleasesScreen(project_key))
+
+    async def action_view_project_repositories(self, project_key: str) -> None:
+        from gojeera.components.screens.project_repositories_screen import (
+            ProjectRepositoriesScreen,
+        )
+
+        await self._push_screen_exclusive(ProjectRepositoriesScreen(project_key))
 
     def action_show_browse_work_item_palette(self) -> None:
         from gojeera.commands.providers.quick_navigation_provider import (

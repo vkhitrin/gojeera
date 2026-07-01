@@ -68,8 +68,15 @@ The application requests the following oauth2 scopes:
 `read:jira-user`, `read:jira-work`, `write:jira-work`,
 `read:project:jira`, `read:board-scope:jira-software`,
 `read:sprint:jira-software`, `write:sprint:jira-software`,
-`manage:jira-data-provider`, `read:servicedesk-request`, `write:servicedesk-request`, `read:servicemanagement-insi
-ght-objects`, `offline_access`, `read:me`, `read:account`
+`manage:jira-data-provider`, `read:servicedesk-request`,
+`write:servicedesk-request`, `read:servicemanagement-insight-objects`,
+`offline_access`, `read:me`, `read:account`
+
+Project repository lookup uses Atlassian GraphQL `GraphStore.projectAssociatedRepo`,
+which Atlassian blocks for third-party OAuth clients. OAuth profiles can configure
+an API-token fallback profile for repository lookup and other OAuth-blocked
+features during `gojeera auth login`. Repository pull request browsing shows recent
+project pull requests that match the selected repository.
 
 ### Choosing a Profile
 

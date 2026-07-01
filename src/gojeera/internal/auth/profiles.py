@@ -39,6 +39,9 @@ class AuthProfileBase(BaseModel):
     def oauth_scopes(self) -> list[str] | None:
         return None
 
+    def api_token_fallback_profile(self) -> str | None:
+        return None
+
     def existing_email(self) -> str:
         return ''
 
@@ -69,6 +72,10 @@ class OAuth2AuthProfile(AuthProfileBase):
     email: str | None = None
     client_id: str | None = None
     display_name: str | None = None
+    api_token_fallback_profile_name: str | None = Field(
+        default=None,
+        alias='api_token_fallback_profile',
+    )
     oauth2_access_token_expiration_timestamp: int | None = None
     auth_type: Literal['oauth2'] = 'oauth2'
 
@@ -82,6 +89,9 @@ class OAuth2AuthProfile(AuthProfileBase):
         from gojeera.internal.auth.oauth2 import OAUTH2_SCOPES
 
         return OAUTH2_SCOPES
+
+    def api_token_fallback_profile(self) -> str | None:
+        return self.api_token_fallback_profile_name
 
     def existing_client_id(self) -> str:
         return self.client_id or ''
@@ -149,6 +159,7 @@ def _load_profile(name: str, profile_data: dict[str, Any]) -> AuthProfile:
 def _dump_profile(profile: AuthProfile) -> dict[str, Any]:
     if isinstance(profile, OAuth2AuthProfile):
         payload = profile.model_dump(
+            by_alias=True,
             exclude_none=True,
             exclude={
                 'name',
@@ -230,6 +241,7 @@ def upsert_profile(
     client_id: str | None,
     oauth2_access_token_expiration_timestamp: int | None,
     activate: bool,
+    api_token_fallback_profile: str | None = None,
 ) -> None:
     config = _load_config_data()
     active_profile, profiles = list_profiles()
@@ -245,6 +257,7 @@ def upsert_profile(
             email=email,
             client_id=client_id,
             display_name=display_name,
+            api_token_fallback_profile=api_token_fallback_profile,
             oauth2_access_token_expiration_timestamp=oauth2_access_token_expiration_timestamp,
         )
     else:

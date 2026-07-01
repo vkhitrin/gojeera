@@ -667,3 +667,46 @@ class AsyncJiraClient(JSONResponseMixin, AsyncHTTPClient):
             suggestions,
         )
         return {'suggestions': suggestions}
+
+
+class GraphQLClient(JSONResponseMixin, AsyncHTTPClient):
+    """Async JSON client for Atlassian GraphQL API operations."""
+
+    def set_headers(self, headers: dict | None = None) -> dict:
+        return self._merge_headers(
+            {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            headers,
+        )
+
+    async def execute(
+        self,
+        query: str,
+        variables: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: int = 55,
+    ) -> dict[str, Any]:
+        payload = {'query': query, 'variables': variables or {}}
+        response = cast(
+            dict[str, Any],
+            await self._run_async_request_loop(
+                httpx.AsyncClient.post,
+                self.base_url,
+                headers,
+                timeout,
+                json=payload,
+            ),
+        )
+
+        if errors := response.get('errors'):
+            message = 'GraphQL request failed'
+            if isinstance(errors, list) and errors:
+                first_error = errors[0]
+                if isinstance(first_error, dict) and first_error.get('message'):
+                    message = str(first_error['message'])
+            raise ServiceInvalidRequestException(
+                message,
+                context={'url': self.base_url},
+                remote_payload=response,
+            )
+
+        return response

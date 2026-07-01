@@ -1595,6 +1595,120 @@ ProjectReleasesScreen #project-releases-scroll LoadingIndicator.-textual-loading
   background: $surface;
 }
 
+ProjectRepositoriesScreen #modal_outer {
+  width: 90%;
+  max-width: 140;
+  height: 80%;
+  max-height: 36;
+}
+
+ProjectRepositoriesScreen #project-repositories-filter-row {
+  width: 100%;
+  height: auto;
+  padding: 0 1 1 1;
+  background: $surface;
+}
+
+ProjectRepositoriesScreen #project-repository-text-filter {
+  width: 32;
+  height: 1;
+  margin: 0;
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+ProjectRepositoriesScreen #project-repository-text-filter:focus {
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+ProjectRepositoriesScreen #project-repository-text-filter > .input--placeholder {
+  color: $text-muted;
+}
+
+ProjectRepositoriesScreen #project-repository-text-filter:disabled {
+  background: $surface-lighten-1 50%;
+  color: $text-muted;
+}
+
+ProjectRepositoriesScreen #project-repositories-scroll {
+  width: 100%;
+  height: 1fr;
+  padding: 0 1 1 1;
+  background: $surface;
+  scrollbar-size-vertical: 1;
+}
+
+ProjectRepositoriesScreen ExtendedTable {
+  width: 100%;
+  height: 1fr;
+  background: transparent;
+}
+
+ProjectRepositoriesScreen #project-repositories-scroll LoadingIndicator,
+ProjectRepositoriesScreen
+  #project-repositories-scroll
+  LoadingIndicator.-textual-loading-indicator {
+  background: $surface;
+}
+
+RepositoryPullRequestsScreen #modal_outer {
+  width: 90%;
+  max-width: 150;
+  height: 80%;
+  max-height: 36;
+}
+
+RepositoryPullRequestsScreen #repository-pull-requests-filter-row {
+  width: 100%;
+  height: auto;
+  padding: 0 1 1 1;
+  background: $surface;
+}
+
+RepositoryPullRequestsScreen #repository-pull-request-text-filter {
+  width: 32;
+  height: 1;
+  margin: 0;
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+RepositoryPullRequestsScreen #repository-pull-request-text-filter:focus {
+  background: $surface-lighten-1;
+  color: $text;
+}
+
+RepositoryPullRequestsScreen #repository-pull-request-text-filter > .input--placeholder {
+  color: $text-muted;
+}
+
+RepositoryPullRequestsScreen #repository-pull-request-text-filter:disabled {
+  background: $surface-lighten-1 50%;
+  color: $text-muted;
+}
+
+RepositoryPullRequestsScreen #repository-pull-requests-scroll {
+  width: 100%;
+  height: 1fr;
+  padding: 0 1 1 1;
+  background: $surface;
+  scrollbar-size-vertical: 1;
+}
+
+RepositoryPullRequestsScreen ExtendedTable {
+  width: 100%;
+  height: 1fr;
+  background: transparent;
+}
+
+RepositoryPullRequestsScreen #repository-pull-requests-scroll LoadingIndicator,
+RepositoryPullRequestsScreen
+  #repository-pull-requests-scroll
+  LoadingIndicator.-textual-loading-indicator {
+  background: $surface;
+}
+
 DebugInfoScreen #debug_tabs {
   width: 100%;
   height: 1fr;

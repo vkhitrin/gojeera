@@ -291,6 +291,113 @@ def _resolve_existing_profile_selection() -> tuple[str, AuthProfile | None, bool
     return selected_profile, profiles.get(selected_profile), True
 
 
+def _create_api_token_fallback_profile(
+    *,
+    oauth_profile_name: str,
+    default_site: str,
+) -> str:
+    active_profile, profiles = list_profiles()
+    del active_profile
+
+    default_profile_name = f'{oauth_profile_name}-api-token'
+    while True:
+        profile_name = Prompt.ask(
+            '[bold]API-token fallback profile name[/bold]',
+            default=default_profile_name,
+        ).strip()
+        if not profile_name:
+            continue
+        if profile_name not in profiles:
+            break
+        click.echo(f'Profile "{profile_name}" already exists. Select it from the picker instead.')
+
+    instance_url = (
+        Prompt.ask('[bold]Fallback Jira instance URL[/bold]', default=default_site)
+        .strip()
+        .rstrip('/')
+    )
+    email = Prompt.ask('[bold]Fallback Jira email[/bold]').strip()
+    api_token = _prompt_masked_secret('[bold]Fallback Jira API token[/bold]')
+
+    if not instance_url:
+        click.echo('Jira instance URL is required.')
+        sys.exit(1)
+    if not email or not api_token:
+        click.echo('Email and Jira API token are required.')
+        sys.exit(1)
+
+    validation_result = auth_service.validate_profile(
+        BasicAuthProfile(
+            name=profile_name,
+            site=instance_url,
+            email=email,
+        ),
+        api_token=api_token,
+    )
+    if not validation_result.is_valid:
+        click.echo(f'Authentication validation failed: {validation_result.message}')
+        sys.exit(1)
+
+    upsert_profile(
+        profile_name,
+        auth_type='basic',
+        site=instance_url,
+        email=email,
+        account_id=validation_result.account_id,
+        display_name=validation_result.message,
+        cloud_id=validation_result.cloud_id,
+        client_id=None,
+        oauth2_access_token_expiration_timestamp=None,
+        activate=False,
+    )
+    set_jira_api_token(email, api_token)
+    return profile_name
+
+
+def _resolve_api_token_fallback_profile(
+    *,
+    oauth_profile_name: str,
+    existing_profile: OAuth2AuthProfile | None,
+    oauth_site: str,
+) -> str | None:
+    existing_fallback = (
+        existing_profile.api_token_fallback_profile() if existing_profile is not None else None
+    )
+    _, profiles = list_profiles()
+    basic_profiles = {
+        profile_name: profile
+        for profile_name, profile in profiles.items()
+        if isinstance(profile, BasicAuthProfile)
+    }
+
+    options: list[tuple[str, str]] = [('__none__', 'Do not configure API-token fallback')]
+    for profile_name, profile in basic_profiles.items():
+        options.append((profile_name, f'{profile_name} [api_token] {profile.site}'.rstrip()))
+    options.append(('__create__', 'Create new API-token fallback profile'))
+
+    default_index = 0
+    if existing_fallback is not None:
+        for index, (value, _) in enumerate(options):
+            if value == existing_fallback:
+                default_index = index
+                break
+
+    selected_profile = _select_option(
+        'API-token fallback for OAuth-blocked features',
+        options,
+        default_index=default_index,
+    )
+    if selected_profile == '__none__':
+        return None
+    if selected_profile == '__create__':
+        return _create_api_token_fallback_profile(
+            oauth_profile_name=oauth_profile_name,
+            default_site=oauth_site,
+        )
+
+    return selected_profile
+
+
 def _select_option(title: str, options: list[tuple[str, str]], default_index: int = 0) -> str:
     from prompt_toolkit.application import Application
     from prompt_toolkit.key_binding import KeyBindings
@@ -736,6 +843,14 @@ def auth_login():
                     token_response.access_token_expiration_timestamp
                 )
 
+            api_token_fallback_profile = _resolve_api_token_fallback_profile(
+                oauth_profile_name=profile_name,
+                existing_profile=existing_profile
+                if isinstance(existing_profile, OAuth2AuthProfile)
+                else None,
+                oauth_site=oauth_site,
+            )
+
             activate = Confirm.ask('[bold]Set as active profile?[/bold]', default=True)
 
             upsert_profile(
@@ -749,6 +864,7 @@ def auth_login():
                 client_id=oauth_client_id,
                 oauth2_access_token_expiration_timestamp=oauth_access_token_expiration_timestamp,
                 activate=activate,
+                api_token_fallback_profile=api_token_fallback_profile,
             )
             if not skip_oauth_login:
                 if oauth_account_id is None:

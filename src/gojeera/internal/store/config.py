@@ -284,6 +284,14 @@ class JiraConfig(BaseSettings):
         return self.active_profile.oauth_scopes() if self.active_profile is not None else None
 
     @property
+    def api_token_fallback_profile(self) -> str | None:
+        return (
+            self.active_profile.api_token_fallback_profile()
+            if self.active_profile is not None
+            else None
+        )
+
+    @property
     def oauth2_authorization_url(self) -> str:
         return ATLASSIAN_OAUTH2_AUTHORIZATION_URL
 
@@ -357,6 +365,32 @@ class JiraConfig(BaseSettings):
             cloud_id=cloud_id,
             account_id=account_id,
             api_token=self.require_api_token(),
+        )
+
+    def build_api_token_auth_context(self, profile_name: str) -> JiraAuthContext:
+        profile = self.profiles.get(profile_name)
+        if not isinstance(profile, BasicAuthProfile):
+            raise ValueError(f'jira profile "{profile_name}" is not an API-token profile.')
+
+        if not profile.cloud_id:
+            raise ValueError(f'jira profile "{profile_name}" is missing cloud_id.')
+        if not profile.account_id:
+            raise ValueError(f'jira profile "{profile_name}" is missing account_id.')
+
+        secrets = AUTH_SERVICE.get_runtime_secrets(profile, prefer_environment=False)
+        api_token = secrets.get('api_token')
+        if not api_token:
+            raise ValueError(f'jira profile "{profile_name}" is missing an API token.')
+
+        return JiraAuthContext(
+            profile_name=profile_name,
+            auth_type='basic',
+            api_base_url=profile.site_url(),
+            instance_base_url=profile.site_url(),
+            api_email=profile.email,
+            cloud_id=profile.cloud_id,
+            account_id=profile.account_id,
+            api_token=api_token,
         )
 
     def has_auth_configuration(self) -> bool:

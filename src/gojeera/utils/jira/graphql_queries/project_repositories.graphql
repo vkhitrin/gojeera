@@ -1,0 +1,29 @@
+query GojeeraProjectRepositories($projectAri: ID!, $first: Int!, $after: String) {
+  graphStore @optIn(to: ["GraphStore", "GraphStoreProjectAssociatedRepo"]) {
+    projectAssociatedRepo(id: $projectAri, first: $first, after: $after) {
+      edges {
+        id
+        node {
+          __typename
+          ... on DevOpsRepository {
+            id
+            providerId
+            name
+            devOpsUrl: url
+            externalId
+          }
+          ... on ExternalRepository {
+            id
+            name
+            displayName
+            externalUrl: url
+            repositoryId
+            thirdPartyId
+            __PROVIDER_FIELDS__
+          }
+        }
+      }
+      __PAGE_INFO_FIELDS__
+    }
+  }
+}

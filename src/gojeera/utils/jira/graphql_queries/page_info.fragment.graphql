@@ -1,0 +1,4 @@
+pageInfo {
+  hasNextPage
+  endCursor
+}

@@ -1,0 +1,18 @@
+query GojeeraWorkItemPullRequests($issueAri: ID!, $first: Int!, $after: String) {
+  graphStoreV2_jiraWorkItemLinksExternalPullRequest(
+    id: $issueAri,
+    first: $first,
+    after: $after,
+    sort: { lastModified: { direction: DESC, priority: 1 } }
+  ) @optIn(to: "GraphStoreV2IssueAssociatedPr") {
+    edges {
+      id
+      createdAt
+      lastUpdated
+      node {
+        __PULL_REQUEST_DETAILS__
+      }
+    }
+    __PAGE_INFO_FIELDS__
+  }
+}

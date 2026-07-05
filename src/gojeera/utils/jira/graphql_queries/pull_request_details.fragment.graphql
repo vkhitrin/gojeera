@@ -1,0 +1,22 @@
+__typename
+... on DevOpsPullRequestDetails {
+  id
+  devOpsRepositoryId: repositoryId
+  repositoryInternalId
+  repositoryName
+  repositoryUrl
+  title
+  devOpsStatus: status
+  url
+  pullRequestInternalId
+  providerId
+  providerName
+  lastUpdated
+  __BRANCH_PAIR_FIELDS__
+  author {
+    name
+  }
+}
+... on ExternalPullRequest {
+  __EXTERNAL_PULL_REQUEST_FIELDS__
+}

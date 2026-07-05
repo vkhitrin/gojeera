@@ -6,12 +6,37 @@ import respx
 
 from gojeera.internal.jira.api import JiraAPI
 from gojeera.internal.models.exceptions import ServiceInvalidRequestException
-from gojeera.utils.jira.graphql import GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR
+from gojeera.utils.jira.graphql import (
+    GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR,
+    GRAPHQL_QUERIES,
+    load_graphql_document,
+)
 from tests.jira_api_test_utils import (
     api_configuration,
     basic_auth_context,
     oauth2_auth_context,
 )
+
+
+def test_graphql_queries_are_exported_from_resource_files():
+    assert load_graphql_document('project_by_key.graphql').startswith('query GojeeraProjectByKey')
+    assert set(GRAPHQL_QUERIES) == {
+        'project_by_key',
+        'project_repositories',
+        'project_space_pull_requests',
+        'work_item_pull_requests',
+    }
+    assert all(
+        placeholder not in query
+        for query in GRAPHQL_QUERIES.values()
+        for placeholder in (
+            '__BRANCH_PAIR_FIELDS__',
+            '__EXTERNAL_PULL_REQUEST_FIELDS__',
+            '__PAGE_INFO_FIELDS__',
+            '__PROVIDER_FIELDS__',
+            '__PULL_REQUEST_DETAILS__',
+        )
+    )
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,10 @@
+  id
+  externalRepositoryId: repositoryId
+  title
+  externalStatus: status
+  url
+  pullRequestId
+  thirdPartyId
+  lastUpdate
+  __BRANCH_PAIR_FIELDS__
+  __PROVIDER_FIELDS__

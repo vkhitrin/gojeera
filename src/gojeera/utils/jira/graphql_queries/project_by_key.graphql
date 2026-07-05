@@ -1,0 +1,6 @@
+query GojeeraProjectByKey($cloudId: ID!, $projectKey: String!) {
+  jira_projectByIdOrKey(cloudId: $cloudId, idOrKey: $projectKey) {
+    id
+    key
+  }
+}

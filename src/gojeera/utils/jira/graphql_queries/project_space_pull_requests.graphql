@@ -1,0 +1,23 @@
+query GojeeraProjectSpacePullRequests($projectAri: ID!, $first: Int!, $after: String) {
+  graphStoreV2 @optIn(to: ["GraphStoreV2", "GraphStoreV2ProjectAssociatedPr"]) {
+    jiraSpaceLinksExternalPullRequest(
+      id: $projectAri,
+      first: $first,
+      after: $after,
+      sort: { lastModified: { direction: DESC, priority: 1 } }
+    ) {
+      edges {
+        id
+        createdAt
+        lastUpdated
+        node {
+          __typename
+          ... on ExternalPullRequest {
+            __EXTERNAL_PULL_REQUEST_FIELDS__
+          }
+        }
+      }
+      __PAGE_INFO_FIELDS__
+    }
+  }
+}

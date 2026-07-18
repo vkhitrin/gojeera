@@ -51,7 +51,8 @@ WORK_ITEM_TOOLTIP_FIELDS = ['summary', 'status', 'issuetype']
 
 
 class _AttachmentTooltipMarkdown(Protocol):
-    app: App
+    @property
+    def app(self) -> App: ...
 
 
 def build_work_item_tooltip(

@@ -3,12 +3,10 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 import yaml
 
-from gojeera.internal.store.files import get_config_directory
-from gojeera.internal.store.files import load_yaml_mapping
+from gojeera.internal.store.files import get_config_directory, load_yaml_mapping
 
 ATLASSIAN_OAUTH2_AUTHORIZATION_URL = 'https://auth.atlassian.com/authorize'
 ATLASSIAN_OAUTH2_TOKEN_URL = 'https://auth.atlassian.com/oauth/token'

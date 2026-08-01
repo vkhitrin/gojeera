@@ -131,7 +131,7 @@ def test_get_atlassian_accessible_resources_requires_list_payload():
         return_value=httpx.Response(200, json={'invalid': True})
     )
 
-    with pytest.raises(ValueError, match='must be a list'):
+    with pytest.raises(TypeError, match='must be a list'):
         get_atlassian_accessible_resources(access_token='access-token')
 
 

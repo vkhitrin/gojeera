@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -184,7 +184,7 @@ class TestWorkItemDescription:
             filename='report.pdf',
             mime_type='application/pdf',
             size=426744,
-            created=datetime(2026, 4, 5, 17, 32),
+            created=datetime(2026, 4, 5, 17, 32, tzinfo=timezone.utc),
             author=JiraUser(
                 account_id='user-1',
                 active=True,

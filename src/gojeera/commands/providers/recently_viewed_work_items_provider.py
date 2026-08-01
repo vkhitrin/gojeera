@@ -7,8 +7,8 @@ import humanize
 from rich.text import Text
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
-from gojeera.widgets.layout.sub_palette import mark_sub_command_palette_hit
 from gojeera.internal.store.cache import get_cache, run_cache_io
+from gojeera.widgets.layout.sub_palette import mark_sub_command_palette_hit
 
 RECENTLY_VIEWED_WORK_ITEMS_PALETTE_ID = 'recently-viewed-work-items'
 RECENTLY_VIEWED_WORK_ITEMS_ACTION_LABEL = 'Recently Viewed Work Items'

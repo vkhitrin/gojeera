@@ -1,4 +1,3 @@
-import asyncio
 from typing import TYPE_CHECKING, cast
 
 from textual.reactive import Reactive, reactive
@@ -114,8 +113,6 @@ class WorkItemHistoryWidget(RecordListTabWidget):
                 severity='warning',
                 title=work_item_key,
             )
-        except asyncio.CancelledError:
-            raise
         finally:
             self.hide_loading()
 

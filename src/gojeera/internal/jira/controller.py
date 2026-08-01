@@ -1,18 +1,21 @@
-from collections import defaultdict
-from collections.abc import AsyncIterator, Iterable
 import asyncio
+from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 import dataclasses
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import logging
 import mimetypes
 import os
 from pathlib import Path
-from typing import Any, Awaitable, Callable, TypedDict, TypeVar, cast
+from typing import Any, TypedDict, TypeVar, cast
 
 from dateutil.parser import isoparse
 import httpx
+
+from gojeera.internal.auth.profiles import OAuth2AuthProfile
+from gojeera.internal.auth.service import AuthService
 from gojeera.internal.jira.api import JiraAPI
 from gojeera.internal.jira.client import AsyncJiraClient
 from gojeera.internal.jira.factories import WorkItemFactory
@@ -29,8 +32,11 @@ from gojeera.internal.models.jira import (
     JiraField,
     JiraGlobalSettings,
     JiraMyselfInfo,
+    JiraProject,
     JiraProjectFeature,
     JiraProjectRelease,
+    JiraProjectRepository,
+    JiraRepositoryPullRequest,
     JiraServerInfo,
     JiraSprint,
     JiraTimeTrackingConfiguration,
@@ -38,9 +44,6 @@ from gojeera.internal.models.jira import (
     JiraUserGroup,
     JiraWorkItemGenericFields,
     LinkWorkItemType,
-    JiraProject,
-    JiraProjectRepository,
-    JiraRepositoryPullRequest,
     UpdateWorkItemResponse,
     WorkItemRemoteLink,
     WorkItemStatus,
@@ -59,12 +62,10 @@ from gojeera.internal.models.work_items import (
     WorkItemHistoryChange,
     WorkItemHistoryEntry,
 )
-from gojeera.internal.auth.profiles import OAuth2AuthProfile
-from gojeera.internal.auth.service import AuthService
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
-from gojeera.utils.jira.jql import work_item_flagged_jql
 from gojeera.utils.data.mappings import get_nested
+from gojeera.utils.jira.jql import work_item_flagged_jql
 from gojeera.utils.system.logging_utils import (
     ExceptionLogDetails,
 )
@@ -738,7 +739,11 @@ class APIController:
                     ],
                 )
             )
-        return sorted(history, key=lambda item: item.created or datetime.min, reverse=True)
+        return sorted(
+            history,
+            key=lambda item: item.created or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
 
     def _build_work_item_history(self, response: dict[str, Any]) -> PaginatedWorkItemHistory:
         return PaginatedWorkItemHistory(
@@ -1556,7 +1561,7 @@ class APIController:
                 )
                 return APIControllerResponse(
                     success=False,
-                    error=f'Failed to extract the details of the requested work item {work_item_id_or_key}: {str(e)}',
+                    error=f'Failed to extract the details of the requested work item {work_item_id_or_key}: {e!s}',
                 )
             return APIControllerResponse(result=JiraWorkItemSearchResponse(work_items=[instance]))
 
@@ -1583,13 +1588,13 @@ class APIController:
             jql_filters := self.config.jql_filters
         ):
             for filter_data in jql_filters:
-                if filter_data.get('label') == filter_label and (
-                    expression := filter_data.get('expression')
+                if (
+                    filter_data.get('label') == filter_label
+                    and (expression := filter_data.get('expression'))
+                    and (cleaned_expression := expression.replace('\n', ' ').replace('\t', ' '))
+                    and (jql_expression := cleaned_expression.strip())
                 ):
-                    if (
-                        cleaned_expression := expression.replace('\n', ' ').replace('\t', ' ')
-                    ) and (jql_expression := cleaned_expression.strip()):
-                        return {'jql': jql_expression, 'updated_from': None}
+                    return {'jql': jql_expression, 'updated_from': None}
 
         return {}
 
@@ -1635,7 +1640,7 @@ class APIController:
             if 'queries' in response and len(response['queries']) > 0:
                 query_result = response['queries'][0]
 
-                if 'errors' in query_result and query_result['errors']:
+                if query_result.get('errors'):
                     error_messages = []
                     for error in query_result['errors']:
                         if isinstance(error, str):
@@ -1663,9 +1668,9 @@ class APIController:
                 error='The Jira server returned an invalid response during JQL validation.',
             )
         except Exception as e:
-            self.logger.warning(f'JQL validation failed with error: {str(e)}')
+            self.logger.warning(f'JQL validation failed with error: {e!s}')
             return APIControllerResponse(
-                success=False, error=f'Failed to validate JQL query: {str(e)}'
+                success=False, error=f'Failed to validate JQL query: {e!s}'
             )
 
     async def search_work_items(
@@ -1740,7 +1745,7 @@ class APIController:
         except Exception as e:
             return APIControllerResponse(
                 success=False,
-                error=f'There was an unknown error while searching for work items: {str(e)}',
+                error=f'There was an unknown error while searching for work items: {e!s}',
             )
         work_items: list[JiraWorkItem] = []
         work_item: JiraWorkItem
@@ -2080,12 +2085,11 @@ class APIController:
                 'The selected work item does not include the required fields metadata.'
             )
 
-        if JiraWorkItemGenericFields.SUMMARY.value in updates:
-            if (
-                not (summary := updates.get(JiraWorkItemGenericFields.SUMMARY.value))
-                or not summary.strip()
-            ):
-                raise ValidationError('The summary field can not be empty.')
+        if JiraWorkItemGenericFields.SUMMARY.value in updates and (
+            not (summary := updates.get(JiraWorkItemGenericFields.SUMMARY.value))
+            or not summary.strip()
+        ):
+            raise ValidationError('The summary field can not be empty.')
 
         fields_to_update: dict[str, list] = {}
         direct_fields_to_update: dict[str, Any] = {}
@@ -2970,7 +2974,7 @@ class APIController:
                 'Unable to attach files',
                 extra={
                     'work_item_key_or_id': work_item_key_or_id,
-                    'filename': filename,
+                    'attachment_filename': filename,
                     **exception_details.get('extra', {}),
                 },
             )

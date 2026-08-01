@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Literal
-
-from typing_extensions import NotRequired, TypedDict
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Literal
+
+from typing_extensions import NotRequired, TypedDict
 
 from gojeera.internal.models.base import BaseModel
 

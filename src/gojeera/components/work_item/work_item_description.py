@@ -156,7 +156,7 @@ class WorkItemInfoContainer(Container, can_focus=False):
         if not work_item:
             self.description_container.remove_class('tab-scroll-surface--persistent')
             self.clear_information = True
-            return None
+            return
 
         self.show_loading()
         self.description_container.add_class('tab-scroll-surface--persistent')
@@ -166,7 +166,7 @@ class WorkItemInfoContainer(Container, can_focus=False):
 
         self.header_summary_widget.update(work_item.summary)
         self.call_after_refresh(self._start_setup_work_item_description_worker, work_item.key)
-        return None
+        return
 
     def _start_setup_work_item_description_worker(self, work_item_key: str) -> None:
         current_work_item = self.work_item
@@ -251,8 +251,8 @@ class WorkItemInfoContainer(Container, can_focus=False):
         if not current_work_item:
             return
 
-        application = cast('JiraApp', self.app)  # noqa: F821
-        screen = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
+        screen = cast('JiraApp', self.app)
 
         try:
             response: APIControllerResponse = await application.api.update_work_item(

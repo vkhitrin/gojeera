@@ -1,5 +1,5 @@
-import logging
 from collections.abc import Sequence
+import logging
 from typing import Any
 
 from textual.reactive import Reactive, reactive

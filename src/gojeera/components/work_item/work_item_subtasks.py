@@ -78,7 +78,7 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
         if current_work_item is None:
             return
 
-        screen = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+        screen = cast('JiraApp', self.app)  # type: ignore[arg-type]
         self.run_worker(screen.clone_work_item(current_work_item.key))
 
     async def action_edit_selected_work_item_summary(self) -> None:
@@ -86,8 +86,8 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
         if current_work_item is None:
             return
 
-        application = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
-        screen = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+        application = cast('JiraApp', self.app)  # type: ignore[arg-type]
+        screen = cast('JiraApp', self.app)  # type: ignore[arg-type]
 
         response: APIControllerResponse = await application.api.get_work_item(current_work_item.key)
         if not response.success or not response.result or not response.result.work_items:

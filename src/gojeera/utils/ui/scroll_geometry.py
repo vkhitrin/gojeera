@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import textwrap
-from typing import Callable, TypeVar, cast
+from typing import TypeVar, cast
 
 from rich.cells import cell_len
 from textual.scroll_view import ScrollView

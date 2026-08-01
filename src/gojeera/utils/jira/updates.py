@@ -23,15 +23,10 @@ def work_item_priority_has_changed(
     """
 
     if current_priority is None:
-        if not target_priority:
-            return False
+        return bool(target_priority)
+    if not target_priority:
         return True
-    else:
-        if not target_priority:
-            return True
-        if current_priority.id == target_priority:
-            return False
-        return True
+    return current_priority.id != target_priority
 
 
 def work_item_assignee_has_changed(
@@ -50,15 +45,10 @@ def work_item_assignee_has_changed(
     """
 
     if current_assignee is None:
-        if target_assignee_account_id is None:
-            return False
-        else:
-            return True
-    else:
-        if target_assignee_account_id is None:
-            return True
-        else:
-            return current_assignee.account_id != target_assignee_account_id
+        return target_assignee_account_id is not None
+    if target_assignee_account_id is None:
+        return True
+    return current_assignee.account_id != target_assignee_account_id
 
 
 def work_item_parent_has_changed(
@@ -75,14 +65,10 @@ def work_item_parent_has_changed(
     """
 
     if current_parent_key is None:
-        if not target_parent_key:
-            return False
-        return True
+        return bool(target_parent_key)
     if not target_parent_key:
         return True
-    if current_parent_key == target_parent_key.strip():
-        return False
-    return True
+    return current_parent_key != target_parent_key.strip()
 
 
 def work_item_due_date_has_changed(
@@ -98,14 +84,10 @@ def work_item_due_date_has_changed(
         `True` id the due date has changed; `False` otherwise.
     """
     if current_due_date is None:
-        if target_due_date:
-            return True
-        return False
+        return bool(target_due_date)
     if not target_due_date:
         return True
-    if str(current_due_date) == target_due_date:
-        return False
-    return True
+    return str(current_due_date) != target_due_date
 
 
 def work_item_components_has_changed(
@@ -132,6 +114,4 @@ def work_item_components_has_changed(
     if len(current_components) != len(target_components):
         return True
     current_set = {x.id for x in current_components}
-    if current_set.intersection({x.get('id') for x in target_components}) == current_set:
-        return False
-    return True
+    return current_set.intersection({x.get('id') for x in target_components}) != current_set

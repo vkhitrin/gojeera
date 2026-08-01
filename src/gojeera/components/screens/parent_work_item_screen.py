@@ -56,16 +56,16 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(
-                id='parent-work-item-form', classes='modal-form modal-form--fields'
+            with (
+                VerticalScroll(id='parent-work-item-form', classes='modal-form modal-form--fields'),
+                Vertical(),
             ):
-                with Vertical():
-                    parent_work_item_label = Label('Parent Work Item')
-                    parent_work_item_label.add_class('field_label')
-                    yield parent_work_item_label
-                    parent_input = WorkItemKeyInput()
-                    parent_input.disabled = True
-                    yield parent_input
+                parent_work_item_label = Label('Parent Work Item')
+                parent_work_item_label.add_class('field_label')
+                yield parent_work_item_label
+                parent_input = WorkItemKeyInput()
+                parent_input.disabled = True
+                yield parent_input
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield build_modal_confirm_button(

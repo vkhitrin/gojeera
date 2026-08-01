@@ -1,5 +1,5 @@
-from typing import cast
 import json
+from typing import cast
 
 import httpx
 import pytest

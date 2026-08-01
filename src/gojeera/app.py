@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 from inspect import isawaitable
+import itertools
 import logging
 import os
 from pathlib import Path
@@ -40,8 +41,8 @@ from gojeera.components.work_item.work_item_related_work_items import RelatedWor
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
 from gojeera.internal.jira.controller import APIController
-from gojeera.internal.models.work_items import WorkItemSearchResult
 from gojeera.internal.models.atlassian import AtlassianContext
+from gojeera.internal.models.work_items import WorkItemSearchResult
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.internal.store.files import get_log_file, get_themes_directory
@@ -1623,10 +1624,7 @@ class WorkspaceMixin(App):
         )
 
     async def _load_work_item_comments(self, work_item_key: str) -> None:
-        try:
-            response: APIControllerResponse = await self.api.get_comments(work_item_key)
-        except asyncio.CancelledError:
-            raise
+        response: APIControllerResponse = await self.api.get_comments(work_item_key)
 
         if not self._is_current_loaded_work_item(work_item_key):
             return
@@ -1642,13 +1640,10 @@ class WorkspaceMixin(App):
         self.work_item_comments_widget.hide_loading()
 
     async def _load_work_item_subtasks(self, work_item_key: str) -> None:
-        try:
-            response: APIControllerResponse = await self.api.search_work_items(
-                jql_query=f'parent={work_item_key}',
-                fields=['id', 'key', 'status', 'summary', 'issuetype', 'assignee'],
-            )
-        except asyncio.CancelledError:
-            raise
+        response: APIControllerResponse = await self.api.search_work_items(
+            jql_query=f'parent={work_item_key}',
+            fields=['id', 'key', 'status', 'summary', 'issuetype', 'assignee'],
+        )
 
         if not self._is_current_loaded_work_item(work_item_key):
             return
@@ -1894,7 +1889,7 @@ class WorkspaceMixin(App):
             tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
 
-            for active_id, next_id in zip(tab_ids, tab_ids[1:], strict=False):
+            for active_id, next_id in itertools.pairwise(tab_ids):
                 if active_id == current_active:
                     self.tabs.active = next_id
                     break
@@ -1904,7 +1899,7 @@ class WorkspaceMixin(App):
             tab_ids = self.tabs.visible_tab_ids()
             current_active = self.tabs.active
 
-            for prev_id, active_id in zip(tab_ids, tab_ids[1:], strict=False):
+            for prev_id, active_id in itertools.pairwise(tab_ids):
                 if active_id == current_active:
                     self.tabs.active = prev_id
                     break
@@ -2395,9 +2390,12 @@ if __name__ == '__main__':
                         error = str(response.error)
                         error_msg = error.lower()
 
-                        if 'contextvar' in error_msg or ('<' in error_msg and '0x' in error_msg):
-                            return False, 'Please check your credentials.', None
-                        elif 'unauthorized' in error_msg or '401' in error_msg:
+                        if (
+                            'contextvar' in error_msg
+                            or ('<' in error_msg and '0x' in error_msg)
+                            or 'unauthorized' in error_msg
+                            or '401' in error_msg
+                        ):
                             return False, 'Please check your credentials.', None
                         elif 'forbidden' in error_msg or '403' in error_msg:
                             return False, 'Access forbidden. Please check your permissions.', None
@@ -2442,5 +2440,5 @@ if __name__ == '__main__':
 
         JiraApp(settings, user_info=user_info).run()
     except Exception as e:
-        console.print(f'[bold red]Error:[/bold red] {str(e)}')
+        console.print(f'[bold red]Error:[/bold red] {e!s}')
         sys.exit(1)

@@ -19,12 +19,12 @@ from textual.widgets import Static
 
 from gojeera.components.screens.comment_screen import CommentScreen
 from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.jira.work_item_permissions import (
     ADD_COMMENT_PERMISSIONS,
     MISSING_ADD_COMMENT_PERMISSION_ERROR_PREFIX,
     WorkItemPermissionCache,
 )
-from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.work_items import (
     WorkItemComment,
     _build_attachment_markdown_details,
@@ -203,7 +203,7 @@ class CommentContainer(Vertical, can_focus=False):
         if not self._work_item_key:
             return False
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         current_user_id = (
             application.atlassian_context.user_info.account_id
             if application.atlassian_context.user_info
@@ -264,7 +264,7 @@ class CommentContainer(Vertical, can_focus=False):
         if self._comment_id:
             url = build_external_url_for_work_item(
                 self._work_item_key,
-                cast('JiraApp', self.app),  # noqa: F821
+                cast('JiraApp', self.app),
                 focused_comment_id=self._comment_id,
             )
             if url:
@@ -301,9 +301,8 @@ class CommentContainer(Vertical, can_focus=False):
             current = current.parent
 
     def handle_delete_choice(self, result: bool | None) -> None:
-        if result:
-            if self._work_item_key and self._comment_id:
-                self.run_worker(self.delete_comment(self._work_item_key, self._comment_id))
+        if result and self._work_item_key and self._comment_id:
+            self.run_worker(self.delete_comment(self._work_item_key, self._comment_id))
 
     def _update_comments_after_delete(self) -> None:
         current = self.parent
@@ -329,7 +328,7 @@ class CommentContainer(Vertical, can_focus=False):
         Returns:
             `None`
         """
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.delete_comment(
             work_item_key, comment_id
         )

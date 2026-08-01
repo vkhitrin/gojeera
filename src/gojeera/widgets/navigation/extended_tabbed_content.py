@@ -287,7 +287,7 @@ class ExtendedTabbedContent(TabbedContent):
 
             from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 
-            screen = cast('JiraApp', self.app)  # noqa: F821
+            screen = cast('JiraApp', self.app)
 
             project_key = None
             if (

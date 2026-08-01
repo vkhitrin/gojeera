@@ -19,7 +19,6 @@ from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinks
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.widgets.work_item.work_item_breadcrumb import WorkItemBreadcrumb
 
-
 WORK_ITEM_WORKLOG_BINDINGS = [
     Binding(
         key='ctrl+l',

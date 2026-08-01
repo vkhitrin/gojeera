@@ -1,10 +1,11 @@
 import asyncio
+from collections.abc import Callable
 import copy
 import inspect
 import json
-import re
 from pathlib import Path
-from typing import Any, Callable
+import re
+from typing import Any
 
 from httpx import Response
 from pydantic import SecretStr
@@ -20,10 +21,10 @@ from textual.widgets import Input, TextArea
 from gojeera.internal.auth.profiles import BasicAuthProfile
 from gojeera.internal.models.jira import (
     JiraField,
+    JiraProject,
     JiraProjectFeature,
     JiraSprint,
     JiraUser,
-    JiraProject,
     WorkItemStatus,
     WorkItemType,
 )

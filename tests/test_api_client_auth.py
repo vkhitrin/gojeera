@@ -5,8 +5,8 @@ from pydantic import SecretStr
 import pytest
 import respx
 
-from gojeera.internal.models.exceptions import ServiceInvalidRequestException
 from gojeera.internal.jira.client import AsyncJiraClient, GraphQLClient, JiraClient
+from gojeera.internal.models.exceptions import ServiceInvalidRequestException
 from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
 from gojeera.utils.system.logging_utils import extract_exception_details
 

@@ -1,5 +1,6 @@
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
-from typing import Awaitable, Callable, cast
+from typing import cast
 
 import pytest
 

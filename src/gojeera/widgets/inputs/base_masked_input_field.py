@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from dateutil.parser import isoparse
 from textual.validation import ValidationResult

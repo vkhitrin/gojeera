@@ -103,7 +103,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
             self.notify(
                 'Uploading attachment...',
             )
-            screen = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+            screen = cast('JiraApp', self.app)  # type: ignore[arg-type]
             response: APIControllerResponse = screen.api.add_attachment(work_item_key, file_name)
             if not response.success:
                 self.notify(
@@ -159,7 +159,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
         if attachment and attachment.id and attachment.filename:
             if self.work_item_key:
                 self.notify('Opening attachment in the browser...', title=self.work_item_key)
-            app = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+            app = cast('JiraApp', self.app)  # type: ignore[arg-type]
             if url := build_external_url_for_attachment(attachment.id, attachment.filename, app):
                 app.open_url(url)
 
@@ -171,7 +171,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
                 severity='error',
             )
             return
-        app = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+        app = cast('JiraApp', self.app)  # type: ignore[arg-type]
         response: APIControllerResponse = await app.api.get_attachment_content(attachment.id)
 
         if not response.success or not response.result:
@@ -235,7 +235,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
             if not attachment or not attachment.id:
                 self.notify('No attachment selected', severity='error')
                 return
-            screen = cast('JiraApp', self.app)  # noqa: F821  # type: ignore[arg-type]
+            screen = cast('JiraApp', self.app)  # type: ignore[arg-type]
             response: APIControllerResponse = await screen.api.delete_attachment(attachment.id)
             if not response.success:
                 self.notify(

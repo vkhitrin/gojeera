@@ -197,7 +197,7 @@ class ExtendedModalScreen(ModalScreen[T], Generic[T]):
 
         if hasattr(widget, 'text'):
             try:
-                text = getattr(widget, 'text')
+                text = widget.text
             except Exception:
                 text = None
             if isinstance(text, str):
@@ -205,13 +205,13 @@ class ExtendedModalScreen(ModalScreen[T], Generic[T]):
 
         if hasattr(widget, 'selection'):
             try:
-                return getattr(widget, 'selection')
+                return widget.selection
             except Exception:
                 return None
 
         if hasattr(widget, 'value'):
             try:
-                return getattr(widget, 'value')
+                return widget.value
             except Exception:
                 return None
 

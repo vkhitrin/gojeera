@@ -20,7 +20,7 @@ class QuitScreen(BaseConfirmationDialogScreen[str]):
     confirm_button_classes = 'dialog-button dialog-button--danger-soft'
 
     async def close_connections(self):
-        app = cast('JiraApp', self.screen.app)  # noqa: F821
+        app = cast('JiraApp', self.screen.app)
         await app.api.close()
 
     @on(Button.Pressed, '#button-quit')

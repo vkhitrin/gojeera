@@ -82,7 +82,7 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
         if not link_type_id or not isinstance(link_type_id, str):
             return
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.link_work_items(
             left_work_item_key=self.work_item_key,
             right_work_item_key=right_work_item_key,
@@ -141,7 +141,7 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
         current_work_item = selected
         link_id = current_work_item.id
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.delete_work_item_link(link_id)
         if self.work_item_key:
             if not response.success:

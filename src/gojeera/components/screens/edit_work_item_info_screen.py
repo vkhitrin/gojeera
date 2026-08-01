@@ -235,7 +235,7 @@ class EditWorkItemInfoScreen(DescriptionActionsMixin, DynamicModalScreen[dict[st
         try:
             description_widget = self.query_one(ExtendedADFMarkdownTextArea)
         except Exception:
-            logger.error('Failed to get Description widget', exc_info=True)
+            logger.exception('Failed to get Description widget')
             return
 
         work_item_key = self.work_item.key if self.work_item else None

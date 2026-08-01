@@ -8,6 +8,8 @@ from typing import Any, Literal, cast
 
 from pydantic import (
     BaseModel as PydanticModel,
+)
+from pydantic import (
     ConfigDict,
     Field,
     SecretStr,
@@ -36,10 +38,10 @@ from gojeera.internal.auth.profiles import (
     resolve_current_profile,
 )
 from gojeera.internal.auth.service import AuthService
-from gojeera.internal.styling.themes import find_unexpected_theme_field
 from gojeera.internal.models.jira import JiraFilter, JiraFilterDict
 from gojeera.internal.store.files import get_config_file
 from gojeera.internal.store.secret import SecretStoreError
+from gojeera.internal.styling.themes import find_unexpected_theme_field
 
 AUTH_SERVICE = AuthService()
 
@@ -225,7 +227,7 @@ class JiraConfig(BaseSettings):
             object.__setattr__(self, 'oauth2_refresh_token', SecretStr(refresh_token))
 
     @model_validator(mode='after')
-    def resolve_profile(self) -> 'JiraConfig':
+    def resolve_profile(self) -> JiraConfig:
         if self.profiles and self.active_profile_name is not None:
             if self.active_profile_name not in self.profiles:
                 raise ValueError(
@@ -370,7 +372,7 @@ class JiraConfig(BaseSettings):
     def build_api_token_auth_context(self, profile_name: str) -> JiraAuthContext:
         profile = self.profiles.get(profile_name)
         if not isinstance(profile, BasicAuthProfile):
-            raise ValueError(f'jira profile "{profile_name}" is not an API-token profile.')
+            raise TypeError(f'jira profile "{profile_name}" is not an API-token profile.')
 
         if not profile.cloud_id:
             raise ValueError(f'jira profile "{profile_name}" is missing cloud_id.')
@@ -445,7 +447,7 @@ class ApplicationConfiguration(BaseSettings):
         return v
 
     @model_validator(mode='after')
-    def validate_authentication_configuration(self) -> 'ApplicationConfiguration':
+    def validate_authentication_configuration(self) -> ApplicationConfiguration:
         if self.jira.profiles and self.jira.get_active_profile_name() is None:
             raise ValueError('jira.current_profile is required when authentication profiles exist.')
         if not self.jira.has_auth_configuration():
@@ -640,9 +642,12 @@ class KeyringSettingsSource(InitSettingsSource):
                 api_base_url = active_profile.site_url()
 
             resolved_profile: AuthProfile | None = active_profile
-            if auth_type == 'basic' and isinstance(active_profile, OAuth2AuthProfile):
-                resolved_profile = None
-            elif auth_type == 'oauth2' and isinstance(active_profile, BasicAuthProfile):
+            if (
+                auth_type == 'basic'
+                and isinstance(active_profile, OAuth2AuthProfile)
+                or auth_type == 'oauth2'
+                and isinstance(active_profile, BasicAuthProfile)
+            ):
                 resolved_profile = None
 
             if resolved_profile is None and isinstance(api_base_url, str):

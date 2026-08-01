@@ -1,10 +1,9 @@
 import json
 from pathlib import Path
 
-import yaml
-
 from httpx import Response
 import respx
+import yaml
 
 from gojeera.app import JiraApp
 from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen

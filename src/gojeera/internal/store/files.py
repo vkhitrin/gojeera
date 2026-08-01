@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Any
 
-import yaml
 from xdg_base_dirs import xdg_config_home, xdg_state_home
+import yaml
 
 LOG_FILE_FILE_NAME = 'gojeera.log'
 

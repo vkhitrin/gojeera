@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 import logging
@@ -19,11 +19,11 @@ from textual_tags import Tag, TagAutoComplete
 from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
 from gojeera.components.screens.work_log_screen import LogWorkScreen
 from gojeera.components.work_item.work_item_description import WorkItemInfoContainer
+from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.jira.work_item_permissions import (
     VIEW_WATCHERS_PERMISSIONS,
     WorkItemPermissionCache,
 )
-from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.models.exceptions import UpdateWorkItemException, ValidationError
 from gojeera.internal.models.jira import (
     JiraUser,
@@ -710,7 +710,7 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         self._field_descriptions_loading = True
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         try:
             response = await application.api.get_fields()
             if not response.success or not response.result:
@@ -1407,7 +1407,7 @@ class WorkItemFields(Container, can_focus=False):
                     work_item_key=self.work_item.key,
                     mode='new',
                     current_remaining_estimate=current_remaining_estimate,
-                    started=datetime.now().strftime('%Y-%m-%d %H:%M'),
+                    started=datetime.now(tz=timezone.utc).astimezone().strftime('%Y-%m-%d %H:%M'),
                 ),
                 self._request_adding_worklog,
             )
@@ -1672,7 +1672,7 @@ class WorkItemFields(Container, can_focus=False):
                     except Exception:
                         if getattr(dynamic_widget, '_allow_blank', True):
                             dynamic_widget.value = Select.NULL
-                elif isinstance(dynamic_widget, URL) or isinstance(dynamic_widget, TextInput):
+                elif isinstance(dynamic_widget, (URL, TextInput)):
                     string_value = str(current_value) if current_value else ''
                     dynamic_widget._original_value = string_value
                     dynamic_widget.value = string_value
@@ -2000,7 +2000,7 @@ class WorkItemFields(Container, can_focus=False):
 
         work_item_key = self.work_item.key
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         work_item_fields_response = await application.api.get_work_item(
             work_item_id_or_key=work_item_key
         )
@@ -2073,7 +2073,7 @@ class WorkItemFields(Container, can_focus=False):
                 )
                 return
 
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             response: APIControllerResponse = await application.api.add_work_item_worklog(
                 work_item_key_or_id=self.work_item.key,
                 started=parsed_started,
@@ -2304,19 +2304,18 @@ class WorkItemFields(Container, can_focus=False):
                 )
 
         if self.priority_selector.update_enabled and self.work_item.priority:
-            if work_item_priority_has_changed(
-                self.work_item.priority, self.priority_selector.selection
+            if (
+                work_item_priority_has_changed(
+                    self.work_item.priority, self.priority_selector.selection
+                )
+                and self.priority_selector.selection is not None
             ):
-                if self.priority_selector.selection is not None:
-                    payload[self.priority_selector.jira_field_key] = (
-                        self.priority_selector.selection
-                    )
+                payload[self.priority_selector.jira_field_key] = self.priority_selector.selection
 
-        if self.assignee_selector.update_enabled:
-            if work_item_assignee_has_changed(
-                self.work_item.assignee, self.assignee_selector.selection
-            ):
-                payload['assignee_account_id'] = self.assignee_selector.selection
+        if self.assignee_selector.update_enabled and work_item_assignee_has_changed(
+            self.work_item.assignee, self.assignee_selector.selection
+        ):
+            payload['assignee_account_id'] = self.assignee_selector.selection
 
         if self.work_item_labels_widget.update_enabled:
             if self.work_item_labels_widget.value_has_changed:
@@ -2858,7 +2857,7 @@ class WorkItemFields(Container, can_focus=False):
             if not payload and not work_item_requires_transition:
                 return
 
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             work_item_updated_successfully = False
             work_item_transitioned_successfully = False
             if payload:
@@ -3099,7 +3098,7 @@ class WorkItemFields(Container, can_focus=False):
         current_assignee: JiraUser | None = None,
         field_is_editable: bool | None = None,
     ) -> None:
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
 
         response: APIControllerResponse = (
             await application.api.search_users_assignable_to_work_item(work_item_key=work_item_key)
@@ -3126,7 +3125,7 @@ class WorkItemFields(Container, can_focus=False):
         current_status_name: str | None = None,
         current_status_id: str | None = None,
     ) -> None:
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.transitions(work_item_key)
 
         if not response.success or not response.result or not response.result:
@@ -3898,7 +3897,7 @@ class WorkItemFields(Container, can_focus=False):
         # Yield once so newly mounted dynamic widgets can complete their compose cycle.
         await asyncio.sleep(0)
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         user_picker_widgets = self.dynamic_fields_widgets_container.query(UserPicker)
 
         if not user_picker_widgets:
@@ -4412,7 +4411,7 @@ class WorkItemFields(Container, can_focus=False):
     ) -> None:
 
         try:
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             sprints_response = await application.api.get_sprints_for_project(project_key)
 
             if not self.work_item or self.work_item.key != work_item_key:

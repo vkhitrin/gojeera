@@ -167,7 +167,7 @@ def replace_media_with_text(
 
         filename = attrs.get('alt') or default_filename
         attachment_url = None
-        if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):
+        if media_details := resolved_media_attachment_details.get(attrs.get('id', '')):  # noqa: SIM114
             filename, attachment_url = media_details
         elif media_details := resolved_media_attachment_details.get(filename):
             filename, attachment_url = media_details
@@ -761,7 +761,10 @@ def replace_date_with_colored_text(adf: dict) -> dict:
                 if timestamp_ms:
                     try:
                         timestamp_s = int(timestamp_ms) / 1000
-                        date_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d')
+                        # Preserve the existing local-time rendering contract for ADF dates.
+                        date_str = datetime.fromtimestamp(timestamp_s).strftime(  # noqa: DTZ006
+                            '%Y-%m-%d'
+                        )
                         new_content.append(
                             _text_node_with_marks(
                                 node,

@@ -44,7 +44,7 @@ from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFM
 from gojeera.widgets.navigation.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.selection.lazy_select import LazySelect
 from gojeera.widgets.selection.multi_select import MultiSelect
-from gojeera.widgets.selection.user_picker import UserPicker as UserPicker
+from gojeera.widgets.selection.user_picker import UserPicker
 from gojeera.widgets.work_item.work_item_labels import WorkItemLabels
 
 logger = logging.getLogger('gojeera')
@@ -328,6 +328,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         return len(pending_fields) == 0
 
     def _get_pending_dynamic_fields(self) -> list[str]:
+        from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
         from gojeera.widgets.inputs.date_input import DateInput
         from gojeera.widgets.inputs.date_time_input import DateTimeInput
         from gojeera.widgets.inputs.numeric_input import NumericInput
@@ -337,7 +338,6 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         from gojeera.widgets.selection.selection import SelectionWidget
         from gojeera.widgets.selection.user_picker import UserPicker
         from gojeera.widgets.work_item.work_item_labels import WorkItemLabels
-        from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
 
         pending_fields = []
 
@@ -583,9 +583,11 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             if hasattr(wrapper, 'widget') and wrapper.widget:
                 widget = wrapper.widget
 
-                if isinstance(widget, (Select, Input, TextArea)):
-                    set_jump_mode(widget, 'focus')
-                elif hasattr(widget, 'can_focus') and widget.can_focus:
+                if (
+                    isinstance(widget, (Select, Input, TextArea))
+                    or hasattr(widget, 'can_focus')
+                    and widget.can_focus
+                ):
                     set_jump_mode(widget, 'focus')
 
     def _populate_project_selector(
@@ -626,7 +628,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     pass
                 return
 
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             response = await application.api.search_projects()
 
             if response.success and response.result:
@@ -693,7 +695,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     self._apply_single_available_subtask_type(types_list, project_key)
                     return
 
-                application = cast('JiraApp', self.app)  # noqa: F821
+                application = cast('JiraApp', self.app)
                 response = await application.api.get_work_item_types_for_project(project_key)
 
                 if response.success and response.result:
@@ -721,7 +723,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                     self.work_item_type_selector._stop_spinner()
             except Exception as e:
                 self.notify(
-                    f'Error fetching work item types: {str(e)}',
+                    f'Error fetching work item types: {e!s}',
                     severity='error',
                     title='Create Work Item',
                 )
@@ -794,7 +796,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
 
         if not worker.is_cancelled:
             try:
-                application = cast('JiraApp', self.app)  # noqa: F821
+                application = cast('JiraApp', self.app)
                 cached_users = await run_cache_io(
                     lambda: self._cache.get_project_users(project_key)
                 )
@@ -852,7 +854,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
                         pass
             except Exception as e:
                 self.notify(
-                    f'Error fetching users: {str(e)}', severity='error', title='Create Work Item'
+                    f'Error fetching users: {e!s}', severity='error', title='Create Work Item'
                 )
                 stop_user_spinners()
         else:
@@ -976,7 +978,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
             if isinstance(response, Exception):
                 self.dynamic_fields_container.loading = False
                 self.notify(
-                    f'Error fetching metadata: {str(response)}',
+                    f'Error fetching metadata: {response!s}',
                     severity='error',
                     title='Create Work Item',
                 )
@@ -1386,7 +1388,7 @@ class AddWorkItemScreen(DescriptionActionsMixin, DynamicModalScreen[dict[str, ob
         try:
             description_widget = self.description_field
         except Exception:
-            logger.error('Failed to get Description widget', exc_info=True)
+            logger.exception('Failed to get Description widget')
             return
 
         await insert_user_mention(

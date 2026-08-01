@@ -702,13 +702,14 @@ __OVERFLOW_SCROLLBAR_CSS__
         )
 
     def action_open_work_item_in_browser(self) -> None:
-        if self.current_work_item_key:
-            if url := build_external_url_for_work_item(
+        if self.current_work_item_key and (
+            url := build_external_url_for_work_item(
                 self.current_work_item_key,
                 cast('JiraApp', self.app),
-            ):
-                self.notify('Opening Work Item in the browser...', title='Search Results')
-                self.app.open_url(url)
+            )
+        ):
+            self.notify('Opening Work Item in the browser...', title='Search Results')
+            self.app.open_url(url)
 
     def action_clone_work_item(self) -> None:
         if not self.current_work_item_key:
@@ -726,13 +727,14 @@ __OVERFLOW_SCROLLBAR_CSS__
             self.notify('Key copied to clipboard', title=self.current_work_item_key)
 
     def action_copy_work_item_url(self) -> None:
-        if self.current_work_item_key:
-            if url := build_external_url_for_work_item(
+        if self.current_work_item_key and (
+            url := build_external_url_for_work_item(
                 self.current_work_item_key,
                 cast('JiraApp', self.app),
-            ):
-                self.app.copy_to_clipboard(url)
-                self.notify('URL copied to clipboard', title=self.current_work_item_key)
+            )
+        ):
+            self.app.copy_to_clipboard(url)
+            self.notify('URL copied to clipboard', title=self.current_work_item_key)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         del parameters

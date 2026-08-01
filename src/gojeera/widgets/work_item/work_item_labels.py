@@ -83,11 +83,10 @@ class WorkItemLabels(MultiSelect):
     def _show_remote_suggestions(self) -> None:
         try:
             self._refresh_autocomplete_visibility()
-        except Exception as e:
+        except Exception:
             logger.exception(
-                'labels suggestions dropdown failed field_id=%s error=%s',
+                'labels suggestions dropdown failed field_id=%s',
                 self.field_id,
-                e,
             )
 
     async def _fetch_label_suggestions_for_query(self, query: str) -> None:
@@ -147,10 +146,8 @@ class WorkItemLabels(MultiSelect):
                         self._name_to_id[suggestion] = suggestion
                         self._id_to_name[suggestion] = suggestion
                 self.call_after_refresh(self._show_remote_suggestions)
-        except Exception as e:
-            logger.exception(
-                'labels suggestions failed field_id=%s query=%r error=%s', self.field_id, query, e
-            )
+        except Exception:
+            logger.exception('labels suggestions failed field_id=%s query=%r', self.field_id, query)
 
     async def set_labels(self, labels: list[str]) -> None:
         options = [(label, label) for label in labels]

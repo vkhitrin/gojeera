@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rich.align import Align
 from rich.text import Text
-
 from textual import events
 from textual.binding import Binding
 from textual.command import Command, CommandInput, CommandList, CommandPalette
@@ -152,7 +151,7 @@ class ExtendedPalette(CommandPalette):
             command_list = self.query_one(CommandList)
             if (
                 command_list.option_count
-                and not command_list.get_option_at_index(0).id == self._NO_MATCHES
+                and command_list.get_option_at_index(0).id != self._NO_MATCHES
             ):
                 event.prevent_default()
                 event.stop()

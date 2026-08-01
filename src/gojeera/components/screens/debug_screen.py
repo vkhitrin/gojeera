@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING, cast
 
 from textual import events, work
@@ -52,7 +53,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     def __init__(
         self,
         name: str | None = None,
-        id: str | None = None,  # noqa: A002
+        id: str | None = None,
     ):
         super().__init__(name, id)
         self._loading_sections: set[str] = set()
@@ -291,7 +292,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     @work(exclusive=False)
     async def _fetch_server_info(self) -> None:
         try:
-            app = cast('JiraApp', self.app)  # noqa: F821
+            app = cast('JiraApp', self.app)
 
             server_info: JiraServerInfo | None = app.atlassian_context.server_info
 
@@ -336,7 +337,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     @work(exclusive=False)
     async def _fetch_user_info(self) -> None:
         try:
-            app = cast('JiraApp', self.app)  # noqa: F821
+            app = cast('JiraApp', self.app)
 
             user_info: JiraMyselfInfo | None = app.atlassian_context.user_info
 
@@ -376,7 +377,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
     @work(exclusive=False)
     async def _fetch_global_settings(self) -> None:
         try:
-            app = cast('JiraApp', self.app)  # noqa: F821
+            app = cast('JiraApp', self.app)
 
             jira_global_settings: JiraGlobalSettings | None = app.atlassian_context.global_settings
 
@@ -446,7 +447,7 @@ class DebugInfoScreen(ExtendedModalScreen[None]):
 
             current_active = self.tabs.active
             tab_ids = [pane.id for pane in tab_panes if pane.id]
-            for left_id, right_id in zip(tab_ids, tab_ids[1:], strict=False):
+            for left_id, right_id in itertools.pairwise(tab_ids):
                 active_id, target_id = (left_id, right_id) if direction > 0 else (right_id, left_id)
                 if active_id == current_active:
                     self.tabs.active = target_id

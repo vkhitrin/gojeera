@@ -9,7 +9,7 @@ class WorkItemKeyInput(ExtendedInput):
     """Input widget for entering a Jira work item key."""
 
     class Activated(Message):
-        def __init__(self, input_widget: 'WorkItemKeyInput') -> None:
+        def __init__(self, input_widget: WorkItemKeyInput) -> None:
             self.input_widget = input_widget
             super().__init__()
 

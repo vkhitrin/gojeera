@@ -2,7 +2,7 @@ from importlib import resources
 import sqlite3
 
 from gojeera.internal.store import migrations
-from gojeera.internal.store.cache import ApplicationCache, MIGRATION_SUFFIX, PROFILE_CACHE_TABLES
+from gojeera.internal.store.cache import MIGRATION_SUFFIX, PROFILE_CACHE_TABLES, ApplicationCache
 
 
 def test_sqlite_cache_migrations_apply_successfully(tmp_path):

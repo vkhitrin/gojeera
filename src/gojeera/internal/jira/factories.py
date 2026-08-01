@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date
 import logging
 from typing import Any
 
@@ -6,8 +6,8 @@ from dateutil.parser import isoparse
 
 from gojeera.internal.models.jira import (
     Attachment,
-    JiraSprint,
     JiraProject,
+    JiraSprint,
     JiraUser,
     JiraWorkItemComponent,
     JiraWorkItemGenericFields,
@@ -226,9 +226,7 @@ class WorkItemFactory:
             attachments=attachments,
             sprint=sprint,
             edit_meta=data.get('editmeta', {}),
-            due_date=datetime.strptime(
-                str(fields.get(JiraWorkItemGenericFields.DUE_DATE.value)), '%Y-%m-%d'
-            ).date()
+            due_date=date.fromisoformat(str(fields.get(JiraWorkItemGenericFields.DUE_DATE.value)))
             if fields.get(JiraWorkItemGenericFields.DUE_DATE.value)
             else None,
             custom_fields=custom_fields_values,

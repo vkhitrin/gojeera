@@ -92,7 +92,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
             return
         link_url, link_title = extracted_link_fields
 
-        screen = cast('JiraApp', self.app)  # noqa: F821
+        screen = cast('JiraApp', self.app)
         response: APIControllerResponse = await screen.api.create_work_item_remote_link(
             self.work_item_key,
             link_url,
@@ -171,7 +171,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                 return
             link_url, link_title = extracted_link_fields
 
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             response: APIControllerResponse = await application.api.update_work_item_remote_link(
                 self._work_item_key,
                 link_id,
@@ -229,7 +229,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
             self.notify('No link selected', severity='error')
             return
 
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.delete_work_item_remote_link(
             self._work_item_key, resolved_link_id
         )
@@ -246,15 +246,14 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
             ]
 
     async def fetch_remote_links(self, work_item_key: str) -> None:
-        screen = cast('JiraApp', self.app)  # noqa: F821
+        screen = cast('JiraApp', self.app)
         response: APIControllerResponse = await screen.api.get_work_item_remote_links(work_item_key)
-        if work_item_key:
-            if not response.success:
-                self.notify(
-                    'Unable to retrieve the remote links associated to the work item.',
-                    severity='warning',
-                    title=work_item_key,
-                )
+        if work_item_key and not response.success:
+            self.notify(
+                'Unable to retrieve the remote links associated to the work item.',
+                severity='warning',
+                title=work_item_key,
+            )
         if not response.success:
             if work_item_key:
                 self.notify(

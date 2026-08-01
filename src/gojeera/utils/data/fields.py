@@ -224,9 +224,7 @@ class ValidationUtils:
             return True
         if value == '':
             return True
-        if value.strip() == '':
-            return True
-        return False
+        return value.strip() == ''
 
     @staticmethod
     def values_differ(original: Any, current: Any, ignore_whitespace: bool = True) -> bool:

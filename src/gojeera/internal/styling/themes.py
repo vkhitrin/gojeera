@@ -1,7 +1,8 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
 import logging
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from pydantic import TypeAdapter
 from textual.theme import Theme
@@ -72,7 +73,7 @@ def create_themes_from_config(
                 themes.append(create_theme_from_config(config))
         except Exception as e:
             theme_name = config.name if isinstance(config, Theme) else config.get('name', 'unknown')
-            raise ValueError(f"Invalid theme configuration for '{theme_name}': {str(e)}") from e
+            raise ValueError(f"Invalid theme configuration for '{theme_name}': {e!s}") from e
 
     return themes
 
@@ -105,8 +106,8 @@ def load_themes_from_directory(themes_directory: Path) -> list[Theme]:
         except yaml.YAMLError as e:
             raise ValueError(f'Invalid theme file "{yaml_file.name}": failed to parse YAML') from e
         except ValueError as e:
-            raise ValueError(f'Invalid theme file "{yaml_file.name}": {str(e)}') from e
+            raise ValueError(f'Invalid theme file "{yaml_file.name}": {e!s}') from e
         except Exception as e:
-            raise ValueError(f'Invalid theme file "{yaml_file.name}": {str(e)}') from e
+            raise ValueError(f'Invalid theme file "{yaml_file.name}": {e!s}') from e
 
     return themes

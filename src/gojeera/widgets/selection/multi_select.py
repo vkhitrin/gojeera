@@ -1,6 +1,7 @@
+from collections.abc import Sequence
 import logging
 import textwrap
-from typing import Any, Sequence, cast
+from typing import Any, cast
 
 from rich.segment import Segment
 from rich.style import Style as RichStyle

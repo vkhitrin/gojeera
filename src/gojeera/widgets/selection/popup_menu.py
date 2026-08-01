@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from rich.text import Text
 from textual import events
@@ -53,7 +53,7 @@ class PopupMenuItemWidget(Static):
         super().__init__('', id=f'popup-menu-item-{item.id}')
 
     @property
-    def menu(self) -> 'PopupMenu | None':
+    def menu(self) -> PopupMenu | None:
         return self.parent if isinstance(self.parent, PopupMenu) else None
 
     def render(self) -> Text:
@@ -137,24 +137,24 @@ class PopupMenu(Static, can_focus=True):
     class Selected(Message):
         """Posted when an option is selected."""
 
-        def __init__(self, menu: 'PopupMenu', item: PopupMenuItem) -> None:
+        def __init__(self, menu: PopupMenu, item: PopupMenuItem) -> None:
             self.menu = menu
             self.item = item
             super().__init__()
 
         @property
-        def control(self) -> 'PopupMenu':
+        def control(self) -> PopupMenu:
             return self.menu
 
     class Dismissed(Message):
         """Posted when the popup should be dismissed."""
 
-        def __init__(self, menu: 'PopupMenu') -> None:
+        def __init__(self, menu: PopupMenu) -> None:
             self.menu = menu
             super().__init__()
 
         @property
-        def control(self) -> 'PopupMenu':
+        def control(self) -> PopupMenu:
             return self.menu
 
     def __init__(

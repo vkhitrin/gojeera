@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from textual.widgets import Static
 from textual.widgets._select import SelectCurrent, SelectOverlay

@@ -21,7 +21,7 @@ async def insert_user_mention(
     cache: ApplicationCache | None = None,
 ) -> None:
     if TYPE_CHECKING:
-        app = cast('JiraApp', app)  # noqa: F821
+        app = cast('JiraApp', app)
 
     if cache is None:
         cache = get_cache()

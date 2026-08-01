@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 from httpx import Response
@@ -327,8 +327,8 @@ async def open_comments_tab_and_hover_attachment_tooltip(pilot):
                 display_name='Rook Hydra',
                 email='rook.hydra@acme.example.com',
             ),
-            created=datetime(2026, 2, 5, 11, 23),
-            updated=datetime(2026, 2, 5, 11, 23),
+            created=datetime(2026, 2, 5, 11, 23, tzinfo=timezone.utc),
+            updated=datetime(2026, 2, 5, 11, 23, tzinfo=timezone.utc),
             body=_adf_doc(
                 {
                     'type': 'paragraph',

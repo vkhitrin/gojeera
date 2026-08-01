@@ -39,7 +39,7 @@ class ExtendedTable(DataTable):
             return row_style
 
         row_key = self._row_locations.get_key(row_index)
-        if row_key in self._row_styles:
+        if row_key is not None and row_key in self._row_styles:
             return row_style + self._row_styles[row_key]
 
         return row_style

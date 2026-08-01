@@ -12,13 +12,13 @@ from typing import Any, TypeVar
 
 from gojeera.internal.models.jira import (
     JiraBoard,
+    JiraField,
     JiraFilter,
     JiraFilterDict,
-    JiraField,
+    JiraProject,
     JiraProjectFeature,
     JiraSprint,
     JiraUser,
-    JiraProject,
     WorkItemStatus,
     WorkItemType,
 )
@@ -167,9 +167,12 @@ class ApplicationCache:
             self._connection.commit()
             applied_migrations = self._get_applied_migrations()
             migration_files = sorted(
-                migration
-                for migration in resources.files(migrations).iterdir()
-                if migration.name.endswith(MIGRATION_SUFFIX)
+                (
+                    migration
+                    for migration in resources.files(migrations).iterdir()
+                    if migration.name.endswith(MIGRATION_SUFFIX)
+                ),
+                key=lambda migration: migration.name,
             )
             for migration in migration_files:
                 migration_id = migration.name.removesuffix(MIGRATION_SUFFIX)

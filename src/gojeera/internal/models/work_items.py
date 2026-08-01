@@ -6,10 +6,10 @@ from gojeera.internal.models.base import BaseModel
 from gojeera.internal.models.jira import (
     Attachment,
     JiraBaseWorkItem,
+    JiraProject,
     JiraSprint,
     JiraUser,
     JiraWorkItemComponent,
-    JiraProject,
     TimeTracking,
     WorkItemPriority,
     WorkItemStatus,
@@ -172,11 +172,12 @@ class JiraWorkItem(JiraBaseWorkItem):
     is_watching: bool | None = None
 
     def cleaned_summary(self, max_length: int | None = None) -> str:
-        if max_length is not None:
-            if (stripped_summary := self.summary.strip()) and len(
-                stripped_summary
-            ) > max_length - 3:
-                return f'{stripped_summary[: max_length - 3]}...'
+        if (
+            max_length is not None
+            and (stripped_summary := self.summary.strip())
+            and len(stripped_summary) > max_length - 3
+        ):
+            return f'{stripped_summary[: max_length - 3]}...'
         return self.summary.strip()
 
     def display_status(self) -> str:

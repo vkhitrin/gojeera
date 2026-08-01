@@ -78,19 +78,21 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
-            with VerticalScroll(
-                id='add-remote-link-form',
-                classes='modal-form modal-form--fields tab-scroll-surface--persistent',
+            with (
+                VerticalScroll(
+                    id='add-remote-link-form',
+                    classes='modal-form modal-form--fields tab-scroll-surface--persistent',
+                ),
+                Vertical(),
             ):
-                with Vertical():
-                    url_label = Label('URL')
-                    url_label.add_class('field_label')
-                    yield url_label
-                    yield RemoteLinkURLInputWidget()
-                    title_label = Label('Title')
-                    title_label.add_class('field_label')
-                    yield title_label
-                    yield RemoteLinkNameInputWidget()
+                url_label = Label('URL')
+                url_label.add_class('field_label')
+                yield url_label
+                yield RemoteLinkURLInputWidget()
+                title_label = Label('Title')
+                title_label.add_class('field_label')
+                yield title_label
+                yield RemoteLinkNameInputWidget()
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield build_modal_confirm_button(
                     Button, button_id='add-remote-link-button-save', disabled=True

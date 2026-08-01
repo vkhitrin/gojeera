@@ -114,7 +114,7 @@ __OVERFLOW_SCROLLBAR_CSS__
             self.index = index
 
         @property
-        def control(self) -> 'RecordList':
+        def control(self) -> RecordList:
             return cast('RecordList', self._sender)
 
     class RowHighlighted(_RowMessage):

@@ -114,7 +114,7 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
         self.call_after_refresh(lambda: focus_first_available(self.worklog_list_view))
 
     async def _handle_worklog_update(self, data: dict) -> None:
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         worklog_id = data.get('worklog_id')
 
         if not worklog_id:
@@ -149,7 +149,7 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
             )
 
     async def _handle_worklog_deletion(self, work_item_key: str, worklog_id: str) -> None:
-        application = cast('JiraApp', self.app)  # noqa: F821
+        application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.remove_worklog(
             work_item_key, worklog_id
         )
@@ -191,7 +191,7 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
                 return
             self.is_loading = True
         try:
-            application = cast('JiraApp', self.app)  # noqa: F821
+            application = cast('JiraApp', self.app)
             response: APIControllerResponse = await application.api.get_work_item_worklog(
                 self._work_item_key, offset=offset, limit=self.PAGE_SIZE
             )
@@ -231,7 +231,7 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
 
                     url = build_external_url_for_work_item(
                         self._work_item_key,
-                        cast('JiraApp', self.app),  # noqa: F821
+                        cast('JiraApp', self.app),
                         focused_work_log_id=worklog.id,
                     )
 

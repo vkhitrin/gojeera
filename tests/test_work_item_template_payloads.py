@@ -13,9 +13,9 @@ from gojeera.internal.jira.factories import WorkItemFactory
 from gojeera.internal.models.jira import WorkItemType
 from gojeera.utils import work_item_templates
 from gojeera.utils.work_item_templates import (
-    WorkItemTemplatePayloadError,
     WORK_ITEM_TEMPLATE_COPY_SKIP_FIELDS,
     WORK_ITEM_TEMPLATE_COPY_SKIP_VALUE_KEYS,
+    WorkItemTemplatePayloadError,
     dump_work_item_template,
     prepare_work_item_template_payload,
 )

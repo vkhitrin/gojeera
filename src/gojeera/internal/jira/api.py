@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import date, datetime
 from io import BufferedReader, BytesIO
@@ -9,26 +10,26 @@ import logging
 from pathlib import Path
 import re
 import sys
-from typing import TYPE_CHECKING, Any, Awaitable, BinaryIO, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, TypeVar, cast
 
 # https://darren.codes/posts/python-startup-time/
 sys.modules['httpx._main'] = cast(Any, None)
-import httpx  # noqa: E402
-import magic  # noqa: E402
+import httpx
+import magic
 
-from gojeera.internal.jira.client import (  # noqa: E402
+from gojeera.internal.jira.client import (
     AsyncHTTPClient,
     AsyncJiraClient,
     GraphQLClient,
     JiraClient,
 )
-from gojeera.internal.models.exceptions import (  # noqa: E402
+from gojeera.internal.models.exceptions import (
     FileUploadException,
     ServiceInvalidRequestException,
     ServiceInvalidResponseException,
 )
-from gojeera.internal.store.cache import get_cache, run_cache_io  # noqa: E402
-from gojeera.utils.jira.graphql import (  # noqa: E402
+from gojeera.internal.store.cache import get_cache, run_cache_io
+from gojeera.utils.jira.graphql import (
     GRAPHQL_PROJECT_BY_KEY_QUERY,
     GRAPHQL_PROJECT_PULL_REQUEST_MAX_PAGES,
     GRAPHQL_PROJECT_PULL_REQUEST_PAGE_SIZE,
@@ -40,8 +41,8 @@ from gojeera.utils.jira.graphql import (  # noqa: E402
     GRAPHQL_WORK_ITEM_PULL_REQUESTS_OAUTH_ERROR,
     GRAPHQL_WORK_ITEM_PULL_REQUESTS_QUERY,
 )
-from gojeera.utils.jira.jql import build_work_item_search_jql  # noqa: E402
-from gojeera.utils.system.logging_utils import build_log_extra  # noqa: E402
+from gojeera.utils.jira.jql import build_work_item_search_jql
+from gojeera.utils.system.logging_utils import build_log_extra
 
 if TYPE_CHECKING:
     from gojeera.internal.store.config import ApplicationConfiguration, JiraAuthContext
@@ -162,7 +163,7 @@ class JiraAPI:
         return self._base_url
 
     @property
-    def auth(self) -> 'JiraAuthContext':
+    def auth(self) -> JiraAuthContext:
         return self._auth
 
     @property
@@ -909,7 +910,6 @@ class JiraAPI:
             work_item_id_or_key,
             link_id=link_id,
         )
-        return None
 
     async def update_work_item_remote_link(
         self, work_item_id_or_key: str, link_id: str, url: str, title: str
@@ -1529,7 +1529,6 @@ class JiraAPI:
             method=httpx.AsyncClient.delete,
             url=f'issue/{work_item_id_or_key}/comment/{comment_id}',
         )
-        return None
 
     async def work_item_edit_metadata(self, work_item_id_or_key: str) -> dict:
         """Retrieves the edit screen fields for a work item that are visible to and editable by the user.
@@ -1683,7 +1682,6 @@ class JiraAPI:
             url=f'issue/{work_item_id_or_key}/transitions',
             data=json.dumps(payload),
         )
-        return None
 
     async def create_work_item_link(
         self,
@@ -1720,7 +1718,6 @@ class JiraAPI:
             url='issueLink',
             data=json.dumps(payload),
         )
-        return None
 
     async def work_item_link_types(self) -> dict:
         """Retrieves a list of all work item link types.
@@ -1734,7 +1731,6 @@ class JiraAPI:
 
     async def delete_work_item_link(self, link_id: str) -> None:
         await self._client.make_request(method=httpx.AsyncClient.delete, url=f'issueLink/{link_id}')
-        return None
 
     async def get_work_item_create_meta(
         self,
@@ -1824,7 +1820,6 @@ class JiraAPI:
         await self._client.make_request(
             method=httpx.AsyncClient.delete, url=f'attachment/{attachment_id}'
         )
-        return None
 
     async def get_attachment_content(self, attachment_id: str) -> Any:
         """Retrieves the contents of an attachment.
@@ -2106,9 +2101,9 @@ class JiraAPI:
                 return []
 
             self.logger.warning(
-                'Failed to fetch sprints for board %s',
+                'Failed to fetch sprints for board %s: %s',
                 board_id,
-                exc_info=True,
+                error,
             )
             return []
 

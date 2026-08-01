@@ -1,10 +1,9 @@
-from textual.theme import Theme
 import pytest
-
-from tests.config_test_helpers import write_custom_theme_config
+from textual.theme import Theme
 
 from gojeera.internal.store.config import ApplicationConfiguration
 from gojeera.internal.styling.themes import create_theme_from_config, load_themes_from_directory
+from tests.config_test_helpers import write_custom_theme_config
 
 
 def test_custom_theme_uses_textual_theme_types(monkeypatch, tmp_path):
@@ -49,14 +48,7 @@ def test_create_theme_from_config_rejects_unexpected_field():
 def test_load_themes_from_directory_raises_for_invalid_theme_file(tmp_path):
     themes_dir = tmp_path / 'themes'
     themes_dir.mkdir()
-    (themes_dir / 'broken.yaml').write_text(
-        '\n'.join(
-            [
-                'naaame: "custom"',
-                'primary: "#ffffff"',
-            ]
-        )
-    )
+    (themes_dir / 'broken.yaml').write_text('naaame: "custom"\nprimary: "#ffffff"')
 
     with pytest.raises(ValueError, match='Invalid theme file "broken.yaml"'):
         load_themes_from_directory(themes_dir)

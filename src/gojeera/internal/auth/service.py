@@ -15,9 +15,9 @@ from gojeera.internal.auth.profiles import (
 )
 from gojeera.internal.store.secret import (
     get_jira_api_token,
-    get_jira_oauth2_credentials,
     get_jira_oauth2_client_id,
     get_jira_oauth2_client_secret,
+    get_jira_oauth2_credentials,
     set_jira_oauth2_refresh_token,
 )
 
@@ -224,10 +224,9 @@ class AuthService:
             payload = {}
 
         error_message = 'authentication failed'
-        if isinstance(payload, dict):
-            if error_messages := payload.get('errorMessages'):
-                if isinstance(error_messages, list) and error_messages:
-                    error_message = str(error_messages[0])
+        if isinstance(payload, dict) and (error_messages := payload.get('errorMessages')):
+            if isinstance(error_messages, list) and error_messages:
+                error_message = str(error_messages[0])
 
         return AuthValidationResult(False, f'{response.status_code}: {error_message}')
 

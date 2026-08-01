@@ -34,12 +34,12 @@ dependencies = [
     "atlas-doc-parser>=1.0.1",
     "click==8.3.0",
     "defusedxml>=0.7.1",
-    "gitpython>=3.1.52",
+    "gitpython>=3.1.57",
     "httpx>=0.28.1",
     "humanize>=4.16.0",
     "keyring>=25.7.0",
     "mdit-py-plugins>=0.6.1",
-    "prompt-toolkit>=3.0.52",
+    "prompt-toolkit>=3.0.53",
     "pydantic-settings[yaml]>=2.14.2",
     "python-dateutil>=2.9.0.post0",
     "python-json-logger>=4.1.0",
@@ -60,13 +60,13 @@ Issues = "https://github.com/vkhitrin/gojeera/issues"
 
 [dependency-groups]
 debug = [
-    "pyinstrument>=5.1.2",
+    "pyinstrument>=5.1.3",
     "pytest-profiling>=1.8.1",
 ]
 dev = [
     "textual-dev>=1.8.0",
-    "ruff>=0.15.22",
-    "ty>=0.0.61",
+    "ruff>=0.16.1",
+    "ty>=0.0.65",
     "vulture>=2.16",
     "deadcode>=2.4.1",
 ]
@@ -129,7 +129,19 @@ respect-gitignore = true
 target-version = "py310"
 
 [tool.ruff.lint]
-ignore = ["E501"]
+ignore = [
+    # Gojeera contains deliberate application and UI recovery boundaries.
+    "BLE001",
+    "S110",
+    "S112",
+    # Line length is enforced by the formatter where practical.
+    "E501",
+    # Textual declares mutable framework configuration on widget classes.
+    "RUF012",
+    # Nested conditions and contexts mirror business flow and widget hierarchy.
+    "SIM102",
+    "SIM117",
+]
 fixable = ["ALL"]
 
 [tool.ruff.lint.isort]

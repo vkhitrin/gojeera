@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from textual.widgets import TextArea
 
@@ -34,7 +35,7 @@ async def insert_picker_markup_from_getter(
     try:
         textarea = get_textarea()
     except Exception:
-        logger.error('Failed to get %s', error_context, exc_info=True)
+        logger.exception('Failed to get %s', error_context)
         return
 
     await insert_picker_markup(

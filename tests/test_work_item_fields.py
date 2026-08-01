@@ -13,9 +13,9 @@ from gojeera.components.work_item.work_item_fields import (
     UNFLAGGED_GLYPH,
     WorkItemFields,
 )
-from gojeera.internal.jira.work_item_permissions import VIEW_WATCHERS_PERMISSIONS
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.jira.factories import WorkItemFactory
+from gojeera.internal.jira.work_item_permissions import VIEW_WATCHERS_PERMISSIONS
 from gojeera.widgets.button_with_metadata import ButtonWithMetadata
 
 from .test_helpers import (

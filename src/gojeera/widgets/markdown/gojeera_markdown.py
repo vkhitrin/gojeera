@@ -1,9 +1,10 @@
 import asyncio
+from collections.abc import Callable, Iterable
 from functools import lru_cache
 from inspect import isawaitable
 import logging
 import re
-from typing import TYPE_CHECKING, Callable, Iterable, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 from urllib.parse import unquote, urlparse
 
 from markdown_it import MarkdownIt
@@ -1080,7 +1081,7 @@ class GojeeraMarkdown(Markdown):
         markdown: str | None = None,
         *,
         name: str | None = None,
-        id: str | None = None,  # noqa: A002
+        id: str | None = None,
         classes: str | None = None,
         parser_factory: Callable[[], MarkdownIt] | None = None,
         open_links: bool = True,

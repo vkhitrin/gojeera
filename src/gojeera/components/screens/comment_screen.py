@@ -98,7 +98,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
             'edit-comment-button-quit' if self.mode == 'edit' else 'add-comment-button-quit'
         )
 
-        save_disabled = False if self.mode == 'edit' else True
+        save_disabled = self.mode != 'edit'
 
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
@@ -270,7 +270,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
     @on(TextArea.Changed, '#comment-textarea')
     def validate_comment(self, _event: TextArea.Changed):
         value = self.comment_field.text
-        self.save_button.disabled = False if (value and value.strip()) else True
+        self.save_button.disabled = not (value and value.strip())
 
     @on(Select.Changed, '#comment-visibility-select')
     def handle_comment_visibility_changed(self, event: Select.Changed) -> None:

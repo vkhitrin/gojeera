@@ -794,7 +794,7 @@ class UnifiedSearchBar(Container):
                 self._users_fetched_for_project = project_key
                 self.assignee_selector._stop_spinner()
             except Exception as e:
-                self.notify(f'Error fetching users: {str(e)}', severity='error', title='Search')
+                self.notify(f'Error fetching users: {e!s}', severity='error', title='Search')
                 self.assignee_selector._stop_spinner()
         else:
             self.assignee_selector._stop_spinner()
@@ -854,9 +854,7 @@ class UnifiedSearchBar(Container):
                     )
                     self.type_selector._stop_spinner()
             except Exception as e:
-                self.notify(
-                    f'Error fetching issue types: {str(e)}', severity='error', title='Search'
-                )
+                self.notify(f'Error fetching issue types: {e!s}', severity='error', title='Search')
                 self.type_selector._stop_spinner()
         else:
             self.type_selector._stop_spinner()
@@ -913,7 +911,7 @@ class UnifiedSearchBar(Container):
                     else:
                         self._handle_status_fetch_failure(response.error)
             except Exception as e:
-                self.notify(f'Error fetching statuses: {str(e)}', severity='error', title='Search')
+                self.notify(f'Error fetching statuses: {e!s}', severity='error', title='Search')
                 self.status_selector._stop_spinner()
         else:
             self.status_selector._stop_spinner()

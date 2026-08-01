@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import copy
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import pytest
 from textual.widgets import Button, Input
@@ -15,10 +15,6 @@ from gojeera.internal.store.cache import get_cache
 from gojeera.widgets.selection.vim_select import VimSelect
 
 from .test_helpers import choose_select_option, wait_for_mount, wait_until
-
-if TYPE_CHECKING:
-    from gojeera.app import JiraApp
-
 
 SORTABLE_PRIORITY_RANK = {
     'Lowest': 0,

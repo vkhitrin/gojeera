@@ -1,5 +1,6 @@
+from collections.abc import Callable
 import logging
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalGroup
@@ -811,10 +812,7 @@ def map_field_to_widget(
         elif custom_type == CustomFieldType.LABELS.value:
             return builder.build_labels(mode, metadata, current_value)
 
-        elif custom_type == CustomFieldType.MULTI_CHECKBOXES.value:
-            return builder.build_multicheckboxes(mode, metadata, current_value)
-
-        elif custom_type in (
+        elif custom_type == CustomFieldType.MULTI_CHECKBOXES.value or custom_type in (
             CustomFieldType.MULTI_SELECT.value,
             CustomFieldType.SD_CUSTOMER_ORGANIZATIONS.value,
         ):

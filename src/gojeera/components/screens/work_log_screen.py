@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import re
 
@@ -159,7 +159,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
                 yield build_modal_confirm_button(
                     Button,
                     button_id='log-work-button-save',
-                    disabled=False if self._mode == 'edit' else True,
+                    disabled=self._mode != 'edit',
                 )
                 yield build_modal_cancel_button(Button, button_id='log-work-button-quit')
         yield ExtendedFooter()
@@ -248,7 +248,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
             self.save_button.disabled = True
         else:
             try:
-                datetime.strptime(event.value, '%Y-%m-%d %H:%M')
+                datetime.strptime(event.value, '%Y-%m-%d %H:%M').replace(tzinfo=timezone.utc)
 
                 self._toggle_widgets(
                     time_spent_value=self.time_spent_input.value,
@@ -267,9 +267,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
             return False
         if not (cleaned_value := value.strip()):
             return False
-        if re.match(r'^\d+[wdhm](\s\d+[wdhm])*$', cleaned_value, re.IGNORECASE):
-            return True
-        return False
+        return bool(re.match(r'^\d+[wdhm](\s\d+[wdhm])*$', cleaned_value, re.IGNORECASE))
 
     def _toggle_widgets(
         self,

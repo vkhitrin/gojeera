@@ -122,9 +122,8 @@ class ExtendedJumper(Jumper):
         if not widget.region:
             return False
 
-        if isinstance(widget, ListView):
-            if len(widget) == 0:
-                return False
+        if isinstance(widget, ListView) and len(widget) == 0:
+            return False
 
         current = widget
         while current is not None:

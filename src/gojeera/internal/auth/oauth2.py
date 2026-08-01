@@ -179,7 +179,7 @@ def get_atlassian_accessible_resources(
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, list):
-        raise ValueError('Atlassian accessible resources response must be a list.')
+        raise TypeError('Atlassian accessible resources response must be a list.')
 
     resources: list[AtlassianAccessibleResource] = []
     for item in payload:
@@ -248,7 +248,7 @@ def wait_for_atlassian_oauth2_callback(
     error_queue: Queue[str] = Queue()
 
     class CallbackHandler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             parsed_request = urlparse(self.path)
             if parsed_request.path != path:
                 self.send_response(404)
@@ -273,9 +273,8 @@ def wait_for_atlassian_oauth2_callback(
             result_queue.put((str(code), str(state)))
             self._write_response('Authentication completed. You can close this window.')
 
-        def log_message(self, format: str, *args) -> None:  # noqa: A002
+        def log_message(self, format: str, *args) -> None:
             del format, args
-            return
 
         def _write_response(self, body: str) -> None:
             response = body.encode('utf-8')
@@ -327,7 +326,7 @@ def _post_token_request(
     response.raise_for_status()
     response_payload = response.json()
     if not isinstance(response_payload, dict):
-        raise ValueError('Atlassian token response must be a JSON object.')
+        raise TypeError('Atlassian token response must be a JSON object.')
 
     expires_in = (
         response_payload.get('expires_in')

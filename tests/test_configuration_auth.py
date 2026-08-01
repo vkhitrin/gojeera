@@ -1,9 +1,8 @@
 from pydantic import SecretStr, ValidationError
 import pytest
 
-from tests.config_test_helpers import write_config_and_set_basic_auth, write_custom_theme_config
-
 from gojeera.internal.store.config import ApplicationConfiguration
+from tests.config_test_helpers import write_config_and_set_basic_auth, write_custom_theme_config
 
 OAUTH2_PROFILE_ID = 'cloud-123:account-123'
 
@@ -120,14 +119,7 @@ def test_yaml_jira_authentication_is_ignored(monkeypatch, tmp_path):
     config_file = tmp_path / 'gojeera.yaml'
     monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
     config_file.write_text(
-        '\n'.join(
-            [
-                'jira:',
-                '  api_email: "yaml@example.com"',
-                '  api_token: "yaml-token"',
-                '  api_base_url: "https://yaml.example.atlassian.net"',
-            ]
-        )
+        'jira:\n  api_email: "yaml@example.com"\n  api_token: "yaml-token"\n  api_base_url: "https://yaml.example.atlassian.net"'
     )
     monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(config_file))
     monkeypatch.delenv('GOJEERA_JIRA__API_EMAIL', raising=False)

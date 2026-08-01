@@ -1,4 +1,5 @@
 from textual.reactive import Reactive, reactive
+
 from gojeera.utils.data.fields import optional_selection_value_has_changed
 from gojeera.widgets.selection.vim_select import VimSelect
 

@@ -1,10 +1,10 @@
-# ruff: noqa: E402
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Callable, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 # https://darren.codes/posts/python-startup-time/
 sys.modules['httpx._main'] = cast(Any, None)
@@ -631,10 +631,9 @@ class AsyncJiraClient(JSONResponseMixin, AsyncHTTPClient):
             )
         except Exception as e:
             self.logger.exception(
-                'label_suggest unexpected_error url=%s query=%r error=%s',
+                'label_suggest unexpected_error url=%s query=%r',
                 full_url,
                 query,
-                e,
             )
             self.logger.error(f'Failed to get label suggestions: {e}')
             return None

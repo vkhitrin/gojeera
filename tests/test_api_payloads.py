@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import httpx
 
-from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.jira.api import JiraAPI
+from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.jira.factories import WorkItemFactory, build_comments
 from gojeera.internal.models.jira import JiraField, WorkItemWatchers
 from gojeera.internal.models.work_items import WorkItemComment

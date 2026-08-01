@@ -1,6 +1,5 @@
 from datetime import date
 
-
 FLAGGED_FIELD_NAME = 'Flagged[Checkboxes]'
 FLAGGED_FIELD_VALUE = 'Impediment'
 

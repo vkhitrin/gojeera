@@ -11,6 +11,9 @@ from textual.widgets import ContentSwitcher, TabbedContent, TabPane
 from textual.widgets._tabbed_content import ContentTab, ContentTabs, Tab
 from textual.widgets._tabs import Underline
 
+from gojeera.utils.ui.focus import focus_first_available
+from gojeera.utils.ui.runtime import request_bindings_refresh
+
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
@@ -195,10 +198,13 @@ class ExtendedTabbedContent(TabbedContent):
             self._tab_base_labels[tab_id] = self._label_text(self.get_tab(tab_id).label)
         return self._tab_base_labels[tab_id]
 
-    def set_tab_badge(self, tab_id: str, badge: int | None) -> None:
+    def set_tab_badge(self, tab_id: str, badge: int | str | None) -> None:
         tab = self.get_tab(tab_id)
         base_label = self._tab_base_label(tab_id)
-        if badge is not None and badge > 0:
+        show_badge = (isinstance(badge, int) and badge > 0) or (
+            isinstance(badge, str) and bool(badge)
+        )
+        if show_badge:
             tab.add_class('-badged')
             tab.label = f'{base_label}[bold $text-primary] {badge} [/]'
         else:
@@ -238,10 +244,13 @@ class ExtendedTabbedContent(TabbedContent):
         self._sync_external_content(active)
 
     def on_focus(self) -> None:
-        self.screen.refresh_bindings()
+        self._request_bindings_refresh()
 
     def on_descendant_focus(self) -> None:
-        self.screen.refresh_bindings()
+        self._request_bindings_refresh()
+
+    def _request_bindings_refresh(self) -> None:
+        request_bindings_refresh(self)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         del parameters
@@ -345,6 +354,17 @@ class ExtendedTabbedContent(TabbedContent):
             return self.information_panel.get_active_pane()
         except Exception:
             return active_pane
+
+    def focus_active_content_or_tabs(self) -> None:
+        """Focus visible content after a keyboard-driven tab change."""
+        active_pane = self._active_focus_pane()
+        candidates = list(active_pane.walk_children()) if active_pane else []
+        focus_first_available(*candidates, self.tabs_widget)
+
+    def activate_from_content(self, tab_id: str) -> None:
+        """Activate a tab and hand focus from the previous content to the new content."""
+        self.active = tab_id
+        self.call_after_refresh(self.focus_active_content_or_tabs)
 
     def action_focus_content(self) -> None:
         focused = self.screen.focused

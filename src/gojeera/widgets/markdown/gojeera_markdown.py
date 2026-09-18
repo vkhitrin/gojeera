@@ -316,7 +316,12 @@ class WorkItemLinkTooltipProvider:
         self._loading: set[str] = set()
 
     def get_cached(self, work_item_key: str) -> Text | None:
-        tooltip_data = self._cache.get(work_item_key)
+        api = getattr(self.markdown.app, 'api', None)
+        shared_cache_getter = getattr(type(api), 'get_cached_work_item_tooltip', None)
+        if api is not None and callable(shared_cache_getter):
+            tooltip_data = shared_cache_getter(api, work_item_key)
+        else:
+            tooltip_data = self._cache.get(work_item_key)
         if tooltip_data is None:
             return None
 
@@ -347,7 +352,17 @@ class WorkItemLinkTooltipProvider:
             summary = getattr(work_item, 'summary', '') or work_item_key
             work_item_type = getattr(work_item, 'work_item_type_name', '') or 'Work Item'
             status = getattr(getattr(work_item, 'status', None), 'name', '') or 'Unknown'
-            self._cache[work_item_key] = (work_item_type, summary, status)
+            shared_cache_setter = getattr(type(api), 'cache_work_item_tooltip', None)
+            if api is not None and callable(shared_cache_setter):
+                shared_cache_setter(
+                    api,
+                    work_item_key,
+                    work_item_type,
+                    summary,
+                    status,
+                )
+            else:
+                self._cache[work_item_key] = (work_item_type, summary, status)
             return build_work_item_tooltip(work_item_type, summary, status)
         finally:
             self._loading.discard(work_item_key)

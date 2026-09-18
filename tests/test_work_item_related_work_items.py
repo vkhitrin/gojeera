@@ -1,6 +1,11 @@
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
+from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.models.jira import WorkItemStatus, WorkItemType
+from gojeera.internal.models.work_items import JiraWorkItem, JiraWorkItemSearchResponse
 
 from .test_helpers import (
     accept_confirmation,
@@ -16,6 +21,57 @@ from .test_helpers import (
 async def open_related_widget(pilot):
     await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=3)
     return pilot.app.screen.query_one(RelatedWorkItemsWidget)
+
+
+async def test_created_related_item_survives_stale_follow_up_fetch(monkeypatch) -> None:
+    monkeypatch.setattr(RelatedWorkItemsWidget, 'watch_work_items', lambda self, items: None)
+    widget = RelatedWorkItemsWidget()
+    linked_item = JiraWorkItem(
+        id='8',
+        key='ENG-8',
+        summary='Linked item',
+        status=WorkItemStatus(id='1', name='Open'),
+        work_item_type=WorkItemType(id='10001', name='Task'),
+    )
+    stale_parent = JiraWorkItem(
+        id='3',
+        key='ENG-3',
+        summary='Parent item',
+        status=WorkItemStatus(id='1', name='Open'),
+        work_item_type=WorkItemType(id='10001', name='Task'),
+        related_work_items=[],
+    )
+    link_work_items = AsyncMock(return_value=APIControllerResponse())
+    get_work_item = AsyncMock(
+        return_value=APIControllerResponse(
+            result=JiraWorkItemSearchResponse(work_items=[stale_parent])
+        )
+    )
+    fake_app = SimpleNamespace(
+        api=SimpleNamespace(
+            link_work_items=link_work_items,
+            get_work_item=get_work_item,
+        )
+    )
+    monkeypatch.setattr(
+        RelatedWorkItemsWidget,
+        'app',
+        property(lambda self: fake_app),
+    )
+    monkeypatch.setattr(widget, 'notify', Mock())
+    widget.work_item_key = 'ENG-3'
+
+    await widget.link_work_items(
+        {
+            'right_work_item_key': 'ENG-8',
+            'right_work_item': linked_item,
+            'link_type': 'outward',
+            'link_type_id': '10000',
+            'link_type_name': 'blocks',
+        }
+    )
+
+    assert [(item.key, item.link_type) for item in widget.work_items or []] == [('ENG-8', 'blocks')]
 
 
 async def prepare_related_widget(pilot):

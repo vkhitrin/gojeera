@@ -5,18 +5,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Label, Static
 
-from gojeera.widgets.inputs.extended_input import ExtendedInput
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
+from gojeera.widgets.layout import modal_components
 from gojeera.widgets.navigation.jumper_file_picker import ExtendedFileOpen
 
 
-class FilePathInput(ExtendedInput):
+class FilePathInput(modal_components.ExtendedInput):
     def __init__(self, *, placeholder: str, initial_value: str = ''):
         super().__init__(
             value=initial_value,
@@ -28,7 +21,7 @@ class FilePathInput(ExtendedInput):
         self.disabled = True
 
 
-class AttachmentPathModalScreen(ExtendedModalScreen[str]):
+class AttachmentPathModalScreen(modal_components.ExtendedModalScreen[str]):
     """Shared modal for selecting a file path for attachment workflows."""
 
     def __init__(
@@ -82,7 +75,7 @@ class AttachmentPathModalScreen(ExtendedModalScreen[str]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with modal_components.VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id=self._form_id, classes='modal-form modal-form--tight'):
                 with Vertical(id='file-path-container', classes='modal-form-section'):
@@ -114,14 +107,16 @@ class AttachmentPathModalScreen(ExtendedModalScreen[str]):
                         )
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_components.build_modal_confirm_button(
                     Button,
                     button_id=self._save_button_id,
                     label=self._save_button_label,
                     disabled=self._selected_file is None,
                 )
-                yield build_modal_cancel_button(Button, button_id=self._cancel_button_id)
-        yield ExtendedFooter(show_command_palette=False)
+                yield modal_components.build_modal_cancel_button(
+                    Button, button_id=self._cancel_button_id
+                )
+        yield modal_components.ExtendedFooter(show_command_palette=False)
 
     def on_mount(self) -> None:
         if self._initial_path is not None:

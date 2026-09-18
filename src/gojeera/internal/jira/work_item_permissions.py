@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from collections import OrderedDict
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from time import monotonic
+from typing import TYPE_CHECKING
 
 from gojeera.internal.jira.controller import APIControllerResponse
 
@@ -18,6 +21,8 @@ VIEW_WATCHERS_PERMISSIONS = (
     BROWSE_PROJECTS_PERMISSION,
     VIEW_VOTERS_AND_WATCHERS_PERMISSION,
 )
+PERMISSION_CACHE_TTL_SECONDS = 300.0
+PERMISSION_CACHE_MAX_ENTRIES = 256
 
 MISSING_ADD_COMMENT_PERMISSION_ERROR_PREFIX = 'Missing required permission(s) to add comments:'
 
@@ -29,19 +34,19 @@ class WorkItemPermissionCache:
         self,
         *,
         app_getter: Callable[[], JiraApp],
-        run_worker: Callable[[], Callable[..., Any]],
-        is_mounted: Callable[[], bool],
-        group: str,
         on_loaded: Callable[[str, tuple[str, ...], APIControllerResponse | None], None]
         | None = None,
     ) -> None:
         self._app_getter = app_getter
-        self._run_worker = run_worker
-        self._is_mounted = is_mounted
-        self._group = group
         self._on_loaded = on_loaded
-        self._cache: dict[tuple[str, tuple[str, ...]], APIControllerResponse | None] = {}
-        self._workers: dict[tuple[str, tuple[str, ...]], Any] = {}
+        self._cache: OrderedDict[
+            tuple[str, tuple[str, ...]],
+            tuple[float, APIControllerResponse | None],
+        ] = OrderedDict()
+        self._inflight: dict[
+            tuple[str, tuple[str, ...]],
+            asyncio.Task[APIControllerResponse | None],
+        ] = {}
 
     @staticmethod
     def _cache_key(
@@ -55,35 +60,48 @@ class WorkItemPermissionCache:
         work_item_key: str,
         permissions: tuple[str, ...],
     ) -> APIControllerResponse | None:
-        return self._cache.get(self._cache_key(work_item_key, permissions))
+        found, response = self._cached_entry(self._cache_key(work_item_key, permissions))
+        return response if found else None
 
-    def start_load(
+    def _cached_entry(
         self,
-        work_item_key: str,
-        permissions: tuple[str, ...],
-        *,
-        action_name: str,
-        exclusive: bool = False,
+        cache_key: tuple[str, tuple[str, ...]],
+    ) -> tuple[bool, APIControllerResponse | None]:
+        cached = self._cache.get(cache_key)
+        if cached is None:
+            return False, None
+        expires_at, response = cached
+        if expires_at <= monotonic():
+            self._cache.pop(cache_key, None)
+            return False, None
+        self._cache.move_to_end(cache_key)
+        return True, response
+
+    def _store(
+        self,
+        cache_key: tuple[str, tuple[str, ...]],
+        response: APIControllerResponse | None,
     ) -> None:
-        cache_key = self._cache_key(work_item_key, permissions)
-        if cache_key in self._cache or not self._is_mounted():
-            return
-
-        worker = self._workers.get(cache_key)
-        if worker is not None and not worker.is_finished:
-            return
-
-        self._workers[cache_key] = self._run_worker()(
-            self.load(work_item_key, permissions, action_name=action_name),
-            exclusive=exclusive,
-            group=self._group,
-        )
+        self._cache[cache_key] = (monotonic() + PERMISSION_CACHE_TTL_SECONDS, response)
+        self._cache.move_to_end(cache_key)
+        while len(self._cache) > PERMISSION_CACHE_MAX_ENTRIES:
+            self._cache.popitem(last=False)
 
     async def load(
         self, work_item_key: str, permissions: tuple[str, ...], *, action_name: str
     ) -> APIControllerResponse | None:
         cache_key = self._cache_key(work_item_key, permissions)
-        return await self._load_uncached(cache_key, work_item_key, permissions, action_name)
+        task = self._inflight.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(
+                self._load_uncached(cache_key, work_item_key, permissions, action_name)
+            )
+            self._inflight[cache_key] = task
+        try:
+            return await task
+        finally:
+            if task.done() and self._inflight.get(cache_key) is task:
+                self._inflight.pop(cache_key, None)
 
     async def get(
         self,
@@ -93,12 +111,9 @@ class WorkItemPermissionCache:
         action_name: str,
     ) -> APIControllerResponse | None:
         cache_key = self._cache_key(work_item_key, permissions)
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
-        worker = self._workers.get(cache_key)
-        if worker is not None and not worker.is_finished:
-            return cast(APIControllerResponse | None, await worker.wait())
+        found, response = self._cached_entry(cache_key)
+        if found:
+            return response
 
         return await self.load(work_item_key, permissions, action_name=action_name)
 
@@ -109,8 +124,9 @@ class WorkItemPermissionCache:
         permissions: tuple[str, ...],
         action_name: str,
     ) -> APIControllerResponse | None:
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        found, cached_response = self._cached_entry(cache_key)
+        if found:
+            return cached_response
 
         app = self._app_getter()
         permission_response = await app.api.validate_work_item_permissions(
@@ -118,7 +134,7 @@ class WorkItemPermissionCache:
             list(permissions),
             action_name=action_name,
         )
-        self._cache[cache_key] = permission_response
+        self._store(cache_key, permission_response)
         if self._on_loaded is not None:
             self._on_loaded(work_item_key, permissions, permission_response)
         return permission_response

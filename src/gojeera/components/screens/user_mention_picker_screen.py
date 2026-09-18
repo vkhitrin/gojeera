@@ -4,17 +4,10 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Label, Select, Static
 
 from gojeera.internal.models.jira import JiraUser
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.layout import modal_components
 
 
-class UserMentionSelector(VimSelect):
+class UserMentionSelector(modal_components.VimSelect):
     """Custom VimSelect for user mention selection."""
 
     def __init__(self, items: list[tuple[str, tuple[str, str]]]):
@@ -28,7 +21,7 @@ class UserMentionSelector(VimSelect):
         self.valid_empty = False
 
 
-class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
+class UserMentionPickerScreen(modal_components.ExtendedModalScreen[tuple[str, str] | None]):
     """Modal screen for selecting a user to mention.
 
     Args:
@@ -38,7 +31,7 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
 
     BINDINGS = [
         ('ctrl+c', 'dismiss_screen_with_ctrl_c', 'Close'),
-        *ExtendedModalScreen.BINDINGS,
+        *modal_components.ExtendedModalScreen.BINDINGS,
     ]
 
     def action_dismiss_screen_with_ctrl_c(self) -> None:
@@ -65,7 +58,7 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
 
-        with VerticalSuppressClicks(id='modal_outer'):
+        with modal_components.VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='user-mention-form', classes='modal-form modal-form--fields'):
                 with Vertical():
@@ -80,15 +73,17 @@ class UserMentionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     yield UserMentionSelector(options)
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_components.build_modal_confirm_button(
                     Button,
                     button_id='user-mention-button-insert',
                     label='Insert',
                     disabled=True,
                 )
-                yield build_modal_cancel_button(Button, button_id='user-mention-button-quit')
+                yield modal_components.build_modal_cancel_button(
+                    Button, button_id='user-mention-button-quit'
+                )
 
-        yield ExtendedFooter(show_command_palette=False)
+        yield modal_components.ExtendedFooter(show_command_palette=False)
 
     def _format_user_display(self, user: JiraUser) -> str:
         """Format user for display in select dropdown.

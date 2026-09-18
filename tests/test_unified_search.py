@@ -1,7 +1,9 @@
 import asyncio
 from contextlib import asynccontextmanager
 import copy
+from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from textual.widgets import Button, Input
@@ -398,36 +400,73 @@ async def run_search_test(
         yield pilot
 
 
-@asynccontextmanager
-async def run_basic_sortable_search_test(
-    configuration,
-    user_info,
-    search_payload: dict,
+@pytest.fixture
+def search_test_runner(
+    mock_configuration,
+    mock_jira_api_with_search_results,
+    mock_user_info,
 ):
-    async with run_sortable_search_test(
-        configuration,
-        user_info,
-        search_payload=search_payload,
-        perform_basic_search=True,
-    ) as pilot:
+    del mock_jira_api_with_search_results
+
+    def run(*, perform_basic_search: bool = False):
+        return run_search_test(
+            mock_configuration,
+            mock_user_info,
+            perform_basic_search=perform_basic_search,
+        )
+
+    return run
+
+
+@pytest.fixture
+def sortable_search_runner(
+    mock_configuration,
+    mock_jira_api_with_search_results,
+    mock_jira_search_with_results,
+    mock_user_info,
+):
+    del mock_jira_api_with_search_results
+
+    def run(*, perform_basic_search: bool):
+        return run_sortable_search_test(
+            mock_configuration,
+            mock_user_info,
+            search_payload=mock_jira_search_with_results,
+            perform_basic_search=perform_basic_search,
+        )
+
+    return run
+
+
+@pytest.fixture
+def basic_sortable_search_runner(sortable_search_runner):
+    return lambda: sortable_search_runner(perform_basic_search=True)
+
+
+def _configure_empty_search_api(app: JiraApp) -> None:
+    cast(Any, app.api).prepare_work_item_search = AsyncMock(
+        return_value=APIControllerResponse(result={})
+    )
+    cast(Any, app.api).search_work_items = AsyncMock(
+        return_value=APIControllerResponse(
+            result=JiraWorkItemSearchResponse(work_items=[], is_last=True)
+        )
+    )
+
+
+@asynccontextmanager
+async def loaded_search_results(app: JiraApp, *, timeout: float):
+    async with app.run_test() as pilot:
+        await wait_for_mount(pilot)
+        await app.search_work_items(search_data={'mode': 'basic'})
+        await wait_until(lambda: app.search_results_container.results_loaded, timeout=timeout)
         yield pilot
 
 
 def with_basic_sortable_search_pilot():
     def decorator(test):
-        async def wrapper(
-            self,
-            mock_configuration,
-            mock_jira_api_with_search_results,
-            mock_jira_search_with_results,
-            mock_user_info,
-        ):
-            del mock_jira_api_with_search_results
-            async with run_basic_sortable_search_test(
-                mock_configuration,
-                mock_user_info,
-                mock_jira_search_with_results,
-            ) as pilot:
+        async def wrapper(self, basic_sortable_search_runner):
+            async with basic_sortable_search_runner() as pilot:
                 await test(self, pilot)
 
         return wrapper
@@ -442,6 +481,318 @@ def get_result_keys(app: JiraApp) -> list[str]:
 
 
 class TestUnifiedSearch:
+    @pytest.mark.asyncio
+    async def test_search_and_total_count_requests_run_concurrently(
+        self, mock_configuration, mock_jira_api_with_search_results, mock_user_info
+    ):
+        del mock_jira_api_with_search_results
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        started: set[str] = set()
+        both_started = asyncio.Event()
+        release_search = asyncio.Event()
+        release_count = asyncio.Event()
+        prepared_kwargs = {'jql_query': 'created >= -30d order by created DESC'}
+        prepare = AsyncMock(return_value=APIControllerResponse(result=prepared_kwargs))
+        cast(Any, app.api).prepare_work_item_search = prepare
+
+        async def mark_started(name: str) -> None:
+            started.add(name)
+            if len(started) == 2:
+                both_started.set()
+
+        async def search_work_items(**kwargs: Any) -> APIControllerResponse:
+            assert kwargs['prepared_search_kwargs'] is prepared_kwargs
+            await mark_started('search')
+            await release_search.wait()
+            return APIControllerResponse(
+                result=JiraWorkItemSearchResponse(work_items=[], is_last=True)
+            )
+
+        async def count_work_items(**kwargs: Any) -> APIControllerResponse:
+            assert kwargs['prepared_search_kwargs'] is prepared_kwargs
+            await mark_started('count')
+            await release_count.wait()
+            return APIControllerResponse(result=7)
+
+        cast(Any, app.api).search_work_items = search_work_items
+        cast(Any, app.api).count_work_items = count_work_items
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            request = asyncio.create_task(app._search_work_items(search_data={'mode': 'basic'}))
+            await asyncio.wait_for(both_started.wait(), timeout=1.0)
+            release_search.set()
+            result = await asyncio.wait_for(request, timeout=1.0)
+            count_task = app._pending_search_count_task
+            assert count_task is not None
+            assert not count_task.done()
+            release_count.set()
+            assert (await count_task).result == 7
+
+        assert started == {'search', 'count'}
+        assert result.total == 0
+        prepare.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_search_results_stop_loading_before_slow_count_finishes(
+        self, mock_configuration, search_results_app
+    ):
+        app = search_results_app
+        count_started = asyncio.Event()
+        release_count = asyncio.Event()
+        _configure_empty_search_api(app)
+
+        async def count_work_items(**kwargs: Any) -> APIControllerResponse:
+            del kwargs
+            count_started.set()
+            await release_count.wait()
+            return APIControllerResponse(result=77)
+
+        cast(Any, app.api).count_work_items = count_work_items
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            await app.search_work_items(search_data={'mode': 'basic'})
+            await asyncio.wait_for(count_started.wait(), timeout=1.0)
+
+            assert not app.search_results_container.is_loading
+            assert app.search_results_container.pagination == {
+                'total': 0,
+                'current_page_number': 1,
+            }
+
+            release_count.set()
+            await wait_until(
+                lambda: (app.search_results_container.pagination or {}).get('total') == 77,
+                timeout=1.0,
+            )
+            total_pages = app.search_results_list.total_pages
+
+        page_size = mock_configuration.search_results_per_page
+        assert total_pages == (77 + page_size - 1) // page_size
+
+    @pytest.mark.asyncio
+    async def test_repeated_search_recalculates_total_count(self, search_results_app):
+        app = search_results_app
+        _configure_empty_search_api(app)
+        count_work_items = AsyncMock(
+            side_effect=[
+                APIControllerResponse(result=7),
+                APIControllerResponse(result=0),
+            ]
+        )
+        cast(Any, app.api).count_work_items = count_work_items
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            search_data = app.unified_search_bar.get_search_data()
+            await app.search_work_items(search_data=search_data)
+            await wait_until(
+                lambda: (app.search_results_container.pagination or {}).get('total') == 7,
+                timeout=1.0,
+            )
+
+            await app.action_search()
+            await wait_until(
+                lambda: (
+                    count_work_items.await_count == 2
+                    and not app.search_results_container.is_loading
+                    and (app.search_results_container.pagination or {}).get('total') == 0
+                ),
+                timeout=1.0,
+            )
+
+            assert (app.search_results_container.pagination or {}).get('total') == 0
+            assert app.search_results_list.total_pages == 1
+
+    @pytest.mark.asyncio
+    async def test_initial_jql_search_is_validated_once_for_search_and_count(
+        self, search_results_app
+    ):
+        app = search_results_app
+        validation = AsyncMock(return_value=APIControllerResponse())
+        cast(Any, app.api).validate_jql_query = validation
+        cast(Any, app.api).search_work_items = AsyncMock(
+            return_value=APIControllerResponse(
+                result=JiraWorkItemSearchResponse(work_items=[], is_last=True)
+            )
+        )
+        cast(Any, app.api).count_work_items = AsyncMock(
+            return_value=APIControllerResponse(result=0)
+        )
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            await app._search_work_items(search_data={'mode': 'jql', 'jql': 'project = ENG'})
+
+        validation.assert_awaited_once_with('project = ENG')
+
+    @pytest.mark.asyncio
+    async def test_active_search_page_reuses_validation_and_total(
+        self,
+        monkeypatch,
+        search_results_app,
+    ):
+        app = search_results_app
+        validation = AsyncMock()
+        monkeypatch.setattr(app.api, 'validate_jql_query', validation)
+        search = AsyncMock(
+            return_value=SimpleNamespace(
+                response=JiraWorkItemSearchResponse(work_items=[], is_last=True),
+                total=0,
+            )
+        )
+        monkeypatch.setattr(app, '_search_work_items', search)
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            app._active_search_data = {'mode': 'jql', 'jql': 'project = ENG'}
+            app.search_results_list.total_pages = 4
+            app.search_results_container.pagination = {
+                'total': 77,
+                'current_page_number': 1,
+            }
+
+            await app.search_work_items(page=2, use_active_search=True)
+
+            total_pages = app.search_results_list.total_pages
+            pagination = app.search_results_container.pagination
+
+        validation.assert_not_awaited()
+        assert search.await_args is not None
+        assert search.await_args.kwargs['calculate_total'] is False
+        assert total_pages == 4
+        assert pagination == {
+            'total': 77,
+            'current_page_number': 2,
+        }
+
+    @pytest.mark.asyncio
+    async def test_active_search_page_retains_current_results_while_loading_and_on_failure(
+        self,
+        monkeypatch,
+        search_results_app,
+    ):
+        app = search_results_app
+        page_request_started = asyncio.Event()
+        release_page_request = asyncio.Event()
+
+        async def fail_page_request(**kwargs: Any):
+            del kwargs
+            page_request_started.set()
+            await release_page_request.wait()
+            return SimpleNamespace(response=None, total=0)
+
+        async with app.run_test() as pilot:
+            await wait_for_mount(pilot)
+            await app.search_work_items(search_data={'mode': 'basic'})
+            await wait_until(lambda: app.search_results_container.results_loaded, timeout=1.0)
+            existing_response = app.search_results_list.work_item_search_results
+            existing_rows = list(app.search_results_list.work_item_containers)
+            assert existing_response is not None
+            assert existing_rows
+
+            app._active_search_data = {'mode': 'basic'}
+            monkeypatch.setattr(app, '_search_work_items', fail_page_request)
+            request = asyncio.create_task(app.search_work_items(page=2, use_active_search=True))
+            await asyncio.wait_for(page_request_started.wait(), timeout=1.0)
+
+            assert app.search_results_container.is_loading
+            assert app.search_results_list.work_item_search_results is existing_response
+            assert app.search_results_list.work_item_containers == existing_rows
+            assert app.search_results_list.display
+
+            release_page_request.set()
+            await asyncio.wait_for(request, timeout=1.0)
+
+            assert app.search_results_list.work_item_search_results is existing_response
+            assert app.search_results_list.work_item_containers == existing_rows
+            assert app.search_results_list.display
+            assert not app.search_results_container.is_loading
+
+    @pytest.mark.asyncio
+    async def test_ctrl_j_search_focuses_results_after_render(
+        self,
+        search_results_app,
+    ):
+        app = search_results_app
+
+        async with loaded_search_results(app, timeout=3.0) as pilot:
+            app.unified_search_bar.unified_input.focus()
+            await pilot.pause()
+
+            await pilot.press('ctrl+j')
+            await wait_until(
+                lambda: (
+                    app.search_results_container.results_loaded
+                    and not app.search_results_container.is_loading
+                ),
+                timeout=3.0,
+            )
+
+            assert app.focused is app.search_results_list
+
+    def test_pending_search_render_ignores_unmounted_results(self):
+        complete_initial_render = Mock()
+        list_view = SimpleNamespace(
+            is_mounted=False,
+            is_pending_initial_render=True,
+            _complete_initial_render=complete_initial_render,
+        )
+
+        JiraApp._complete_pending_search_render(cast(Any, list_view))
+
+        complete_initial_render.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_page_key_navigation_restores_search_results_focus_after_render(
+        self,
+        monkeypatch,
+        mock_configuration,
+        search_results_app,
+    ):
+        app = search_results_app
+
+        async with loaded_search_results(app, timeout=1.0) as pilot:
+            search_results = app.search_results_list
+            existing_response = search_results.work_item_search_results
+            assert existing_response is not None
+
+            monkeypatch.setattr(
+                app,
+                '_search_work_items',
+                AsyncMock(return_value=SimpleNamespace(response=existing_response, total=0)),
+            )
+            app._active_search_data = {'mode': 'basic'}
+            search_results.total_pages = 2
+            search_results.token_by_page[2] = 'next-page-token'
+            app.search_results_container.pagination = {
+                'total': mock_configuration.search_results_per_page * 2,
+                'current_page_number': 1,
+            }
+            search_results.focus()
+            await pilot.pause()
+
+            await pilot.press('n')
+            await wait_until(
+                lambda: (
+                    search_results.page == 2
+                    and app.focused is search_results
+                    and not app.search_results_container.is_loading
+                ),
+                timeout=1.0,
+            )
+
+            await pilot.press('p')
+            await wait_until(
+                lambda: (
+                    search_results.page == 1
+                    and app.focused is search_results
+                    and not app.search_results_container.is_loading
+                ),
+                timeout=1.0,
+            )
+
     @pytest.mark.asyncio
     async def test_search_results_page_actions_do_not_overflow(
         self, mock_configuration, mock_jira_api_with_search_results, mock_user_info
@@ -641,12 +992,9 @@ class TestUnifiedSearch:
     @pytest.mark.asyncio
     async def test_search_button_stays_enabled_after_multiple_basic_searches(
         self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
+        search_test_runner,
     ):
-        del mock_jira_api_with_search_results
-        async with run_search_test(mock_configuration, mock_user_info) as pilot:
+        async with search_test_runner() as pilot:
             search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
             search_button = search_bar.query_one('#unified-search-button', Button)
             assert not search_button.disabled
@@ -663,16 +1011,9 @@ class TestUnifiedSearch:
     @pytest.mark.asyncio
     async def test_basic_search_then_text_mode_disables_empty_search(
         self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_user_info,
+        search_test_runner,
     ):
-        del mock_jira_api_with_search_results
-        async with run_search_test(
-            mock_configuration,
-            mock_user_info,
-            perform_basic_search=True,
-        ) as pilot:
+        async with search_test_runner(perform_basic_search=True) as pilot:
             search_bar = await switch_mode(pilot, 'text')
             search_button = search_bar.query_one('#unified-search-button', Button)
 
@@ -728,18 +1069,9 @@ class TestUnifiedSearch:
     @pytest.mark.asyncio
     async def test_text_search_sort_change_updates_to_latest_updated_issue(
         self,
-        mock_configuration,
-        mock_jira_api_with_search_results,
-        mock_jira_search_with_results,
-        mock_user_info,
+        sortable_search_runner,
     ):
-        del mock_jira_api_with_search_results
-        async with run_sortable_search_test(
-            mock_configuration,
-            mock_user_info,
-            search_payload=mock_jira_search_with_results,
-            perform_basic_search=False,
-        ) as pilot:
+        async with sortable_search_runner(perform_basic_search=False) as pilot:
             search_bar = await switch_mode(pilot, 'text')
             search_input = search_bar.query_one('#unified-search-input', Input)
             search_input.value = 'monster'

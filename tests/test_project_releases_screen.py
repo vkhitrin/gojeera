@@ -1,11 +1,19 @@
+import asyncio
+from typing import cast
+
 from httpx import Response
 import pytest
 import respx
 
 from gojeera.app import JiraApp
 from gojeera.components.screens.project_releases_screen import ProjectReleasesScreen
+from gojeera.internal.jira.controller import APIController, APIControllerResponse
+from gojeera.internal.models.jira import (
+    JiraProjectRelease,
+    JiraServerInfo,
+)
 
-from .test_helpers import wait_until
+from .test_helpers import jira_global_settings, wait_until
 
 
 @pytest.fixture
@@ -135,6 +143,82 @@ def assert_project_releases_snapshot(snap_compare, mock_configuration, mock_user
 
 
 class TestProjectReleasesScreen:
+    @pytest.mark.asyncio
+    async def test_releases_render_the_first_page_while_later_pages_load(
+        self,
+        mock_configuration,
+        mock_user_info,
+    ):
+        first_release = JiraProjectRelease(
+            id='release-1',
+            name='First release',
+            release_date='2026-08-01',
+        )
+        second_release = JiraProjectRelease(
+            id='release-2',
+            name='Second release',
+            release_date='2026-08-08',
+        )
+        first_page_published = asyncio.Event()
+        release_second_page = asyncio.Event()
+
+        class StreamingProjectReleasesAPI:
+            async def server_info(self) -> APIControllerResponse:
+                server_info = JiraServerInfo(
+                    base_url='https://example.atlassian.acme.net',
+                    version='1001.0.0',
+                    build_number=1001,
+                    build_date='2026-06-24T00:00:00.000+0000',
+                    server_title='Example Jira',
+                )
+                return APIControllerResponse(result=server_info)
+
+            async def global_settings(self) -> APIControllerResponse:
+                return APIControllerResponse(result=jira_global_settings())
+
+            async def get_project_releases(
+                self,
+                project_key: str,
+                *,
+                status=None,
+                order_by=None,
+                on_page=None,
+            ) -> APIControllerResponse:
+                assert project_key == 'ENG'
+                assert status == 'unreleased'
+                assert order_by == 'releaseDate'
+                assert on_page is not None
+                on_page([first_release])
+                first_page_published.set()
+                await release_second_page.wait()
+                on_page([first_release, second_release])
+                return APIControllerResponse(result=[first_release, second_release])
+
+            async def close(self) -> None:
+                pass
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        app.api = cast(APIController, StreamingProjectReleasesAPI())
+
+        async with app.run_test():
+            await app.push_screen(ProjectReleasesScreen('ENG'))
+            await asyncio.wait_for(first_page_published.wait(), timeout=1)
+            screen = app.screen
+            assert isinstance(screen, ProjectReleasesScreen)
+            await wait_until(lambda: len(screen._rendered_releases) == 1, timeout=3.0)
+
+            assert screen._rendered_releases[0] is first_release
+            assert not screen.releases_scroll.loading
+            assert screen.loading_label.display
+
+            release_second_page.set()
+            await wait_until(lambda: len(screen._rendered_releases) == 2, timeout=3.0)
+            await wait_until(lambda: not screen.loading_label.display, timeout=3.0)
+            assert [release.id for release in screen._rendered_releases] == [
+                'release-2',
+                'release-1',
+            ]
+
     def test_project_releases_screen_initial_state(
         self, snap_compare, mock_configuration, mock_jira_api_with_project_releases, mock_user_info
     ):

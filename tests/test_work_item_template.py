@@ -8,11 +8,15 @@ import yaml
 from gojeera.app import JiraApp
 from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 from gojeera.components.screens.work_item_template_screen import WorkItemTemplatePickerScreen
-from gojeera.components.search.unified_search import UnifiedSearchBar
 from gojeera.widgets.search.work_item_search_results_scroll import WorkItemSearchResultsScroll
 from gojeera.widgets.selection.popup_menu import PopupMenu
 
-from .test_helpers import wait_for_mount, wait_for_worker_idle, wait_until
+from .test_helpers import (
+    expand_create_work_item_menu,
+    wait_for_mount,
+    wait_for_worker_idle,
+    wait_until,
+)
 
 FIXTURES_DIR = Path(__file__).parent / 'fixtures'
 TEMPLATE = yaml.safe_load((FIXTURES_DIR / 'work_item_template_bug.yaml').read_text())
@@ -52,21 +56,7 @@ def assert_template_snapshot(
 
 
 async def open_create_work_item_menu(pilot) -> None:
-    await wait_for_mount(pilot)
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    search_bar.create_work_item_button.press()
-    await wait_until(
-        lambda: (
-            pilot.app.screen.query_one('#unified-search-new-work-item-menu', PopupMenu).expanded
-        ),
-        timeout=3.0,
-    )
-    await wait_until(
-        lambda: (
-            pilot.app.screen.query_one('#unified-search-new-work-item-menu', PopupMenu).has_focus
-        ),
-        timeout=3.0,
-    )
+    await expand_create_work_item_menu(pilot, wait_for_focus=True)
 
 
 async def select_create_work_item_menu_entry(pilot, *, from_template: bool = False) -> None:

@@ -18,6 +18,7 @@ from textual.app import App
 from textual.pilot import Pilot
 from textual.widgets import Input, TextArea
 
+from gojeera.app import JiraApp
 from gojeera.internal.auth.profiles import BasicAuthProfile
 from gojeera.internal.models.jira import (
     JiraField,
@@ -31,6 +32,22 @@ from gojeera.internal.models.jira import (
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration, JiraConfig
 
 pytest_textual_snapshot.SVGImageExtension.file_extension = 'svg'
+
+
+@pytest.fixture
+def jira_app(mock_configuration, mock_jira_api_sync, mock_user_info) -> JiraApp:
+    del mock_jira_api_sync
+    return JiraApp(settings=mock_configuration, user_info=mock_user_info)
+
+
+@pytest.fixture
+def search_results_app(
+    mock_configuration,
+    mock_jira_api_with_search_results,
+    mock_user_info,
+) -> JiraApp:
+    del mock_jira_api_with_search_results
+    return JiraApp(settings=mock_configuration, user_info=mock_user_info)
 
 
 @pytest.fixture(autouse=True)
@@ -2660,13 +2677,13 @@ async def mock_jira_api_with_create_work_item(
 ):
     async with respx.mock:
         mock_eng_create_work_item_setup(
-            mock_jira_server_info,
-            mock_jira_myself,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_statuses,
-            mock_jira_users,
-            mock_engineering_createmeta_fields,
+            mock_jira_server_info=mock_jira_server_info,
+            mock_jira_myself=mock_jira_myself,
+            mock_jira_projects=mock_jira_projects,
+            mock_jira_issue_types=mock_jira_issue_types,
+            mock_jira_statuses=mock_jira_statuses,
+            mock_jira_users=mock_jira_users,
+            mock_engineering_createmeta_fields=mock_engineering_createmeta_fields,
         )
         mock_fields_endpoints(mock_jira_fields, mock_jira_fields_search)
         respx.get(
@@ -2800,9 +2817,9 @@ async def mock_jira_api_with_related_work_item_link(
         mock_add_comment_permissions_allowed()
         search_results = mock_search_results_agile_context_args['mock_jira_search_with_results']
 
-        # Mock GET work item endpoint with updated issuelinks field for ENG-3
-        # This MUST be registered BEFORE the general loop below to take priority
-        # The application uses 'issuelinks' as the field name in the query
+        # Mock the post-link refresh that requests only the updated issuelinks field.
+        # Initial work-item loads also include issuelinks in a larger field list, so
+        # this route must match the exact single-field query.
         eng_3_with_new_link = get_issue_by_key(search_results['issues'], 'ENG-3')
         eng_8_issue = get_issue_by_key(search_results['issues'], 'ENG-8')
         blocks_type = copy.deepcopy(mock_jira_work_item_link_types['issueLinkTypes'][0])
@@ -2826,7 +2843,10 @@ async def mock_jira_api_with_related_work_item_link(
             }
         )
         respx.get(
-            url__regex=r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-3.*issuelinks'
+            url__regex=(
+                r'https://example\.atlassian\.acme\.net/rest/api/3/issue/ENG-3\?'
+                r'(?:expand=editmeta&fields=issuelinks|fields=issuelinks&expand=editmeta)$'
+            )
         ).mock(
             return_value=Response(
                 200,
@@ -3176,14 +3196,17 @@ async def mock_jira_api_with_sprints(
 ):
     """Mock Jira API with sprint selection enabled."""
     async with respx.mock:
+        setup_args = {
+            'mock_jira_server_info': mock_jira_server_info,
+            'mock_jira_myself': mock_jira_myself,
+            'mock_jira_projects': mock_jira_projects,
+            'mock_jira_issue_types': mock_jira_issue_types,
+            'mock_jira_statuses': mock_jira_statuses,
+            'mock_jira_users': mock_jira_users,
+            'mock_engineering_createmeta_fields': mock_engineering_createmeta_fields,
+        }
         mock_eng_create_work_item_setup(
-            mock_jira_server_info,
-            mock_jira_myself,
-            mock_jira_projects,
-            mock_jira_issue_types,
-            mock_jira_statuses,
-            mock_jira_users,
-            mock_engineering_createmeta_fields,
+            **setup_args,
             mock_jira_engineering_agile_boards=mock_jira_engineering_agile_boards,
             mock_jira_engineering_agile_sprints=mock_jira_engineering_agile_sprints,
         )

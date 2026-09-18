@@ -22,14 +22,16 @@ from gojeera.utils.work_item_templates import (
     load_work_item_template,
     prepare_work_item_template_payload,
 )
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
+from gojeera.widgets.layout.modal_components import (
+    ExtendedFooter,
+    ExtendedModalScreen,
+    VimSelect,
     build_modal_cancel_button,
     build_modal_confirm_button,
 )
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.layout.modal_components import (
+    VerticalSuppressClicks as TemplatePickerForm,
+)
 
 TEMPLATE_METADATA_PLACEHOLDER = 'Details will be shown once a template has been selected'
 
@@ -60,33 +62,6 @@ class WorkItemTemplatePickerScreen(ExtendedModalScreen[tuple[str, WorkItemTempla
 
     is_submitting: reactive[bool] = reactive(False)
     templates_loaded: reactive[bool] = reactive(False)
-
-    DEFAULT_CSS = (
-        ExtendedModalScreen.DEFAULT_CSS
-        + """
-    WorkItemTemplatePickerScreen #modal_outer {
-        width: 80;
-        height: auto;
-        max-height: 80%;
-    }
-
-    WorkItemTemplatePickerScreen #template-field {
-        height: auto;
-        padding: 0 2 1 2;
-    }
-
-    WorkItemTemplatePickerScreen #template-selector {
-        width: 100%;
-    }
-
-    WorkItemTemplatePickerScreen #template-metadata {
-        height: auto;
-        margin: 0;
-        padding: 0;
-        color: $text-muted;
-    }
-    """
-    )
 
     def __init__(
         self,
@@ -178,7 +153,7 @@ class WorkItemTemplatePickerScreen(ExtendedModalScreen[tuple[str, WorkItemTempla
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
 
-        with VerticalSuppressClicks(id='modal_outer'):
+        with TemplatePickerForm(id='modal_outer'):
             yield Label('Work Item Templates', id='modal_title')
             with VerticalScroll(id='modal-form-scroll', classes='modal-form modal-form--fields'):
                 with Vertical(id='template-field'):

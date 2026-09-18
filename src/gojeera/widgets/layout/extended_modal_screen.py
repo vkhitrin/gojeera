@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
 
 from textual import events, on
@@ -25,6 +26,7 @@ T = TypeVar('T')
 class ExtendedModalScreen(ModalScreen[T], Generic[T]):
     """Modal screen with global overlay bindings that remain available in modals."""
 
+    CSS_PATH = Path(__file__).resolve().parents[2] / 'internal/styling/deferred_screens.tcss'
     ENABLE_CTRL_S_POSITIVE_BUTTON = True
 
     DEFAULT_CSS = """

@@ -18,7 +18,14 @@ from textual.widgets import Input
 from textual_autocomplete._autocomplete import AutoCompleteList
 from textual_tags import Tag, TagAutoComplete, TagInput, Tags
 
-from gojeera.utils.data.fields import BaseField, FieldMode, require_create_mode, require_update_mode
+from gojeera.utils.data.fields import (
+    BaseField,
+    require_create_mode,
+    require_update_mode,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as MultiSelectFieldMode,
+)
 from gojeera.widgets.selection.dropdown_positioning import constrain_dropdown_offset
 
 logger = logging.getLogger('gojeera')
@@ -355,7 +362,7 @@ class MultiSelect(Tags, BaseField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: MultiSelectFieldMode,
         field_id: str,
         options: list[tuple[str, str]],
         title: str | None = None,
@@ -369,7 +376,9 @@ class MultiSelect(Tags, BaseField):
         self.field_id = field_id
         self.jira_field_key = field_id
         self.title = title or field_id
-        self._supports_update = field_supports_update if mode == FieldMode.UPDATE else True
+        self._supports_update = (
+            field_supports_update if mode == MultiSelectFieldMode.UPDATE else True
+        )
         self._suspend_tag_selection_messages = False
         self._suspend_change_events = False
         self._is_hydrating = False
@@ -381,17 +390,17 @@ class MultiSelect(Tags, BaseField):
         self._id_to_name = {value_id: name for name, value_id in options}
         self._name_to_id = dict(options)
 
-        if mode == FieldMode.UPDATE and original_value:
+        if mode == MultiSelectFieldMode.UPDATE and original_value:
             self._original_value = list(original_value)
         else:
             self._original_value = None
 
         selected_tag_names = []
-        if mode == FieldMode.UPDATE and original_value:
+        if mode == MultiSelectFieldMode.UPDATE and original_value:
             selected_tag_names = [
                 self._id_to_name.get(value_id, value_id) for value_id in original_value
             ]
-        elif mode == FieldMode.CREATE and initial_value:
+        elif mode == MultiSelectFieldMode.CREATE and initial_value:
             selected_tag_names = [
                 self._id_to_name.get(value_id, value_id) for value_id in initial_value
             ]
@@ -405,7 +414,7 @@ class MultiSelect(Tags, BaseField):
             start_with_tags_selected=False,
             allow_new_tags=allow_new_tags,
             id=field_id,
-            disabled=mode == FieldMode.UPDATE and not field_supports_update,
+            disabled=mode == MultiSelectFieldMode.UPDATE and not field_supports_update,
         )
 
         # textual-tags uses mutable reactive defaults; set per-instance storage directly,
@@ -422,7 +431,7 @@ class MultiSelect(Tags, BaseField):
 
         self._initially_selected_tags = selected_tag_names
 
-        if self.mode == FieldMode.CREATE:
+        if self.mode == MultiSelectFieldMode.CREATE:
             self.add_class('surface-input-tags')
 
         if required:
@@ -469,7 +478,10 @@ class MultiSelect(Tags, BaseField):
         return any(option not in self.selected_tags for option in self._all_option_names)
 
     def _sync_dropdown_arrow_visibility(self) -> None:
-        self.multi_select_tag_input.set_class(not self._has_remaining_options(), '-hide-arrow')
+        tag_input = self.multi_select_tag_input
+        hide_arrow = not self._has_remaining_options()
+        if tag_input.has_class('-hide-arrow') != hide_arrow:
+            tag_input.set_class(hide_arrow, '-hide-arrow')
 
     def _sync_tag_input_display(self) -> None:
         if not self.is_attached:
@@ -553,6 +565,20 @@ class MultiSelect(Tags, BaseField):
 
             self.call_later(trigger_validation)
 
+    async def _replace_selected_tag_widgets(self, values: Sequence[str]) -> None:
+        await self.remove_children(Tag)
+        tags = [ExtendedTag(value) for value in values]
+        for tag in tags:
+            tag.show_x = self.show_x
+        if tags:
+            await self.mount(*tags, before=f'#{self.field_id}_input_tag')
+
+        selected_tags = self._ensure_safe_selected_tags()
+        selected_tags.clear()
+        selected_tags.update(values)
+        self.mutate_reactive(Tags.selected_tags)
+        self._sync_dropdown_arrow_visibility()
+
     def _on_tag_removed(self, event: Tag.Removed):
         """
         Override parent's _on_tag_removed to use discard instead of remove.
@@ -607,9 +633,12 @@ class MultiSelect(Tags, BaseField):
         if hasattr(self, '_initially_selected_tags'):
             self._suspend_tag_selection_messages = True
             try:
-                for tag_name in self._initially_selected_tags:
-                    if tag_name in self._all_option_names:
-                        await self.add_new_tag(tag_name)
+                selected_tags = [
+                    tag_name
+                    for tag_name in self._initially_selected_tags
+                    if tag_name in self._all_option_names
+                ]
+                await self._replace_selected_tag_widgets(selected_tags)
             finally:
                 self._suspend_tag_selection_messages = False
 
@@ -801,13 +830,7 @@ class MultiSelect(Tags, BaseField):
             self._supports_update = field_supports_update
             self.disabled = not field_supports_update
 
-            self.selected_tags.clear()
             self.tag_values.clear()
-
-            from textual_tags import Tag
-
-            for tag in self.query(Tag):
-                await tag.remove()
 
             self.tag_values.update(self._all_option_names)
 
@@ -820,9 +843,11 @@ class MultiSelect(Tags, BaseField):
                 selected_tag_names = [
                     self._id_to_name.get(value_id, value_id) for value_id in self._original_value
                 ]
-                for tag_name in selected_tag_names:
-                    if tag_name in self._all_option_names:
-                        await self.add_new_tag(tag_name)
+                await self._replace_selected_tag_widgets(
+                    [name for name in selected_tag_names if name in self._all_option_names]
+                )
+            else:
+                await self._replace_selected_tag_widgets([])
         finally:
             self._suspend_tag_selection_messages = False
             self._suspend_change_events = False

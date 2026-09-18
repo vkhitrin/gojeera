@@ -4,12 +4,11 @@ from pathlib import Path
 
 from gojeera.app import JiraApp
 from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
-from gojeera.components.search.unified_search import UnifiedSearchBar
 from gojeera.utils.ui.widgets_factory_utils import DynamicFieldWrapper
-from gojeera.widgets.selection.popup_menu import PopupMenu
 from gojeera.widgets.selection.selection import SelectionWidget
 
 from .test_helpers import (
+    expand_create_work_item_menu,
     search_for_work_item_key_and_assert_single_result,
     wait_for_mount,
     wait_for_screen_to_settle,
@@ -30,15 +29,7 @@ async def open_create_work_item_screen(pilot):
 
 
 async def open_create_work_item_screen_from_menu(pilot):
-    await wait_for_mount(pilot)
-    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
-    search_bar.create_work_item_button.press()
-    await wait_until(
-        lambda: (
-            pilot.app.screen.query_one('#unified-search-new-work-item-menu', PopupMenu).expanded
-        ),
-        timeout=3.0,
-    )
+    await expand_create_work_item_menu(pilot)
     await pilot.press('enter')
     await wait_until(lambda: isinstance(pilot.app.screen, AddWorkItemScreen), timeout=3.0)
     await asyncio.sleep(0.2)

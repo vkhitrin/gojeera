@@ -17,23 +17,14 @@ from gojeera.utils.jira.reference import (
 )
 from gojeera.utils.ui.delayed_lookup import cancel_delayed_lookup, schedule_delayed_lookup
 from gojeera.utils.ui.focus import defer_focus_first_available
-from gojeera.widgets.inputs.extended_input import ExtendedInput
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.navigation.extended_jumper import set_jump_mode
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.layout import modal_components
 from gojeera.widgets.work_item.work_item_footer_details import WorkItemFooterDetails
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class LinkedWorkItemInputWidget(ExtendedInput):
+class LinkedWorkItemInputWidget(modal_components.ExtendedInput):
     def __init__(self):
         super().__init__(
             classes='required',
@@ -44,7 +35,7 @@ class LinkedWorkItemInputWidget(ExtendedInput):
         self.compact = True
 
 
-class WorkItemLinkTypeSelector(VimSelect):
+class WorkItemLinkTypeSelector(modal_components.VimSelect):
     def __init__(self, items: list[tuple[str, str]]):
         super().__init__(
             options=items,
@@ -56,7 +47,7 @@ class WorkItemLinkTypeSelector(VimSelect):
         self.valid_empty = False
 
 
-class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
+class AddWorkItemRelationshipScreen(modal_components.ExtendedModalScreen[dict]):
     """A modal screen to allow the user to link work items."""
 
     def __init__(self, work_item_key: str | None = None):
@@ -64,6 +55,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
         self.work_item_key = work_item_key
         self._modal_title: str = f'Link Work Items - Work Item: {self.work_item_key}'
         self._resolved_work_item: JiraWorkItem | None = None
+        self._link_type_names: dict[str, str] = {}
         self._search_timer: Timer | None = None
         self._search_worker: Worker | None = None
 
@@ -81,7 +73,7 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with modal_components.VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='link-work-items-form', classes='modal-form modal-form--fields'):
                 with Vertical():
@@ -94,24 +86,26 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
                     yield work_item_key_label
                     yield LinkedWorkItemInputWidget()
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_components.build_modal_confirm_button(
                     Button,
                     button_id='add-link-button-save',
                     disabled=True,
                 )
-                yield build_modal_cancel_button(Button, button_id='add-link-button-quit')
+                yield modal_components.build_modal_cancel_button(
+                    Button, button_id='add-link-button-quit'
+                )
             yield WorkItemFooterDetails()
-        yield ExtendedFooter(show_command_palette=False)
+        yield modal_components.ExtendedFooter(show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.run_worker(self.fetch_work_item_link_types())
 
         if CONFIGURATION.get().jumper.enabled:
-            set_jump_mode(self.relationship_type, 'focus')
-            set_jump_mode(self.linked_work_item_key, 'focus')
+            modal_components.set_jump_mode(self.relationship_type, 'focus')
+            modal_components.set_jump_mode(self.linked_work_item_key, 'focus')
 
-            set_jump_mode(self.save_button, 'click')
-            set_jump_mode(self.query_one('#add-link-button-quit', Button), 'click')
+            modal_components.set_jump_mode(self.save_button, 'click')
+            modal_components.set_jump_mode(self.query_one('#add-link-button-quit', Button), 'click')
         defer_focus_first_available(
             self,
             self.relationship_type,
@@ -204,8 +198,12 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
             link_type: LinkWorkItemType
             options: list[tuple[str, str]] = []
             for link_type in response.result or []:
-                options.append((link_type.inward, f'{link_type.id}:inward'))
-                options.append((link_type.outward, f'{link_type.id}:outward'))
+                inward_value = f'{link_type.id}:inward'
+                outward_value = f'{link_type.id}:outward'
+                options.append((link_type.inward, inward_value))
+                options.append((link_type.outward, outward_value))
+                self._link_type_names[inward_value] = link_type.inward
+                self._link_type_names[outward_value] = link_type.outward
             self.relationship_type.set_options(options)
 
     @on(Button.Pressed, '#add-link-button-save')
@@ -218,8 +216,10 @@ class AddWorkItemRelationshipScreen(ExtendedModalScreen[dict]):
         self.dismiss(
             {
                 'right_work_item_key': self._resolved_work_item.key,
+                'right_work_item': self._resolved_work_item,
                 'link_type': link_type,
                 'link_type_id': link_type_id,
+                'link_type_name': self._link_type_names.get(selection, ''),
             }
         )
 

@@ -85,6 +85,19 @@ def test_watch_work_item_before_mount_does_not_query_children() -> None:
     fields_widget.watch_work_item(work_item)
 
 
+def test_resize_defers_layout_until_a_work_item_is_bound(monkeypatch) -> None:
+    fields_widget = WorkItemFields()
+    update_layout = Mock()
+    monkeypatch.setattr(fields_widget, '_update_layout_mode', update_layout)
+
+    fields_widget.on_resize()
+    update_layout.assert_not_called()
+
+    fields_widget.work_item = _create_eng3_work_item()
+    fields_widget.on_resize()
+    update_layout.assert_called_once_with()
+
+
 def test_sync_flag_button_uses_remote_state_without_field_key(monkeypatch) -> None:
     work_item = WorkItemFactory.create_work_item(
         json.loads((FIXTURES_DIR / 'jira_work_items' / 'ENG-3.json').read_text())
@@ -229,38 +242,14 @@ async def test_can_view_watchers_returns_false_when_permission_is_missing(monkey
     )
 
 
-def test_start_view_watchers_permission_load_schedules_background_worker(monkeypatch) -> None:
-    fields_widget = WorkItemFields()
-    scheduled = {}
-
-    def fake_run_worker(coro, *, exclusive, group):
-        coro.close()
-        scheduled['exclusive'] = exclusive
-        scheduled['group'] = group
-        return SimpleNamespace(is_finished=False)
-
-    monkeypatch.setattr(WorkItemFields, 'is_mounted', property(lambda _self: True))
-    monkeypatch.setattr(fields_widget, 'run_worker', fake_run_worker)
-
-    fields_widget._start_view_watchers_permission_load('ENG-3')
-
-    assert scheduled == {
-        'exclusive': False,
-        'group': 'view-watchers-permission-load',
-    }
-    assert (
-        fields_widget._permission_cache._workers[('ENG-3', VIEW_WATCHERS_PERMISSIONS)].is_finished
-        is False
-    )
-
-
 async def test_can_view_watchers_uses_cached_permission_without_request(monkeypatch) -> None:
     fields_widget = WorkItemFields()
-    fields_widget._permission_cache._cache[('ENG-3', VIEW_WATCHERS_PERMISSIONS)] = (
+    fields_widget._permission_cache._store(
+        ('ENG-3', VIEW_WATCHERS_PERMISSIONS),
         APIControllerResponse(
             success=False,
             error='Missing required permission(s) to view watchers: VIEW_VOTERS_AND_WATCHERS',
-        )
+        ),
     )
     api = SimpleNamespace(validate_work_item_permissions=AsyncMock())
     monkeypatch.setattr(WorkItemFields, 'app', property(lambda _self: SimpleNamespace(api=api)))

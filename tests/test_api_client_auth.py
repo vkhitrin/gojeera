@@ -1,14 +1,19 @@
+import asyncio
 import json
+from threading import Event
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 from pydantic import SecretStr
 import pytest
 import respx
 
-from gojeera.internal.jira.client import AsyncJiraClient, GraphQLClient, JiraClient
+from gojeera.internal.jira.api import JiraAPI
+from gojeera.internal.jira.client import AsyncJiraClient, BaseHTTPClient, GraphQLClient, JiraClient
 from gojeera.internal.models.exceptions import ServiceInvalidRequestException
 from gojeera.internal.store.config import ApplicationConfiguration, JiraConfig
 from gojeera.utils.system.logging_utils import extract_exception_details
+from tests.jira_api_test_utils import api_configuration, basic_auth_context
 
 
 def _configuration() -> ApplicationConfiguration:
@@ -57,6 +62,54 @@ def _oauth2_client_kwargs(token_refresh_callback):
     }
 
 
+def _graphql_client() -> GraphQLClient:
+    return GraphQLClient(
+        base_url='https://plainid.atlassian.net/gateway/api/graphql',
+        api_email='user@example.com',
+        api_token='token',
+        configuration=_configuration(),
+    )
+
+
+def test_http_clients_keep_idle_connections_available_for_interactive_requests():
+    limits = BaseHTTPClient._build_client_kwargs(_configuration())['limits']
+
+    assert limits.max_connections == 100
+    assert limits.max_keepalive_connections == 20
+    assert limits.keepalive_expiry == 30.0
+
+
+@pytest.mark.asyncio
+async def test_jira_api_defers_sync_connection_pool_until_first_use():
+    api = JiraAPI(auth=basic_auth_context(), configuration=api_configuration())
+
+    assert api._sync_client is None
+
+    await api.close()
+
+    assert api._sync_client is None
+
+
+@pytest.mark.asyncio
+async def test_jira_api_reuses_and_closes_shared_async_connection_pool(monkeypatch):
+    api = JiraAPI(auth=basic_auth_context(), configuration=api_configuration())
+    shared_client = api.client.client
+    shared_close = AsyncMock(wraps=shared_client.aclose)
+    sync_close = Mock(wraps=api.sync_client.client.close)
+    monkeypatch.setattr(shared_client, 'aclose', shared_close)
+    monkeypatch.setattr(api.sync_client.client, 'close', sync_close)
+
+    assert api.async_http_client.client is shared_client
+    assert api.agile_client.client is shared_client
+    assert api.service_desk_client.client is shared_client
+    assert api.graphql_client.client is shared_client
+
+    await api.close()
+
+    shared_close.assert_awaited_once_with()
+    sync_close.assert_called_once_with()
+
+
 def _assert_retry_result(route, call_count: int, response) -> None:
     assert response == {'ok': True}
     assert call_count == [False, True]
@@ -78,6 +131,52 @@ async def test_async_jira_client_retries_after_oauth2_refresh():
         await client.close_async_client()
 
     _assert_retry_result(route, refresh_calls(), response)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_oauth2_refresh_is_non_blocking_and_single_flight():
+    refresh_started = Event()
+    release_refresh = Event()
+    refresh_calls: list[bool] = []
+
+    def refresh_token(force: bool) -> str | None:
+        refresh_calls.append(force)
+        refresh_started.set()
+        release_refresh.wait(timeout=1.0)
+        return 'fresh-token'
+
+    route = respx.get('https://api.atlassian.com/test').mock(
+        return_value=httpx.Response(200, json={'ok': True})
+    )
+    client = AsyncJiraClient(**_oauth2_client_kwargs(refresh_token))
+
+    try:
+        requests = [
+            asyncio.create_task(client.make_request(method=httpx.AsyncClient.get, url='test'))
+            for _ in range(2)
+        ]
+        for _ in range(100):
+            if refresh_started.is_set():
+                break
+            await asyncio.sleep(0)
+
+        assert refresh_started.is_set()
+        await asyncio.sleep(0.01)
+        assert not any(request.done() for request in requests)
+
+        release_refresh.set()
+        responses = await asyncio.gather(*requests)
+    finally:
+        release_refresh.set()
+        await client.close_async_client()
+
+    assert responses == [{'ok': True}, {'ok': True}]
+    assert refresh_calls == [False]
+    assert len(route.calls) == 2
+    assert all(
+        call.request.headers['Authorization'] == 'Bearer fresh-token' for call in route.calls
+    )
 
 
 @pytest.mark.asyncio
@@ -111,12 +210,7 @@ async def test_graphql_client_posts_query_payload():
     route = respx.post('https://plainid.atlassian.net/gateway/api/graphql').mock(
         return_value=httpx.Response(200, json={'data': {'ok': True}})
     )
-    client = GraphQLClient(
-        base_url='https://plainid.atlassian.net/gateway/api/graphql',
-        api_email='user@example.com',
-        api_token='token',
-        configuration=_configuration(),
-    )
+    client = _graphql_client()
 
     try:
         response = await client.execute(
@@ -146,12 +240,7 @@ async def test_graphql_client_raises_for_graphql_errors():
             json={'errors': [{'message': 'Field is not available'}]},
         )
     )
-    client = GraphQLClient(
-        base_url='https://plainid.atlassian.net/gateway/api/graphql',
-        api_email='user@example.com',
-        api_token='token',
-        configuration=_configuration(),
-    )
+    client = _graphql_client()
 
     try:
         with pytest.raises(ServiceInvalidRequestException) as exc_info:

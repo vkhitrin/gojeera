@@ -1,15 +1,27 @@
+from collections import OrderedDict
 import logging
 from typing import TYPE_CHECKING, cast
 
+from textual.timer import Timer
 from textual.widgets import Input
+from textual.worker import Worker
 
-from gojeera.utils.data.fields import FieldMode, require_create_mode, require_update_mode
+from gojeera.utils.data.fields import (
+    FieldMode as LabelsFieldMode,
+)
+from gojeera.utils.data.fields import (
+    require_create_mode,
+    require_update_mode,
+)
+from gojeera.utils.ui.delayed_lookup import cancel_delayed_lookup, schedule_delayed_lookup
 from gojeera.widgets.selection.multi_select import MultiSelect
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 logger = logging.getLogger('gojeera')
+LABEL_SUGGESTIONS_CACHE_MAX_SIZE = 128
+LABEL_SUGGESTIONS_LOOKUP_DELAY_SECONDS = 0.15
 
 
 class WorkItemLabels(MultiSelect):
@@ -17,11 +29,27 @@ class WorkItemLabels(MultiSelect):
     Labels widget for Jira labels field with remote autocomplete from Jira API.
     """
 
-    _class_suggestions_cache: dict[str, list[str]] = {}
+    _class_suggestions_cache: OrderedDict[str, list[str]] = OrderedDict()
+
+    @classmethod
+    def _get_cached_suggestions(cls, query: str) -> list[str] | None:
+        normalized_query = query.casefold()
+        suggestions = cls._class_suggestions_cache.get(normalized_query)
+        if suggestions is not None:
+            cls._class_suggestions_cache.move_to_end(normalized_query)
+        return suggestions
+
+    @classmethod
+    def _cache_suggestions(cls, query: str, suggestions: list[str]) -> None:
+        normalized_query = query.casefold()
+        cls._class_suggestions_cache[normalized_query] = suggestions
+        cls._class_suggestions_cache.move_to_end(normalized_query)
+        while len(cls._class_suggestions_cache) > LABEL_SUGGESTIONS_CACHE_MAX_SIZE:
+            cls._class_suggestions_cache.popitem(last=False)
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: LabelsFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
@@ -30,6 +58,8 @@ class WorkItemLabels(MultiSelect):
         **kwargs,
     ):
         self._last_query: str = ''
+        self._suggestion_timer: Timer | None = None
+        self._suggestion_worker: Worker | None = None
 
         options = []
         if original_value:
@@ -41,8 +71,8 @@ class WorkItemLabels(MultiSelect):
             options=options,
             title=title,
             required=required,
-            initial_value=original_value if mode == FieldMode.CREATE else None,
-            original_value=original_value if mode == FieldMode.UPDATE else None,
+            initial_value=original_value if mode == LabelsFieldMode.CREATE else None,
+            original_value=original_value if mode == LabelsFieldMode.UPDATE else None,
             field_supports_update=supports_update,
             allow_new_tags=True,
             **kwargs,
@@ -53,7 +83,8 @@ class WorkItemLabels(MultiSelect):
             return
 
         query = event.value.strip()
-        logger.info(
+        normalized_query = query.casefold()
+        logger.debug(
             'labels input changed field_id=%s input_id=%s raw_value=%r query=%r',
             self.field_id,
             event.input.id,
@@ -62,22 +93,37 @@ class WorkItemLabels(MultiSelect):
         )
 
         if len(query) < 1:
-            logger.info('labels query skipped field_id=%s reason=empty', self.field_id)
+            self._last_query = ''
+            self._suggestion_timer, self._suggestion_worker = cancel_delayed_lookup(
+                self._suggestion_timer,
+                self._suggestion_worker,
+            )
+            logger.debug('labels query skipped field_id=%s reason=empty', self.field_id)
             return
 
-        if query == self._last_query:
-            logger.info(
+        if normalized_query == self._last_query:
+            logger.debug(
                 'labels query skipped field_id=%s reason=duplicate query=%r', self.field_id, query
             )
             return
 
-        self._last_query = query
-        logger.info('labels worker start field_id=%s query=%r', self.field_id, query)
+        self._last_query = normalized_query
+        self._suggestion_timer, self._suggestion_worker = cancel_delayed_lookup(
+            self._suggestion_timer,
+            self._suggestion_worker,
+        )
+        logger.debug('labels worker scheduled field_id=%s query=%r', self.field_id, query)
+        self._suggestion_timer = schedule_delayed_lookup(
+            self,
+            lambda: self._fetch_label_suggestions_for_query(query),
+            worker_attr='_suggestion_worker',
+            delay=LABEL_SUGGESTIONS_LOOKUP_DELAY_SECONDS,
+        )
 
-        self.run_worker(
-            self._fetch_label_suggestions_for_query(query),
-            exclusive=True,
-            name=f'fetch_labels_{query}',
+    def on_unmount(self) -> None:
+        self._suggestion_timer, self._suggestion_worker = cancel_delayed_lookup(
+            self._suggestion_timer,
+            self._suggestion_worker,
         )
 
     def _show_remote_suggestions(self) -> None:
@@ -90,9 +136,9 @@ class WorkItemLabels(MultiSelect):
             )
 
     async def _fetch_label_suggestions_for_query(self, query: str) -> None:
-        if query in WorkItemLabels._class_suggestions_cache:
-            cached_suggestions = WorkItemLabels._class_suggestions_cache[query]
-            logger.info(
+        normalized_query = query.casefold()
+        if (cached_suggestions := self._get_cached_suggestions(query)) is not None:
+            logger.debug(
                 'labels suggestions cache hit field_id=%s query=%r count=%s',
                 self.field_id,
                 query,
@@ -110,13 +156,13 @@ class WorkItemLabels(MultiSelect):
         try:
             app = self.app
             if not hasattr(app, 'api'):
-                logger.info('labels suggestions skipped field_id=%s reason=no_api', self.field_id)
+                logger.debug('labels suggestions skipped field_id=%s reason=no_api', self.field_id)
                 return
 
             jira_app = cast('JiraApp', app)
-            logger.info('labels suggestions request field_id=%s query=%r', self.field_id, query)
+            logger.debug('labels suggestions request field_id=%s query=%r', self.field_id, query)
             response = await jira_app.api.get_label_suggestions(query=query)
-            logger.info(
+            logger.debug(
                 'labels suggestions response field_id=%s query=%r success=%s has_result=%s',
                 self.field_id,
                 query,
@@ -124,21 +170,23 @@ class WorkItemLabels(MultiSelect):
                 bool(getattr(response, 'result', None)),
             )
 
-            if response.success and response.result:
-                suggestions = response.result
-                logger.info(
+            if response.success:
+                suggestions = list(response.result or [])
+                if self._last_query != normalized_query:
+                    return
+                logger.debug(
                     'labels suggestions applied field_id=%s query=%r count=%s',
                     self.field_id,
                     query,
                     len(suggestions),
                 )
-                logger.info(
+                logger.debug(
                     'labels suggestions values field_id=%s query=%r suggestions=%r',
                     self.field_id,
                     query,
                     suggestions,
                 )
-                WorkItemLabels._class_suggestions_cache[query] = suggestions
+                self._cache_suggestions(query, suggestions)
                 self.add_tag_values(suggestions)
 
                 for suggestion in suggestions:

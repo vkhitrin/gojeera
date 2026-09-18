@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import lru_cache
 import textwrap
 from typing import TypeVar, cast
 
-from rich.cells import cell_len
+from rich.cells import cell_len, chop_cells
 from textual.scroll_view import ScrollView
 from textual.widget import Widget
 
@@ -30,23 +31,15 @@ def container_height_for_scroll_view(view: ScrollView) -> int:
     return max(0, container_height)
 
 
-def wrap_text_cell_aware(text: str, width: int) -> list[str]:
+@lru_cache(maxsize=4096)
+def _wrap_text_cell_aware_cached(text: str, width: int) -> tuple[str, ...]:
     width = max(1, width)
     wrapped_lines: list[str] = []
 
     def split_by_cell_width(value: str) -> list[str]:
         if not value:
             return ['']
-        chunks: list[str] = []
-        current = ''
-        for char in value:
-            if current and cell_len(current + char) > width:
-                chunks.append(current.rstrip())
-                current = '' if char.isspace() else char
-            else:
-                current += char
-        chunks.append(current.rstrip())
-        return chunks or ['']
+        return [chunk.rstrip() for chunk in chop_cells(value, width) if chunk] or ['']
 
     def normalize_line(value: str) -> list[str]:
         normalized = value.rstrip().lstrip()
@@ -68,7 +61,13 @@ def wrap_text_cell_aware(text: str, width: int) -> list[str]:
         for line in initial_lines:
             wrapped_lines.extend(normalize_line(line))
 
-    return wrapped_lines or ['']
+    return tuple(wrapped_lines or [''])
+
+
+def wrap_text_cell_aware(text: str, width: int) -> list[str]:
+    """Wrap terminal text while reusing immutable layouts across redraws."""
+
+    return list(_wrap_text_cell_aware_cached(text, max(1, width)))
 
 
 def build_scrollbar_aware_layout(

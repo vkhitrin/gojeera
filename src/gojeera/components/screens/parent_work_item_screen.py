@@ -17,13 +17,15 @@ from gojeera.utils.ui.delayed_lookup import cancel_delayed_lookup, schedule_dela
 from gojeera.utils.ui.focus import defer_focus_first_available
 from gojeera.utils.ui.jumper import configure_modal_jumper_actions
 from gojeera.widgets.layout.extended_button import ExtendedButton
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
+from gojeera.widgets.layout.modal_components import (
+    ExtendedFooter,
+    ExtendedModalScreen,
     build_modal_cancel_button,
     build_modal_confirm_button,
 )
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
+from gojeera.widgets.layout.modal_components import (
+    VerticalSuppressClicks as ParentWorkItemForm,
+)
 from gojeera.widgets.search.work_item_key_picker import WorkItemKeyInput
 from gojeera.widgets.work_item.work_item_footer_details import WorkItemFooterDetails
 
@@ -54,7 +56,7 @@ class ParentWorkItemScreen(ExtendedModalScreen[dict[str, str] | None]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with ParentWorkItemForm(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with (
                 VerticalScroll(id='parent-work-item-form', classes='modal-form modal-form--fields'),

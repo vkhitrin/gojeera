@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, cast
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.reactive import Reactive, reactive
-from textual.widgets import Static
 
-from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
+from gojeera.components.work_item.work_item_summary import WorkItemSummary
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.widgets.markdown.gojeera_markdown import GojeeraMarkdown
@@ -31,26 +30,6 @@ class WorkItemDescription(GojeeraMarkdown):
 
     def __init__(self):
         super().__init__(id='work_item_description_text')
-
-
-class WorkItemSummary(Static, can_focus=False):
-    """A widget to display the work item summary."""
-
-    DEFAULT_CSS = """
-    WorkItemSummary {
-        border: none;
-        text-style: bold;
-        color: $accent;
-        padding: 0 1 1 1;
-        width: 100%;
-        content-align: left middle;
-        background: transparent;
-    }
-    """
-
-    def __init__(self, widget_id: str = 'work_item_description_summary'):
-        super().__init__('', id=widget_id, markup=False)
-        self.can_focus = False
 
 
 class WorkItemInfoContainer(Container, can_focus=False):
@@ -215,6 +194,8 @@ class WorkItemInfoContainer(Container, can_focus=False):
             pass
 
     async def action_edit_work_item_info(self) -> None:
+        from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
+
         current_work_item = self.work_item
 
         if not current_work_item:

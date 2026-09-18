@@ -84,24 +84,9 @@ class TimeTrackingWidget(Vertical):
     }
     """
 
-    def __init__(
-        self,
-        original_estimate: str | None = None,
-        time_spent: str | None = None,
-        remaining_estimate: str | None = None,
-        original_estimate_seconds: int | None = None,
-        time_spent_seconds: int | None = None,
-        remaining_estimate_seconds: int | None = None,
-    ):
+    def __init__(self, values: TimeTrackingValues | None = None):
         super().__init__()
-        self._tracking_values = TimeTrackingValues.from_raw(
-            original_estimate=original_estimate,
-            time_spent=time_spent,
-            remaining_estimate=remaining_estimate,
-            original_estimate_seconds=original_estimate_seconds,
-            time_spent_seconds=time_spent_seconds,
-            remaining_estimate_seconds=remaining_estimate_seconds,
-        )
+        self._tracking_values = values or TimeTrackingValues()
         self.id = 'time-tracking-widget'
 
     @property

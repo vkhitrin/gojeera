@@ -2,18 +2,14 @@
 
 from gojeera.components.screens.decision_picker_screen import DecisionPickerScreen
 
-from .test_helpers import (
-    CommentPickerFlowConfig,
-    create_comment_picker_flow_helpers,
-    with_snapshot_assertion,
-)
+from . import test_helpers
 
 (
     _open_decision_picker_via_full_flow,
     _open_decision_picker_via_full_flow_with_selection,
     _insert_decision_and_return_to_comment_screen,
-) = create_comment_picker_flow_helpers(
-    config=CommentPickerFlowConfig(
+) = test_helpers.create_comment_picker_flow_helpers(
+    config=test_helpers.CommentPickerFlowConfig(
         action_name='action_insert_decision',
         screen_type=DecisionPickerScreen,
         options_attr='DECISION_TYPES',
@@ -38,14 +34,16 @@ def create_insert_decision_and_return_to_comment_screen():
 
 
 class TestDecisionPickerScreen:
-    @with_snapshot_assertion(create_open_decision_picker_via_full_flow())
+    @test_helpers.with_snapshot_assertion(create_open_decision_picker_via_full_flow())
     def test_decision_screen_initial_state(self):
         pass
 
-    @with_snapshot_assertion(create_open_decision_picker_via_full_flow_with_selection())
+    @test_helpers.with_snapshot_assertion(
+        create_open_decision_picker_via_full_flow_with_selection()
+    )
     def test_decision_screen_picker_with_selection(self):
         pass
 
-    @with_snapshot_assertion(create_insert_decision_and_return_to_comment_screen())
+    @test_helpers.with_snapshot_assertion(create_insert_decision_and_return_to_comment_screen())
     def test_decision_insert_decision(self):
         pass

@@ -23,6 +23,7 @@ class SearchAutoComplete(AutoComplete):
         jql_filters: list[JiraFilterDict] | None = None,
         show_on_empty_input: bool = True,
         hide_exact_single_match: bool = False,
+        disabled: bool = False,
     ):
         self.history_queries = history_queries or []
         self.jql_filters = jql_filters or []
@@ -31,7 +32,7 @@ class SearchAutoComplete(AutoComplete):
         self.show_on_empty_input = show_on_empty_input
         self.hide_exact_single_match = hide_exact_single_match
         self._rebuild_cached_candidates()
-        super().__init__(target=target, candidates=self._candidates)
+        super().__init__(target=target, candidates=self._candidates, disabled=disabled)
 
     def _build_candidates(self) -> list[DropdownItem]:
         items = [DropdownItem(main=query, prefix=HISTORY_PREFIX) for query in self.history_queries]

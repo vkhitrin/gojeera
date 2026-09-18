@@ -4,7 +4,6 @@ from textual import on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
 
-from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
 from gojeera.components.tabs.record_list_tab import (
     WORK_ITEM_NAVIGATION_BINDINGS,
     RecordListTabWidget,
@@ -82,6 +81,8 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
         self.run_worker(screen.clone_work_item(current_work_item.key))
 
     async def action_edit_selected_work_item_summary(self) -> None:
+        from gojeera.components.screens.edit_work_item_info_screen import EditWorkItemInfoScreen
+
         current_work_item = self._selected_work_item()
         if current_work_item is None:
             return

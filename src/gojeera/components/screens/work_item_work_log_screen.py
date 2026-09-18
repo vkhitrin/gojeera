@@ -7,10 +7,12 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.reactive import Reactive, reactive
 from textual.widgets import Button, Static
+from textual.worker import Worker
 
 from gojeera.components.screens.confirmation_screen import ConfirmationScreen
 from gojeera.components.screens.work_log_screen import LogWorkScreen
 from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.models.work_items import JiraWorklog, PaginatedJiraWorklog
 from gojeera.utils.jira.urls import build_external_url_for_work_item
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
@@ -25,44 +27,34 @@ if TYPE_CHECKING:
 class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     """A modal screen that displays the work logs of a work item using ListView with pagination."""
 
-    DEFAULT_CSS = """
-    WorkItemWorkLogScreen #modal_outer {
-        width: 68%;
-        max-width: 96;
-        height: auto;
-        max-height: 24;
-    }
-
-    WorkItemWorkLogScreen #worklogs-content-container {
-        width: 100%;
-        height: auto;
-        max-height: 15;
-        margin-bottom: 1;
-    }
-
-    WorkItemWorkLogScreen #worklogs-list-view {
-        width: 100%;
-        height: auto;
-        max-height: 15;
-        margin: 0 1;
-        overflow-y: auto;
-    }
-    """
-
     BINDINGS = ExtendedModalScreen.BINDINGS + [
         Binding('ctrl+o', 'open_worklog_in_browser', 'Open in browser'),
         Binding('ctrl+e', 'edit_worklog', 'Edit worklog'),
         Binding('ctrl+d', 'delete_worklog', 'Delete worklog'),
     ]
     TITLE = 'Worklog'
-    PAGE_SIZE = 5000
+    PAGE_SIZE = 100
     is_loading: Reactive[bool] = reactive(False, always_update=True)
 
-    def __init__(self, work_item_key: str, current_remaining_estimate: str | None = None):
+    def __init__(
+        self,
+        work_item_key: str,
+        current_remaining_estimate: str | None = None,
+        initial_page: PaginatedJiraWorklog | None = None,
+    ):
         super().__init__()
         self._work_item_key = work_item_key
         self._current_remaining_estimate = current_remaining_estimate
-        self.is_loading = bool(work_item_key)
+        self._worklogs = list(initial_page.logs) if initial_page is not None else []
+        self._worklog_ids = {worklog.id for worklog in self._worklogs}
+        self._next_offset = (
+            initial_page.start_at + len(initial_page.logs) if initial_page is not None else 0
+        )
+        self._pagination_complete = initial_page is not None and (
+            not initial_page.logs or self._next_offset >= initial_page.total
+        )
+        self._loading_worker: Worker | None = None
+        self.is_loading = bool(work_item_key and initial_page is None)
 
     @property
     def help_anchor(self) -> str:
@@ -80,12 +72,19 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     def modal_outer(self) -> VerticalSuppressClicks:
         return self.query_one('#modal_outer', VerticalSuppressClicks)
 
+    @property
+    def loading_label(self) -> Static:
+        return self.query_one('#worklogs-loading', Static)
+
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
         with VerticalSuppressClicks(id='modal_outer'):
             yield Static(f'{self.TITLE} - {self._work_item_key}', id='modal_title')
             with Container(id='worklogs-content-container'):
                 yield RecordList(widget_id='worklogs-list-view')
+                loading_label = Static('Loading more…', id='worklogs-loading')
+                loading_label.display = False
+                yield loading_label
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
                 yield Button(
                     'Close',
@@ -99,19 +98,42 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
     def watch_is_loading(self, loading: bool) -> None:
         if not self.is_mounted:
             return
-        self.modal_outer.loading = loading
+        has_records = bool(self.worklog_list_view._records)
+        self.modal_outer.loading = loading and not has_records
+        self.loading_label.display = loading and has_records
 
     async def on_mount(self) -> None:
         self.content_container.can_focus = False
-        self.modal_outer.loading = self.is_loading
-        if self._work_item_key:
-            self.call_after_refresh(
-                lambda: self.run_worker(
-                    self._fetch_work_log_impl(offset=0, manage_loading=False),
-                    exclusive=True,
-                )
-            )
+        if self._worklogs:
+            self.worklog_list_view.set_records(self._records_for_worklogs(self._worklogs))
+            self.is_loading = False
+        self.watch_is_loading(self.is_loading)
+        if self._work_item_key and not self._pagination_complete:
+            self.call_after_refresh(self._start_next_page_load)
         self.call_after_refresh(lambda: focus_first_available(self.worklog_list_view))
+
+    def _start_next_page_load(self) -> None:
+        if self._pagination_complete or not self._work_item_key:
+            return
+        if self._loading_worker is not None and not self._loading_worker.is_finished:
+            return
+        self._loading_worker = self.run_worker(
+            self._fetch_next_worklog_page(),
+            exclusive=True,
+            group='worklog-pages',
+        )
+
+    def _load_next_page_if_viewport_needs_it(self) -> None:
+        if self._pagination_complete or self.is_loading:
+            return
+        viewport_height = max(1, self.worklog_list_view.scrollable_content_region.height)
+        if self.worklog_list_view.max_scroll_y - self.worklog_list_view.scroll_y <= viewport_height:
+            self._start_next_page_load()
+
+    @on(RecordList.NearEnd)
+    def on_record_list_near_end(self, event: RecordList.NearEnd) -> None:
+        if event.control is self.worklog_list_view:
+            self._start_next_page_load()
 
     async def _handle_worklog_update(self, data: dict) -> None:
         application = cast('JiraApp', self.app)
@@ -176,88 +198,109 @@ class WorkItemWorkLogScreen(ExtendedModalScreen[dict]):
         self.dismiss()
 
     async def reload_worklogs(self) -> None:
-        await self.fetch_work_log(offset=0)
+        self._reset_worklog_pagination()
+        await self._fetch_next_worklog_page()
 
-    async def fetch_work_log(self, offset: int = 0) -> None:
-        if self.is_loading:
+    def _reset_worklog_pagination(self) -> None:
+        self._worklogs = []
+        self._worklog_ids = set()
+        self._next_offset = 0
+        self._pagination_complete = False
+        if self.is_mounted:
+            self.worklog_list_view.clear_records()
+
+    def _records_for_worklogs(self, worklogs: list[JiraWorklog]) -> list[Record]:
+        records: list[Record] = []
+        for worklog in worklogs:
+            author_name = worklog.author.display_name if worklog.author else 'Unknown'
+            time_spent_display = worklog.time_spent or 'N/A'
+            meta = f'{author_name} - {time_spent_display}'
+
+            started_date = worklog.created_on() if worklog.started else 'Unknown date'
+            metadata_parts = [f'Started: {started_date}']
+
+            if worklog.updated and worklog.started and worklog.updated != worklog.started:
+                metadata_parts.append(f'(updated {worklog.updated_on()})')
+
+            content = ''
+            if worklog.comment:
+                base_url = getattr(
+                    getattr(getattr(self.app, 'atlassian_context', None), 'server_info', None),
+                    'base_url',
+                    None,
+                )
+                if converted_content := worklog.get_comment(base_url=base_url):
+                    content = converted_content.strip()
+
+            started_formatted = (
+                worklog.started.strftime('%Y-%m-%d %H:%M') if worklog.started else None
+            )
+            records.append(
+                Record(
+                    key=worklog.id,
+                    meta=meta,
+                    title=content or 'No description',
+                    footer=' '.join(metadata_parts),
+                    payload={
+                        'worklog': worklog,
+                        'url': build_external_url_for_work_item(
+                            self._work_item_key,
+                            cast('JiraApp', self.app),
+                            focused_work_log_id=worklog.id,
+                        ),
+                        'time_spent': worklog.time_spent,
+                        'started': started_formatted,
+                        'comment': content if worklog.comment else None,
+                    },
+                )
+            )
+        return records
+
+    async def _fetch_next_worklog_page(self) -> None:
+        if self._pagination_complete:
             return
-
         self.is_loading = True
-        await self._fetch_work_log_impl(offset=offset, manage_loading=False)
-
-    async def _fetch_work_log_impl(self, offset: int = 0, *, manage_loading: bool = True) -> None:
-        if manage_loading:
-            if self.is_loading:
-                return
-            self.is_loading = True
         try:
             application = cast('JiraApp', self.app)
             response: APIControllerResponse = await application.api.get_work_item_worklog(
-                self._work_item_key, offset=offset, limit=self.PAGE_SIZE
+                self._work_item_key,
+                offset=self._next_offset,
+                limit=self.PAGE_SIZE,
             )
 
-            if response.success and (result := response.result):
-                list_view = self.worklog_list_view
-                if not result.logs:
-                    list_view.clear_records()
-                    return
+            if not response.success or not isinstance(response.result, PaginatedJiraWorklog):
+                self._pagination_complete = True
+                self.notify(
+                    response.error or 'Unable to load work logs',
+                    severity='warning',
+                    title=self._work_item_key,
+                )
+                return
 
-                records: list[Record] = []
-                for worklog in result.logs:
-                    author_name = worklog.author.display_name if worklog.author else 'Unknown'
-                    time_spent_display = worklog.time_spent or 'N/A'
-                    meta = f'{author_name} - {time_spent_display}'
+            page = response.result
+            new_worklogs = [worklog for worklog in page.logs if worklog.id not in self._worklog_ids]
+            self._worklogs.extend(new_worklogs)
+            self._worklog_ids.update(worklog.id for worklog in new_worklogs)
+            previous_offset = self._next_offset
+            self._next_offset = page.start_at + len(page.logs)
+            self._pagination_complete = (
+                not page.logs
+                or self._next_offset <= previous_offset
+                or self._next_offset >= page.total
+            )
 
-                    started_date = worklog.created_on() if worklog.started else 'Unknown date'
-                    metadata_parts = [f'Started: {started_date}']
-
-                    if worklog.updated and worklog.started and worklog.updated != worklog.started:
-                        updated_text = f'(updated {worklog.updated_on()})'
-                        metadata_parts.append(updated_text)
-
-                    metadata = ' '.join(metadata_parts)
-                    content = ''
-                    if worklog.comment:
-                        base_url = getattr(
-                            getattr(
-                                getattr(self.app, 'atlassian_context', None), 'server_info', None
-                            ),
-                            'base_url',
-                            None,
-                        )
-                        if content := worklog.get_comment(base_url=base_url):
-                            content = content.strip()
-                    title = content or 'No description'
-
-                    url = build_external_url_for_work_item(
-                        self._work_item_key,
-                        cast('JiraApp', self.app),
-                        focused_work_log_id=worklog.id,
-                    )
-
-                    started_formatted = None
-                    if worklog.started:
-                        started_formatted = worklog.started.strftime('%Y-%m-%d %H:%M')
-
-                    records.append(
-                        Record(
-                            key=worklog.id,
-                            meta=meta,
-                            title=title,
-                            footer=metadata,
-                            payload={
-                                'worklog': worklog,
-                                'url': url,
-                                'time_spent': worklog.time_spent,
-                                'started': started_formatted,
-                                'comment': content if worklog.comment else None,
-                            },
-                        )
-                    )
-                list_view.set_records(records)
+            if not new_worklogs and not self._worklogs:
+                self.worklog_list_view.clear_records()
+            elif new_worklogs:
+                records = self._records_for_worklogs(new_worklogs)
+                if len(self._worklogs) == len(new_worklogs):
+                    self.worklog_list_view.set_records(records)
+                else:
+                    self.worklog_list_view.append_records(records)
         finally:
-            if not manage_loading or self.is_loading:
-                self.is_loading = False
+            self.is_loading = False
+            if self.is_mounted and not self._pagination_complete:
+                self.call_after_refresh(self._load_next_page_if_viewport_needs_it)
 
     @property
     def selected_worklog_payload(self) -> dict | None:

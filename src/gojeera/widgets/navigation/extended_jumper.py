@@ -50,9 +50,7 @@ class ExtendedJumper(Jumper):
     def get_overlays(self):
         """Build jump targets in a single filtered pass."""
         screen = self.screen
-        content_tabs = [
-            widget for widget in screen.walk_children() if isinstance(widget, ContentTab)
-        ]
+        content_tabs = list(screen.query(ContentTab)) if hasattr(screen, 'query') else []
 
         original_states = {}
         for tab in content_tabs:
@@ -61,18 +59,11 @@ class ExtendedJumper(Jumper):
 
         try:
             ids_to_keys = self.ids_to_keys
-            jumpable_widgets: list[tuple[Offset, Widget, JumpMode]] = []
-            custom_key_count = 0
-            seen_widgets: set[Widget] = set()
+            jumpable_widgets: dict[Offset, tuple[Widget, JumpMode]] = {}
 
             candidate_widgets: list[Widget] = list(screen.walk_children(Widget))
-            candidate_widgets.extend(content_tabs)
 
             for child in candidate_widgets:
-                if child in seen_widgets:
-                    continue
-                seen_widgets.add(child)
-
                 jump_mode = getattr(child, 'jump_mode', None)
                 if jump_mode not in ('focus', 'click') or not child.can_focus:
                     continue
@@ -84,22 +75,28 @@ class ExtendedJumper(Jumper):
                 except NoWidget:
                     continue
 
-                jumpable_widgets.append(
-                    (
-                        Offset(widget_x, widget_y),
-                        child,
-                        cast(JumpMode, jump_mode),
-                    )
+                jumpable_widgets[Offset(widget_x, widget_y)] = (
+                    child,
+                    cast(JumpMode, jump_mode),
                 )
-                if child.id and child.id in ids_to_keys:
-                    custom_key_count += 1
 
+            ordered_widgets = sorted(
+                jumpable_widgets.items(),
+                key=lambda item: (item[0].y, item[0].x),
+            )
+            custom_keys = {
+                ids_to_keys[child.id]
+                for child, _ in jumpable_widgets.values()
+                if child.id and child.id in ids_to_keys
+            }
             available_keys = iter(
-                self._generate_available_keys(len(jumpable_widgets) - custom_key_count)
+                key
+                for key in self._generate_available_keys(len(ordered_widgets))
+                if key not in custom_keys
             )
             overlays: dict[Offset, JumpInfo] = {}
 
-            for widget_offset, child, jump_mode in jumpable_widgets:
+            for widget_offset, (child, jump_mode) in ordered_widgets:
                 if child.id and child.id in ids_to_keys:
                     jump_key = ids_to_keys[child.id]
                 else:

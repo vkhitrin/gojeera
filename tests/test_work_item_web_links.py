@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
 from gojeera.app import JiraApp
 from gojeera.components.screens.confirmation_screen import ConfirmationScreen
 from gojeera.components.screens.web_link_screen import RemoteLinkScreen
@@ -105,6 +108,63 @@ async def delete_web_link_and_verify(pilot):
 HIGHLIGHT = select_work_item_and_highlight_web_link
 CREATE = create_web_link_and_verify
 DELETE = delete_web_link_and_verify
+
+
+def test_remote_links_load_only_when_requested(monkeypatch) -> None:
+    monkeypatch.setattr(WorkItemRemoteLinksWidget, 'watch_remote_links', lambda self, links: None)
+    monkeypatch.setattr(WorkItemRemoteLinksWidget, 'watch_is_loading', lambda self, loading: None)
+    widget = WorkItemRemoteLinksWidget()
+    worker = SimpleNamespace(is_finished=False)
+
+    def run_worker(coroutine, *, exclusive: bool):
+        coroutine.close()
+        return worker
+
+    run = Mock(side_effect=run_worker)
+    monkeypatch.setattr(widget, 'run_worker', run)
+    monkeypatch.setattr(widget, 'show_loading', Mock())
+    monkeypatch.setattr(widget, 'hide_loading', Mock())
+
+    widget.work_item_key = 'ENG-1'
+
+    run.assert_not_called()
+    widget.load_if_needed()
+    widget.load_if_needed()
+
+    run.assert_called_once()
+    assert run.call_args.kwargs == {'exclusive': True}
+
+
+async def test_created_remote_link_is_not_replaced_by_eager_refetch(monkeypatch) -> None:
+    monkeypatch.setattr(WorkItemRemoteLinksWidget, 'watch_remote_links', lambda self, links: None)
+    monkeypatch.setattr(WorkItemRemoteLinksWidget, 'watch_is_loading', lambda self, loading: None)
+    widget = WorkItemRemoteLinksWidget()
+    create_remote_link = AsyncMock(return_value=SimpleNamespace(success=True))
+    fake_app = SimpleNamespace(
+        api=SimpleNamespace(create_work_item_remote_link=create_remote_link),
+    )
+    monkeypatch.setattr(
+        WorkItemRemoteLinksWidget,
+        'app',
+        property(lambda self: fake_app),
+    )
+    monkeypatch.setattr(widget, 'notify', Mock())
+    run_worker = Mock()
+    monkeypatch.setattr(widget, 'run_worker', run_worker)
+    widget.work_item_key = 'ENG-1'
+    widget._loaded_work_item_key = 'ENG-1'
+
+    await widget.create_link(
+        {
+            'link_url': 'https://docs.example.com/api',
+            'link_title': 'API documentation',
+        }
+    )
+    widget.load_if_needed()
+
+    create_remote_link.assert_awaited_once()
+    assert [link.url for link in widget.remote_links or []] == ['https://docs.example.com/api']
+    run_worker.assert_not_called()
 
 
 class TestWorkItemWebLinks:

@@ -10,12 +10,12 @@ import logging
 from pathlib import Path
 import re
 import sys
+from time import monotonic
 from typing import TYPE_CHECKING, Any, BinaryIO, TypeVar, cast
 
 # https://darren.codes/posts/python-startup-time/
 sys.modules['httpx._main'] = cast(Any, None)
 import httpx
-import magic
 
 from gojeera.internal.jira.client import (
     AsyncHTTPClient,
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 ClientT = TypeVar('ClientT', AsyncJiraClient, JiraClient, AsyncHTTPClient, GraphQLClient)
 WORK_ITEM_SEARCH_DEFAULT_MAX_RESULTS = 50
 WORK_ITEM_KEY_SEARCH_PATTERN = re.compile(r'(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])')
+EMPTY_FALLBACK_BOARD_DISCOVERY_TTL_SECONDS = 60.0
 
 
 class JiraAPI:
@@ -68,6 +69,11 @@ class JiraAPI:
         rest_api_path_prefix = auth.rest_api_path_prefix or self.REST_API_PATH_PREFIX
         agile_api_path_prefix = auth.agile_api_path_prefix or self.AGILE_API_PATH_PREFIX
         rest_api_base_url = f'{auth.api_base_url.rstrip("/")}{rest_api_path_prefix}'
+        self._auth = auth
+        self._configuration = configuration
+        self._oauth2_token_refresher = oauth2_token_refresher
+        self._sync_client_base_url = rest_api_base_url
+        self._sync_client: JiraClient | None = None
         self._client = self._build_http_client(
             AsyncJiraClient,
             auth=auth,
@@ -75,19 +81,14 @@ class JiraAPI:
             base_url=rest_api_base_url,
             oauth2_token_refresher=oauth2_token_refresher,
         )
-        self._sync_client = self._build_http_client(
-            JiraClient,
-            auth=auth,
-            configuration=configuration,
-            base_url=rest_api_base_url,
-            oauth2_token_refresher=oauth2_token_refresher,
-        )
+        shared_async_client = self._client.client
         self._async_http_client = self._build_http_client(
             AsyncHTTPClient,
             auth=auth,
             configuration=configuration,
             base_url=rest_api_base_url,
             oauth2_token_refresher=oauth2_token_refresher,
+            shared_client=shared_async_client,
         )
         self._agile_client = self._build_http_client(
             AsyncJiraClient,
@@ -95,6 +96,7 @@ class JiraAPI:
             configuration=configuration,
             base_url=f'{auth.api_base_url.rstrip("/")}{agile_api_path_prefix}',
             oauth2_token_refresher=oauth2_token_refresher,
+            shared_client=shared_async_client,
         )
         service_desk_api_path_prefix = rest_api_path_prefix.replace(
             self.REST_API_PATH_PREFIX,
@@ -106,6 +108,7 @@ class JiraAPI:
             configuration=configuration,
             base_url=f'{auth.api_base_url.rstrip("/")}{service_desk_api_path_prefix}',
             oauth2_token_refresher=oauth2_token_refresher,
+            shared_client=shared_async_client,
         )
         self._graphql_client = self._build_http_client(
             GraphQLClient,
@@ -113,12 +116,13 @@ class JiraAPI:
             configuration=configuration,
             base_url=self._graphql_base_url(auth),
             oauth2_token_refresher=oauth2_token_refresher,
+            shared_client=shared_async_client,
         )
         self._base_url = auth.api_base_url
-        self._auth = auth
         self.logger = logging.getLogger('gojeera')
         self.cache = get_cache()
         self.cache.set_profile(self._cache_profile_key())
+        self._empty_fallback_board_discovery_until: dict[str, float] = {}
 
     def _cache_profile_key(self) -> str:
         return f'{self._auth.cloud_id}:{self._auth.account_id}'
@@ -138,6 +142,7 @@ class JiraAPI:
         configuration: ApplicationConfiguration,
         base_url: str,
         oauth2_token_refresher: Callable[[bool], str | None] | None,
+        shared_client: httpx.AsyncClient | httpx.Client | None = None,
     ) -> ClientT:
         return client_type(
             base_url=base_url,
@@ -147,12 +152,25 @@ class JiraAPI:
             configuration=configuration,
             bearer_token=auth.bearer_token,
             token_refresh_callback=oauth2_token_refresher,
+            shared_client=shared_client,
         )
+
+    async def close(self) -> None:
+        await asyncio.gather(
+            self.client.close_async_client(),
+            self.async_http_client.close_async_client(),
+            self.agile_client.close_async_client(),
+            self.service_desk_client.close_async_client(),
+            self.graphql_client.close_async_client(),
+        )
+        if self._sync_client is not None:
+            self._sync_client.close_client()
 
     def set_bearer_token(self, bearer_token: str | None) -> None:
         self._auth = replace(self._auth, bearer_token=bearer_token)
         self._client.set_bearer_token(bearer_token)
-        self._sync_client.set_bearer_token(bearer_token)
+        if self._sync_client is not None:
+            self._sync_client.set_bearer_token(bearer_token)
         self._async_http_client.set_bearer_token(bearer_token)
         self._agile_client.set_bearer_token(bearer_token)
         self._service_desk_client.set_bearer_token(bearer_token)
@@ -176,11 +194,23 @@ class JiraAPI:
 
     @property
     def sync_client(self) -> JiraClient:
+        if self._sync_client is None:
+            self._sync_client = self._build_http_client(
+                JiraClient,
+                auth=self._auth,
+                configuration=self._configuration,
+                base_url=self._sync_client_base_url,
+                oauth2_token_refresher=self._oauth2_token_refresher,
+            )
         return self._sync_client
 
     @property
     def agile_client(self) -> AsyncJiraClient:
         return self._agile_client
+
+    @property
+    def service_desk_client(self) -> AsyncJiraClient:
+        return self._service_desk_client
 
     @property
     def graphql_client(self) -> GraphQLClient:
@@ -415,12 +445,22 @@ class JiraAPI:
             if isinstance(edge, dict):
                 results.append(build_edge_data(edge))
 
-    async def get_project_repositories(self, project_key: str) -> list[dict[str, Any]]:
+    def _require_graphql_api_token(self, message: str, **context: Any) -> None:
         if self._auth.auth_type == 'oauth2':
             raise ServiceInvalidRequestException(
-                GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR,
-                context={'project_key': project_key, 'auth_type': self._auth.auth_type},
+                message,
+                context={**context, 'auth_type': self._auth.auth_type},
             )
+
+    async def get_project_repositories(
+        self,
+        project_key: str,
+        on_page: Callable[[list[dict[str, Any]]], Awaitable[None] | None] | None = None,
+    ) -> list[dict[str, Any]]:
+        self._require_graphql_api_token(
+            GRAPHQL_PROJECT_REPOSITORIES_OAUTH_ERROR,
+            project_key=project_key,
+        )
 
         project_ari = await self._get_graphql_project_ari(project_key)
         repositories: list[dict[str, Any]] = []
@@ -447,11 +487,18 @@ class JiraAPI:
                     remote_payload=repositories_response,
                 )
 
+            page_repositories: list[dict[str, Any]] = []
             self._extend_graphql_edge_results(
-                repositories,
+                page_repositories,
                 connection,
                 self._build_project_repository_data,
             )
+            repositories.extend(page_repositories)
+
+            if on_page is not None:
+                page_result = on_page(list(repositories))
+                if page_result is not None:
+                    await page_result
 
             after = self._next_graphql_page_cursor(
                 connection,
@@ -479,12 +526,15 @@ class JiraAPI:
             'repository_type': node.get('__typename'),
         }
 
-    async def get_project_space_pull_requests(self, project_key: str) -> list[dict[str, Any]]:
-        if self._auth.auth_type == 'oauth2':
-            raise ServiceInvalidRequestException(
-                GRAPHQL_PROJECT_PULL_REQUESTS_OAUTH_ERROR,
-                context={'project_key': project_key, 'auth_type': self._auth.auth_type},
-            )
+    async def get_project_space_pull_requests(
+        self,
+        project_key: str,
+        on_page: Callable[[list[dict[str, Any]]], Awaitable[None] | None] | None = None,
+    ) -> list[dict[str, Any]]:
+        self._require_graphql_api_token(
+            GRAPHQL_PROJECT_PULL_REQUESTS_OAUTH_ERROR,
+            project_key=project_key,
+        )
 
         project_ari = await self._get_graphql_project_ari(project_key)
         pull_requests: list[dict[str, Any]] = []
@@ -512,11 +562,17 @@ class JiraAPI:
                     remote_payload=pull_requests_response,
                 )
 
+            page_pull_requests: list[dict[str, Any]] = []
             self._extend_graphql_edge_results(
-                pull_requests,
+                page_pull_requests,
                 connection,
                 self._build_project_space_pull_request_data,
             )
+            pull_requests.extend(page_pull_requests)
+            if on_page is not None:
+                page_result = on_page(page_pull_requests)
+                if page_result is not None:
+                    await page_result
 
             after = self._next_graphql_page_cursor(
                 connection,
@@ -530,11 +586,10 @@ class JiraAPI:
         return pull_requests
 
     async def get_work_item_pull_requests(self, work_item_id: str) -> list[dict[str, Any]]:
-        if self._auth.auth_type == 'oauth2':
-            raise ServiceInvalidRequestException(
-                GRAPHQL_WORK_ITEM_PULL_REQUESTS_OAUTH_ERROR,
-                context={'work_item_id': work_item_id, 'auth_type': self._auth.auth_type},
-            )
+        self._require_graphql_api_token(
+            GRAPHQL_WORK_ITEM_PULL_REQUESTS_OAUTH_ERROR,
+            work_item_id=work_item_id,
+        )
 
         issue_ari = f'ari:cloud:jira:{self._auth.cloud_id}:issue/{work_item_id}'
         pull_requests: list[dict[str, Any]] = []
@@ -1796,7 +1851,7 @@ class JiraAPI:
         file_to_upload.seek(0)
         return cast(
             list[dict],
-            self._sync_client.make_request(
+            self.sync_client.make_request(
                 method=httpx.post,
                 url=f'issue/{work_item_id_or_key}/attachments',
                 headers={'X-Atlassian-Token': 'no-check'},
@@ -1806,6 +1861,8 @@ class JiraAPI:
 
     @staticmethod
     def _detect_file_mime_type(file_to_upload: BinaryIO) -> str:
+        import magic
+
         return magic.from_buffer(file_to_upload.read(2028), mime=True)
 
     async def delete_attachment(self, attachment_id: str) -> None:
@@ -2156,6 +2213,14 @@ class JiraAPI:
         # from `/board?projectKeyOrId=...`. Fall back to scanning boards via
         # `/board/{id}/project` when the direct filter misses them.
         if not boards:
+            empty_discovery_until = self._empty_fallback_board_discovery_until.get(
+                normalized_project,
+                0.0,
+            )
+            if empty_discovery_until > monotonic():
+                self.logger.warning(f'No boards found for project {project_key_or_id}')
+                return []
+
             all_boards = await self._fetch_paginated_agile_values(
                 url='board',
                 params={'type': 'scrum'},
@@ -2221,6 +2286,15 @@ class JiraAPI:
                     matching_board_ids.add(board_id_int)
 
             boards = matching_boards
+            if boards:
+                self._empty_fallback_board_discovery_until.pop(normalized_project, None)
+                await run_cache_io(
+                    lambda: self.cache.set_boards_for_project(str(project_key_or_id), boards)
+                )
+            else:
+                self._empty_fallback_board_discovery_until[normalized_project] = (
+                    monotonic() + EMPTY_FALLBACK_BOARD_DISCOVERY_TTL_SECONDS
+                )
 
         if not boards:
             self.logger.warning(f'No boards found for project {project_key_or_id}')

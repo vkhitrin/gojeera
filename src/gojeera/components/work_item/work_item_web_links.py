@@ -3,12 +3,12 @@ from uuid import uuid4
 
 from textual import on
 from textual.reactive import Reactive, reactive
+from textual.worker import Worker
 
-from gojeera.components.screens.confirmation_screen import ConfirmationScreen
-from gojeera.components.screens.web_link_screen import RemoteLinkScreen
 from gojeera.components.tabs.record_list_tab import RecordListTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import WorkItemRemoteLink
+from gojeera.utils.ui.runtime import cancel_worker, should_start_keyed_load
 from gojeera.widgets.layout.record_list import Record, RecordList
 
 if TYPE_CHECKING:
@@ -26,6 +26,27 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
     def __init__(self):
         super().__init__(widget_id='work_item_remote_links', record_list_id='remote-links-list')
         self._work_item_key: str | None = None
+        self._loaded_work_item_key: str | None = None
+        self._loading_worker: Worker | None = None
+
+    def load_if_needed(self) -> None:
+        requested_key = self.work_item_key
+        if requested_key is None or not should_start_keyed_load(
+            requested_key,
+            self._loaded_work_item_key,
+            self._loading_worker,
+        ):
+            return
+        self.show_loading()
+        self._loading_worker = self.run_worker(
+            self.fetch_remote_links(requested_key),
+            exclusive=True,
+        )
+
+    def cancel_loading(self) -> None:
+        cancel_worker(self._loading_worker)
+        self._loading_worker = None
+        self.hide_loading()
 
     @property
     def help_anchor(self) -> str:
@@ -62,6 +83,8 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
         return None
 
     async def action_add_remote_link(self) -> None:
+        from gojeera.components.screens.web_link_screen import RemoteLinkScreen
+
         if self.work_item_key:
             await self.app.push_screen(RemoteLinkScreen(self.work_item_key), callback=self.add_link)
 
@@ -119,7 +142,6 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                     status_resolved=None,
                 ),
             ]
-            self.run_worker(self.fetch_remote_links(self.work_item_key), exclusive=True)
 
     async def action_open_link(self) -> None:
         selected = self.selected_link
@@ -129,6 +151,8 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
             self.app.open_url(selected.url)
 
     async def action_edit_remote_link(self) -> None:
+        from gojeera.components.screens.web_link_screen import RemoteLinkScreen
+
         selected = self.selected_link
         if selected is None:
             if self._work_item_key:
@@ -205,6 +229,8 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                 self.remote_links = updated_links
 
     async def action_delete_remote_link(self) -> None:
+        from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+
         if self.selected_link is None:
             if self._work_item_key:
                 self.notify(
@@ -267,7 +293,15 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                 self.hide_loading()
             return
 
-        self.remote_links = response.result or []
+        if self.work_item_key != work_item_key:
+            return
+        self._loaded_work_item_key = work_item_key
+        links = response.result or []
+        screen.mark_detail_tab_count_loaded(
+            'tab-links',
+            sum(1 for link in links if link.url),
+        )
+        self.remote_links = links
 
     def watch_remote_links(self, links: list[WorkItemRemoteLink] | None) -> None:
         with self.app.batch_update():
@@ -308,15 +342,14 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
 
     def watch_work_item_key(self, work_item_key: str | None = None) -> None:
         self._work_item_key = work_item_key
+        self.cancel_loading()
+        self._loaded_work_item_key = None
         self.remote_links = None
 
         if not work_item_key:
             self.is_loading = False
             self.displayed_count = 0
             return
-
-        self.show_loading()
-        self.run_worker(self.fetch_remote_links(work_item_key))
 
     @on(RecordList.RowInvoked)
     def on_row_invoked(self, event: RecordList.RowInvoked) -> None:

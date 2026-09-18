@@ -1,9 +1,16 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 from gojeera.internal.models import jira as jira_models
-from gojeera.internal.store.cache import ApplicationCache
+from gojeera.internal.store.cache import (
+    CACHE_TTL_FIELDS,
+    CACHE_TTL_GLOBAL_SETTINGS,
+    CACHE_TTL_PROJECTS_WITH_RELEASES,
+    CACHE_TTL_SERVER_INFO,
+    ApplicationCache,
+)
 
 ENGINEERING_PROJECT = jira_models.JiraProject(
     id='10000',
@@ -11,6 +18,16 @@ ENGINEERING_PROJECT = jira_models.JiraProject(
     name='Engineering',
     project_type_key='software',
 )
+
+
+def _server_info() -> jira_models.JiraServerInfo:
+    return jira_models.JiraServerInfo(
+        base_url='https://example.atlassian.net',
+        version='1',
+        build_number=1,
+        build_date='2026-08-08',
+        server_title='Example Jira',
+    )
 
 
 @pytest.fixture
@@ -24,6 +41,19 @@ def cache(cache_path: Path):
     instance.set_profile('test-profile')
     try:
         yield instance
+    finally:
+        instance.close()
+
+
+def test_cache_construction_and_profile_selection_defer_pruning(tmp_path, monkeypatch):
+    prune_expired = Mock()
+    monkeypatch.setattr(ApplicationCache, 'prune_expired', prune_expired)
+
+    instance = ApplicationCache(tmp_path / 'deferred-prune.db')
+    try:
+        instance.set_profile('profile-1')
+
+        prune_expired.assert_not_called()
     finally:
         instance.close()
 
@@ -44,6 +74,102 @@ def test_scoped_cache_entry_expires_after_ttl(cache: ApplicationCache, monkeypat
     assert cache.get_project_users('ENG') is None
     assert cache.get_project_users('ENG', allow_stale=True) == [user]
 
+    current_time = 4661.0
+    assert cache.get_project_users('ENG', allow_stale=True) is None
+
+
+def test_fields_cache_uses_finite_default_ttl(cache: ApplicationCache, monkeypatch):
+    import gojeera.internal.store.cache as cache_module
+
+    current_time = 1000.0
+    monkeypatch.setattr(cache_module.time, 'time', lambda: current_time)
+    field = jira_models.JiraField(id='summary', key='summary', name='Summary', schema={})
+
+    cache.set_fields([field])
+    current_time += CACHE_TTL_FIELDS + 1
+
+    assert cache.get_fields() is None
+    assert cache.get_fields(allow_stale=True) == [field]
+
+
+def test_startup_metadata_cache_uses_bounded_ttls(cache: ApplicationCache, monkeypatch):
+    import gojeera.internal.store.cache as cache_module
+
+    current_time = 1000.0
+    monkeypatch.setattr(cache_module.time, 'time', lambda: current_time)
+    server_info = _server_info()
+    global_settings = jira_models.JiraGlobalSettings(
+        attachments_enabled=True,
+        work_item_linking_enabled=True,
+        subtasks_enabled=True,
+        unassigned_work_items_allowed=False,
+        voting_enabled=True,
+        watching_enabled=True,
+        time_tracking_enabled=True,
+        time_tracking_configuration=jira_models.JiraTimeTrackingConfiguration(
+            default_unit='hour',
+            time_format='pretty',
+            working_days_per_week=5,
+            working_hours_per_day=8,
+        ),
+    )
+
+    cache.set_server_info(server_info)
+    cache.set_global_settings(global_settings)
+
+    assert cache.get_server_info() == server_info
+    assert cache.get_global_settings() == global_settings
+
+    current_time += CACHE_TTL_GLOBAL_SETTINGS + 1
+
+    assert cache.get_global_settings() is None
+    assert cache.get_global_settings(allow_stale=True) is None
+    assert cache.get_server_info() == server_info
+
+    current_time = 1000.0 + CACHE_TTL_SERVER_INFO + 1
+
+    assert cache.get_server_info() is None
+    assert cache.get_server_info(allow_stale=True) is None
+
+
+def test_empty_success_is_cached_to_avoid_repeated_requests(cache: ApplicationCache, monkeypatch):
+    import gojeera.internal.store.cache as cache_module
+
+    current_time = 1000.0
+    monkeypatch.setattr(cache_module.time, 'time', lambda: current_time)
+
+    cache.set_sprints_for_project('ENG', [], ttl_seconds=120)
+
+    assert cache.get_sprints_for_project('ENG') == []
+    current_time += 121
+    assert cache.get_sprints_for_project('ENG') is None
+    assert cache.get_sprints_for_project('ENG', allow_stale=True) == []
+
+
+def test_projects_with_releases_cache_is_profile_scoped_and_stale_while_refreshing(
+    cache: ApplicationCache,
+    monkeypatch,
+):
+    import gojeera.internal.store.cache as cache_module
+
+    current_time = 1000.0
+    monkeypatch.setattr(cache_module.time, 'time', lambda: current_time)
+    cache.set_projects_with_releases([ENGINEERING_PROJECT])
+
+    assert cache.get_projects_with_releases() == [ENGINEERING_PROJECT]
+
+    current_time += CACHE_TTL_PROJECTS_WITH_RELEASES + 1
+
+    assert cache.get_projects_with_releases() is None
+    assert cache.get_projects_with_releases(allow_stale=True) == [ENGINEERING_PROJECT]
+
+    cache.set_profile('other-profile')
+    assert cache.get_projects_with_releases(allow_stale=True) is None
+
+    cache.set_profile('test-profile')
+    cache.clear()
+    assert cache.get_projects_with_releases(allow_stale=True) is None
+
 
 def test_clear_removes_profile_data_and_sync_metadata(cache: ApplicationCache):
     cache.set_projects([jira_models.JiraProject(id='10000', key='ENG', name='Engineering')])
@@ -58,6 +184,8 @@ def test_clear_removes_profile_data_and_sync_metadata(cache: ApplicationCache):
     cache.set_sprints_for_project(
         'ENG', [jira_models.JiraSprint(id=1, name='Sprint 1', state='active', boardId=1)]
     )
+    cache.set_server_info(_server_info())
+    cache.set_projects_with_releases([ENGINEERING_PROJECT])
 
     assert cache.needs_refresh('projects') is False
     assert cache.needs_refresh('project_users', 'ENG') is False
@@ -70,6 +198,8 @@ def test_clear_removes_profile_data_and_sync_metadata(cache: ApplicationCache):
     assert cache.get_project_statuses('ENG', allow_stale=True) is None
     assert cache.get_boards_for_project('ENG', allow_stale=True) is None
     assert cache.get_sprints_for_project('ENG', allow_stale=True) is None
+    assert cache.get_server_info(allow_stale=True) is None
+    assert cache.get_projects_with_releases(allow_stale=True) is None
 
     sync_count = cache._connection.execute(
         'SELECT COUNT(*) FROM sync_log WHERE profile_key = ?', (cache.profile_key,)
@@ -148,7 +278,7 @@ def test_migrations_are_idempotent(cache_path: Path):
         second.close()
 
 
-def test_prune_expired_removes_only_expired_scopes(cache: ApplicationCache, monkeypatch):
+def test_prune_expired_keeps_stale_until_hard_expiration(cache: ApplicationCache, monkeypatch):
     import gojeera.internal.store.cache as cache_module
 
     current_time = 1000.0
@@ -168,8 +298,18 @@ def test_prune_expired_removes_only_expired_scopes(cache: ApplicationCache, monk
     current_time = 1061.0
     cache.prune_expired()
 
+    assert cache.get_project_users('ENG') is None
+    assert [user.account_id for user in cache.get_project_users('ENG', allow_stale=True) or []] == [
+        'eng-user'
+    ]
+
+    current_time = 4661.0
+    cache.prune_expired()
+
     assert cache.get_project_users('ENG', allow_stale=True) is None
-    assert [user.account_id for user in cache.get_project_users('OPS') or []] == ['ops-user']
+    assert [user.account_id for user in cache.get_project_users('OPS', allow_stale=True) or []] == [
+        'ops-user'
+    ]
     assert (
         cache._connection.execute(
             "SELECT COUNT(*) FROM sync_log WHERE profile_key = ? AND scope = 'ENG'",

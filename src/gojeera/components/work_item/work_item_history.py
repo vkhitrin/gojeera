@@ -6,6 +6,7 @@ from textual.worker import Worker
 from gojeera.components.tabs.record_list_tab import RecordListTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.work_items import PaginatedWorkItemHistory, WorkItemHistoryEntry
+from gojeera.utils.ui.runtime import cancel_worker, should_start_keyed_load, worker_is_running
 from gojeera.widgets.layout.record_list import Record
 
 if TYPE_CHECKING:
@@ -38,22 +39,42 @@ class WorkItemHistoryWidget(RecordListTabWidget):
 
     @property
     def has_records(self) -> bool:
-        return bool(self.history)
+        return bool(self._history_entries)
 
     def load_if_needed(self) -> None:
-        if not self.work_item_key or self._loaded_work_item_key == self.work_item_key:
-            return
-        if self._loading_worker is not None and not self._loading_worker.is_finished:
+        if not should_start_keyed_load(
+            self.work_item_key,
+            self._loaded_work_item_key,
+            self._loading_worker,
+        ):
             return
 
         self.show_loading()
+        self._start_next_page_load()
+
+    def _start_next_page_load(self) -> None:
+        if not self.work_item_key or self._loaded_work_item_key == self.work_item_key:
+            return
+        if worker_is_running(self._loading_worker):
+            return
         self._loading_worker = self.run_worker(
             self.fetch_history(self.work_item_key), exclusive=True
         )
 
+    def on_record_list_near_end(self, event) -> None:
+        if event.control is not self.record_list:
+            return
+        self._start_next_page_load()
+
+    def _load_next_page_if_viewport_needs_it(self) -> None:
+        if self._loaded_work_item_key == self.work_item_key:
+            return
+        viewport_height = max(1, self.record_list.scrollable_content_region.height)
+        if self.record_list.max_scroll_y - self.record_list.scroll_y <= viewport_height:
+            self._start_next_page_load()
+
     def cancel_loading(self) -> None:
-        if self._loading_worker is not None and not self._loading_worker.is_finished:
-            self._loading_worker.cancel()
+        cancel_worker(self._loading_worker)
         self._loading_worker = None
         self.hide_loading()
 
@@ -62,9 +83,55 @@ class WorkItemHistoryWidget(RecordListTabWidget):
         self._partial_work_item_key = None
         self._next_offset = 0
         self._pages_loaded = 0
+        app = cast('JiraApp', self.app)
+        app.mark_detail_tab_count_loaded('tab-history', len(self._history_entries))
+
+    def _publish_history(self) -> None:
+        sorted_history = sorted(
+            self._history_entries,
+            key=lambda item: item.created_on,
+            reverse=True,
+        )
+        self.displayed_count = len(sorted_history)
+        if [item.id for item in sorted_history] == [item.id for item in self._history_entries]:
+            return
+        self._history_entries = sorted_history
+        self.history = sorted_history
+
+    @staticmethod
+    def _records_for_history(history: list[WorkItemHistoryEntry]) -> list[Record]:
+        records: list[Record] = []
+        for item in history:
+            changes = item.changes or []
+            first_change = changes[0] if changes else None
+            if first_change is None:
+                title = 'Work item updated'
+                footer = ''
+            elif len(changes) == 1:
+                title = first_change.sentence()
+                footer = ''
+            else:
+                title = f'{first_change.sentence()} and {len(changes) - 1} more'
+                footer = '; '.join(change.sentence() for change in changes[1:4])
+                if len(changes) > 4:
+                    footer = f'{footer}; +{len(changes) - 4} more'
+
+            records.append(
+                Record(
+                    key=item.id,
+                    meta=' by '.join(
+                        part for part in (item.created_on, item.display_author) if part
+                    ),
+                    title=title,
+                    footer=footer,
+                    payload=item,
+                )
+            )
+        return records
 
     async def fetch_history(self, work_item_key: str) -> None:
         screen = cast('JiraApp', self.app)
+        load_next_page = False
         if self._partial_work_item_key != work_item_key:
             self._partial_work_item_key = work_item_key
             self._history_entries = []
@@ -72,49 +139,55 @@ class WorkItemHistoryWidget(RecordListTabWidget):
             self._pages_loaded = 0
 
         try:
-            while self._pages_loaded < self.MAX_PAGES:
-                response: APIControllerResponse = await screen.api.get_work_item_history(
-                    work_item_key,
-                    offset=self._next_offset,
-                    limit=self.PAGE_SIZE,
-                )
-                if not response.success or not isinstance(
-                    response.result, PaginatedWorkItemHistory
-                ):
-                    self.notify(
-                        'Unable to retrieve the history associated to the work item.',
-                        severity='warning',
-                        title=work_item_key,
-                    )
-                    self.hide_loading()
-                    return
-
-                if self.work_item_key != work_item_key:
-                    return
-
-                page = response.result
-                self._history_entries.extend(page.entries)
-                self._pages_loaded += 1
-                self.history = sorted(
-                    self._history_entries,
-                    key=lambda item: item.created_on,
-                    reverse=True,
-                )
-
-                if page.is_last or not page.entries:
-                    self._mark_loaded(work_item_key)
-                    return
-
-                self._next_offset = page.start_at + len(page.entries)
-
-            self._mark_loaded(work_item_key)
-            self.notify(
-                'Stopped loading history after the pagination safety limit.',
-                severity='warning',
-                title=work_item_key,
+            response: APIControllerResponse = await screen.api.get_work_item_history(
+                work_item_key,
+                offset=self._next_offset,
+                limit=self.PAGE_SIZE,
             )
+            if not response.success or not isinstance(response.result, PaginatedWorkItemHistory):
+                if self._history_entries:
+                    self._publish_history()
+                self.notify(
+                    'Unable to retrieve the history associated to the work item.',
+                    severity='warning',
+                    title=work_item_key,
+                )
+                return
+
+            if self.work_item_key != work_item_key:
+                return
+
+            page = response.result
+            self._history_entries.extend(page.entries)
+            self._pages_loaded += 1
+
+            if self._pages_loaded == 1:
+                self.history = list(self._history_entries)
+            elif page.entries:
+                self.record_list.append_records(self._records_for_history(page.entries))
+                self.displayed_count = len(self._history_entries)
+
+            if page.is_last or not page.entries:
+                self._publish_history()
+                self._mark_loaded(work_item_key)
+                return
+
+            self._next_offset = page.start_at + len(page.entries)
+            if self._pages_loaded >= self.MAX_PAGES:
+                self._publish_history()
+                self._mark_loaded(work_item_key)
+                self.notify(
+                    'Stopped loading history after the pagination safety limit.',
+                    severity='warning',
+                    title=work_item_key,
+                )
+                return
+
+            load_next_page = True
         finally:
             self.hide_loading()
+            if load_next_page and self.is_mounted:
+                self.call_after_refresh(self._load_next_page_if_viewport_needs_it)
 
     def watch_history(self, history: list[WorkItemHistoryEntry] | None) -> None:
         with self.app.batch_update():
@@ -124,35 +197,7 @@ class WorkItemHistoryWidget(RecordListTabWidget):
                 self.displayed_count = 0
                 return
 
-            records: list[Record] = []
-            for item in history:
-                changes = item.changes or []
-                first_change = changes[0] if changes else None
-                if first_change is None:
-                    title = 'Work item updated'
-                    footer = ''
-                elif len(changes) == 1:
-                    title = first_change.sentence()
-                    footer = ''
-                else:
-                    title = f'{first_change.sentence()} and {len(changes) - 1} more'
-                    footer = '; '.join(change.sentence() for change in changes[1:4])
-                    if len(changes) > 4:
-                        footer = f'{footer}; +{len(changes) - 4} more'
-
-                records.append(
-                    Record(
-                        key=item.id,
-                        meta=' by '.join(
-                            part for part in (item.created_on, item.display_author) if part
-                        ),
-                        title=title,
-                        footer=footer,
-                        payload=item,
-                    )
-                )
-
-            self.record_list.set_records(records)
+            self.record_list.set_records(self._records_for_history(history))
             self.hide_loading()
             self.displayed_count = len(history)
 

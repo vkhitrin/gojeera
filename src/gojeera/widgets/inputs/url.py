@@ -5,10 +5,12 @@ from textual.widgets import Input
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     configure_compact_field_for_mode,
     require_create_mode,
     require_update_mode,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as URLFieldMode,
 )
 
 
@@ -26,7 +28,7 @@ class URL(Input, BaseField, BaseUpdateField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: URLFieldMode,
         field_id: str,
         title: str | None = None,
         original_value: str | None = None,
@@ -39,18 +41,18 @@ class URL(Input, BaseField, BaseUpdateField):
             compact=True,
             **kwargs,
         )
-        configure_compact_field_for_mode(
-            self,
-            mode=mode,
-            field_id=field_id,
-            title=title,
-            original_value=original_value or '',
-            field_supports_update=field_supports_update,
-            update_value=original_value or '',
-        )
+        field_options = {
+            'mode': mode,
+            'field_id': field_id,
+            'title': title,
+            'original_value': original_value or '',
+            'field_supports_update': field_supports_update,
+            'update_value': original_value or '',
+        }
+        configure_compact_field_for_mode(self, **field_options)
 
     def on_input_blurred(self, _event: Input.Changed) -> None:
-        if self.mode == FieldMode.UPDATE and not self.update_enabled:
+        if self.mode == URLFieldMode.UPDATE and not self.update_enabled:
             return
 
         value = self.value.strip()

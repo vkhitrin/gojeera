@@ -5,17 +5,10 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Label, Select, Static
 
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.layout import modal_components
 
 
-class SimpleOptionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
+class SimpleOptionPickerScreen(modal_components.ExtendedModalScreen[tuple[str, str] | None]):
     """Shared modal for selecting a tuple payload from a list of options."""
 
     MODAL_TITLE: ClassVar[str]
@@ -30,10 +23,10 @@ class SimpleOptionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
         self._modal_title = self.MODAL_TITLE
 
     @property
-    def option_select(self) -> VimSelect:
-        return self.query_one(VimSelect)
+    def option_select(self) -> modal_components.VimSelect:
+        return self.query_one(modal_components.VimSelect)
 
-    def build_selector(self) -> VimSelect:
+    def build_selector(self) -> modal_components.VimSelect:
         raise NotImplementedError
 
     @property
@@ -43,7 +36,7 @@ class SimpleOptionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
 
-        with VerticalSuppressClicks(id='modal_outer'):
+        with modal_components.VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id=self.FORM_ID, classes='modal-form modal-form--fields'):
                 with Vertical():
@@ -53,15 +46,17 @@ class SimpleOptionPickerScreen(ExtendedModalScreen[tuple[str, str] | None]):
                     yield self.build_selector()
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_components.build_modal_confirm_button(
                     Button,
                     button_id=self.INSERT_BUTTON_ID,
                     label='Insert',
                     disabled=True,
                 )
-                yield build_modal_cancel_button(Button, button_id=self.CANCEL_BUTTON_ID)
+                yield modal_components.build_modal_cancel_button(
+                    Button, button_id=self.CANCEL_BUTTON_ID
+                )
 
-        yield ExtendedFooter(show_command_palette=False)
+        yield modal_components.ExtendedFooter(show_command_palette=False)
 
     def on_mount(self) -> None:
         self.activate_modal_actions(self.option_select, jump_mode='focus')

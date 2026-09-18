@@ -3,12 +3,18 @@ from __future__ import annotations
 from typing import Any, cast
 
 from rich.style import Style
-from textual.geometry import Size
+from textual.geometry import Region, Size
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 
-from gojeera.utils.ui.card_scroll import make_blank_card_strip, row_index_at_y, scroll_to_row
+from gojeera.utils.ui.card_scroll import (
+    make_blank_card_strip,
+    make_card_content_strip,
+    row_index_at_y,
+    scroll_to_row,
+)
 from gojeera.utils.ui.scroll_geometry import (
+    build_scrollbar_aware_layout,
     container_height_for_scroll_view,
     render_width_for_scroll_view,
     update_vertical_overflow_class,
@@ -74,6 +80,43 @@ class CardScrollViewMixin:
             total_width=width,
         )
 
+    def _make_card_content_strip(
+        self,
+        *,
+        content_width: int,
+        text: str,
+        text_style: Style,
+        background_style: Style,
+        total_width: int,
+    ) -> Strip:
+        return make_card_content_strip(
+            card_padding=self.CARD_PADDING,
+            content_width=content_width,
+            text=text,
+            text_style=text_style,
+            background_style=background_style,
+            base_style=self.rich_style,
+            total_width=total_width,
+        )
+
+    def _make_content_strip(
+        self,
+        text: str,
+        text_style: Style,
+        background_style: Style,
+        width: int,
+    ) -> Strip:
+        return self._make_card_content_strip(
+            content_width=self._blank_card_content_width(width),
+            text=text,
+            text_style=text_style,
+            background_style=background_style,
+            total_width=width,
+        )
+
+    def _build_scrollbar_aware_layout(self, **kwargs: Any) -> Any:
+        return build_scrollbar_aware_layout(**kwargs)
+
     def _wrap_text(self, text: str, width: int) -> list[str]:
         return wrap_text_cell_aware(text, width)
 
@@ -92,6 +135,22 @@ class CardScrollViewMixin:
             return
         row = self._rows[index]
         scroll_to_row(cast(ScrollView, self), row_y=row.y, row_height=row.height)
+
+    def _refresh_row_indices(self, *indices: int | None) -> None:
+        """Repaint only visible rows whose interaction styling changed."""
+        view = cast(ScrollView, self)
+        viewport = Region(0, 0, view.size.width, view.size.height)
+        scroll_y = int(view.scroll_offset.y)
+        regions: list[Region] = []
+        for index in dict.fromkeys(indices):
+            if index is None or not 0 <= index < len(self._rows):
+                continue
+            row = self._rows[index]
+            region = Region(0, row.y - scroll_y, view.size.width, row.height).intersection(viewport)
+            if region.width > 0 and region.height > 0:
+                regions.append(region)
+        if regions:
+            view.refresh(*regions)
 
     def _update_hovered_index(self, y: int) -> None:
         hovered_index = self._row_index_at_y(y)

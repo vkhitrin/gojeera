@@ -5,12 +5,14 @@ from textual.widgets import Select
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     configure_select_field_for_mode,
     optional_selection_value_has_changed,
     require_create_mode,
     require_update_mode,
     selection_update_payload,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as SelectionFieldMode,
 )
 from gojeera.widgets.selection.vim_select import VimSelect
 
@@ -28,7 +30,7 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: SelectionFieldMode,
         field_id: str,
         options: list[tuple[str, str]],
         title: str | None = None,
@@ -40,7 +42,7 @@ class SelectionWidget(VimSelect, BaseField, BaseUpdateField):
         prompt: str | None = None,
     ):
         display_prompt = prompt or ''
-        select_value = original_value if mode == FieldMode.UPDATE else initial_value
+        select_value = original_value if mode == SelectionFieldMode.UPDATE else initial_value
         if select_value is None:
             select_value = Select.NULL
 

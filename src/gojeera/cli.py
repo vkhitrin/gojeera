@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from gojeera.internal.auth.profiles import AuthProfile
     from gojeera.internal.auth.service import AuthProfileStatus
 
-from gojeera.internal.auth.service import AuthService
+from gojeera.internal.auth.service import AuthService, AuthValidationResult
 
 logger = logging.getLogger('gojeera')
 _console: Console | None = None
@@ -56,6 +56,29 @@ def _get_console() -> Console:
 
 
 auth_service = AuthService()
+
+
+def _validate_basic_profile_or_exit(
+    profile_name: str,
+    instance_url: str,
+    email: str,
+    api_token: str,
+) -> AuthValidationResult:
+    if not email or not api_token:
+        click.echo('Email and Jira API token are required.')
+        sys.exit(1)
+    validation_result = auth_service.validate_profile(
+        BasicAuthProfile(
+            name=profile_name,
+            site=instance_url,
+            email=email,
+        ),
+        api_token=api_token,
+    )
+    if not validation_result.is_valid:
+        click.echo(f'Authentication validation failed: {validation_result.message}')
+        sys.exit(1)
+    return validation_result
 
 
 def _echo_invalid_auth_profile_error(message: str) -> bool:
@@ -322,21 +345,12 @@ def _create_api_token_fallback_profile(
     if not instance_url:
         click.echo('Jira instance URL is required.')
         sys.exit(1)
-    if not email or not api_token:
-        click.echo('Email and Jira API token are required.')
-        sys.exit(1)
-
-    validation_result = auth_service.validate_profile(
-        BasicAuthProfile(
-            name=profile_name,
-            site=instance_url,
-            email=email,
-        ),
+    validation_result = _validate_basic_profile_or_exit(
+        profile_name=profile_name,
+        instance_url=instance_url,
+        email=email,
         api_token=api_token,
     )
-    if not validation_result.is_valid:
-        click.echo(f'Authentication validation failed: {validation_result.message}')
-        sys.exit(1)
 
     upsert_profile(
         profile_name,
@@ -922,21 +936,12 @@ def auth_login():
                         auth_service.get_basic_api_token(existing_profile, prefer_environment=False)
                         or ''
                     )
-                if not api_token:
-                    click.echo('Email and Jira API token are required.')
-                    sys.exit(1)
-
-                validation_result = auth_service.validate_profile(
-                    BasicAuthProfile(
-                        name=profile_name,
-                        site=instance_url,
-                        email=email,
-                    ),
-                    api_token=api_token,
+                validation_result = _validate_basic_profile_or_exit(
+                    profile_name,
+                    instance_url,
+                    email,
+                    api_token,
                 )
-                if not validation_result.is_valid:
-                    click.echo(f'Authentication validation failed: {validation_result.message}')
-                    sys.exit(1)
 
                 basic_site = instance_url
                 basic_email = email

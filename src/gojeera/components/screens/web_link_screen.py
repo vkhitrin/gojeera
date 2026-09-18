@@ -3,14 +3,16 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Input, Label, Static
 
-from gojeera.widgets.inputs.extended_input import ExtendedInput
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
+from gojeera.widgets.layout.modal_components import (
+    ExtendedFooter,
+    ExtendedInput,
+    ExtendedModalScreen,
     build_modal_cancel_button,
     build_modal_confirm_button,
 )
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
+from gojeera.widgets.layout.modal_components import (
+    VerticalSuppressClicks as RemoteLinkForm,
+)
 
 
 class RemoteLinkURLInputWidget(ExtendedInput):
@@ -76,7 +78,7 @@ class RemoteLinkScreen(ExtendedModalScreen[dict]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with RemoteLinkForm(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with (
                 VerticalScroll(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from rich.style import Style
@@ -28,10 +29,43 @@ class ExtendedTable(DataTable):
         self._row_styles.clear()
         return super().clear(columns)
 
-    def set_row_style(self, row_key: RowKey | str, style: Style) -> None:
-        resolved_row_key = row_key if isinstance(row_key, RowKey) else RowKey(row_key)
-        self._row_styles[resolved_row_key] = style
+    def replace_rows(
+        self,
+        rows: Iterable[Iterable[Any]],
+        *,
+        row_styles: Iterable[Style | None] | None = None,
+    ) -> list[RowKey]:
+        """Replace all rows in one UI update and optionally apply per-row styles."""
+
+        with self.app.batch_update():
+            self.clear()
+            row_keys = self._add_styled_rows(rows, row_styles)
+        return row_keys
+
+    def append_rows(
+        self,
+        rows: Iterable[Iterable[Any]],
+        *,
+        row_styles: Iterable[Style | None] | None = None,
+    ) -> list[RowKey]:
+        """Append rows in one UI update and optionally apply per-row styles."""
+
+        with self.app.batch_update():
+            row_keys = self._add_styled_rows(rows, row_styles)
+        return row_keys
+
+    def _add_styled_rows(
+        self,
+        rows: Iterable[Iterable[Any]],
+        row_styles: Iterable[Style | None] | None,
+    ) -> list[RowKey]:
+        row_keys = self.add_rows(rows)
+        if row_styles is not None:
+            for row_key, row_style in zip(row_keys, row_styles, strict=True):
+                if row_style is not None:
+                    self._row_styles[row_key] = row_style
         self.refresh()
+        return row_keys
 
     def _get_row_style(self, row_index: int, base_style: Style) -> Style:
         row_style = super()._get_row_style(row_index, base_style)

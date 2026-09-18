@@ -4,6 +4,7 @@ from textual.command import DiscoveryHit, Hit
 
 SUB_COMMAND_PALETTE_ID_ATTRIBUTE = 'sub_command_palette_id'
 SUB_COMMAND_PALETTE_LAUNCH_ATTRIBUTE = 'sub_command_palette_launch'
+COMMAND_PALETTE_NOTICE_ATTRIBUTE = 'command_palette_notice'
 
 
 def mark_sub_command_palette_hit(
@@ -18,6 +19,17 @@ def mark_sub_command_palette_hit(
 def is_sub_command_palette_hit(hit: DiscoveryHit | Hit, palette_id: str) -> bool:
     """Return whether a command hit belongs to the requested sub command palette."""
     return getattr(hit, SUB_COMMAND_PALETTE_ID_ATTRIBUTE, None) == palette_id
+
+
+def mark_command_palette_notice(hit: DiscoveryHit | Hit) -> DiscoveryHit | Hit:
+    """Mark an informational command-palette row as non-selectable."""
+    setattr(hit, COMMAND_PALETTE_NOTICE_ATTRIBUTE, True)
+    return hit
+
+
+def is_command_palette_notice(hit: DiscoveryHit | Hit) -> bool:
+    """Return whether a hit is an informational row."""
+    return bool(getattr(hit, COMMAND_PALETTE_NOTICE_ATTRIBUTE, False))
 
 
 def mark_sub_command_palette_launcher_hit(

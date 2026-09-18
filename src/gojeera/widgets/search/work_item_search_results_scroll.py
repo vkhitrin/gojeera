@@ -18,10 +18,6 @@ from gojeera.internal.models.work_items import (
 )
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.jira.urls import build_external_url_for_work_item
-from gojeera.utils.ui.card_scroll import make_card_content_strip
-from gojeera.utils.ui.scroll_geometry import (
-    build_scrollbar_aware_layout,
-)
 from gojeera.widgets.layout.card_scroll_view_mixin import (
     OVERFLOW_SCROLLBAR_CSS,
     CardScrollViewMixin,
@@ -224,6 +220,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         self._initial_render_attempts = 0
         self._pending_theme_refresh = False
         self._skip_next_resize_rebuild = False
+        self._restore_focus_after_request = False
         self._card_style = None
         self._card_selected_style = None
         self._card_loaded_style = None
@@ -286,10 +283,13 @@ __OVERFLOW_SCROLLBAR_CSS__
         self._cache_component_styles()
         self.refresh()
 
-    def _update_selection(self) -> None:
+    def _update_selection(self, previous_index: int | None = None) -> None:
         selected = self.selected_work_item
         self.current_work_item_key = selected.work_item_key if selected else None
-        self.refresh()
+        if previous_index is None:
+            self.refresh()
+        else:
+            self._refresh_row_indices(previous_index, self._selected_index)
 
     def _cache_component_styles(self) -> None:
         self._card_style = self.get_component_rich_style('search-result--card', partial=True)
@@ -367,7 +367,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         return rows, y
 
     def _build_layout_for_current_geometry(self) -> tuple[int, list[SearchResultRow], int]:
-        return build_scrollbar_aware_layout(
+        return self._build_scrollbar_aware_layout(
             base_width=self._base_card_width(),
             container_height=self._container_height(),
             scrollbar_size_vertical=self.scrollbar_size_vertical,
@@ -414,8 +414,31 @@ __OVERFLOW_SCROLLBAR_CSS__
         self._complete_initial_render_with(
             has_content=bool(self._work_items),
             retry_callback=self._complete_initial_render,
-            after_finalize=lambda: self._finish_search_state(results_loaded=True),
+            after_finalize=self._finish_initial_render,
         )
+
+    def _finish_initial_render(self) -> None:
+        self._finish_search_state(results_loaded=True)
+        self.restore_focus_after_request()
+
+    def request_focus_after_render(self) -> None:
+        self._restore_focus_after_request = True
+
+    def restore_focus_after_request(self) -> None:
+        if not self._restore_focus_after_request:
+            return
+        if self.is_mounted and self.display:
+            self.call_after_refresh(self._focus_after_request)
+
+    def _focus_after_request(self) -> None:
+        if (
+            self._restore_focus_after_request
+            and self.is_mounted
+            and self.display
+            and self.focusable
+        ):
+            self._restore_focus_after_request = False
+            self.app.set_focus(self, scroll_visible=False)
 
     def _refresh_scrollbars(self) -> None:
         super()._refresh_scrollbars()
@@ -471,17 +494,6 @@ __OVERFLOW_SCROLLBAR_CSS__
             self._footer_active_style
             if index == self._selected_index or self._hovered_index == index
             else self._footer_style
-        )
-
-    def _make_content_strip(self, text: str, text_style, background_style, width: int) -> Strip:
-        return make_card_content_strip(
-            card_padding=self.CARD_PADDING,
-            content_width=self._card_content_width(width),
-            text=text,
-            text_style=text_style,
-            background_style=background_style,
-            base_style=self.rich_style,
-            total_width=width,
         )
 
     def _blank_card_content_width(self, width: int) -> int:
@@ -542,26 +554,38 @@ __OVERFLOW_SCROLLBAR_CSS__
 
     def action_cursor_down(self) -> None:
         if self._rows:
-            self._selected_index = min(self._selected_index + 1, len(self._rows) - 1)
-            self._update_selection()
+            previous_index = self._selected_index
+            self._selected_index = min(previous_index + 1, len(self._rows) - 1)
+            if self._selected_index == previous_index:
+                return
+            self._update_selection(previous_index)
             self._scroll_to_index(self._selected_index)
 
     def action_cursor_up(self) -> None:
         if self._rows:
-            self._selected_index = max(self._selected_index - 1, 0)
-            self._update_selection()
+            previous_index = self._selected_index
+            self._selected_index = max(previous_index - 1, 0)
+            if self._selected_index == previous_index:
+                return
+            self._update_selection(previous_index)
             self._scroll_to_index(self._selected_index)
 
     def action_first_item(self) -> None:
         if self._rows:
+            previous_index = self._selected_index
             self._selected_index = 0
-            self._update_selection()
+            if self._selected_index == previous_index:
+                return
+            self._update_selection(previous_index)
             self._scroll_to_index(self._selected_index)
 
     def action_last_item(self) -> None:
         if self._rows:
+            previous_index = self._selected_index
             self._selected_index = len(self._rows) - 1
-            self._update_selection()
+            if self._selected_index == previous_index:
+                return
+            self._update_selection(previous_index)
             self._scroll_to_index(self._selected_index)
 
     async def clear_results(self) -> None:
@@ -670,8 +694,9 @@ __OVERFLOW_SCROLLBAR_CSS__
         index = self._row_index_at_y(clicked_y)
         if index is None:
             return
+        previous_index = self._selected_index
         self._selected_index = index
-        self._update_selection()
+        self._update_selection(previous_index)
         self._scroll_to_index(index)
         self._select_work_item(self._rows[index].work_item_key)
 
@@ -702,12 +727,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         )
 
     def action_open_work_item_in_browser(self) -> None:
-        if self.current_work_item_key and (
-            url := build_external_url_for_work_item(
-                self.current_work_item_key,
-                cast('JiraApp', self.app),
-            )
-        ):
+        if url := self._current_work_item_url():
             self.notify('Opening Work Item in the browser...', title='Search Results')
             self.app.open_url(url)
 
@@ -727,14 +747,17 @@ __OVERFLOW_SCROLLBAR_CSS__
             self.notify('Key copied to clipboard', title=self.current_work_item_key)
 
     def action_copy_work_item_url(self) -> None:
-        if self.current_work_item_key and (
-            url := build_external_url_for_work_item(
-                self.current_work_item_key,
-                cast('JiraApp', self.app),
-            )
-        ):
+        if url := self._current_work_item_url():
             self.app.copy_to_clipboard(url)
-            self.notify('URL copied to clipboard', title=self.current_work_item_key)
+            self.notify('URL copied to clipboard', title=self.current_work_item_key or '')
+
+    def _current_work_item_url(self) -> str | None:
+        if not self.current_work_item_key:
+            return None
+        return build_external_url_for_work_item(
+            self.current_work_item_key,
+            cast('JiraApp', self.app),
+        )
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         del parameters
@@ -776,6 +799,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         self.action_next_page()
 
     def _request_work_items_page(self, requested_page: int) -> None:
+        self._restore_focus_after_request = self.app.focused is self
         next_page_token = self.token_by_page.get(requested_page)
         self.pending_page = requested_page
 

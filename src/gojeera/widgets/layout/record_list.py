@@ -12,10 +12,6 @@ from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 
-from gojeera.utils.ui.card_scroll import make_card_content_strip
-from gojeera.utils.ui.scroll_geometry import (
-    build_scrollbar_aware_layout,
-)
 from gojeera.widgets.layout.card_scroll_view_mixin import (
     OVERFLOW_SCROLLBAR_CSS,
     CardScrollViewMixin,
@@ -123,6 +119,13 @@ __OVERFLOW_SCROLLBAR_CSS__
     class RowInvoked(_RowMessage):
         pass
 
+    class NearEnd(Message):
+        """Posted when more records are needed to keep the viewport populated."""
+
+        @property
+        def control(self) -> RecordList:
+            return cast('RecordList', self._sender)
+
     def __init__(self, *, widget_id: str, classes: str | None = None):
         super().__init__(id=widget_id, classes=classes)
         self.can_focus = False
@@ -142,6 +145,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         self._initial_render_attempts = 0
         self._skip_next_resize_rebuild = False
         self._initial_render_scheduled = False
+        self._near_end_notified_record_count: int | None = None
 
     @property
     def selected_record(self) -> Record | None:
@@ -162,6 +166,7 @@ __OVERFLOW_SCROLLBAR_CSS__
             self._schedule_initial_render()
 
     def clear_records(self) -> None:
+        self._near_end_notified_record_count = None
         if not self.is_mounted:
             self._records = []
             self._selected_index = None
@@ -171,6 +176,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         self._clear_mounted_records()
 
     def set_records(self, records: list[Record]) -> None:
+        self._near_end_notified_record_count = None
         next_records = list(records)
         next_selected_index = 0 if self._is_active and next_records else None
         if not self.is_mounted:
@@ -192,6 +198,36 @@ __OVERFLOW_SCROLLBAR_CSS__
             self._initial_render_attempts = 0
             self._reset_render_state(refresh=False)
         self._schedule_initial_render()
+
+    def append_records(self, records: Sequence[Record]) -> None:
+        appended_records = list(records)
+        if not appended_records:
+            return
+        if not self.is_mounted or self._pending_initial_render:
+            self.set_records([*self._records, *appended_records])
+            return
+
+        existing_records = bool(self._records)
+        self._records.extend(appended_records)
+        self._near_end_notified_record_count = None
+        self.can_focus = True
+        if not existing_records or not self.has_class('-overflowing'):
+            self._rebuild_rows()
+            return
+
+        appended_rows, appended_height = self._build_rows_for_records(
+            appended_records,
+            self._layout_width,
+        )
+        y_offset = self.virtual_size.height + 1
+        for row in appended_rows:
+            row.y += y_offset
+        virtual_height = y_offset + appended_height
+        self._commit_layout(
+            self._layout_width,
+            [*self._rows, *appended_rows],
+            virtual_height,
+        )
 
     def _clear_mounted_records(self) -> None:
         with self.app.batch_update():
@@ -324,7 +360,7 @@ __OVERFLOW_SCROLLBAR_CSS__
     def _build_layout_for_records(
         self, records: list[Record], *, base_width: int | None = None
     ) -> tuple[int, list[RecordRowLayout], int]:
-        return build_scrollbar_aware_layout(
+        return self._build_scrollbar_aware_layout(
             base_width=max(
                 1,
                 base_width if base_width is not None else self._safe_render_width(),
@@ -351,6 +387,22 @@ __OVERFLOW_SCROLLBAR_CSS__
         if reset_scroll:
             self.scroll_to(y=0, animate=False, force=True, immediate=True)
         self.refresh()
+        self.call_after_refresh(self._post_near_end_if_needed)
+
+    def _post_near_end_if_needed(self) -> None:
+        record_count = len(self._records)
+        if not record_count or self._near_end_notified_record_count == record_count:
+            return
+        viewport_height = max(1, self.scrollable_content_region.height)
+        if self.max_scroll_y - self.scroll_y > viewport_height:
+            return
+        self._near_end_notified_record_count = record_count
+        self.post_message(self.NearEnd())
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        super().watch_scroll_y(old_value, new_value)
+        if round(old_value) != round(new_value):
+            self._post_near_end_if_needed()
 
     def _apply_layout(
         self,
@@ -407,8 +459,11 @@ __OVERFLOW_SCROLLBAR_CSS__
         super()._refresh_scrollbars()
         self._hide_horizontal_scrollbar()
 
-    def _update_selection(self) -> None:
-        self.refresh()
+    def _update_selection(self, *indices: int | None) -> None:
+        if indices:
+            self._refresh_row_indices(*indices)
+        else:
+            self.refresh()
 
     def _post_highlight(self) -> None:
         if selected := self.selected_record:
@@ -430,7 +485,7 @@ __OVERFLOW_SCROLLBAR_CSS__
         previous_index = self._selected_index
         self._selected_index = index
         if previous_index != index:
-            self._update_selection()
+            self._update_selection(previous_index, index)
             self._post_highlight()
         if scroll_into_view:
             self._scroll_to_index(index)
@@ -452,19 +507,6 @@ __OVERFLOW_SCROLLBAR_CSS__
         if self._is_active_index(index):
             return self._text_active_style or self.rich_style
         return self._text_style or self.rich_style
-
-    def _make_content_strip(
-        self, text: str, text_style: Style, background_style: Style, width: int
-    ) -> Strip:
-        return make_card_content_strip(
-            card_padding=self.CARD_PADDING,
-            content_width=self._content_width(width),
-            text=text,
-            text_style=text_style,
-            background_style=background_style,
-            base_style=self.rich_style,
-            total_width=width,
-        )
 
     def _blank_card_content_width(self, width: int) -> int:
         return self._content_width(width)
@@ -535,9 +577,10 @@ __OVERFLOW_SCROLLBAR_CSS__
         if self._selected_index is None and self._records:
             self.select_index(0, scroll_into_view=True, focus=False)
         else:
-            self._update_selection()
+            self._update_selection(self._selected_index)
 
     def on_blur(self) -> None:
         self._is_active = False
+        hovered_index = self._hovered_index
         self._hovered_index = None
-        self._update_selection()
+        self._update_selection(self._selected_index, hovered_index)

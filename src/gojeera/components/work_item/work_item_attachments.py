@@ -5,9 +5,6 @@ from textual import on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
 
-from gojeera.components.screens.confirmation_screen import ConfirmationScreen
-from gojeera.components.screens.new_attachment_screen import AddAttachmentScreen
-from gojeera.components.screens.save_attachment_screen import SaveAttachmentScreen
 from gojeera.components.tabs.record_list_tab import RecordListTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import Attachment
@@ -73,6 +70,8 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
         super().watch_is_loading(loading)
 
     async def action_add_attachment(self) -> None:
+        from gojeera.components.screens.new_attachment_screen import AddAttachmentScreen
+
         if self.work_item_key:
             await self.app.push_screen(
                 AddAttachmentScreen(self.work_item_key), self.upload_attachment
@@ -164,6 +163,8 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
                 app.open_url(url)
 
     async def action_download_attachment(self) -> None:
+        from gojeera.components.screens.save_attachment_screen import SaveAttachmentScreen
+
         attachment = self.selected_attachment
         if not attachment or not attachment.id or not attachment.filename:
             self.notify(
@@ -207,6 +208,8 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
                 )
 
     async def action_delete_attachment(self) -> None:
+        from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+
         if not self.selected_attachment:
             self.notify(
                 'Select a row, e.g. by clicking on it, before attempting to delete the file.',

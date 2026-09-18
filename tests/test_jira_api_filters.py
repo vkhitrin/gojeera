@@ -25,26 +25,25 @@ def expected_filter(label: str, expression: str, *, starred: bool) -> dict:
     }
 
 
+def paginated_values(first_values: list[dict], second_values: list[dict]) -> list[dict]:
+    return [
+        paginated_response(0, first_values, is_last=False),
+        paginated_response(2, second_values, is_last=True),
+    ]
+
+
 @pytest.mark.asyncio
 async def test_fetch_user_filters_fetches_all_personal_pages():
     api, make_request = build_api_with_mocked_client(
-        [
-            paginated_response(
-                0,
-                [
-                    {'id': '1', 'name': 'Mine 1', 'jql': 'project = ENG', 'favourite': False},
-                    {'id': '2', 'name': 'Mine 2', 'jql': 'project = SUP', 'favourite': True},
-                ],
-                is_last=False,
-            ),
-            paginated_response(
-                2,
-                [
-                    {'id': '3', 'name': 'Mine 3', 'jql': 'project = OPS', 'favourite': False},
-                ],
-                is_last=True,
-            ),
-        ]
+        paginated_values(
+            [
+                {'id': '1', 'name': 'Mine 1', 'jql': 'project = ENG', 'favourite': False},
+                {'id': '2', 'name': 'Mine 2', 'jql': 'project = SUP', 'favourite': True},
+            ],
+            [
+                {'id': '3', 'name': 'Mine 3', 'jql': 'project = OPS', 'favourite': False},
+            ],
+        )
     )
 
     filters = await api.fetch_user_filters(account_id='user-1', max_results=2)
@@ -84,20 +83,14 @@ async def test_fetch_user_filters_fetches_all_shared_pages_and_deduplicates():
                 ],
                 is_last=True,
             ),
-            paginated_response(
-                0,
+            *paginated_values(
                 [
                     {'id': '1', 'name': 'Mine 1', 'jql': 'project = ENG', 'favourite': True},
                     {'id': '2', 'name': 'Team 1', 'jql': 'project = SUP', 'favourite': True},
                 ],
-                is_last=False,
-            ),
-            paginated_response(
-                2,
                 [
                     {'id': '3', 'name': 'Team 2', 'jql': 'project = OPS', 'favourite': False},
                 ],
-                is_last=True,
             ),
         ]
     )
@@ -121,23 +114,15 @@ async def test_fetch_user_filters_fetches_all_shared_pages_and_deduplicates():
 @pytest.mark.asyncio
 async def test_get_all_fields_paginated_fetches_all_pages():
     api, make_request = build_api_with_mocked_client(
-        [
-            paginated_response(
-                0,
-                [
-                    {'id': 'custom-1', 'description': 'First'},
-                    {'id': 'custom-2', 'description': 'Second'},
-                ],
-                is_last=False,
-            ),
-            paginated_response(
-                2,
-                [
-                    {'id': 'custom-3', 'description': 'Third'},
-                ],
-                is_last=True,
-            ),
-        ]
+        paginated_values(
+            [
+                {'id': 'custom-1', 'description': 'First'},
+                {'id': 'custom-2', 'description': 'Second'},
+            ],
+            [
+                {'id': 'custom-3', 'description': 'Third'},
+            ],
+        )
     )
 
     fields = await api.get_all_fields_paginated(max_results=2, query='Story Points')

@@ -119,13 +119,24 @@ class RecordListTabWidget(Vertical, can_focus=False):
         self, work_item_key: str, *, defer_tab_activation: bool = False
     ) -> None:
         screen = cast('JiraApp', self.app)
+        focused = screen.focused
+        restore_content_focus = focused is not None and (
+            focused is self or focused in self.walk_children()
+        )
         await screen.load_work_item(work_item_key)
 
         if screen.tabs and not screen.tabs.disabled:
+
+            def activate_tab() -> None:
+                if restore_content_focus:
+                    screen.tabs.activate_from_content('tab-description')
+                else:
+                    screen.tabs.active = 'tab-description'
+
             if defer_tab_activation:
-                self.set_timer(0.01, lambda: setattr(screen.tabs, 'active', 'tab-description'))
+                self.set_timer(0.01, activate_tab)
             else:
-                screen.tabs.active = 'tab-description'
+                activate_tab()
 
     def load_work_item(self, work_item_key: str, *, defer_tab_activation: bool = False) -> None:
         self.run_worker(

@@ -8,9 +8,11 @@ from textual.widgets import MaskedInput
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     configure_compact_field_for_mode,
     update_value_or_unset,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as MaskedFieldMode,
 )
 from gojeera.widgets.inputs.masked_input_utils import (
     allow_empty_masked_input_validation,
@@ -28,7 +30,7 @@ class BaseMaskedInputField(MaskedInput, BaseField, BaseUpdateField):
     def __init__(
         self,
         *,
-        mode: FieldMode,
+        mode: MaskedFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
@@ -36,7 +38,7 @@ class BaseMaskedInputField(MaskedInput, BaseField, BaseUpdateField):
         field_supports_update: bool = True,
     ) -> None:
         configured_required = self._configured_required(mode, required)
-        valid_empty = not configured_required if mode == FieldMode.CREATE else True
+        valid_empty = not configured_required if mode == MaskedFieldMode.CREATE else True
         super().__init__(
             id=field_id,
             template=self._mask_template,
@@ -83,6 +85,6 @@ class BaseMaskedInputField(MaskedInput, BaseField, BaseUpdateField):
         )
 
     @staticmethod
-    def _configured_required(mode: FieldMode, required: bool) -> bool:
+    def _configured_required(mode: MaskedFieldMode, required: bool) -> bool:
         del mode
         return required

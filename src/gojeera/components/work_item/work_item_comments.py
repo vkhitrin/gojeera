@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import logging
 from typing import TYPE_CHECKING, Any, cast
@@ -16,9 +17,8 @@ from textual.css.query import NoMatches
 from textual.reactive import Reactive, reactive
 from textual.widget import MountError
 from textual.widgets import Static
+from textual.worker import Worker
 
-from gojeera.components.screens.comment_screen import CommentScreen
-from gojeera.components.screens.confirmation_screen import ConfirmationScreen
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.jira.work_item_permissions import (
     ADD_COMMENT_PERMISSIONS,
@@ -30,7 +30,7 @@ from gojeera.internal.models.work_items import (
     _build_attachment_markdown_details,
 )
 from gojeera.utils.jira.urls import build_external_url_for_work_item
-from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
+from gojeera.utils.ui.runtime import request_bindings_refresh
 from gojeera.widgets.markdown.gojeera_markdown import GojeeraMarkdown
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+COMMENT_RENDER_BATCH_SIZE = 20
 
 
 def _apply_comment_result_to_collection(
@@ -146,6 +147,33 @@ def _inspect_adf_body(body: object) -> dict[str, object]:
     }
 
 
+def _convert_comment_bodies(
+    comments: list[WorkItemComment],
+    base_url: str | None,
+    media_attachment_details: dict[str, tuple[str, str | None]],
+    ordered_attachment_details: list[tuple[str, str | None]],
+) -> list[str]:
+    from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
+
+    contents: list[str] = []
+    for comment in comments:
+        if isinstance(comment.body, str):
+            contents.append(comment.body)
+        elif comment.body is not None:
+            contents.append(
+                convert_adf_to_markdown(
+                    comment.body,
+                    base_url,
+                    rendered_body=comment.rendered_body,
+                    media_attachment_details=media_attachment_details,
+                    ordered_attachment_details=ordered_attachment_details,
+                )
+            )
+        else:
+            contents.append('')
+    return contents
+
+
 class CommentContainer(Vertical, can_focus=False):
     """A container representing a single comment."""
 
@@ -228,6 +256,8 @@ class CommentContainer(Vertical, can_focus=False):
         return True
 
     async def action_delete_comment(self) -> None:
+        from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+
         if not self._can_modify_comment('delete'):
             return
 
@@ -237,6 +267,8 @@ class CommentContainer(Vertical, can_focus=False):
         )
 
     async def action_edit_comment(self) -> None:
+        from gojeera.components.screens.comment_screen import CommentScreen
+
         if not self._can_modify_comment('edit'):
             return
 
@@ -340,6 +372,7 @@ class CommentContainer(Vertical, can_focus=False):
             )
         else:
             self.notify('Comment deleted successfully', title=work_item_key)
+            application.adjust_loaded_comment_total(work_item_key, -1)
             self._update_comments_after_delete()
 
 
@@ -433,11 +466,25 @@ class CommentsScrollView(VerticalScroll):
         containers = self.comment_containers
         if containers:
             self.select_comment_at(min(self._selected_index + 1, len(containers) - 1))
+            self._request_more_if_near_end()
 
     def action_cursor_up(self) -> None:
         containers = self.comment_containers
         if containers:
             self.select_comment_at(max(self._selected_index - 1, 0))
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        super().watch_scroll_y(old_value, new_value)
+        if round(old_value) != round(new_value):
+            self._request_more_if_near_end()
+
+    def _request_more_if_near_end(self) -> None:
+        widget = self._get_comments_widget()
+        if widget is None:
+            return
+        viewport_height = max(1, self.scrollable_content_region.height)
+        if self.max_scroll_y - self.scroll_y <= viewport_height:
+            widget.load_more_if_needed()
 
     def action_open_comment_in_browser(self) -> None:
         if selected := self.selected_comment:
@@ -491,15 +538,15 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         self._work_item_is_service_desk = False
         self._permission_cache = WorkItemPermissionCache(
             app_getter=lambda: cast('JiraApp', self.app),
-            run_worker=lambda: self.run_worker,
-            is_mounted=lambda: self.is_mounted,
-            group='add-comment-permission-load',
             on_loaded=self._handle_permission_loaded,
         )
+        self._permission_worker: Worker | None = None
         self._last_comment_fingerprint: set[tuple[str, datetime | None]] | None = None
         self._comment_indices: dict[str, int] = {}
         self._comment_containers: list[CommentContainer] = []
         self._pending_focus_comment_id: str | None = None
+        self._comment_render_generation = 0
+        self.pagination_complete = True
 
     @property
     def help_anchor(self) -> str:
@@ -511,13 +558,13 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
     @work_item_key.setter
     def work_item_key(self, value: str | None):
+        if value != self._work_item_key:
+            if self._permission_worker is not None and not self._permission_worker.is_finished:
+                self._permission_worker.cancel()
+            self._permission_worker = None
         self._work_item_key = value
-        if value:
-            self._start_add_comment_permission_load(value)
-            if self.is_attached:
-                self.call_after_refresh(self._start_add_comment_permission_load, value)
         if self.is_mounted:
-            self.screen.refresh_bindings()
+            self._request_bindings_refresh()
 
     @property
     def work_item_is_service_desk(self) -> bool:
@@ -550,8 +597,6 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
             self.work_item_key,
             ADD_COMMENT_PERMISSIONS,
         )
-        if permission_response is None:
-            self._start_add_comment_permission_load(self.work_item_key)
         return (
             permission_response is None
             or permission_response.success
@@ -571,8 +616,6 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
 
     def on_mount(self) -> None:
         self.content_container.can_focus = False
-        if self.work_item_key:
-            self._start_add_comment_permission_load(self.work_item_key)
 
     def show_loading(self) -> None:
         self.is_loading = True
@@ -593,6 +636,9 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         )
         if comment is None:
             return
+        if self.work_item_key:
+            application = cast('JiraApp', self.app)
+            application.adjust_loaded_comment_total(self.work_item_key, 1)
         self.comments = _apply_comment_result_to_collection(self.comments, comment, 'new')
 
     def action_add_comment(self) -> None:
@@ -610,15 +656,10 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         _permission_response: APIControllerResponse | None,
     ) -> None:
         if self.is_mounted and work_item_key == self.work_item_key:
-            self.screen.refresh_bindings()
+            self._request_bindings_refresh()
 
-    def _start_add_comment_permission_load(self, work_item_key: str) -> None:
-        self._permission_cache.start_load(
-            work_item_key,
-            ADD_COMMENT_PERMISSIONS,
-            action_name='add comments',
-            exclusive=True,
-        )
+    def _request_bindings_refresh(self) -> None:
+        request_bindings_refresh(self)
 
     async def _get_add_comment_permission(
         self,
@@ -630,7 +671,32 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
             action_name='add comments',
         )
 
+    def load_permission_if_needed(self) -> None:
+        work_item_key = self.work_item_key
+        if not work_item_key:
+            return
+        if (
+            self._permission_cache.cached_response(work_item_key, ADD_COMMENT_PERMISSIONS)
+            is not None
+        ):
+            return
+        if self._permission_worker is not None and not self._permission_worker.is_finished:
+            return
+        self._permission_worker = self.run_worker(
+            self._get_add_comment_permission(work_item_key),
+            exclusive=True,
+            group='add-comment-permission-load',
+        )
+
+    def load_more_if_needed(self) -> None:
+        if self.pagination_complete or not self.work_item_key:
+            return
+        application = cast('JiraApp', self.app)
+        application.load_more_work_item_comments(self.work_item_key)
+
     async def _open_add_comment_screen_if_permitted(self, work_item_key: str) -> None:
+        from gojeera.components.screens.comment_screen import CommentScreen
+
         permission_response = await self._get_add_comment_permission(work_item_key)
         if permission_response is not None and not permission_response.success:
             return
@@ -694,13 +760,91 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         )
 
     async def _clear_rendered_comments(self) -> None:
-        for container in self._comment_containers:
-            await container.remove()
+        await self.comments_scroll_view.remove_children()
         self._comment_containers = []
         self._comment_indices = {}
 
+    def _build_comment_container(
+        self,
+        comment: WorkItemComment,
+        content: str,
+        *,
+        base_url: str | None,
+        attachments_widget: Any,
+        media_attachment_details: dict[str, tuple[str, str | None]],
+    ) -> CommentContainer:
+        inner_container = Vertical(classes='comment-item-inner')
+        header_row = Horizontal(classes='comment-header-row')
+
+        author_name = comment.author.display_name if comment.author else 'Unknown'
+        title_text = Text(author_name, style='bold')
+        header_row.compose_add_child(Static(title_text, classes='comment-author'))
+        inner_container.compose_add_child(header_row)
+
+        posted_date = comment.created_on() if comment.created else 'Unknown date'
+        subtitle_parts = [posted_date]
+        if comment.updated and comment.created and comment.updated != comment.created:
+            subtitle_parts.append(f'(edited {comment.updated_on()})')
+
+        subtitle_text = Text(' '.join(subtitle_parts), style='dim')
+        if self.work_item_is_service_desk and comment.jsd_public is False:
+            subtitle_text.append(' Private', style='red')
+        inner_container.compose_add_child(Static(subtitle_text, classes='comment-metadata'))
+
+        if content:
+            markdown_widget = GojeeraMarkdown(
+                content,
+                classes='comment-body',
+                jira_base_url=base_url,
+            )
+            markdown_widget.can_focus = False
+            inner_container.compose_add_child(markdown_widget)
+        else:
+            if comment.body is None:
+                render_reason = 'comment.body is None'
+            elif isinstance(comment.body, str):
+                render_reason = 'comment.body is empty string'
+            else:
+                render_reason = 'convert_adf_to_markdown returned empty content'
+            body_details = _inspect_adf_body(comment.body)
+
+            logger.error(
+                'Unable to display comment body; rendering fallback message',
+                extra={
+                    'work_item_key': self.work_item_key,
+                    'comment_id': comment.id,
+                    'reason': render_reason,
+                    'body_type': type(comment.body).__name__,
+                    'has_rendered_body': bool(comment.rendered_body),
+                    'attachment_count': len(getattr(attachments_widget, 'attachments', None) or []),
+                    'media_attachment_details_count': len(media_attachment_details),
+                    **body_details,
+                },
+            )
+            inner_container.compose_add_child(
+                Static(
+                    Text(
+                        'Unable to display the comment. Open the link above to view it.',
+                        style='bold orange',
+                    ),
+                    classes='comment-error',
+                )
+            )
+
+        comment_container = CommentContainer(
+            work_item_key=self.work_item_key,
+            comment_id=comment.id,
+            comment_body=content,
+            comment_author_id=comment.author.account_id if comment.author else None,
+            id=f'comment-{comment.id}',
+        )
+        comment_container.compose_add_child(inner_container)
+        return comment_container
+
     async def watch_comments(self, items: list[WorkItemComment] | None) -> None:
         """Watch for changes to comments."""
+        self._comment_render_generation += 1
+        render_generation = self._comment_render_generation
         if not self.is_attached:
             return
 
@@ -730,8 +874,22 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         ):
             return
 
-        self._last_comment_fingerprint = current_comment_fingerprint
+        sorted_items = sorted(items, key=lambda comment: comment.updated or 0, reverse=True)
+        append_start = 0
+        existing_count = len(self._comment_containers)
+        if (
+            existing_count
+            and len(sorted_items) > existing_count
+            and [comment.id for comment in sorted_items[:existing_count]]
+            == [container._comment_id for container in self._comment_containers]
+            and {
+                (comment.id, comment.updated or comment.created)
+                for comment in sorted_items[:existing_count]
+            }.issubset(self._last_comment_fingerprint or set())
+        ):
+            append_start = existing_count
 
+        render_items = sorted_items[append_start:]
         attachments_widget = getattr(self.app, 'work_item_attachments_widget', None)
         if attachments_widget is None:
             screen = getattr(self.app, 'screen', None)
@@ -740,117 +898,58 @@ class WorkItemCommentsWidget(Vertical, can_focus=False):
         media_attachment_details, ordered_attachment_details = _build_attachment_markdown_details(
             attachments
         )
-        sorted_items = sorted(items, key=lambda comment: comment.updated or 0, reverse=True)
+        base_url = getattr(
+            getattr(getattr(self.app, 'atlassian_context', None), 'server_info', None),
+            'base_url',
+            None,
+        )
+        contents = await asyncio.to_thread(
+            _convert_comment_bodies,
+            render_items,
+            base_url,
+            media_attachment_details,
+            ordered_attachment_details,
+        )
+        if render_generation != self._comment_render_generation or not scroll_view.is_attached:
+            return
 
-        with self.app.batch_update():
-            await self._clear_rendered_comments()
+        if append_start == 0:
+            with self.app.batch_update():
+                await self._clear_rendered_comments()
 
-            for index, comment in enumerate(sorted_items):
-                base_url = getattr(
-                    getattr(getattr(self.app, 'atlassian_context', None), 'server_info', None),
-                    'base_url',
-                    None,
+        for chunk_start in range(0, len(render_items), COMMENT_RENDER_BATCH_SIZE):
+            if render_generation != self._comment_render_generation or not scroll_view.is_attached:
+                return
+            chunk_end = min(chunk_start + COMMENT_RENDER_BATCH_SIZE, len(render_items))
+            chunk = [
+                self._build_comment_container(
+                    render_items[index],
+                    contents[index],
+                    base_url=base_url,
+                    attachments_widget=attachments_widget,
+                    media_attachment_details=media_attachment_details,
                 )
+                for index in range(chunk_start, chunk_end)
+            ]
+            try:
+                with self.app.batch_update():
+                    await scroll_view.mount(*chunk)
+            except MountError:
+                return
+            self._comment_containers.extend(chunk)
+            for index in range(chunk_start, chunk_end):
+                self._comment_indices[render_items[index].id] = append_start + index
+            if chunk_start == 0:
+                self.hide_loading()
+            if chunk_end < len(render_items):
+                await asyncio.sleep(0)
 
-                inner_container = Vertical(classes='comment-item-inner')
-
-                header_row = Horizontal(classes='comment-header-row')
-
-                author_name = comment.author.display_name if comment.author else 'Unknown'
-                title_text = Text(author_name, style='bold')
-                header_row.compose_add_child(Static(title_text, classes='comment-author'))
-
-                inner_container.compose_add_child(header_row)
-
-                posted_date = comment.created_on() if comment.created else 'Unknown date'
-                subtitle_parts = [posted_date]
-
-                if comment.updated and comment.created and comment.updated != comment.created:
-                    edited_text = f'(edited {comment.updated_on()})'
-                    subtitle_parts.append(edited_text)
-
-                subtitle = ' '.join(subtitle_parts)
-                subtitle_text = Text(subtitle, style='dim')
-                if self.work_item_is_service_desk and comment.jsd_public is False:
-                    subtitle_text.append(' Private', style='red')
-                inner_container.compose_add_child(Static(subtitle_text, classes='comment-metadata'))
-
-                if isinstance(comment.body, str):
-                    content = comment.body
-                elif comment.body is not None:
-                    content = convert_adf_to_markdown(
-                        comment.body,
-                        base_url,
-                        rendered_body=comment.rendered_body,
-                        media_attachment_details=media_attachment_details,
-                        ordered_attachment_details=ordered_attachment_details,
-                    )
-                else:
-                    content = ''
-
-                if content:
-                    markdown_widget = GojeeraMarkdown(
-                        content,
-                        classes='comment-body',
-                        jira_base_url=base_url,
-                    )
-                    markdown_widget.can_focus = False
-                    inner_container.compose_add_child(markdown_widget)
-                else:
-                    if comment.body is None:
-                        render_reason = 'comment.body is None'
-                    elif isinstance(comment.body, str):
-                        render_reason = 'comment.body is empty string'
-                    else:
-                        render_reason = 'convert_adf_to_markdown returned empty content'
-                    body_details = _inspect_adf_body(comment.body)
-
-                    logger.error(
-                        'Unable to display comment body; rendering fallback message',
-                        extra={
-                            'work_item_key': self.work_item_key,
-                            'comment_id': comment.id,
-                            'reason': render_reason,
-                            'body_type': type(comment.body).__name__,
-                            'has_rendered_body': bool(comment.rendered_body),
-                            'attachment_count': len(
-                                getattr(attachments_widget, 'attachments', None) or []
-                            ),
-                            'media_attachment_details_count': len(media_attachment_details),
-                            **body_details,
-                        },
-                    )
-                    inner_container.compose_add_child(
-                        Static(
-                            Text(
-                                'Unable to display the comment. Open the link above to view it.',
-                                style='bold orange',
-                            ),
-                            classes='comment-error',
-                        )
-                    )
-
-                comment_container = CommentContainer(
-                    work_item_key=self.work_item_key,
-                    comment_id=comment.id,
-                    comment_body=content,
-                    comment_author_id=comment.author.account_id if comment.author else None,
-                    id=f'comment-{comment.id}',
-                )
-
-                comment_container.compose_add_child(inner_container)
-
-                try:
-                    await scroll_view.mount(comment_container)
-                except MountError:
-                    return
-
-                self._comment_containers.append(comment_container)
-                self._comment_indices[comment.id] = index
-
-            self.hide_loading()
+        self._last_comment_fingerprint = current_comment_fingerprint
+        self.hide_loading()
 
         self._restore_comment_selection(scroll_view)
 
         self.displayed_count = len(sorted_items)
         self._apply_pending_comment_focus()
+        if not self.pagination_complete:
+            self.call_after_refresh(scroll_view._request_more_if_near_end)

@@ -6,7 +6,6 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Static
 
-from gojeera.components.screens.parent_work_item_screen import ParentWorkItemScreen
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.utils.data.fields import supports_parent_work_item
 from gojeera.widgets.layout.extended_button import ExtendedButton, button_label_width
@@ -143,6 +142,8 @@ class WorkItemBreadcrumb(Horizontal, can_focus=False):
     async def open_parent_work_item_screen(self) -> None:
         if self._work_item is None:
             return
+
+        from gojeera.components.screens.parent_work_item_screen import ParentWorkItemScreen
 
         self._reset_parent_action_active_state()
         await self.app.push_screen(

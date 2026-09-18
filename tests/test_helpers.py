@@ -12,12 +12,14 @@ from gojeera.components.screens.confirmation_screen import ConfirmationScreen
 from gojeera.components.screens.new_related_work_item_screen import AddWorkItemRelationshipScreen
 from gojeera.components.search.unified_search import UnifiedSearchBar
 from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
+from gojeera.internal.models.jira import JiraGlobalSettings
 from gojeera.internal.store.config import ApplicationConfiguration
 from gojeera.widgets.markdown.gojeera_markdown import (
     ExtendedMarkdownParagraph,
     get_markdown_link_href,
 )
 from gojeera.widgets.search.work_item_search_results_scroll import WorkItemSearchResultsScroll
+from gojeera.widgets.selection.popup_menu import PopupMenu
 from gojeera.widgets.selection.vim_select import VimSelect
 
 
@@ -30,6 +32,18 @@ class CommentPickerFlowConfig(NamedTuple):
     cancel_selector: str | None = None
     wait_for_enable: bool = False
     post_insert_focus_save_button: bool = False
+
+
+def jira_global_settings() -> JiraGlobalSettings:
+    return JiraGlobalSettings(
+        attachments_enabled=True,
+        work_item_linking_enabled=True,
+        subtasks_enabled=True,
+        unassigned_work_items_allowed=True,
+        voting_enabled=True,
+        watching_enabled=True,
+        time_tracking_enabled=True,
+    )
 
 
 async def wait_for_mount(pilot):
@@ -50,6 +64,16 @@ async def wait_for_screen_to_settle(pilot, *, timeout: float = 3.0) -> None:
         lambda: getattr(pilot.app, '_active_work_item_load_key', None) is None,
         timeout=timeout,
     )
+
+
+async def expand_create_work_item_menu(pilot, *, wait_for_focus: bool = False) -> None:
+    await wait_for_mount(pilot)
+    search_bar = pilot.app.screen.query_one('#unified-search-bar', UnifiedSearchBar)
+    search_bar.create_work_item_button.press()
+    menu = pilot.app.screen.query_one('#unified-search-new-work-item-menu', PopupMenu)
+    await wait_until(lambda: menu.expanded, timeout=3.0)
+    if wait_for_focus:
+        await wait_until(lambda: menu.has_focus, timeout=3.0)
 
 
 async def choose_select_option(pilot, *, direction: str = 'down', steps: int = 1) -> None:

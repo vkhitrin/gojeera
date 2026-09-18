@@ -1,11 +1,13 @@
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     ValidationUtils,
     configure_compact_field_for_mode,
     require_update_mode,
     update_value_or_unset,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as TextFieldMode,
 )
 from gojeera.widgets.inputs.extended_input import ExtendedInput
 
@@ -17,7 +19,7 @@ class TextInput(ExtendedInput, BaseField, BaseUpdateField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: TextFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
@@ -30,7 +32,7 @@ class TextInput(ExtendedInput, BaseField, BaseUpdateField):
         )
 
         configure_compact_field_for_mode(
-            self,
+            widget=self,
             mode=mode,
             field_id=field_id,
             title=title,

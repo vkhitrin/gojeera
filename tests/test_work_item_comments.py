@@ -1,5 +1,6 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from httpx import Response
 import pytest
@@ -12,6 +13,7 @@ from gojeera.components.screens.confirmation_screen import ConfirmationScreen
 from gojeera.components.work_item.work_item_comments import (
     CommentsScrollView,
     WorkItemCommentsWidget,
+    _convert_comment_bodies,
 )
 from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.models.jira import JiraUser
@@ -41,6 +43,203 @@ MISSING_ADD_COMMENT_PERMISSION_ERROR = (
 SUPPORT_INTERNAL_COMMENT_TEXT = (
     'Follow-up internal note: dispatch checklist is ready for field engineering.'
 )
+
+
+@asynccontextmanager
+async def _comment_widget_context(mock_configuration, mock_user_info):
+    app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    async with app.run_test() as pilot:
+        await navigate_to_comments_tab(pilot, 'ENG-3')
+        yield pilot, app.query_one(WorkItemCommentsWidget)
+
+
+@pytest.fixture
+def comment_widget_context(
+    mock_configuration,
+    mock_jira_api_with_search_results,
+    mock_user_info,
+):
+    del mock_jira_api_with_search_results
+    return lambda: _comment_widget_context(mock_configuration, mock_user_info)
+
+
+@pytest.fixture
+def tracked_comment_context(comment_widget_context):
+    @asynccontextmanager
+    async def context(monkeypatch):
+        async with comment_widget_context() as (_pilot, comments_widget):
+            mount, author = _track_comment_mount(monkeypatch, comments_widget)
+            yield comments_widget, mount, author
+
+    return context
+
+
+def _track_comment_mount(monkeypatch, comments_widget: WorkItemCommentsWidget):
+    scroll_view = comments_widget.comments_scroll_view
+    mount = AsyncMock(side_effect=scroll_view.mount)
+    monkeypatch.setattr(scroll_view, 'mount', mount)
+    author = JiraUser(account_id='user-1', active=True, display_name='User One')
+    return mount, author
+
+
+async def _set_comments_and_wait(
+    comments_widget: WorkItemCommentsWidget,
+    mount: AsyncMock,
+    comments: list[WorkItemComment],
+    *,
+    expected_mounts: int,
+    timeout: float,
+) -> None:
+    comments_widget.comments = comments
+    await wait_until(
+        lambda: (
+            mount.await_count == expected_mounts
+            and comments_widget.displayed_count == len(comments)
+        ),
+        timeout=timeout,
+    )
+
+
+def test_comment_body_batch_conversion_preserves_plain_and_adf_content() -> None:
+    author = JiraUser(account_id='user-1', active=True, display_name='User One')
+    comments = [
+        WorkItemComment(id='plain', author=author, body='Plain text'),
+        WorkItemComment(
+            id='adf',
+            author=author,
+            body=_adf_doc({'type': 'paragraph', 'content': [{'type': 'text', 'text': 'ADF text'}]}),
+        ),
+    ]
+
+    assert _convert_comment_bodies(comments, None, {}, []) == ['Plain text', 'ADF text\n']
+
+
+@pytest.mark.parametrize(
+    ('comment_count', 'expected_mount_sizes'),
+    [
+        (2, [2]),
+        (41, [20, 20, 1]),
+    ],
+)
+async def test_comment_refresh_batches_rendered_comments(
+    monkeypatch,
+    tracked_comment_context,
+    comment_count: int,
+    expected_mount_sizes: list[int],
+) -> None:
+    async with tracked_comment_context(monkeypatch) as (comments_widget, mount, author):
+        await _set_comments_and_wait(
+            comments_widget,
+            mount,
+            [
+                WorkItemComment(id=f'batch-{index}', author=author, body=f'Comment {index}')
+                for index in range(comment_count)
+            ],
+            expected_mounts=len(expected_mount_sizes),
+            timeout=5.0,
+        )
+        assert [len(call.args) for call in mount.await_args_list] == expected_mount_sizes
+
+
+async def test_comment_pagination_converts_and_mounts_only_the_new_page(
+    monkeypatch,
+    comment_widget_context,
+) -> None:
+    async with comment_widget_context() as (_pilot, comments_widget):
+        scroll_view = comments_widget.comments_scroll_view
+        author = JiraUser(account_id='user-1', active=True, display_name='User One')
+        existing = [
+            WorkItemComment(
+                id=f'page-1-{index}',
+                author=author,
+                body=f'Existing {index}',
+                updated=datetime(2026, 8, 8 - index, tzinfo=timezone.utc),
+            )
+            for index in range(2)
+        ]
+        comments_widget.comments = existing
+        await wait_until(lambda: comments_widget.displayed_count == 2, timeout=3.0)
+
+        original_mount = scroll_view.mount
+        mount = AsyncMock(side_effect=original_mount)
+        monkeypatch.setattr(scroll_view, 'mount', mount)
+        convert = Mock(wraps=_convert_comment_bodies)
+        monkeypatch.setattr(
+            'gojeera.components.work_item.work_item_comments._convert_comment_bodies',
+            convert,
+        )
+        older_comment = WorkItemComment(
+            id='page-2-1',
+            author=author,
+            body='Older page',
+            updated=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+
+        comments_widget.comments = [*existing, older_comment]
+        await wait_until(lambda: comments_widget.displayed_count == 3, timeout=3.0)
+
+        convert.assert_called_once()
+        converted_comments = convert.call_args.args[0]
+        assert [comment.id for comment in converted_comments] == ['page-2-1']
+        mount.assert_awaited_once()
+        mount_call = mount.await_args
+        assert mount_call is not None
+        assert len(mount_call.args) == 1
+
+
+async def test_comment_edit_still_rebuilds_the_existing_comment_list(
+    monkeypatch,
+    comment_widget_context,
+) -> None:
+    async with comment_widget_context() as (_pilot, comments_widget):
+        author = JiraUser(account_id='user-1', active=True, display_name='User One')
+        existing = [
+            WorkItemComment(
+                id=f'edit-{index}',
+                author=author,
+                body=f'Before {index}',
+                updated=datetime(2026, 8, 7 - index, tzinfo=timezone.utc),
+            )
+            for index in range(2)
+        ]
+        comments_widget.comments = existing
+        await wait_until(lambda: comments_widget.displayed_count == 2, timeout=3.0)
+
+        previous_containers = list(comments_widget.comment_containers)
+        convert = Mock(wraps=_convert_comment_bodies)
+        monkeypatch.setattr(
+            'gojeera.components.work_item.work_item_comments._convert_comment_bodies',
+            convert,
+        )
+        edited = WorkItemComment(
+            id='edit-0',
+            author=author,
+            body='After edit',
+            updated=datetime(2026, 8, 8, tzinfo=timezone.utc),
+        )
+
+        comments_widget.comments = [edited, existing[1]]
+        await wait_until(
+            lambda: (
+                len(comments_widget.comment_containers) == 2
+                and comments_widget.comment_containers[0] is not previous_containers[0]
+            ),
+            timeout=3.0,
+        )
+
+        convert.assert_called_once()
+        converted_comments = convert.call_args.args[0]
+        assert [comment.id for comment in converted_comments] == ['edit-0', 'edit-1']
+
+
+def test_assigning_work_item_does_not_preload_comment_permissions() -> None:
+    comments_widget = WorkItemCommentsWidget()
+    get_permissions = AsyncMock()
+    comments_widget._permission_cache.get = get_permissions
+
+    comments_widget.work_item_key = 'ENG-1'
+
+    get_permissions.assert_not_awaited()
 
 
 def _find_attachment_offset(paragraph: ExtendedMarkdownParagraph, filename: str) -> tuple[int, int]:

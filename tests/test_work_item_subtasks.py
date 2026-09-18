@@ -4,14 +4,14 @@ from gojeera.app import JiraApp
 from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
 from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
 
-from .test_helpers import (
-    assert_main_screen,
-    assert_snapshot_matches,
-    focus_work_item_tab,
-    wait_for_screen_to_settle,
-    wait_for_worker_idle,
-    wait_until,
-)
+from . import test_helpers as helpers
+
+assert_main_screen = helpers.assert_main_screen
+assert_snapshot_matches = helpers.assert_snapshot_matches
+focus_work_item_tab = helpers.focus_work_item_tab
+wait_for_screen_to_settle = helpers.wait_for_screen_to_settle
+wait_for_worker_idle = helpers.wait_for_worker_idle
+wait_until = helpers.wait_until
 
 
 async def open_subtasks_widget(pilot):

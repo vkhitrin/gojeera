@@ -40,7 +40,7 @@ class ProjectClassCss:
     component_classes: tuple[str, ...]
 
 
-def compile_textual_css(tcss_file: Path, project_css: list[ProjectClassCss]) -> list[str]:
+def compile_textual_css(tcss_files: list[Path], project_css: list[ProjectClassCss]) -> list[str]:
     """Validate project CSS with Textual's stylesheet parser."""
     from gojeera.app import JiraApp
     from gojeera.internal.auth.profiles import BasicAuthProfile
@@ -67,7 +67,8 @@ def compile_textual_css(tcss_file: Path, project_css: list[ProjectClassCss]) -> 
     stylesheet = Stylesheet(variables=app.get_css_variables())
 
     try:
-        stylesheet.read(tcss_file)
+        for tcss_file in tcss_files:
+            stylesheet.read(tcss_file)
         for project_class_css in project_css:
             stylesheet.add_source(
                 project_class_css.css,
@@ -288,7 +289,7 @@ def _extract_string_set(node: ast.AST) -> set[str]:
 
 
 def collect_project_default_css(src_dir: Path) -> list[ProjectClassCss]:
-    """Collect project class DEFAULT_CSS blocks via AST, avoiding imports."""
+    """Collect project class DEFAULT_CSS and screen CSS blocks without imports."""
     classes: list[ProjectClassCss] = []
     for file_path in src_dir.rglob('*.py'):
         try:
@@ -308,7 +309,7 @@ def collect_project_default_css(src_dir: Path) -> list[ProjectClassCss]:
                 if not isinstance(class_node, ast.Assign):
                     continue
                 for target in class_node.targets:
-                    if isinstance(target, ast.Name) and target.id == 'DEFAULT_CSS':
+                    if isinstance(target, ast.Name) and target.id in {'CSS', 'DEFAULT_CSS'}:
                         css_value = _extract_string_literal(class_node.value)
                         break
                     if isinstance(target, ast.Name) and target.id == 'COMPONENT_CLASSES':
@@ -566,6 +567,7 @@ def main() -> int:
     """Main entry point."""
     project_root = Path(__file__).parent.parent
     tcss_file = project_root / 'src' / 'gojeera' / 'internal' / 'styling' / 'gojeera.tcss'
+    tcss_files = sorted(tcss_file.parent.glob('*.tcss'))
     src_dir = project_root / 'src'
 
     if not tcss_file.exists():
@@ -577,15 +579,23 @@ def main() -> int:
         return 1
 
     project_css = collect_project_default_css(src_dir)
-    textual_parse_errors = compile_textual_css(tcss_file, project_css)
+    textual_parse_errors = compile_textual_css(tcss_files, project_css)
 
-    tcss_content = tcss_file.read_text(encoding='utf-8')
-    all_classes, all_ids = extract_css_selectors(tcss_content)
-    all_definitions = extract_rule_definitions(
-        tcss_content,
-        owner='src.gojeera.gojeera_tcss',
-        source=tcss_file,
-    )
+    all_classes: set[str] = set()
+    all_ids: set[str] = set()
+    all_definitions: list[CssDefinition] = []
+    for project_tcss_file in tcss_files:
+        tcss_content = project_tcss_file.read_text(encoding='utf-8')
+        css_classes, css_ids = extract_css_selectors(tcss_content)
+        all_classes.update(css_classes)
+        all_ids.update(css_ids)
+        all_definitions.extend(
+            extract_rule_definitions(
+                tcss_content,
+                owner=f'src.gojeera.{project_tcss_file.stem}_tcss',
+                source=project_tcss_file,
+            )
+        )
 
     for project_class_css in project_css:
         css_classes, css_ids = extract_css_selectors(project_class_css.css)

@@ -1,14 +1,17 @@
 import asyncio
-from collections import defaultdict
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections import OrderedDict, defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Mapping
 from contextlib import asynccontextmanager
 import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from functools import partial
 import logging
 import mimetypes
 import os
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from typing import Any, TypedDict, TypeVar, cast
 
 from dateutil.parser import isoparse
@@ -57,12 +60,17 @@ from gojeera.internal.models.work_items import (
     JiraWorkItemSearchResponse,
     JiraWorklog,
     PaginatedJiraWorklog,
+    PaginatedWorkItemComments,
     PaginatedWorkItemHistory,
     WorkItemComment,
     WorkItemHistoryChange,
     WorkItemHistoryEntry,
 )
-from gojeera.internal.store.cache import get_cache, run_cache_io
+from gojeera.internal.store.cache import (
+    CACHE_TTL_PROJECTS_WITH_RELEASES,
+    get_cache,
+    run_cache_io,
+)
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.utils.data.mappings import get_nested
 from gojeera.utils.jira.jql import work_item_flagged_jql
@@ -82,6 +90,8 @@ MAXIMUM_PAGE_NUMBER_SEARCH_PROJECTS = 10
 RECORDS_PER_PAGE_PROJECT_RELEASES = 50
 MAXIMUM_PAGE_NUMBER_PROJECT_RELEASES = 20
 MAXIMUM_CONCURRENT_PROJECT_RELEASE_CHECKS = 8
+PROJECT_REPOSITORIES_CACHE_TTL_SECONDS = 60.0
+PROJECT_RELEASES_CACHE_TTL_SECONDS = 60.0
 DEVELOPMENT_PROJECT_FEATURE_KEYS = frozenset({'jsw.classic.code', 'jsw.classic.development'})
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_PROJECTS = 1000
 RECORDS_PER_PAGE_SEARCH_USERS_ASSIGNABLE_TO_WORK_ITEMS = 1000
@@ -91,6 +101,12 @@ API_TOKEN_FALLBACK_REQUIRED_ERROR = (
 PROJECT_DEVELOPMENT_FEATURE_DISABLED_ERROR = (
     'Development features are not enabled for project {project_key}.'
 )
+PULL_REQUEST_KEY_LOOKUP_CONCURRENCY = 8
+CACHE_REFRESH_FAILURE_RETRY_SECONDS = 60.0
+PROJECT_PULL_REQUEST_CACHE_TTL_SECONDS = 60.0
+WORK_ITEM_TOOLTIP_CACHE_TTL_SECONDS = 60.0
+WORK_ITEM_TOOLTIP_CACHE_MAX_ENTRIES = 256
+TRANSIENT_PROJECT_CACHE_MAX_ENTRIES = 64
 
 
 @dataclass
@@ -115,6 +131,15 @@ class SearchWorkItemFilterArgs(TypedDict):
 
 T = TypeVar('T')
 R = TypeVar('R')
+DEFERRED_WORK_ITEM_FIELDS = {
+    JiraWorkItemGenericFields.COMMENT.value,
+    JiraWorkItemGenericFields.SUBTASKS.value,
+}
+INITIAL_WORK_ITEM_FIELDS = [
+    '*all',
+    *(f'-{field}' for field in sorted(DEFERRED_WORK_ITEM_FIELDS)),
+    'watches',
+]
 
 
 class APIController:
@@ -124,6 +149,7 @@ class APIController:
         self.config = CONFIGURATION.get() if not configuration else configuration
         self.auth = self.config.jira.build_auth_context()
         self.auth_service = AuthService()
+        self._oauth2_refresh_lock = Lock()
         self.client: JiraAPI
         self.identity_api: AsyncJiraClient | None = None
         self.client = JiraAPI(
@@ -142,37 +168,221 @@ class APIController:
             )
         self.skip_users_without_email = self.config.ignore_users_without_email
         self.logger = logging.getLogger('gojeera')
-        self.cache = get_cache()
-        self.cache.set_profile(self._cache_profile_key())
+        client_cache = getattr(self.client, 'cache', None)
+        if client_cache is None:
+            client_cache = get_cache()
+            client_cache.set_profile(self._cache_profile_key())
+        self.cache = client_cache
+        self._inflight_requests: dict[tuple[Any, ...], asyncio.Task[APIControllerResponse]] = {}
+        self._background_refresh_tasks: set[asyncio.Task[APIControllerResponse]] = set()
+        self._cache_refresh_retry_after: dict[tuple[Any, ...], float] = {}
+        self._project_pull_requests_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._project_repositories_cache: dict[str, tuple[float, list[JiraProjectRepository]]] = {}
+        self._project_releases_cache: dict[
+            tuple[str, int | None, str | None, str | None],
+            tuple[float, list[JiraProjectRelease]],
+        ] = {}
+        self._project_release_page_callbacks: dict[
+            tuple[Any, ...],
+            list[Callable[[list[JiraProjectRelease]], Awaitable[None] | None]],
+        ] = {}
+        self._projects_with_releases_cache: tuple[float, list[JiraProject]] | None = None
+        self._work_item_tooltip_cache: OrderedDict[str, tuple[float, tuple[str, str, str]]] = (
+            OrderedDict()
+        )
+
+    async def _coalesce_request(
+        self,
+        key: tuple[Any, ...],
+        operation: Callable[[], Coroutine[Any, Any, APIControllerResponse]],
+    ) -> APIControllerResponse:
+        inflight_requests = getattr(self, '_inflight_requests', None)
+        if inflight_requests is None:
+            inflight_requests = {}
+            self._inflight_requests = inflight_requests
+
+        if existing := inflight_requests.get(key):
+            return await asyncio.shield(existing)
+
+        task = asyncio.create_task(operation())
+        inflight_requests[key] = task
+
+        def remove_completed(completed_task: asyncio.Task[APIControllerResponse]) -> None:
+            if inflight_requests.get(key) is completed_task:
+                inflight_requests.pop(key, None)
+
+        task.add_done_callback(remove_completed)
+        return await asyncio.shield(task)
+
+    def _schedule_background_refresh(
+        self,
+        key: tuple[Any, ...],
+        operation: Callable[[], Coroutine[Any, Any, APIControllerResponse]],
+    ) -> None:
+        inflight_requests = getattr(self, '_inflight_requests', {})
+        if key in inflight_requests:
+            return
+        retry_after = getattr(self, '_cache_refresh_retry_after', None)
+        if retry_after is None:
+            retry_after = {}
+            self._cache_refresh_retry_after = retry_after
+        if retry_after.get(key, 0.0) > monotonic():
+            return
+        task = asyncio.create_task(self._coalesce_request(key, operation))
+        background_tasks = getattr(self, '_background_refresh_tasks', None)
+        if background_tasks is None:
+            background_tasks = set()
+            self._background_refresh_tasks = background_tasks
+        background_tasks.add(task)
+
+        def remove_completed(completed_task: asyncio.Task[APIControllerResponse]) -> None:
+            self._background_refresh_tasks.discard(completed_task)
+            if completed_task.cancelled():
+                return
+            try:
+                response = completed_task.result()
+            except Exception:
+                retry_after[key] = monotonic() + CACHE_REFRESH_FAILURE_RETRY_SECONDS
+                self.logger.exception('Background cache refresh failed', extra={'cache_key': key})
+                return
+            if not response.success:
+                retry_after[key] = monotonic() + CACHE_REFRESH_FAILURE_RETRY_SECONDS
+                self.logger.debug(
+                    'Background cache refresh returned an error',
+                    extra={'cache_key': key, 'error': response.error},
+                )
+                return
+            retry_after.pop(key, None)
+
+        task.add_done_callback(remove_completed)
+
+    @staticmethod
+    def _get_transient_cache_entry(
+        cache: dict[Any, tuple[float, Any]],
+        key: Any,
+    ) -> tuple[float, Any] | None:
+        entry = cache.get(key)
+        if entry is None:
+            return None
+        if entry[0] <= monotonic():
+            cache.pop(key, None)
+            return None
+        cache.pop(key, None)
+        cache[key] = entry
+        return entry
+
+    @staticmethod
+    def _set_transient_cache_entry(
+        cache: dict[Any, tuple[float, Any]],
+        key: Any,
+        entry: tuple[float, Any],
+    ) -> None:
+        cache.pop(key, None)
+        cache[key] = entry
+        while len(cache) > TRANSIENT_PROJECT_CACHE_MAX_ENTRIES:
+            cache.pop(next(iter(cache)))
+
+    async def _cached_or_refresh(
+        self,
+        key: tuple[Any, ...],
+        cache_getter: Callable[[bool], Any | None],
+        refresh: Callable[[], Coroutine[Any, Any, APIControllerResponse]],
+    ) -> APIControllerResponse:
+        cached = await run_cache_io(lambda: cache_getter(False))
+        if cached is not None:
+            return APIControllerResponse(result=cached)
+
+        stale = await run_cache_io(lambda: cache_getter(True))
+        if stale is not None:
+            self._schedule_background_refresh(key, refresh)
+            return APIControllerResponse(result=stale)
+
+        return await self._coalesce_request(key, refresh)
+
+    async def _fresh_cached_or_refresh(
+        self,
+        key: tuple[Any, ...],
+        cache_getter: Callable[[], Any | None],
+        refresh: Callable[[], Coroutine[Any, Any, APIControllerResponse]],
+    ) -> APIControllerResponse:
+        cached = await run_cache_io(cache_getter)
+        if cached is not None:
+            return APIControllerResponse(result=cached)
+        return await self._coalesce_request(key, refresh)
 
     def _cache_profile_key(self) -> str:
         return f'{self.auth.cloud_id}:{self.auth.account_id}'
 
-    def _refresh_oauth2_access_token(self, force: bool) -> str | None:
-        active_profile = self.config.jira.active_profile
-        if not isinstance(active_profile, OAuth2AuthProfile):
+    def get_cached_work_item_tooltip(self, work_item_key: str) -> tuple[str, str, str] | None:
+        """Return fresh tooltip data shared by every Markdown widget."""
+        cache = getattr(self, '_work_item_tooltip_cache', None)
+        if cache is None:
             return None
 
-        if (
-            force
-            or getattr(self.config.jira, 'oauth2_access_token', None) is None
-            or self.auth_service.should_refresh_oauth2_access_token(active_profile)
-        ):
-            token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
-            self.config.jira.update_active_oauth2_session(
-                access_token=token_response.access_token,
-                refresh_token=token_response.refresh_token,
-                oauth2_access_token_expiration_timestamp=(
-                    token_response.access_token_expiration_timestamp
-                ),
-            )
-            refreshed_token = token_response.access_token
-        else:
-            refreshed_token = (
-                self.config.jira.oauth2_access_token.get_secret_value()
-                if self.config.jira.oauth2_access_token is not None
-                else self.auth_service.get_oauth2_access_token(active_profile)
-            )
+        normalized_key = work_item_key.casefold()
+        cached_entry = cache.get(normalized_key)
+        if cached_entry is None:
+            return None
+        if cached_entry[0] <= monotonic():
+            cache.pop(normalized_key, None)
+            return None
+
+        cache.move_to_end(normalized_key)
+        return cached_entry[1]
+
+    def cache_work_item_tooltip(
+        self,
+        work_item_key: str,
+        work_item_type: str,
+        summary: str,
+        status: str,
+    ) -> None:
+        """Store bounded, short-lived tooltip data for the active profile."""
+        cache = getattr(self, '_work_item_tooltip_cache', None)
+        if cache is None:
+            cache = OrderedDict()
+            self._work_item_tooltip_cache = cache
+
+        normalized_key = work_item_key.casefold()
+        cache[normalized_key] = (
+            monotonic() + WORK_ITEM_TOOLTIP_CACHE_TTL_SECONDS,
+            (work_item_type, summary, status),
+        )
+        cache.move_to_end(normalized_key)
+        while len(cache) > WORK_ITEM_TOOLTIP_CACHE_MAX_ENTRIES:
+            cache.popitem(last=False)
+
+    def invalidate_work_item_tooltip(self, work_item_key: str) -> None:
+        cache = getattr(self, '_work_item_tooltip_cache', None)
+        if cache is not None:
+            cache.pop(work_item_key.casefold(), None)
+
+    def _refresh_oauth2_access_token(self, force: bool) -> str | None:
+        with self._oauth2_refresh_lock:
+            active_profile = self.config.jira.active_profile
+            if not isinstance(active_profile, OAuth2AuthProfile):
+                return None
+
+            if (
+                force
+                or getattr(self.config.jira, 'oauth2_access_token', None) is None
+                or self.auth_service.should_refresh_oauth2_access_token(active_profile)
+            ):
+                token_response = self.auth_service.refresh_oauth2_access_token(active_profile)
+                self.config.jira.update_active_oauth2_session(
+                    access_token=token_response.access_token,
+                    refresh_token=token_response.refresh_token,
+                    oauth2_access_token_expiration_timestamp=(
+                        token_response.access_token_expiration_timestamp
+                    ),
+                )
+                refreshed_token = token_response.access_token
+            else:
+                refreshed_token = (
+                    self.config.jira.oauth2_access_token.get_secret_value()
+                    if self.config.jira.oauth2_access_token is not None
+                    else self.auth_service.get_oauth2_access_token(active_profile)
+                )
 
         if not refreshed_token:
             return None
@@ -187,16 +397,12 @@ class APIController:
         return refreshed_token
 
     async def close(self) -> None:
-        await self.client.client.close_async_client()
-        await self.client.async_http_client.close_async_client()
-        await self.client.graphql_client.close_async_client()
+        await self.client.close()
         if self.identity_api is not None:
             await self.identity_api.close_async_client()
 
     async def _close_jira_api_clients(self, client: JiraAPI) -> None:
-        await client.client.close_async_client()
-        await client.async_http_client.close_async_client()
-        await client.graphql_client.close_async_client()
+        await client.close()
 
     def _build_api_token_fallback_client(self) -> JiraAPI | None:
         fallback_profile = self.config.jira.api_token_fallback_profile
@@ -709,11 +915,17 @@ class APIController:
                 transitions.append(built_transition)
         return transitions
 
-    def _build_work_item_comments(self, response: dict[str, Any]) -> list[WorkItemComment]:
-        return [
+    def _build_work_item_comments(self, response: dict[str, Any]) -> PaginatedWorkItemComments:
+        comments = [
             self._build_work_item_comment(comment_data)
             for comment_data in response.get('comments', [])
         ]
+        return PaginatedWorkItemComments(
+            comments=comments,
+            max_results=int(response.get('maxResults', len(comments)) or 0),
+            start_at=int(response.get('startAt', 0) or 0),
+            total=int(response.get('total', len(comments)) or 0),
+        )
 
     def _build_work_item_history_entries(
         self, response: dict[str, Any]
@@ -798,7 +1010,7 @@ class APIController:
             'work_item_type': work_item_type,
             'jql_query': jql_query,
         }
-        criteria = self._build_criteria_for_searching_work_items(**search_filters)
+        criteria = self._build_criteria_for_searching_work_items(search_filters)
 
         if validation_error := await self._validate_search_criteria_jql(criteria):
             return None, validation_error
@@ -863,7 +1075,11 @@ class APIController:
             ),
         )
 
-    async def get_project_repositories(self, project_key: str) -> APIControllerResponse:
+    async def get_project_repositories(
+        self,
+        project_key: str,
+        on_page: Callable[[list[JiraProjectRepository]], Awaitable[None] | None] | None = None,
+    ) -> APIControllerResponse:
         """Retrieves repositories associated with a Jira project."""
 
         if fallback_response := self._api_token_fallback_required_response():
@@ -880,10 +1096,39 @@ class APIController:
                 ),
             )
 
+        cache_key = project_key.casefold()
+        repositories_cache = getattr(self, '_project_repositories_cache', {})
+        cached_entry = self._get_transient_cache_entry(repositories_cache, cache_key)
+        if cached_entry is not None:
+            cached_repositories = list(cached_entry[1])
+            if on_page is not None:
+                page_result = on_page(cached_repositories)
+                if page_result is not None:
+                    await page_result
+            return APIControllerResponse(result=cached_repositories)
+
         try:
             await self._ensure_project_cached(project_key)
             async with self._client_with_api_token_fallback() as client:
-                repositories_data = await client.get_project_repositories(project_key)
+                pages_published = False
+
+                async def publish_page(repositories_page: list[dict[str, Any]]) -> None:
+                    nonlocal pages_published
+                    pages_published = True
+                    if on_page is None:
+                        return
+                    repositories = [
+                        self._build_project_repository(repository_data)
+                        for repository_data in repositories_page
+                    ]
+                    page_result = on_page(repositories)
+                    if page_result is not None:
+                        await page_result
+
+                repositories_data = await client.get_project_repositories(
+                    project_key,
+                    on_page=publish_page,
+                )
         except Exception as e:
             exception_details = self._extract_exception_details(e)
             self.logger.error(
@@ -892,32 +1137,122 @@ class APIController:
             )
             return APIControllerResponse(success=False, error=exception_details.message)
 
-        return APIControllerResponse(
-            result=[
-                self._build_project_repository(repository_data)
-                for repository_data in repositories_data
-            ]
+        repositories = [
+            self._build_project_repository(repository_data) for repository_data in repositories_data
+        ]
+        if not pages_published and on_page is not None:
+            page_result = on_page(list(repositories))
+            if page_result is not None:
+                await page_result
+        repositories_cache = getattr(self, '_project_repositories_cache', None)
+        if repositories_cache is None:
+            repositories_cache = {}
+            self._project_repositories_cache = repositories_cache
+        self._set_transient_cache_entry(
+            repositories_cache,
+            cache_key,
+            (
+                monotonic() + PROJECT_REPOSITORIES_CACHE_TTL_SECONDS,
+                list(repositories),
+            ),
         )
+        return APIControllerResponse(result=repositories)
 
     async def get_repository_pull_requests(
         self,
         project_key: str,
         repository: JiraProjectRepository,
+        on_page: Callable[[list[JiraRepositoryPullRequest]], Awaitable[None] | None] | None = None,
     ) -> APIControllerResponse:
         """Retrieves pull requests associated with a project repository."""
 
         if fallback_response := self._api_token_fallback_required_response():
             return fallback_response
 
+        cache_key = project_key.casefold()
+        cached_entry = self._get_transient_cache_entry(
+            self._project_pull_requests_cache,
+            cache_key,
+        )
+
         try:
             async with self._client_with_api_token_fallback() as client:
-                pull_requests_data = await client.get_project_space_pull_requests(project_key)
-                pull_requests_data = [
-                    pull_request_data
-                    for pull_request_data in pull_requests_data
-                    if self._repository_matches_pull_request(repository, pull_request_data)
-                ]
-                await self._populate_pull_request_work_item_keys(client, pull_requests_data)
+                if cached_entry is not None and cached_entry[0] > monotonic():
+                    pull_requests_data = [
+                        pull_request_data
+                        for pull_request_data in cached_entry[1]
+                        if self._repository_matches_pull_request(repository, pull_request_data)
+                    ]
+                    await self._populate_pull_request_work_item_keys(client, pull_requests_data)
+                    response = self._build_pull_request_response(
+                        pull_requests_data,
+                        include_work_item_key_in_sort=True,
+                    )
+                    if on_page is not None:
+                        page_result = on_page(
+                            cast(list[JiraRepositoryPullRequest], response.result)
+                        )
+                        if page_result is not None:
+                            await page_result
+                    return response
+
+                matching_pull_requests: list[dict[str, Any]] = []
+                pages_published = False
+
+                async def publish_page(page: list[dict[str, Any]]) -> None:
+                    nonlocal pages_published
+                    pages_published = True
+                    matching_page = [
+                        pull_request_data
+                        for pull_request_data in page
+                        if self._repository_matches_pull_request(repository, pull_request_data)
+                    ]
+                    await self._populate_pull_request_work_item_keys(client, matching_page)
+                    matching_pull_requests.extend(matching_page)
+                    if on_page is not None:
+                        page_response = self._build_pull_request_response(
+                            matching_page,
+                            include_work_item_key_in_sort=True,
+                        )
+                        page_result = on_page(
+                            cast(list[JiraRepositoryPullRequest], page_response.result)
+                        )
+                        if page_result is not None:
+                            await page_result
+
+                project_pull_requests = await client.get_project_space_pull_requests(
+                    project_key,
+                    on_page=publish_page,
+                )
+                if not pages_published:
+                    matching_pull_requests = [
+                        pull_request_data
+                        for pull_request_data in project_pull_requests
+                        if self._repository_matches_pull_request(repository, pull_request_data)
+                    ]
+                    await self._populate_pull_request_work_item_keys(
+                        client,
+                        matching_pull_requests,
+                    )
+                    if on_page is not None:
+                        fallback_page = self._build_pull_request_response(
+                            matching_pull_requests,
+                            include_work_item_key_in_sort=True,
+                        )
+                        page_result = on_page(
+                            cast(list[JiraRepositoryPullRequest], fallback_page.result)
+                        )
+                        if page_result is not None:
+                            await page_result
+                self._set_transient_cache_entry(
+                    self._project_pull_requests_cache,
+                    cache_key,
+                    (
+                        monotonic() + PROJECT_PULL_REQUEST_CACHE_TTL_SECONDS,
+                        project_pull_requests,
+                    ),
+                )
+                pull_requests_data = matching_pull_requests
         except Exception as e:
             exception_details = self._extract_exception_details(e)
             self.logger.error(
@@ -944,15 +1279,24 @@ class APIController:
         if not unresolved_work_item_ids:
             return
 
-        work_item_keys_by_id: dict[str, str] = {}
-        for work_item_id in unresolved_work_item_ids:
-            work_item_data = await client.get_work_item(
-                work_item_id_or_key=work_item_id,
-                fields='key',
-            )
-            work_item_key = str(work_item_data.get('key') or '')
-            if work_item_key:
-                work_item_keys_by_id[work_item_id] = work_item_key
+        semaphore = asyncio.Semaphore(PULL_REQUEST_KEY_LOOKUP_CONCURRENCY)
+
+        async def resolve_work_item_key(work_item_id: str) -> tuple[str, str]:
+            async with semaphore:
+                work_item_data = await client.get_work_item(
+                    work_item_id_or_key=work_item_id,
+                    fields='key',
+                )
+            return work_item_id, str(work_item_data.get('key') or '')
+
+        resolved_work_item_keys = await asyncio.gather(
+            *(resolve_work_item_key(work_item_id) for work_item_id in unresolved_work_item_ids)
+        )
+        work_item_keys_by_id = {
+            work_item_id: work_item_key
+            for work_item_id, work_item_key in resolved_work_item_keys
+            if work_item_key
+        }
 
         for pull_request_data in pull_requests_data:
             work_item_id = str(pull_request_data.get('work_item_id') or '')
@@ -1014,6 +1358,9 @@ class APIController:
         query: str | None = None,
         keys: list[str] | None = None,
         project_type_key: str | None = None,
+        on_page: Callable[[list[JiraProject]], None] | None = None,
+        *,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Searches for projects using different filters.
 
@@ -1022,33 +1369,53 @@ class APIController:
             (case-insensitive).
             keys: the project keys to filter the results by.
             project_type_key: filter the results by project type.
+            on_page: optional callback invoked with the accumulated projects after each page.
 
         Returns:
             An instance of `APIControllerResponse` with the list of `JiraProject` instances. If an error occurs an
             instance of `APIControllerResponse` with the `error` message.
         """
 
-        if query is None and not keys and project_type_key is None:
-            cached_projects = await run_cache_io(self.cache.get_projects)
-            if cached_projects is not None:
-                return APIControllerResponse(result=cached_projects)
-
-        if query is None and not keys and project_type_key is not None:
-            cached_projects_by_type = await run_cache_io(
-                lambda: self.cache.get_projects_by_type(project_type_key)
-            )
-            if cached_projects_by_type is not None:
-                return APIControllerResponse(result=cached_projects_by_type)
-
-            cached_projects = await run_cache_io(self.cache.get_projects)
-            if cached_projects is not None:
-                return APIControllerResponse(
-                    result=[
-                        project
-                        for project in cached_projects
-                        if project.project_type_key == project_type_key
-                    ]
+        cache_key = (
+            'projects',
+            (query or '').casefold(),
+            tuple(key.casefold() for key in keys or []),
+            (project_type_key or '').casefold(),
+        )
+        if not _coalesced:
+            if query is None and not keys and project_type_key is None:
+                response = await self._cached_or_refresh(
+                    cache_key,
+                    lambda allow_stale: self.cache.get_projects(allow_stale=allow_stale),
+                    lambda: self.search_projects(on_page=on_page, _coalesced=True),
                 )
+                return response
+
+            if query is None and not keys and project_type_key is not None:
+                response = await self._cached_or_refresh(
+                    cache_key,
+                    lambda allow_stale: self.cache.get_projects_by_type(
+                        project_type_key,
+                        allow_stale=allow_stale,
+                    ),
+                    lambda: self.search_projects(
+                        project_type_key=project_type_key,
+                        on_page=on_page,
+                        _coalesced=True,
+                    ),
+                )
+                return response
+
+            return await self._coalesce_request(
+                cache_key,
+                lambda: self.search_projects(
+                    query=query,
+                    keys=keys,
+                    project_type_key=project_type_key,
+                    on_page=on_page,
+                    _coalesced=True,
+                ),
+            )
 
         projects: list[JiraProject] = []
         is_last = False
@@ -1090,6 +1457,8 @@ class APIController:
                     )
                 is_last = response.get('isLast')
                 i += 1
+                if on_page is not None:
+                    on_page(list(projects))
 
         if query is None and not keys and project_type_key is None:
             await run_cache_io(lambda: self.cache.set_projects(projects))
@@ -1105,8 +1474,49 @@ class APIController:
         limit: int | None = None,
         status: str | None = None,
         order_by: str | None = 'sequence',
+        on_page: Callable[[list[JiraProjectRelease]], Awaitable[None] | None] | None = None,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Retrieves project releases from Jira project versions."""
+
+        cache_key = (project_key.casefold(), limit, status, order_by)
+        releases_cache = getattr(self, '_project_releases_cache', {})
+        cached_entry = self._get_transient_cache_entry(releases_cache, cache_key)
+        if cached_entry is not None:
+            cached_releases = list(cached_entry[1])
+            if on_page is not None:
+                page_result = on_page(cached_releases)
+                if page_result is not None:
+                    await page_result
+            return APIControllerResponse(result=cached_releases)
+
+        request_key = ('project-releases', *cache_key)
+        if not _coalesced:
+            callbacks = getattr(self, '_project_release_page_callbacks', None)
+            if callbacks is None:
+                callbacks = {}
+                self._project_release_page_callbacks = callbacks
+            if on_page is not None:
+                callbacks.setdefault(request_key, []).append(on_page)
+            try:
+                return await self._coalesce_request(
+                    request_key,
+                    lambda: self.get_project_releases(
+                        project_key,
+                        limit=limit,
+                        status=status,
+                        order_by=order_by,
+                        on_page=lambda releases: self._publish_project_release_page(
+                            request_key, releases
+                        ),
+                        _coalesced=True,
+                    ),
+                )
+            finally:
+                if on_page is not None and request_key in callbacks:
+                    callbacks[request_key].remove(on_page)
+                    if not callbacks[request_key]:
+                        callbacks.pop(request_key, None)
 
         releases: list[JiraProjectRelease] = []
         is_last = False
@@ -1141,12 +1551,94 @@ class APIController:
             is_last = bool(response.get('isLast', True))
             i += 1
 
-            if limit is not None and len(releases) >= limit:
-                return APIControllerResponse(result=releases[:limit])
+            if on_page is not None:
+                published_releases = releases[:limit] if limit is not None else list(releases)
+                page_result = on_page(published_releases)
+                if page_result is not None:
+                    await page_result
 
+            if limit is not None and len(releases) >= limit:
+                result = releases[:limit]
+                self._cache_project_releases(cache_key, result)
+                return APIControllerResponse(result=result)
+
+        self._cache_project_releases(cache_key, releases)
         return APIControllerResponse(result=releases)
 
-    async def search_projects_with_releases(self) -> APIControllerResponse:
+    async def _publish_project_release_page(
+        self,
+        request_key: tuple[Any, ...],
+        releases: list[JiraProjectRelease],
+    ) -> None:
+        callbacks = getattr(self, '_project_release_page_callbacks', {}).get(request_key, [])
+        for callback in list(callbacks):
+            page_result = callback(list(releases))
+            if page_result is not None:
+                await page_result
+
+    def _cache_project_releases(
+        self,
+        cache_key: tuple[str, int | None, str | None, str | None],
+        releases: list[JiraProjectRelease],
+    ) -> None:
+        cache = getattr(self, '_project_releases_cache', None)
+        if cache is None:
+            cache = {}
+            self._project_releases_cache = cache
+        self._set_transient_cache_entry(
+            cache,
+            cache_key,
+            (
+                monotonic() + PROJECT_RELEASES_CACHE_TTL_SECONDS,
+                list(releases),
+            ),
+        )
+
+    async def search_projects_with_releases(
+        self,
+        on_page: Callable[[list[JiraProject]], Awaitable[None] | None] | None = None,
+        *,
+        _refresh: bool = False,
+    ) -> APIControllerResponse:
+        """Return software projects with releases, publishing matches as checks finish."""
+        cache = getattr(self, 'cache', None)
+        if not _refresh:
+            cached_entry = getattr(self, '_projects_with_releases_cache', None)
+            if cached_entry is not None and cached_entry[0] > monotonic():
+                cached_projects = list(cached_entry[1])
+                if on_page is not None:
+                    page_result = on_page(cached_projects)
+                    if page_result is not None:
+                        await page_result
+                return APIControllerResponse(result=cached_projects)
+
+            if cache is not None:
+                cached_projects = await run_cache_io(cache.get_projects_with_releases)
+                if cached_projects is not None:
+                    self._projects_with_releases_cache = (
+                        monotonic() + CACHE_TTL_PROJECTS_WITH_RELEASES,
+                        list(cached_projects),
+                    )
+                    if on_page is not None:
+                        page_result = on_page(list(cached_projects))
+                        if page_result is not None:
+                            await page_result
+                    return APIControllerResponse(result=cached_projects)
+
+                stale_projects = await run_cache_io(
+                    lambda: cache.get_projects_with_releases(allow_stale=True)
+                )
+                if stale_projects is not None:
+                    if on_page is not None:
+                        page_result = on_page(list(stale_projects))
+                        if page_result is not None:
+                            await page_result
+                    self._schedule_background_refresh(
+                        ('projects-with-releases',),
+                        lambda: self.search_projects_with_releases(_refresh=True),
+                    )
+                    return APIControllerResponse(result=stale_projects)
+
         projects_response = await self.search_projects(project_type_key='software')
         if not projects_response.success:
             return projects_response
@@ -1154,26 +1646,56 @@ class APIController:
         projects = cast(list[JiraProject], projects_response.result or [])
         semaphore = asyncio.Semaphore(MAXIMUM_CONCURRENT_PROJECT_RELEASE_CHECKS)
 
-        async def has_releases(project: JiraProject) -> bool:
+        async def check_project(project: JiraProject) -> tuple[JiraProject, bool]:
             async with semaphore:
                 releases_response = await self.get_project_releases(project.key, limit=1)
-                return bool(releases_response.success and releases_response.result)
+                return project, bool(releases_response.success and releases_response.result)
 
-        release_checks = await asyncio.gather(*(has_releases(project) for project in projects))
-        projects_with_releases = [
-            project
-            for project, has_release in zip(projects, release_checks, strict=True)
-            if has_release
-        ]
+        projects_with_releases: list[JiraProject] = []
+        checks = [asyncio.create_task(check_project(project)) for project in projects]
+        try:
+            for completed_check in asyncio.as_completed(checks):
+                project, has_releases = await completed_check
+                if not has_releases:
+                    continue
+                projects_with_releases.append(project)
+                projects_with_releases.sort(key=lambda item: item.key.casefold())
+                if on_page is not None:
+                    page_result = on_page(list(projects_with_releases))
+                    if page_result is not None:
+                        await page_result
+        finally:
+            for check in checks:
+                if not check.done():
+                    check.cancel()
+            await asyncio.gather(*checks, return_exceptions=True)
+
+        self._projects_with_releases_cache = (
+            monotonic() + CACHE_TTL_PROJECTS_WITH_RELEASES,
+            list(projects_with_releases),
+        )
+        if cache is not None:
+            await run_cache_io(lambda: cache.set_projects_with_releases(projects_with_releases))
 
         return APIControllerResponse(result=projects_with_releases)
 
-    async def get_project_features(self, project_key: str) -> APIControllerResponse:
+    async def get_project_features(
+        self,
+        project_key: str,
+        *,
+        _coalesced: bool = False,
+    ) -> APIControllerResponse:
         """Retrieves Jira Software project features, using the local SQLite cache when fresh."""
 
-        cached_features = await run_cache_io(lambda: self.cache.get_project_features(project_key))
-        if cached_features is not None:
-            return APIControllerResponse(result=cached_features)
+        if not _coalesced:
+            return await self._cached_or_refresh(
+                ('project-features', project_key.casefold()),
+                lambda allow_stale: self.cache.get_project_features(
+                    project_key,
+                    allow_stale=allow_stale,
+                ),
+                lambda: self.get_project_features(project_key, _coalesced=True),
+            )
 
         try:
             response = await self.client.get_project_features(project_key)
@@ -1203,7 +1725,12 @@ class APIController:
         features = cast(list[JiraProjectFeature], features_response.result or [])
         return APIControllerResponse(result=self._project_development_feature_enabled(features))
 
-    async def get_project_statuses(self, project_key: str) -> APIControllerResponse:
+    async def get_project_statuses(
+        self,
+        project_key: str,
+        *,
+        _coalesced: bool = False,
+    ) -> APIControllerResponse:
         """Retrieves the statues applicable to work items of a project.
 
         Args:
@@ -1214,9 +1741,15 @@ class APIController:
             instance of `APIControllerResponse` with the `error` message and `success = False`.
         """
 
-        cached_statuses = await run_cache_io(lambda: self.cache.get_project_statuses(project_key))
-        if cached_statuses is not None:
-            return APIControllerResponse(result=cached_statuses)
+        if not _coalesced:
+            return await self._cached_or_refresh(
+                ('project-statuses', project_key.casefold()),
+                lambda allow_stale: self.cache.get_project_statuses(
+                    project_key,
+                    allow_stale=allow_stale,
+                ),
+                lambda: self.get_project_statuses(project_key, _coalesced=True),
+            )
 
         try:
             response: list[dict] = await self.client.get_project_statuses(project_key)
@@ -1251,10 +1784,13 @@ class APIController:
 
         return APIControllerResponse(result=statuses_by_work_item_type)
 
-    async def status(self) -> APIControllerResponse:
-        cached_statuses = await run_cache_io(self.cache.get_statuses)
-        if cached_statuses is not None:
-            return APIControllerResponse(result=cached_statuses)
+    async def status(self, *, _coalesced: bool = False) -> APIControllerResponse:
+        if not _coalesced:
+            return await self._cached_or_refresh(
+                ('statuses',),
+                lambda allow_stale: self.cache.get_statuses(allow_stale=allow_stale),
+                lambda: self.status(_coalesced=True),
+            )
 
         try:
             response: list[dict] = await self.client.status()
@@ -1288,11 +1824,18 @@ class APIController:
             instance of `APIControllerResponse` with the `error` message.
         """
 
-        cached_types = await run_cache_io(
-            lambda: self.cache.get_project_work_item_types(project_key)
+        return await self._cached_or_refresh(
+            ('project-work-item-types', project_key.casefold()),
+            lambda allow_stale: self.cache.get_project_work_item_types(
+                project_key,
+                allow_stale=allow_stale,
+            ),
+            lambda: self._get_work_item_types_for_project_uncached(project_key),
         )
-        if cached_types is not None:
-            return APIControllerResponse(result=cached_types)
+
+    async def _get_work_item_types_for_project_uncached(
+        self, project_key: str
+    ) -> APIControllerResponse:
 
         try:
             project: dict = await self.client.get_project(project_key)
@@ -1320,7 +1863,7 @@ class APIController:
 
         return APIControllerResponse(result=work_item_types)
 
-    async def get_work_item_types(self) -> APIControllerResponse:
+    async def get_work_item_types(self, *, _coalesced: bool = False) -> APIControllerResponse:
         """Retrieves all the types of work items relevant for any project.
 
         It may contain multiple work item types with the same name (different IDs though).
@@ -1329,12 +1872,18 @@ class APIController:
             An instance of `APIControllerResponse` with the list of `IssueType` instances. If an error occurs an
             instance of `APIControllerResponse` with the `error` message.
         """
-        cached_types = await run_cache_io(self.cache.get_work_item_types)
-        if cached_types is not None:
-            return APIControllerResponse(result=cached_types)
+        if not _coalesced:
+            return await self._cached_or_refresh(
+                ('work-item-types',),
+                lambda allow_stale: self.cache.get_work_item_types(allow_stale=allow_stale),
+                lambda: self.get_work_item_types(_coalesced=True),
+            )
 
         try:
-            response: list[dict] = await self.client.get_work_items_types_for_user()
+            response, projects = await asyncio.gather(
+                self.client.get_work_items_types_for_user(),
+                self.search_projects(),
+            )
         except Exception as e:
             exception_details: dict = self._extract_exception_details(e)
             self.logger.error(
@@ -1343,7 +1892,6 @@ class APIController:
             return APIControllerResponse(success=False, error=exception_details.get('message'))
         else:
             projects_by_id: dict[str, JiraProject] = {}
-            projects: APIControllerResponse = await self.search_projects()
             if projects.success:
                 projects_by_id = {p.id: p for p in projects.result or []}
 
@@ -1399,6 +1947,8 @@ class APIController:
         work_item_key: str,
         query: str | None = None,
         active: bool | None = True,
+        *,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Retrieves the users that can be assigned to a work item.
 
@@ -1416,10 +1966,24 @@ class APIController:
 
         project_key = work_item_key.split('-')[0] if work_item_key else None
 
-        if not query and project_key:
-            cached_users = await run_cache_io(lambda: self.cache.get_project_users(project_key))
-            if cached_users:
-                return APIControllerResponse(result=cached_users)
+        if not _coalesced:
+            refresh = lambda: self.search_users_assignable_to_work_item(
+                work_item_key,
+                query,
+                active,
+                _coalesced=True,
+            )
+            return await self._assignable_users_cached_or_coalesced(
+                cache_key=(
+                    'assignable-work-item-users',
+                    work_item_key.casefold(),
+                    (query or '').casefold(),
+                    active,
+                ),
+                project_key=project_key,
+                query=query,
+                refresh=refresh,
+            )
 
         try:
             response: list[dict] = await self.client.user_assignable_search(
@@ -1453,6 +2017,8 @@ class APIController:
         project_keys: list[str],
         query: str | None = None,
         active: bool | None = True,
+        *,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Retrieves the users that can be assigned to work items in multiple projects.
 
@@ -1468,10 +2034,25 @@ class APIController:
             `success = False` and the error message in the `error` key.
         """
 
-        if not query and len(project_keys) == 1:
-            cached_users = await run_cache_io(lambda: self.cache.get_project_users(project_keys[0]))
-            if cached_users is not None:
-                return APIControllerResponse(result=cached_users)
+        if not _coalesced:
+            refresh = partial(
+                self.search_users_assignable_to_projects,
+                project_keys=project_keys,
+                query=query,
+                active=active,
+                _coalesced=True,
+            )
+            return await self._assignable_users_cached_or_coalesced(
+                cache_key=(
+                    'assignable-users',
+                    tuple(project_key.casefold() for project_key in project_keys),
+                    (query or '').casefold(),
+                    active,
+                ),
+                project_key=project_keys[0] if len(project_keys) == 1 else None,
+                query=query,
+                refresh=refresh,
+            )
 
         try:
             response: list[dict] = await self.client.user_assignable_multi_projects(
@@ -1500,11 +2081,32 @@ class APIController:
 
         return APIControllerResponse(result=sorted_users)
 
+    async def _assignable_users_cached_or_coalesced(
+        self,
+        *,
+        cache_key: tuple[Any, ...],
+        project_key: str | None,
+        query: str | None,
+        refresh: Callable[[], Coroutine[Any, Any, APIControllerResponse]],
+    ) -> APIControllerResponse:
+        if not query and project_key:
+            return await self._cached_or_refresh(
+                cache_key,
+                lambda allow_stale: self.cache.get_project_users(
+                    project_key,
+                    allow_stale=allow_stale,
+                ),
+                refresh,
+            )
+        return await self._coalesce_request(cache_key, refresh)
+
     async def get_work_item(
         self,
         work_item_id_or_key: str,
         fields: list[str] | None = None,
         properties: str | None = None,
+        *,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Retrieves a work item (aka. Jira work item) by its key or id.
 
@@ -1525,9 +2127,25 @@ class APIController:
             `success = False` and the error message in the `error` key.
         """
 
-        should_fetch_flagged_state = fields is None
         if fields is None:
             fields = ['*all', 'watches']
+        if not _coalesced:
+            requested_fields = list(fields)
+            return await self._coalesce_request(
+                (
+                    'work-item',
+                    work_item_id_or_key.casefold(),
+                    tuple(requested_fields),
+                    properties,
+                ),
+                lambda: self.get_work_item(
+                    work_item_id_or_key,
+                    fields=requested_fields,
+                    properties=properties,
+                    _coalesced=True,
+                ),
+            )
+
         fields_strings: str | None = ','.join(fields) if fields else None
         try:
             work_item: dict = await self.client.get_work_item(
@@ -1550,10 +2168,16 @@ class APIController:
         else:
             try:
                 instance: JiraWorkItem = WorkItemFactory.create_work_item(work_item)
-                if should_fetch_flagged_state:
-                    flagged_response = await self.get_work_item_flagged_state(instance.key)
-                    if flagged_response.success:
-                        instance.flagged = bool(flagged_response.result)
+                summary = instance.summary or ''
+                work_item_type = instance.work_item_type_name or ''
+                status = instance.status.name if instance.status else ''
+                if instance.key and summary and work_item_type and status:
+                    self.cache_work_item_tooltip(
+                        instance.key,
+                        work_item_type,
+                        summary,
+                        status,
+                    )
             except Exception as e:
                 self.logger.error(
                     'There was an error while extracting data from a work item',
@@ -1567,14 +2191,15 @@ class APIController:
 
     def _build_criteria_for_searching_work_items(
         self,
-        project_key: str | None = None,
-        created_from: date | None = None,
-        created_until: date | None = None,
-        status: int | None = None,
-        assignee: str | None = None,
-        work_item_type: int | None = None,
-        jql_query: str | None = None,
+        search_filters: Mapping[str, Any],
     ) -> dict:
+        project_key = search_filters.get('project_key')
+        created_from = search_filters.get('created_from')
+        created_until = search_filters.get('created_until')
+        status = search_filters.get('status')
+        assignee = search_filters.get('assignee')
+        work_item_type = search_filters.get('work_item_type')
+        jql_query = search_filters.get('jql_query')
         if jql_query:
             return {'jql': jql_query.strip(), 'updated_from': None}
 
@@ -1612,6 +2237,32 @@ class APIController:
             jql_query=search_filters.get('jql_query'),
         )
         return cast(dict[str, Any], search_kwargs), validation_error
+
+    async def _resolve_search_kwargs(
+        self,
+        search_filters: dict[str, Any],
+        prepared_search_kwargs: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any] | None, APIControllerResponse | None]:
+        if prepared_search_kwargs is not None:
+            return prepared_search_kwargs, None
+        return await self._prepared_search_kwargs_or_response(search_filters)
+
+    async def prepare_work_item_search(
+        self,
+        *,
+        project_key: str | None = None,
+        created_from: date | None = None,
+        created_until: date | None = None,
+        status: int | None = None,
+        assignee: str | None = None,
+        work_item_type: int | None = None,
+        jql_query: str | None = None,
+    ) -> APIControllerResponse:
+        """Build and validate reusable arguments for a work-item search."""
+        search_kwargs, validation_error = await self._prepared_search_kwargs_or_response(locals())
+        if validation_error:
+            return validation_error
+        return APIControllerResponse(result=search_kwargs)
 
     @staticmethod
     def _updated_fields_response(response: dict) -> APIControllerResponse:
@@ -1686,6 +2337,7 @@ class APIController:
         next_page_token: str | None = None,
         fields: list[str] | None = None,
         limit: int | None = None,
+        prepared_search_kwargs: dict[str, Any] | None = None,
     ) -> APIControllerResponse:
         """Searches for work items matching specified JQL query and other criteria.
 
@@ -1709,11 +2361,12 @@ class APIController:
             An instance of `APIControllerResponse` with the work items found or, en error if the search can not be
             performed.
         """
-        prepared_search = await self._prepared_search_kwargs_or_response(locals())
-        search_kwargs, validation_error = prepared_search
-        if validation_error:
+        resolved_kwargs, validation_error = await self._resolve_search_kwargs(
+            locals(), prepared_search_kwargs
+        )
+        if validation_error is not None:
             return validation_error
-        assert search_kwargs is not None
+        search_kwargs = cast(dict[str, Any], resolved_kwargs)
 
         try:
             response: dict = await self.client.search_work_items(
@@ -1774,6 +2427,7 @@ class APIController:
         work_item_type: int | None = None,
         created_until: date | None = None,
         assignee: str | None = None,
+        prepared_search_kwargs: dict[str, Any] | None = None,
     ) -> APIControllerResponse:
         """Estimates the number of work items yield by a search.
 
@@ -1789,7 +2443,9 @@ class APIController:
         Returns:
             The approximate count response, or an error response when Jira rejects the query.
         """
-        search_kwargs, validation_error = await self._prepared_search_kwargs_or_response(locals())
+        search_kwargs, validation_error = await self._resolve_search_kwargs(
+            locals(), prepared_search_kwargs
+        )
         if validation_error:
             return validation_error
         assert search_kwargs is not None
@@ -1933,13 +2589,20 @@ class APIController:
             },
         )
 
-    async def global_settings(self) -> APIControllerResponse:
+    async def global_settings(self, *, _coalesced: bool = False) -> APIControllerResponse:
         """Retrieves the global settings of the Jira instance.
 
         Returns:
             An instance of `APIControllerResponse(success=True)` with the details or,
             `APIControllerResponse(success=False)` if there is an error fetching the details.
         """
+        if not _coalesced:
+            return await self._fresh_cached_or_refresh(
+                ('global_settings',),
+                self.cache.get_global_settings,
+                lambda: self.global_settings(_coalesced=True),
+            )
+
         try:
             response: dict = await self.client.global_settings()
         except Exception as e:
@@ -1954,45 +2617,51 @@ class APIController:
                 working_hours_per_day=values.get('workingHoursPerDay'),
             )
 
-        return APIControllerResponse(
-            result=JiraGlobalSettings(
-                attachments_enabled=bool(response.get('attachmentsEnabled', False)),
-                work_item_linking_enabled=bool(response.get('issueLinkingEnabled', False)),
-                subtasks_enabled=bool(response.get('subTasksEnabled', False)),
-                unassigned_work_items_allowed=bool(response.get('unassignedIssuesAllowed', False)),
-                voting_enabled=bool(response.get('votingEnabled', False)),
-                watching_enabled=bool(response.get('watchingEnabled', False)),
-                time_tracking_enabled=bool(response.get('timeTrackingEnabled', False)),
-                time_tracking_configuration=time_tracking_configuration,
-            )
+        global_settings = JiraGlobalSettings(
+            attachments_enabled=bool(response.get('attachmentsEnabled', False)),
+            work_item_linking_enabled=bool(response.get('issueLinkingEnabled', False)),
+            subtasks_enabled=bool(response.get('subTasksEnabled', False)),
+            unassigned_work_items_allowed=bool(response.get('unassignedIssuesAllowed', False)),
+            voting_enabled=bool(response.get('votingEnabled', False)),
+            watching_enabled=bool(response.get('watchingEnabled', False)),
+            time_tracking_enabled=bool(response.get('timeTrackingEnabled', False)),
+            time_tracking_configuration=time_tracking_configuration,
         )
+        await run_cache_io(lambda: self.cache.set_global_settings(global_settings))
+        return APIControllerResponse(result=global_settings)
 
-    async def server_info(self) -> APIControllerResponse:
+    async def server_info(self, *, _coalesced: bool = False) -> APIControllerResponse:
         """Retrieves details of the Jira server instance.
 
         Returns:
-            An instance of `APIControllerResponse(success=True)` with the details or,
-            `APIControllerResponse(success=False)` if there is an error fetching the details.
+            Server metadata in a successful response. Failures contain the Jira error details.
         """
+        if not _coalesced:
+            return await self._fresh_cached_or_refresh(
+                ('server_info',),
+                self.cache.get_server_info,
+                lambda: self.server_info(_coalesced=True),
+            )
+
         try:
             response: dict = await self.client.server_info()
         except Exception as e:
             return self._server_information_error_response(e)
-        return APIControllerResponse(
-            result=JiraServerInfo(
-                base_url=str(response.get('baseUrl', '')),
-                display_url_servicedesk_help_center=response.get('displayUrlServicedeskHelpCenter'),
-                display_url_confluence=response.get('displayUrlConfluence'),
-                version=str(response.get('version', '')),
-                deployment_type=response.get('deploymentType'),
-                build_number=int(response.get('buildNumber', 0)),
-                build_date=str(response.get('buildDate', '')),
-                server_time=response.get('serverTime'),
-                server_title=str(response.get('serverTitle', '')),
-                default_locale=get_nested(response, 'defaultLocale', 'locale'),
-                server_time_zone=response.get('serverTimeZone'),
-            )
+        server_info = JiraServerInfo(
+            base_url=str(response.get('baseUrl', '')),
+            display_url_servicedesk_help_center=response.get('displayUrlServicedeskHelpCenter'),
+            display_url_confluence=response.get('displayUrlConfluence'),
+            version=str(response.get('version', '')),
+            deployment_type=response.get('deploymentType'),
+            build_number=int(response.get('buildNumber', 0)),
+            build_date=str(response.get('buildDate', '')),
+            server_time=response.get('serverTime'),
+            server_title=str(response.get('serverTitle', '')),
+            default_locale=get_nested(response, 'defaultLocale', 'locale'),
+            server_time_zone=response.get('serverTimeZone'),
         )
+        await run_cache_io(lambda: self.cache.set_server_info(server_info))
+        return APIControllerResponse(result=server_info)
 
     async def myself(self) -> APIControllerResponse:
         """Retrieves details of the Jira user connecting to the API.
@@ -2003,15 +2672,16 @@ class APIController:
         """
         try:
             if self.config.jira.auth_type == 'oauth2' and self.identity_api is not None:
-                identity_response = cast(
-                    dict,
-                    await self.identity_api.make_request(
+                identity_result, jira_result = await asyncio.gather(
+                    self.identity_api.make_request(
                         method=httpx.AsyncClient.get,
                         url='me',
                         headers={'Accept': 'application/json'},
                     ),
+                    self.client.myself(),
                 )
-                jira_response = await self.client.myself()
+                identity_response = cast(dict, identity_result)
+                jira_response = cast(dict, jira_result)
                 result = JiraMyselfInfo(
                     account_id=str(
                         identity_response.get('account_id') or jira_response.get('accountId', '')
@@ -2261,6 +2931,7 @@ class APIController:
                 payload=fields_to_update,
                 fields=direct_fields_to_update,
             )
+            self.invalidate_work_item_tooltip(work_item.key)
             if JiraWorkItemGenericFields.PARENT.value in updates:
                 verification_response = await self.get_work_item(
                     work_item_id_or_key=work_item.key,
@@ -2384,6 +3055,7 @@ class APIController:
                 },
             )
             return APIControllerResponse(success=False, error=exception_details.get('message'))
+        self.invalidate_work_item_tooltip(work_item_id_or_key)
         return APIControllerResponse()
 
     async def get_comment(self, work_item_key_or_id: str, comment_id: str) -> APIControllerResponse:
@@ -2771,6 +3443,8 @@ class APIController:
         self,
         project_id_or_key: str,
         work_item_type_id: str,
+        *,
+        _coalesced: bool = False,
     ) -> APIControllerResponse:
         """Retrieves the metadata relevant for creating work items of a project and of a certain type.
 
@@ -2782,6 +3456,20 @@ class APIController:
             An instance of `APIControllerResponse(success=True)` with the metadata;
             `APIControllerResponse(success=False)` if there is an error.
         """
+        if not _coalesced:
+            return await self._coalesce_request(
+                (
+                    'work-item-create-metadata',
+                    project_id_or_key.casefold(),
+                    work_item_type_id,
+                ),
+                lambda: self.get_work_item_create_metadata(
+                    project_id_or_key,
+                    work_item_type_id,
+                    _coalesced=True,
+                ),
+            )
+
         try:
             response = await self.client.get_work_item_create_meta(
                 project_id_or_key, work_item_type_id
@@ -3185,26 +3873,43 @@ class APIController:
             extra={'worklog_id': worklog_id},
         )
 
-    async def get_fields(self, field_name: str | None = None) -> APIControllerResponse:
+    async def get_fields(
+        self,
+        field_name: str | None = None,
+        *,
+        _coalesced: bool = False,
+    ) -> APIControllerResponse:
         """Retrieves system and custom work item fields.
 
         Returns:
             `APIControllerResponse(success=True, result=fields)` if the operation was successful;
             `APIControllerResponse(success=False)` if there is an error.
         """
-        cached_fields = await run_cache_io(self.cache.get_fields)
-        if cached_fields is not None:
-            if field_name:
-                filtered_fields = [
+        if not _coalesced:
+            response = await self._cached_or_refresh(
+                ('fields',),
+                lambda allow_stale: self.cache.get_fields(allow_stale=allow_stale),
+                lambda: self.get_fields(_coalesced=True),
+            )
+            if field_name and isinstance(response.result, list):
+                response.result = [
                     field
-                    for field in cached_fields
+                    for field in response.result
                     if str(field.name).lower() == field_name.lower()
                 ]
-                return APIControllerResponse(result=filtered_fields)
-            return APIControllerResponse(result=cached_fields)
+            return response
+
+        async def get_paginated_fields() -> list[dict]:
+            try:
+                return await self.client.get_all_fields_paginated(max_results=100)
+            except Exception:
+                return []
 
         try:
-            response = await self.client.get_fields()
+            response, paginated_fields = await asyncio.gather(
+                self.client.get_fields(),
+                get_paginated_fields(),
+            )
         except Exception as e:
             exception_details = self._extract_exception_details(e)
             self.logger.error(
@@ -3214,11 +3919,6 @@ class APIController:
             return APIControllerResponse(success=False, error=exception_details.message)
 
         descriptions_by_id: dict[str, str] = {}
-        try:
-            paginated_fields = await self.client.get_all_fields_paginated(max_results=100)
-        except Exception:
-            paginated_fields = []
-
         for field in paginated_fields:
             field_id = field.get('id')
             description = field.get('description')
@@ -3227,8 +3927,6 @@ class APIController:
 
         fields: list[JiraField] = []
         for field in response:
-            if field_name and str(field.get('name', '')).lower() != field_name.lower():
-                continue
             field_id = field.get('id', '')
             fields.append(
                 JiraField(
@@ -3239,8 +3937,7 @@ class APIController:
                     schema=field.get('schema', {}),
                 )
             )
-        if field_name is None:
-            await run_cache_io(lambda: self.cache.set_fields(fields))
+        await run_cache_io(lambda: self.cache.set_fields(fields))
         return APIControllerResponse(result=fields)
 
     async def get_label_suggestions(self, query: str = '') -> APIControllerResponse:
@@ -3275,7 +3972,12 @@ class APIController:
 
         return APIControllerResponse(result=suggestions)
 
-    async def get_sprints_for_project(self, project_key: str) -> APIControllerResponse:
+    async def get_sprints_for_project(
+        self,
+        project_key: str,
+        *,
+        _coalesced: bool = False,
+    ) -> APIControllerResponse:
         """Get active and future sprints for a project with caching.
 
         Args:
@@ -3285,9 +3987,15 @@ class APIController:
             An instance of `APIControllerResponse` with a list of JiraSprint models and `success = True`.
             If an error occurs then `success = False` and the error message in the `error` key.
         """
-        cached_sprints = await run_cache_io(lambda: self.cache.get_sprints_for_project(project_key))
-        if cached_sprints:
-            return APIControllerResponse(result=cached_sprints)
+        if not _coalesced:
+            return await self._cached_or_refresh(
+                ('sprints', project_key.casefold()),
+                lambda allow_stale: self.cache.get_sprints_for_project(
+                    project_key,
+                    allow_stale=allow_stale,
+                ),
+                lambda: self.get_sprints_for_project(project_key, _coalesced=True),
+            )
 
         try:
             sprints_data = await self.client.get_sprints_for_project(
@@ -3323,12 +4031,13 @@ class APIController:
                     self.logger.warning(f'Failed to parse sprint: {e}')
                     continue
 
-            # Avoid poisoning the cache with an empty first fetch. Some projects
-            # can transiently resolve to no sprint data even though later
-            # retries succeed, especially when board discovery or agile access is
-            # still settling during the first work-item load.
-            if sprints:
-                await run_cache_io(lambda: self.cache.set_sprints_for_project(project_key, sprints))
+            await run_cache_io(
+                lambda: self.cache.set_sprints_for_project(
+                    project_key,
+                    sprints,
+                    ttl_seconds=None if sprints else 120,
+                )
+            )
 
             return APIControllerResponse(result=sprints)
 

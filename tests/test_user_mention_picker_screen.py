@@ -67,8 +67,12 @@ def create_open_user_mention_picker_via_full_flow_with_selection(mock_jira_users
         )
 
         # Snapshot a stable post-selection state without the focused type-to-search cursor.
+        # Move the pointer away from the controls as hover styling otherwise depends on
+        # where the preceding comment-screen click happened to land under this modal.
+        await pilot.hover('#modal_title')
         screen.set_focus(screen.insert_button)
-        await asyncio.sleep(0.1)
+        await wait_until(lambda: screen.focused is screen.insert_button)
+        await pilot.pause()
 
     return open_user_mention_picker_via_full_flow_with_selection
 

@@ -7,12 +7,14 @@ from textual.reactive import Reactive, reactive
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     configure_select_field_for_mode,
     normalized_selection_value,
     optional_selection_value_has_changed,
     require_update_mode,
     selection_update_payload,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as UserFieldMode,
 )
 from gojeera.widgets.selection.user_selection_input import (
     UNASSIGNED_OPTION,
@@ -43,7 +45,7 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: UserFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
@@ -77,14 +79,14 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
             self.update_enabled = field_supports_update
 
         configure_select_field_for_mode(
-            self,
+            widget=self,
             mode=mode,
             field_id=field_id,
             title=title,
             required=required,
             field_supports_update=field_supports_update,
             original_value=original_value,
-            on_update=sync_update_state if mode == FieldMode.UPDATE else None,
+            on_update=sync_update_state if mode == UserFieldMode.UPDATE else None,
         )
 
     def watch_update_enabled(self, enabled: bool) -> None:
@@ -113,7 +115,7 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
             self.update_enabled = update_enabled
 
     def watch_users(self, users: dict | None = None) -> None:
-        if self.mode != FieldMode.CREATE:
+        if self.mode != UserFieldMode.CREATE:
             return
 
         if users and (items := users.get('users', []) or []):
@@ -128,7 +130,7 @@ class UserPicker(UnassignedUserSelect, BaseField, BaseUpdateField):
             self.replace_options(options, selection=selection)
 
     def get_value_for_create(self) -> str | None:
-        if self.mode != FieldMode.CREATE:
+        if self.mode != UserFieldMode.CREATE:
             raise ValueError('get_value_for_create() only valid in CREATE mode')
         return normalized_selection_value(self.value)
 

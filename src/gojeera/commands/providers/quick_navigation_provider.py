@@ -19,6 +19,8 @@ QUICK_NAVIGATION_BROWSE_WORK_ITEM_ACTION_HELP = 'Open a work item by key or Jira
 class QuickNavigationProvider(Provider):
     """Open Jira work items from command palette input."""
 
+    palette_id = QUICK_NAVIGATION_BROWSE_WORK_ITEM_PALETTE_ID
+
     def _build_callback(self, work_item_reference: str):
         async def open_work_item() -> None:
             app = cast('JiraApp', self.app)

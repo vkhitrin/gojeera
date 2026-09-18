@@ -4,11 +4,13 @@ from textual.validation import Number
 from gojeera.utils.data.fields import (
     BaseField,
     BaseUpdateField,
-    FieldMode,
     ValidationUtils,
     configure_compact_field_for_mode,
     require_create_mode,
     require_update_mode,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as NumericFieldMode,
 )
 from gojeera.widgets.inputs.extended_input import ExtendedInput, allow_digit_only_key_input
 
@@ -20,7 +22,7 @@ class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: NumericFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
@@ -33,7 +35,7 @@ class NumericInput(ExtendedInput, BaseField, BaseUpdateField):
             placeholder=placeholder,
             validators=[Number()] if required else [],
             valid_empty=not required,
-            type='number' if mode == FieldMode.UPDATE else 'text',
+            type='number' if mode == NumericFieldMode.UPDATE else 'text',
             compact=True,
         )
 

@@ -47,6 +47,14 @@ def _write_acli_oauth_profile(
     )
 
 
+def _configure_acli_profiles(monkeypatch, tmp_path, *, secret_provider, **profile_options):
+    profiles_file = tmp_path / 'auth_profiles.yaml'
+    _write_acli_oauth_profile(profiles_file, **profile_options)
+    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
+    _set_runtime_secrets_provider(monkeypatch, secret_provider)
+    return profiles_file
+
+
 def _set_basic_auth_env(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv('GOJEERA_AUTH_PROFILES_FILE', str(tmp_path / 'auth_profiles.yaml'))
     monkeypatch.setenv('GOJEERA_CONFIG_FILE', str(tmp_path / 'gojeera.yaml'))
@@ -234,20 +242,16 @@ def test_oauth2_refresh_token_is_loaded_from_keyring(monkeypatch, tmp_path):
 
 
 def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monkeypatch, tmp_path):
-    profiles_file = tmp_path / 'auth_profiles.yaml'
-    _write_acli_oauth_profile(
-        profiles_file,
+    _configure_acli_profiles(
+        monkeypatch,
+        tmp_path,
         extra_profiles=(
             '  - name: "basic"',
             '    auth_type: "basic"',
             '    site: "https://example.atlassian.acme.net"',
             '    email: "basic@example.com"',
         ),
-    )
-    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
-    _set_runtime_secrets_provider(
-        monkeypatch,
-        lambda profile, **kwargs: (
+        secret_provider=lambda profile, **kwargs: (
             {
                 'oauth2_access_token': 'oauth-access-token',
                 'oauth2_refresh_token': 'oauth-refresh-token',
@@ -274,9 +278,9 @@ def test_activate_profile_reloads_basic_secret_and_resolves_profile_fields(monke
 
 
 def test_build_api_token_auth_context_resolves_named_fallback_profile(monkeypatch, tmp_path):
-    profiles_file = tmp_path / 'auth_profiles.yaml'
-    _write_acli_oauth_profile(
-        profiles_file,
+    _configure_acli_profiles(
+        monkeypatch,
+        tmp_path,
         extra_profile_lines=('    api_token_fallback_profile: "basic"',),
         extra_profiles=(
             '  - name: "basic"',
@@ -286,11 +290,7 @@ def test_build_api_token_auth_context_resolves_named_fallback_profile(monkeypatc
             '    cloud_id: "cloud-basic"',
             '    account_id: "account-basic"',
         ),
-    )
-    _set_profile_registry_env(monkeypatch, profiles_file, tmp_path)
-    _set_runtime_secrets_provider(
-        monkeypatch,
-        lambda profile, **kwargs: (
+        secret_provider=lambda profile, **kwargs: (
             {'api_token': 'basic-api-token'}
             if profile.auth_type == 'basic'
             else {'oauth2_access_token': 'oauth-access-token'}

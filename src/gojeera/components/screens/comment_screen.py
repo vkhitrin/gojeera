@@ -12,16 +12,18 @@ from gojeera.internal.models.work_items import WorkItemComment
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.textarea_insertion import insert_picker_markup_from_getter
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
+from gojeera.widgets.layout.modal_components import (
+    ExtendedADFMarkdownTextArea,
+    ExtendedFooter,
+    ExtendedModalScreen,
+    VimSelect,
     build_modal_cancel_button,
     build_modal_confirm_button,
+    set_jump_mode,
 )
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
-from gojeera.widgets.navigation.extended_jumper import set_jump_mode
-from gojeera.widgets.selection.vim_select import VimSelect
+from gojeera.widgets.layout.modal_components import (
+    VerticalSuppressClicks as CommentForm,
+)
 
 logger = logging.getLogger('gojeera')
 
@@ -101,7 +103,7 @@ class CommentScreen(ExtendedModalScreen[dict[str, object] | None]):
         save_disabled = self.mode != 'edit'
 
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with CommentForm(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with Vertical(id='modal-form-scroll'):
                 with Vertical(id='comment-field-container'):

@@ -59,6 +59,47 @@ def _single_basic_profile_listing():
     )
 
 
+def _oauth_resource_listing():
+    return [
+        SimpleNamespace(
+            id='cloud-123',
+            name='Example',
+            url='https://example.atlassian.net',
+        )
+    ]
+
+
+def _oauth_auth_service(validate_profile=None):
+    if validate_profile is None:
+        validate_profile = lambda profile, **kwargs: AuthValidationResult(
+            True,
+            'OAuth User',
+            account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+        )
+    return SimpleNamespace(
+        validate_profile=validate_profile,
+        get_oauth2_client_secret=lambda profile, **kwargs: None,
+        get_oauth2_client_id=lambda profile, **kwargs: None,
+    )
+
+
+def _mock_oauth_login_dependencies(monkeypatch, selected_options: list[str]) -> None:
+    select_values = iter(selected_options)
+    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
+    monkeypatch.setattr(
+        'gojeera.cli._run_oauth2_login_flow',
+        lambda **kwargs: SimpleNamespace(
+            access_token='oauth-access-token',
+            refresh_token='oauth-refresh-token',
+            access_token_expiration_timestamp=1234567890,
+        ),
+    )
+    monkeypatch.setattr(
+        'gojeera.cli.get_atlassian_accessible_resources',
+        lambda access_token: _oauth_resource_listing(),
+    )
+
+
 def test_auth_login_stores_environment_secrets(monkeypatch):
     runner = _runner()
 
@@ -537,25 +578,11 @@ def test_auth_login_runs_oauth2_browser_flow(monkeypatch):
     )
     monkeypatch.setattr(
         'gojeera.cli.get_atlassian_accessible_resources',
-        lambda access_token: [
-            type(
-                'Resource',
-                (),
-                {'id': 'cloud-123', 'name': 'Example', 'url': 'https://example.atlassian.net'},
-            )()
-        ],
+        lambda access_token: _oauth_resource_listing(),
     )
     monkeypatch.setattr(
         'gojeera.cli.auth_service',
-        SimpleNamespace(
-            validate_profile=lambda profile, **kwargs: AuthValidationResult(
-                True,
-                'OAuth User',
-                account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
-            ),
-            get_oauth2_client_secret=lambda profile, **kwargs: None,
-            get_oauth2_client_id=lambda profile, **kwargs: None,
-        ),
+        _oauth_auth_service(),
     )
 
     def mock_upsert_profile(profile_name, **kwargs):
@@ -718,37 +745,10 @@ def test_auth_login_oauth2_can_select_existing_api_token_fallback(monkeypatch):
     )
     monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
     monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
-    select_values = iter(['oauth2', 'bot'])
-    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
-    monkeypatch.setattr(
-        'gojeera.cli._run_oauth2_login_flow',
-        lambda **kwargs: SimpleNamespace(
-            access_token='oauth-access-token',
-            refresh_token='oauth-refresh-token',
-            access_token_expiration_timestamp=1234567890,
-        ),
-    )
-    monkeypatch.setattr(
-        'gojeera.cli.get_atlassian_accessible_resources',
-        lambda access_token: [
-            SimpleNamespace(
-                id='cloud-123',
-                name='Example',
-                url='https://example.atlassian.net',
-            )
-        ],
-    )
+    _mock_oauth_login_dependencies(monkeypatch, ['oauth2', 'bot'])
     monkeypatch.setattr(
         'gojeera.cli.auth_service',
-        SimpleNamespace(
-            validate_profile=lambda profile, **kwargs: AuthValidationResult(
-                True,
-                'OAuth User',
-                account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
-            ),
-            get_oauth2_client_secret=lambda profile, **kwargs: None,
-            get_oauth2_client_id=lambda profile, **kwargs: None,
-        ),
+        _oauth_auth_service(),
     )
     monkeypatch.setattr('gojeera.cli.upsert_profile', _capture_upserted_profile(captured_profile))
     monkeypatch.setattr('gojeera.cli.set_jira_oauth2_refresh_token', lambda *args: None)
@@ -786,26 +786,7 @@ def test_auth_login_oauth2_can_create_api_token_fallback(monkeypatch):
     monkeypatch.setattr('gojeera.cli.list_profiles', lambda: ('oauth', {'oauth': oauth_profile}))
     monkeypatch.setattr('gojeera.cli.Prompt.ask', lambda *args, **kwargs: next(prompt_values))
     monkeypatch.setattr('gojeera.cli.Confirm.ask', lambda *args, **kwargs: True)
-    select_values = iter(['oauth2', '__create__'])
-    monkeypatch.setattr('gojeera.cli._select_option', lambda *args, **kwargs: next(select_values))
-    monkeypatch.setattr(
-        'gojeera.cli._run_oauth2_login_flow',
-        lambda **kwargs: SimpleNamespace(
-            access_token='oauth-access-token',
-            refresh_token='oauth-refresh-token',
-            access_token_expiration_timestamp=1234567890,
-        ),
-    )
-    monkeypatch.setattr(
-        'gojeera.cli.get_atlassian_accessible_resources',
-        lambda access_token: [
-            SimpleNamespace(
-                id='cloud-123',
-                name='Example',
-                url='https://example.atlassian.net',
-            )
-        ],
-    )
+    _mock_oauth_login_dependencies(monkeypatch, ['oauth2', '__create__'])
 
     def validate_profile(profile, **kwargs):
         if profile.auth_type == 'basic':
@@ -824,11 +805,7 @@ def test_auth_login_oauth2_can_create_api_token_fallback(monkeypatch):
 
     monkeypatch.setattr(
         'gojeera.cli.auth_service',
-        SimpleNamespace(
-            validate_profile=validate_profile,
-            get_oauth2_client_secret=lambda profile, **kwargs: None,
-            get_oauth2_client_id=lambda profile, **kwargs: None,
-        ),
+        _oauth_auth_service(validate_profile),
     )
     monkeypatch.setattr(
         'gojeera.cli.upsert_profile',

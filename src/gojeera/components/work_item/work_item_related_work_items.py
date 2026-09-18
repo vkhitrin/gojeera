@@ -1,14 +1,15 @@
 from typing import TYPE_CHECKING, cast
+from uuid import uuid4
 
-from textual import on
+from textual import on as textual_on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
 
-from gojeera.components.screens.confirmation_screen import ConfirmationScreen
-from gojeera.components.screens.new_related_work_item_screen import AddWorkItemRelationshipScreen
 from gojeera.components.tabs.record_list_tab import (
     WORK_ITEM_NAVIGATION_BINDINGS,
-    RecordListTabWidget,
+)
+from gojeera.components.tabs.record_list_tab import (
+    RecordListTabWidget as RelationshipRecordListTabWidget,
 )
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import JiraWorkItemGenericFields
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class RelatedWorkItemsWidget(RecordListTabWidget):
+class RelatedWorkItemsWidget(RelationshipRecordListTabWidget):
     """A container for displaying the work items related to a work item."""
 
     BINDINGS = [
@@ -58,6 +59,10 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
             self.run_worker(self.link_work_items(data))
 
     async def action_link_work_item(self) -> None:
+        from gojeera.components.screens.new_related_work_item_screen import (
+            AddWorkItemRelationshipScreen,
+        )
+
         if self.work_item_key:
             await self.app.push_screen(
                 AddWorkItemRelationshipScreen(self.work_item_key), callback=self.add_relationship
@@ -96,13 +101,47 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
                 title=self.work_item_key,
             )
         else:
+            optimistic_item = self._build_optimistic_related_work_item(data)
+            if optimistic_item is not None and not any(
+                item.key == optimistic_item.key for item in self.work_items or []
+            ):
+                self.work_items = [*(self.work_items or []), optimistic_item]
+
             response = await application.api.get_work_item(
                 self.work_item_key,
                 fields=[JiraWorkItemGenericFields.WORK_ITEM_LINKS.value],
             )
             if response.success and response.result and response.result.work_items:
                 work_item: JiraWorkItem = response.result.work_items[0]
-                self.work_items = work_item.related_work_items or []
+                refreshed_items = work_item.related_work_items or []
+                if optimistic_item is not None and not any(
+                    item.key == optimistic_item.key for item in refreshed_items
+                ):
+                    refreshed_items = [*refreshed_items, optimistic_item]
+                self.work_items = refreshed_items
+
+    @staticmethod
+    def _build_optimistic_related_work_item(data: dict) -> RelatedJiraWorkItem | None:
+        right_work_item = data.get('right_work_item')
+        link_type = data.get('link_type')
+        link_type_name = data.get('link_type_name')
+        if (
+            not isinstance(right_work_item, JiraWorkItem)
+            or right_work_item.work_item_type is None
+            or not isinstance(link_type, str)
+            or not isinstance(link_type_name, str)
+        ):
+            return None
+        return RelatedJiraWorkItem(
+            id=f'local-{uuid4().hex}',
+            key=right_work_item.key,
+            summary=right_work_item.summary,
+            status=right_work_item.status,
+            work_item_type=right_work_item.work_item_type,
+            link_type=link_type_name,
+            relation_type=link_type,
+            priority=right_work_item.priority,
+        )
 
     async def action_load_selected_work_item(self) -> None:
         current_work_item = self.selected_payload_as(RelatedJiraWorkItem)
@@ -122,6 +161,8 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
         self.open_work_item_in_browser(current_work_item.key)
 
     async def action_unlink_work_item(self) -> None:
+        from gojeera.components.screens.confirmation_screen import ConfirmationScreen
+
         if not isinstance(self.record_list.selected_payload, RelatedJiraWorkItem):
             return
 
@@ -134,12 +175,54 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
         if result:
             self.run_worker(self.delete_link())
 
+    async def _resolve_related_link_id(self, selected: RelatedJiraWorkItem) -> str | None:
+        if not selected.id.startswith('local-'):
+            return selected.id
+        if not self.work_item_key:
+            return None
+
+        application = cast('JiraApp', self.app)
+        response = await application.api.get_work_item(
+            self.work_item_key,
+            fields=[JiraWorkItemGenericFields.WORK_ITEM_LINKS.value],
+        )
+        if not response.success or not response.result or not response.result.work_items:
+            return None
+
+        refreshed_items = response.result.work_items[0].related_work_items or []
+        resolved = next(
+            (
+                item
+                for item in refreshed_items
+                if item.key == selected.key and item.relation_type == selected.relation_type
+            ),
+            None,
+        )
+        local_items = [
+            item
+            for item in self.work_items or []
+            if item.id.startswith('local-')
+            and not any(current.key == item.key for current in refreshed_items)
+        ]
+        self.work_items = [*refreshed_items, *local_items]
+        if resolved is not None:
+            self.record_list.focus_record_by_key(resolved.id)
+            return resolved.id
+        return None
+
     async def delete_link(self) -> None:
         selected = self.record_list.selected_payload
         if not isinstance(selected, RelatedJiraWorkItem):
             return
         current_work_item = selected
-        link_id = current_work_item.id
+        link_id = await self._resolve_related_link_id(current_work_item)
+        if link_id is None:
+            self.notify(
+                'The related work item is still syncing. Please try again in a moment.',
+                severity='warning',
+                title=self.work_item_key or '',
+            )
+            return
 
         application = cast('JiraApp', self.app)
         response: APIControllerResponse = await application.api.delete_work_item_link(link_id)
@@ -150,6 +233,7 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
                     severity='error',
                     title=self.work_item_key,
                 )
+                return
 
             self.work_items = [i for i in self.work_items or [] if i.id != link_id]
 
@@ -168,6 +252,6 @@ class RelatedWorkItemsWidget(RecordListTabWidget):
 
         self.displayed_count = self.update_records_from_items(items, build_record)
 
-    @on(RecordList.RowInvoked)
+    @textual_on(RecordList.RowInvoked)
     def on_row_invoked(self, event: RecordList.RowInvoked) -> None:
         self.handle_row_invoked_load(event)

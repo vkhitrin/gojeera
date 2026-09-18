@@ -1,6 +1,7 @@
 import asyncio
 
 from gojeera.app import JiraApp
+from gojeera.commands.providers import recent_items_provider
 from gojeera.internal.store.cache import get_cache
 from gojeera.widgets.navigation.extended_palette import ExtendedPalette
 
@@ -72,7 +73,8 @@ class TestRecentlyViewedWorkItemsProvider:
         )
 
         monkeypatch.setattr(
-            'gojeera.commands.providers.recently_viewed_work_items_provider.humanize.naturaltime',
+            recent_items_provider.humanize,
+            'naturaltime',
             lambda _: '5 minutes ago',
         )
         app = JiraApp(settings=mock_configuration, user_info=mock_user_info)

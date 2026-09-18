@@ -1,4 +1,6 @@
+import asyncio
 from typing import cast
+from unittest.mock import Mock
 
 import pytest
 
@@ -11,13 +13,12 @@ from gojeera.internal.jira.controller import (
     APIControllerResponse,
 )
 from gojeera.internal.models.jira import (
-    JiraGlobalSettings,
     JiraProjectRepository,
     JiraRepositoryPullRequest,
     JiraServerInfo,
 )
 
-from .test_helpers import wait_until
+from .test_helpers import jira_global_settings, wait_until
 
 
 class FakeProjectRepositoriesAPI:
@@ -42,21 +43,17 @@ class FakeProjectRepositoriesAPI:
         )
 
     async def global_settings(self) -> APIControllerResponse:
-        return APIControllerResponse(
-            result=JiraGlobalSettings(
-                attachments_enabled=True,
-                work_item_linking_enabled=True,
-                subtasks_enabled=True,
-                unassigned_work_items_allowed=True,
-                voting_enabled=True,
-                watching_enabled=True,
-                time_tracking_enabled=True,
-            )
-        )
+        return APIControllerResponse(result=jira_global_settings())
 
-    async def get_project_repositories(self, project_key: str) -> APIControllerResponse:
+    async def get_project_repositories(
+        self,
+        project_key: str,
+        on_page=None,
+    ) -> APIControllerResponse:
         assert project_key == 'ENG'
         if self.repositories is not None:
+            if on_page is not None:
+                on_page(self.repositories)
             return APIControllerResponse(result=self.repositories)
 
         return APIControllerResponse(
@@ -68,10 +65,14 @@ class FakeProjectRepositoriesAPI:
         self,
         requested_project_key: str,
         selected_repository: JiraProjectRepository,
+        on_page=None,
     ) -> APIControllerResponse:
         assert requested_project_key == 'ENG'
         assert selected_repository.name == 'platform-api'
-        return APIControllerResponse(result=self.pull_requests or [])
+        pull_requests = self.pull_requests or []
+        if on_page is not None:
+            await on_page(pull_requests)
+        return APIControllerResponse(result=pull_requests)
 
     async def close(self) -> None:
         pass
@@ -181,6 +182,103 @@ def assert_project_repositories_payload_snapshot(
 
 
 class TestProjectRepositoriesScreen:
+    @pytest.mark.asyncio
+    async def test_repositories_render_the_first_page_while_later_pages_load(
+        self,
+        mock_configuration,
+        mock_user_info,
+    ):
+        first_repository = JiraProjectRepository(id='repo-1', name='platform-api')
+        second_repository = JiraProjectRepository(id='repo-2', name='platform-web')
+        first_page_published = asyncio.Event()
+        release_second_page = asyncio.Event()
+
+        class StreamingProjectRepositoriesAPI(FakeProjectRepositoriesAPI):
+            async def get_project_repositories(self, project_key: str, on_page=None):
+                assert project_key == 'ENG'
+                assert on_page is not None
+                on_page([first_repository])
+                first_page_published.set()
+                await release_second_page.wait()
+                on_page([first_repository, second_repository])
+                return APIControllerResponse(result=[first_repository, second_repository])
+
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        app.api = cast(APIController, StreamingProjectRepositoriesAPI())
+
+        async with app.run_test():
+            await app.push_screen(ProjectRepositoriesScreen('ENG'))
+            await asyncio.wait_for(first_page_published.wait(), timeout=1)
+            screen = app.screen
+            assert isinstance(screen, ProjectRepositoriesScreen)
+            await wait_until(lambda: len(screen._rendered_repositories) == 1, timeout=3.0)
+
+            assert screen._rendered_repositories[0] is first_repository
+            assert not screen.repositories_scroll.loading
+            assert screen.loading_label.display
+            replace_rows = Mock(wraps=screen.table.replace_rows)
+            screen.table.replace_rows = replace_rows
+
+            release_second_page.set()
+            await wait_until(lambda: len(screen._rendered_repositories) == 2, timeout=3.0)
+            await wait_until(lambda: not screen.loading_label.display, timeout=3.0)
+            replace_rows.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pull_requests_render_the_first_page_while_later_pages_load(
+        self,
+        mock_configuration,
+        mock_user_info,
+    ):
+        repository = JiraProjectRepository(id='repo-1', name='platform-api')
+        first_page = JiraRepositoryPullRequest(
+            id='pr-1',
+            title='First pull request',
+            work_item_key='ENG-1',
+            work_item_id='1',
+        )
+        second_page = JiraRepositoryPullRequest(
+            id='pr-2',
+            title='Second pull request',
+            work_item_key='ENG-2',
+            work_item_id='2',
+        )
+        first_page_published = asyncio.Event()
+        release_second_page = asyncio.Event()
+
+        class StreamingProjectRepositoriesAPI(FakeProjectRepositoriesAPI):
+            async def get_repository_pull_requests(self, *args, **kwargs) -> APIControllerResponse:
+                requested_project_key, selected_repository = args
+                on_page = kwargs.get('on_page')
+                assert requested_project_key == 'ENG'
+                assert selected_repository is repository
+                assert on_page is not None
+                await on_page([first_page])
+                first_page_published.set()
+                await release_second_page.wait()
+                await on_page([second_page])
+                return APIControllerResponse(result=[first_page, second_page])
+
+        fake_api = StreamingProjectRepositoriesAPI()
+        app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+        app.api = cast(APIController, fake_api)
+
+        async with app.run_test() as pilot:
+            screen = RepositoryPullRequestsScreen('ENG', repository)
+            await app.push_screen(screen)
+            await asyncio.wait_for(first_page_published.wait(), timeout=3.0)
+            await wait_until(lambda: screen.table.row_count == 1, timeout=3.0)
+
+            assert not screen.pull_requests_scroll.loading
+            assert screen.loading_label.display
+
+            release_second_page.set()
+            await wait_until(lambda: screen.table.row_count == 2, timeout=3.0)
+            await wait_until(lambda: not screen.loading_label.display, timeout=3.0)
+            await pilot.pause()
+
+            assert [item.id for item in screen._rendered_pull_requests] == ['pr-1', 'pr-2']
+
     @staticmethod
     def test_project_repositories_screen_oauth2_missing_fallback_notification(
         snap_compare,

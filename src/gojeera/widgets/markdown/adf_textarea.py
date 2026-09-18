@@ -2,7 +2,9 @@ import logging
 
 from gojeera.utils.data.fields import (
     BaseField,
-    FieldMode,
+)
+from gojeera.utils.data.fields import (
+    FieldMode as ADFFieldMode,
 )
 from gojeera.utils.markdown.adf_helpers import convert_adf_to_markdown
 from gojeera.widgets.markdown.gojeera_markdown import GojeeraMarkdown
@@ -17,12 +19,13 @@ class ADFTextAreaWidget(GojeeraMarkdown, BaseField):
 
     def __init__(
         self,
-        mode: FieldMode,
+        mode: ADFFieldMode,
         field_id: str,
         title: str | None = None,
         required: bool = False,
         original_value: dict | str | None = None,
         field_supports_update: bool = True,
+        preconverted_markdown: str | None = None,
     ):
         """
         Initialize an ADFTextAreaWidget.
@@ -38,7 +41,11 @@ class ADFTextAreaWidget(GojeeraMarkdown, BaseField):
         """
         del field_supports_update
 
-        markdown_text = self._convert_to_markdown(original_value)
+        markdown_text = (
+            preconverted_markdown
+            if preconverted_markdown is not None
+            else self.convert_value_to_markdown(original_value)
+        )
 
         super().__init__(
             markdown=markdown_text,
@@ -54,7 +61,8 @@ class ADFTextAreaWidget(GojeeraMarkdown, BaseField):
 
         self.add_class('adf-textarea-readonly')
 
-    def _convert_to_markdown(self, value: dict | str | None) -> str:
+    @staticmethod
+    def convert_value_to_markdown(value: dict | str | None) -> str:
         """
         Convert ADF (Atlassian Document Format) to Markdown.
 

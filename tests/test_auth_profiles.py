@@ -60,17 +60,24 @@ def expected_single_profile_config(**profile):
     }
 
 
+def upsert_oauth_work_profile(profiles_file, **overrides):
+    profile = {
+        'auth_type': 'oauth2',
+        'email': None,
+        'account_id': '712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
+        'display_name': 'Vadim Khitrin',
+        'cloud_id': '156d871e-bab7-4cd0-b529-a8a5af3f792e',
+        'client_id': 'client-123',
+        **overrides,
+    }
+    return upsert_work_profile(profiles_file, **profile)
+
+
 def test_upsert_oauth2_profile_writes_named_oauth_profile_without_secrets(monkeypatch, tmp_path):
     profiles_file = auth_profiles_file(monkeypatch, tmp_path)
 
-    config = upsert_work_profile(
+    config = upsert_oauth_work_profile(
         profiles_file,
-        auth_type='oauth2',
-        email=None,
-        account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
-        display_name='Vadim Khitrin',
-        cloud_id='156d871e-bab7-4cd0-b529-a8a5af3f792e',
-        client_id='client-123',
         oauth2_access_token_expiration_timestamp=123,
     )
 
@@ -88,14 +95,8 @@ def test_upsert_oauth2_profile_writes_named_oauth_profile_without_secrets(monkey
 def test_upsert_oauth2_profile_writes_api_token_fallback_profile(monkeypatch, tmp_path):
     profiles_file = auth_profiles_file(monkeypatch, tmp_path)
 
-    config = upsert_work_profile(
+    config = upsert_oauth_work_profile(
         profiles_file,
-        auth_type='oauth2',
-        email=None,
-        account_id='712020:403b9a3f-d68e-46a1-83f3-8f87a7b55857',
-        display_name='Vadim Khitrin',
-        cloud_id='156d871e-bab7-4cd0-b529-a8a5af3f792e',
-        client_id='client-123',
         api_token_fallback_profile='work-api-token',
     )
 

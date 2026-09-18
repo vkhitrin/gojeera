@@ -3,21 +3,20 @@ from datetime import datetime, timezone
 from enum import Enum
 import json
 import logging
+from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 
 from dateutil import parser
-from textual import on, work
+from textual import events, on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalGroup, VerticalScroll
 from textual.message import Message
 from textual.reactive import Reactive, reactive
 from textual.widget import Widget
-from textual.widgets import Button, Input, Label, Select
+from textual.widgets import Button, Input, Label, Select, TextArea
 from textual.widgets._select import SelectOverlay
 from textual_tags import Tag, TagAutoComplete
 
-from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
-from gojeera.components.screens.work_log_screen import LogWorkScreen
 from gojeera.components.work_item.work_item_description import WorkItemInfoContainer
 from gojeera.internal.jira.controller import APIController, APIControllerResponse
 from gojeera.internal.jira.work_item_permissions import (
@@ -30,7 +29,7 @@ from gojeera.internal.models.jira import (
     WorkItemPriority,
     WorkItemWatchers,
 )
-from gojeera.internal.models.work_items import JiraWorkItem
+from gojeera.internal.models.work_items import JiraWorkItem, PaginatedJiraWorklog
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.data.fields import (
     FieldMode,
@@ -76,6 +75,8 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 logger = logging.getLogger('gojeera')
+DYNAMIC_FIELD_MOUNT_BATCH_SIZE = 6
+SPRINT_OPTIONS_MEMORY_TTL_SECONDS = 300.0
 
 FLAGGED_FIELD_VALUE = 'Impediment'
 FLAGGED_GLYPH = '⚑'
@@ -248,6 +249,7 @@ class WorkItemFields(Container, can_focus=False):
     """Details panel container for work item fields."""
 
     DEFERRED_FIELDS_START_DELAY_S = 0.08
+    FIELD_METADATA_IDLE_DELAY_S = 1.0
 
     DEFAULT_CSS = """
     WorkItemFields {
@@ -370,12 +372,20 @@ class WorkItemFields(Container, can_focus=False):
         self._field_names_by_id: dict[str, str] = {}
         self._field_descriptions_by_id: dict[str, str] = {}
         self._field_descriptions_loading = False
+        self._field_metadata_timer = None
         self._dynamic_fields_signature: str | None = None
         self._dynamic_field_wrappers_cache: list[DynamicFieldWrapper] | None = None
         self._static_field_labels_cache: dict[str, Label] | None = None
         self._pending_changes_update_scheduled = False
         self._pending_changes_tracking_suspensions = 0
-        self._sprint_options_by_project: dict[str, list[tuple[str, str]]] = {}
+        self._pending_change_sources: set[Widget] = set()
+        self._pending_change_full_scan_requested = True
+        self._dirty_pending_change_targets: set[Widget] = set()
+        self._pending_change_target_labels: dict[Widget, Label | None] | None = None
+        self._sprint_options_by_project: dict[
+            str,
+            tuple[float, list[tuple[str, str]]],
+        ] = {}
         self._sprint_fetch_in_flight_projects: set[str] = set()
         self._assignee_refresh_worker = None
         self._status_refresh_worker = None
@@ -384,9 +394,6 @@ class WorkItemFields(Container, can_focus=False):
         self._deferred_adf_mount_worker = None
         self._permission_cache = WorkItemPermissionCache(
             app_getter=lambda: cast('JiraApp', self.app),
-            run_worker=lambda: self.run_worker,
-            is_mounted=lambda: self.is_mounted,
-            group='view-watchers-permission-load',
         )
         self._flagged_state: bool | None = None
         self._pending_work_item_key_for_deferred_load: str | None = None
@@ -629,6 +636,8 @@ class WorkItemFields(Container, can_focus=False):
         selector = WorkItemStatusSelectionInput(options, prompt=prompt)
         selector._transition_status_ids = transition_status_ids or {}
         self._work_item_status_selector = selector
+        self._pending_change_target_labels = None
+        self._pending_change_full_scan_requested = True
         self.query_one('#status-field-row', expect_type=Horizontal).mount(
             self._field_control(selector)
         )
@@ -734,11 +743,34 @@ class WorkItemFields(Container, can_focus=False):
 
     def _start_field_descriptions_loading(self) -> None:
         if (
-            self._field_names_by_id or self._field_descriptions_by_id
-        ) or self._field_descriptions_loading:
+            (self._field_names_by_id or self._field_descriptions_by_id)
+            or self._field_descriptions_loading
+            or self._field_metadata_timer is not None
+        ):
+            return
+        work_item_key = self.work_item.key if self.work_item else None
+        if not work_item_key:
+            return
+        self._field_metadata_timer = self.set_timer(
+            self.FIELD_METADATA_IDLE_DELAY_S,
+            lambda: self._begin_field_descriptions_loading(work_item_key),
+        )
+
+    def _begin_field_descriptions_loading(self, work_item_key: str) -> None:
+        self._field_metadata_timer = None
+        if not self.work_item or self.work_item.key != work_item_key:
+            return
+        if self._field_names_by_id or self._field_descriptions_by_id:
             return
         self._field_descriptions_loading = True
         self.run_worker(self._load_field_descriptions_in_background(), exclusive=False)
+
+    def on_mouse_move(self, _: events.MouseMove) -> None:
+        if self._field_metadata_timer is None or not self.work_item:
+            return
+        self._field_metadata_timer.stop()
+        self._field_metadata_timer = None
+        self._begin_field_descriptions_loading(self.work_item.key)
 
     async def _load_field_descriptions_in_background(self) -> None:
         await self._ensure_field_metadata_loaded()
@@ -1106,7 +1138,8 @@ class WorkItemFields(Container, can_focus=False):
             pass
 
     def on_resize(self) -> None:
-        self._update_layout_mode()
+        if self.work_item is not None:
+            self._update_layout_mode()
 
     def _schedule_field_spacing_refresh(self) -> None:
         if not self.is_mounted or self._loading_form:
@@ -1216,8 +1249,6 @@ class WorkItemFields(Container, can_focus=False):
         else:
             self._sync_flag_button(None)
             self._sync_watchers_action(None)
-        self.call_after_refresh(self._setup_jump_mode)
-        self._update_layout_mode()
 
     def _set_preview_overlay_visible(self, visible: bool) -> None:
         has_work_item = self.work_item is not None
@@ -1230,9 +1261,14 @@ class WorkItemFields(Container, can_focus=False):
             if self.content_container.styles.opacity != form_opacity:
                 self.content_container.styles.opacity = form_opacity
 
-    def _schedule_pending_changes_indicator_update(self) -> None:
+    def _schedule_pending_changes_indicator_update(self, source: Widget | None = None) -> None:
         if self._pending_changes_tracking_suspensions > 0:
             return
+        if source is None:
+            self._pending_change_full_scan_requested = True
+            self._pending_change_sources.clear()
+        elif not self._pending_change_full_scan_requested:
+            self._pending_change_sources.add(source)
         if self._pending_changes_update_scheduled:
             return
         self._pending_changes_update_scheduled = True
@@ -1244,13 +1280,104 @@ class WorkItemFields(Container, can_focus=False):
             return
         if not self._loading_form and self.work_item:
             try:
-                has_changes = self._check_for_pending_changes()
+                if self._pending_change_full_scan_requested:
+                    self._rebuild_pending_change_state()
+                else:
+                    self._update_pending_change_sources()
+                self._pending_change_full_scan_requested = False
+                self._pending_change_sources.clear()
+                has_changes = bool(self._dirty_pending_change_targets)
                 if self.has_pending_changes != has_changes:
                     self.has_pending_changes = has_changes
-
-                self._update_all_field_labels_styling()
             except Exception:
-                pass
+                self._pending_change_full_scan_requested = True
+
+    def _static_pending_change_targets(self) -> dict[str, Widget | None]:
+        return {
+            'status-field-container': self.maybe_work_item_status_selector,
+            'priority-field-container': self.priority_selector,
+            'assignee-field-container': self.assignee_selector,
+            'due-date-container': self.work_item_due_date_field,
+            'labels-field-container': self.work_item_labels_widget,
+            'components-field-container': self.work_item_components_widget,
+            'affects-version-field-container': self.work_item_affects_version_widget,
+            'fix-version-field-container': self.work_item_fix_version_widget,
+            'story-points-field-container': self.work_item_story_points_widget,
+            'sprint-field-container': self.sprint_picker_widget,
+        }
+
+    def _pending_change_targets(self) -> dict[Widget, Label | None]:
+        if self._pending_change_target_labels is not None:
+            return self._pending_change_target_labels
+
+        static_labels = self._static_field_labels()
+        targets = {
+            widget: static_labels.get(container_id)
+            for container_id, widget in self._static_pending_change_targets().items()
+            if widget is not None
+        }
+        targets.update({wrapper: None for wrapper in self._iter_dynamic_field_wrappers()})
+        self._pending_change_target_labels = targets
+        return targets
+
+    def _pending_change_target_for(self, source: Widget) -> Widget | None:
+        targets = self._pending_change_targets()
+        current: Widget | None = source
+        while current is not None and current is not self:
+            if current in targets:
+                return current
+            parent = current.parent
+            current = parent if isinstance(parent, Widget) else None
+        return None
+
+    def _pending_change_target_has_changed(self, target: Widget) -> bool:
+        if isinstance(target, WorkItemStatusSelectionInput):
+            return self._status_has_pending_change()
+        if isinstance(target, DynamicFieldWrapper):
+            dynamic_widget = target.widget
+            return bool(
+                CONFIGURATION.get().enable_updating_additional_fields
+                and target.update_enabled
+                and target.value_has_changed
+                and target.jira_field_key
+                and dynamic_widget is not None
+                and hasattr(dynamic_widget, 'get_value_for_update')
+            )
+        return bool(
+            getattr(target, 'update_enabled', True) and getattr(target, 'value_has_changed', False)
+        )
+
+    def _update_pending_change_target_label(self, target: Widget, changed: bool) -> None:
+        if isinstance(target, DynamicFieldWrapper):
+            target.update_label_styling()
+            return
+
+        label = self._pending_change_targets().get(target)
+        if label is None:
+            return
+        label.set_class(changed, 'pending_field_label')
+
+    def _update_pending_change_target(self, target: Widget) -> None:
+        changed = self._pending_change_target_has_changed(target)
+        if changed:
+            self._dirty_pending_change_targets.add(target)
+        else:
+            self._dirty_pending_change_targets.discard(target)
+        self._update_pending_change_target_label(target, changed)
+
+    def _rebuild_pending_change_state(self) -> None:
+        self._dirty_pending_change_targets.clear()
+        for target in self._pending_change_targets():
+            self._update_pending_change_target(target)
+
+    def _update_pending_change_sources(self) -> None:
+        for source in self._pending_change_sources:
+            target = self._pending_change_target_for(source)
+            if target is None:
+                self._pending_change_full_scan_requested = True
+                self._rebuild_pending_change_state()
+                return
+            self._update_pending_change_target(target)
 
     def _update_all_field_labels_styling(self) -> None:
         for wrapper in self._iter_dynamic_field_wrappers():
@@ -1310,19 +1437,24 @@ class WorkItemFields(Container, can_focus=False):
         if self._pending_changes_tracking_suspensions == 0:
             self._schedule_pending_changes_indicator_update()
 
-    async def on_input_changed(self, _event: Input.Changed) -> None:
-        self._schedule_pending_changes_indicator_update()
+    async def on_input_changed(self, event: Input.Changed) -> None:
+        self._schedule_pending_changes_indicator_update(event.input)
 
-    async def on_select_changed(self, _event: Select.Changed) -> None:
-        self._schedule_pending_changes_indicator_update()
+    async def on_select_changed(self, event: Select.Changed) -> None:
+        self._schedule_pending_changes_indicator_update(event.select)
 
-    async def on_tag_auto_complete_applied(self, _event: TagAutoComplete.Applied) -> None:
-        self._schedule_pending_changes_indicator_update()
+    async def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self._schedule_pending_changes_indicator_update(event.text_area)
 
-    async def on_tag_removed(self, _event: Tag.Removed) -> None:
-        self._schedule_pending_changes_indicator_update()
+    async def on_tag_auto_complete_applied(self, event: TagAutoComplete.Applied) -> None:
+        self._schedule_pending_changes_indicator_update(event.autocomplete)
+
+    async def on_tag_removed(self, event: Tag.Removed) -> None:
+        self._schedule_pending_changes_indicator_update(event.tag)
 
     def watch_has_pending_changes(self, has_changes: bool) -> None:
+        if not has_changes:
+            self._dirty_pending_change_targets.clear()
         logger.debug(
             'pending_changes watch work_item=%s has_changes=%s loading_form=%s suspensions=%s save_in_progress=%s',
             self.work_item.key if self.work_item else None,
@@ -1332,7 +1464,11 @@ class WorkItemFields(Container, can_focus=False):
             self._save_in_progress,
         )
         self._update_pending_changes_footer()
-        self.screen.refresh_bindings()
+        request_refresh = getattr(self.app, 'request_bindings_refresh', None)
+        if callable(request_refresh):
+            request_refresh()
+        else:
+            self.screen.refresh_bindings()
 
     def _update_pending_changes_footer(self) -> None:
         show_pending_changes = (
@@ -1365,6 +1501,8 @@ class WorkItemFields(Container, can_focus=False):
             self.run_worker(self._open_worklog_screen_if_logs_exist())
 
     async def _open_worklog_screen_if_logs_exist(self) -> None:
+        from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
+
         if not self.work_item:
             return
 
@@ -1380,7 +1518,10 @@ class WorkItemFields(Container, can_focus=False):
             )
             return
 
-        if not response.result or not response.result.logs:
+        initial_page = (
+            response.result if isinstance(response.result, PaginatedJiraWorklog) else None
+        )
+        if initial_page is None or not initial_page.logs:
             self.notify(
                 'Work item has no work logs',
                 severity='warning',
@@ -1393,11 +1534,17 @@ class WorkItemFields(Container, can_focus=False):
             current_remaining_estimate = self.work_item.time_tracking.remaining_estimate
 
         self.app.push_screen(
-            WorkItemWorkLogScreen(self.work_item.key, current_remaining_estimate),
+            WorkItemWorkLogScreen(
+                self.work_item.key,
+                current_remaining_estimate,
+                initial_page=initial_page,
+            ),
             self._handle_worklog_screen_dismissal,
         )
 
     def action_log_work(self) -> None:
+        from gojeera.components.screens.work_log_screen import LogWorkScreen
+
         if self.work_item:
             current_remaining_estimate = None
             if self.work_item.time_tracking:
@@ -1569,6 +1716,8 @@ class WorkItemFields(Container, can_focus=False):
 
     def _invalidate_dynamic_field_wrapper_cache(self) -> None:
         self._dynamic_field_wrappers_cache = None
+        self._pending_change_target_labels = None
+        self._pending_change_full_scan_requested = True
 
     def _static_field_labels(self) -> dict[str, Label]:
         if self._static_field_labels_cache is not None:
@@ -2371,22 +2520,6 @@ class WorkItemFields(Container, can_focus=False):
                 payload[field_key] = wrapper.get_value_for_update()
         return payload
 
-    def _check_for_pending_changes(self) -> bool:
-        if not self.work_item:
-            return False
-
-        payload = self._build_payload_for_update()
-        has_field_changes = bool(payload)
-        status_selector = self.maybe_work_item_status_selector
-
-        has_status_change = (
-            status_selector is not None
-            and status_selector.selection is not None
-            and status_selector.selected_status_id != self.work_item.status.id
-        )
-
-        return has_field_changes or has_status_change
-
     def action_save_work_item(self) -> None:
         if self._save_in_progress:
             return
@@ -2420,14 +2553,6 @@ class WorkItemFields(Container, can_focus=False):
             return
 
         await self.watchers_menu.toggle_with_loader(self._load_watchers_menu_items)
-
-    def _start_view_watchers_permission_load(self, work_item_key: str) -> None:
-        self._permission_cache.start_load(
-            work_item_key,
-            VIEW_WATCHERS_PERMISSIONS,
-            action_name='view watchers',
-            exclusive=False,
-        )
 
     async def _get_view_watchers_permission(
         self,
@@ -2731,6 +2856,7 @@ class WorkItemFields(Container, can_focus=False):
             and status_selector.selection is not None
             and self.work_item is not None
             and self.work_item.status is not None
+            and status_selector.selected_status_id != self.work_item.status.id
         )
 
     def _reset_status_selection(self) -> None:
@@ -3256,6 +3382,9 @@ class WorkItemFields(Container, can_focus=False):
         if self._deferred_fields_start_timer is not None:
             self._deferred_fields_start_timer.stop()
             self._deferred_fields_start_timer = None
+        if self._field_metadata_timer is not None:
+            self._field_metadata_timer.stop()
+            self._field_metadata_timer = None
         self._pending_work_item_key_for_deferred_load = None
 
         if not work_item:
@@ -3275,11 +3404,11 @@ class WorkItemFields(Container, can_focus=False):
             self.has_pending_changes = False
             return
 
+        self._update_layout_mode()
         self.is_loading = True
         self._flagged_state = work_item.flagged
         self._sync_flag_button(work_item)
         self._sync_watchers_action(work_item)
-        self._start_view_watchers_permission_load(work_item.key)
         self._start_flag_button_state_refresh_if_needed(work_item)
         self._set_preview_overlay_visible(True)
         self.preview_widget.set_work_item(work_item, self._field_names_by_id)
@@ -3756,10 +3885,6 @@ class WorkItemFields(Container, can_focus=False):
         await self.dynamic_fields_widgets_container.remove_children()
         self._dynamic_fields_signature = dynamic_fields_signature if dynamic_widgets else None
 
-        for widget in dynamic_widgets:
-            if isinstance(widget, DynamicFieldWrapper):
-                widget.materialize()
-
         if dynamic_widgets:
             adf_textarea_widgets = [
                 w
@@ -3810,7 +3935,7 @@ class WorkItemFields(Container, can_focus=False):
         self,
         container: VerticalGroup,
         rows: list[Widget | ReadOnlyDynamicFieldRow],
-        chunk_size: int = 6,
+        chunk_size: int = DYNAMIC_FIELD_MOUNT_BATCH_SIZE,
     ) -> list[Widget | ReadOnlyDynamicFieldRow]:
         if not rows:
             return []
@@ -4329,8 +4454,9 @@ class WorkItemFields(Container, can_focus=False):
             show_current_sprint_readonly(current_sprints)
             return
 
-        cached_sprints = self._sprint_options_by_project.get(project_key)
-        if cached_sprints is not None:
+        cached_sprint_entry = self._sprint_options_by_project.get(project_key)
+        if cached_sprint_entry is not None and cached_sprint_entry[0] > monotonic():
+            cached_sprints = cached_sprint_entry[1]
             self.sprint_picker_widget.loading = False
             self.sprint_picker_widget.set_options_state(
                 {
@@ -4343,6 +4469,7 @@ class WorkItemFields(Container, can_focus=False):
                 }
             )
             return
+        self._sprint_options_by_project.pop(project_key, None)
 
         self.sprint_picker_widget.set_options_state(
             {
@@ -4424,7 +4551,10 @@ class WorkItemFields(Container, can_focus=False):
 
             sprint_results = sprints_response.result or []
             sprints_list = [(sprint.name, str(sprint.id)) for sprint in sprint_results]
-            self._sprint_options_by_project[project_key] = sprints_list
+            self._sprint_options_by_project[project_key] = (
+                monotonic() + SPRINT_OPTIONS_MEMORY_TTL_SECONDS,
+                sprints_list,
+            )
             self.sprint_picker_widget.set_options_state(
                 {
                     'options': self._ensure_current_sprint_options(

@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import cast
 
-from rich.text import Text
-from textual.command import DiscoveryHit, Hit, Hits, Provider
-from textual.visual import VisualType
-
+from gojeera.commands.providers.project_provider import ProjectSubPaletteProvider
 from gojeera.internal.models.jira import JiraProject
-from gojeera.widgets.layout.sub_palette import (
-    mark_sub_command_palette_hit,
-    mark_sub_command_palette_launcher_hit,
-)
 
 RELEASES_PALETTE_ID = 'project-releases'
 RELEASES_ACTION_LABEL = 'View Releases'
@@ -20,8 +14,14 @@ RELEASES_PALETTE_PLACEHOLDER = 'Search projects with releases…'
 
 
 # TODO: (vkhitrin) consider adding caching in SQLite
-class ReleaseCommandProvider(Provider):
+class ReleaseCommandProvider(ProjectSubPaletteProvider):
     """Expose Jira project releases in the command palette."""
+
+    palette_id = RELEASES_PALETTE_ID
+    palette_placeholder = RELEASES_PALETTE_PLACEHOLDER
+    action_label = RELEASES_ACTION_LABEL
+    action_help = RELEASES_ACTION_HELP
+    action_name = 'show_releases_palette'
 
     def _build_project_callback(self, project: JiraProject):
         async def open_project_releases() -> None:
@@ -33,51 +33,13 @@ class ReleaseCommandProvider(Provider):
 
         return open_project_releases
 
-    def _build_releases_action_callback(self):
-        async def show_releases_palette() -> None:
-            await self.app.run_action('show_releases_palette')
-
-        return show_releases_palette
-
-    def _build_releases_discovery_hit(self) -> DiscoveryHit:
-        return DiscoveryHit(
-            RELEASES_ACTION_LABEL,
-            self._build_releases_action_callback(),
-            help=RELEASES_ACTION_HELP,
-        )
-
-    def _build_releases_hit(self, score: float, label: VisualType) -> Hit:
-        return Hit(
-            score,
-            label,
-            self._build_releases_action_callback(),
-            help=RELEASES_ACTION_HELP,
-        )
-
-    def _is_releases_palette_active(self) -> bool:
-        return getattr(self.app, 'active_sub_command_palette_id', None) == RELEASES_PALETTE_ID
-
-    @staticmethod
-    def _format_label(project: JiraProject) -> str:
-        return f'[{project.key}] {project.name}'
-
-    @staticmethod
-    def _mark_project_hit(hit: DiscoveryHit | Hit) -> DiscoveryHit | Hit:
-        return mark_sub_command_palette_hit(hit, RELEASES_PALETTE_ID)
-
-    @staticmethod
-    def _mark_releases_launcher_hit(hit: DiscoveryHit | Hit) -> DiscoveryHit | Hit:
-        return mark_sub_command_palette_launcher_hit(
-            hit,
-            RELEASES_PALETTE_ID,
-            RELEASES_PALETTE_PLACEHOLDER,
-        )
-
     async def _load_projects_with_releases(self) -> list[JiraProject]:
         from gojeera.app import JiraApp
 
         app = cast('JiraApp', self.app)
-        response = await app.api.search_projects_with_releases()
+        response = await app.api.search_projects_with_releases(
+            on_page=self._publish_projects_with_releases,
+        )
         if not response.success:
             app.notify(
                 response.error or 'Failed to load projects with releases',
@@ -85,67 +47,78 @@ class ReleaseCommandProvider(Provider):
                 severity='error',
             )
             return []
-        return sorted(
+        projects = sorted(
             cast(list[JiraProject], response.result or []),
             key=lambda project: project.key.casefold(),
         )
-
-    async def _get_projects_with_releases(self) -> list[JiraProject]:
-        cached_projects = getattr(self, '_projects_with_releases', None)
-        if cached_projects is not None:
-            return cast(list[JiraProject], cached_projects)
-
-        load_task = getattr(self, '_projects_with_releases_task', None)
-        if load_task is None or load_task.cancelled():
-            load_task = asyncio.create_task(self._load_projects_with_releases())
-            self._projects_with_releases_task = load_task
-
-        projects = await asyncio.shield(load_task)
-        self._projects_with_releases = projects
+        self._publish_projects_with_releases(projects)
         return projects
 
-    def _build_project_discovery_hit(self, project: JiraProject) -> DiscoveryHit:
-        label = self._format_label(project)
-        return DiscoveryHit(
-            Text(label, no_wrap=True, overflow='ellipsis'),
-            self._build_project_callback(project),
-            text=label,
+    def _publish_projects_with_releases(self, projects: list[JiraProject]) -> None:
+        self._projects_with_releases_partial = sorted(
+            projects,
+            key=lambda project: project.key.casefold(),
         )
-
-    def _build_project_hit(self, project: JiraProject, score: float) -> Hit:
-        label = self._format_label(project)
-        return Hit(
-            score,
-            Text(label, no_wrap=True, overflow='ellipsis'),
-            self._build_project_callback(project),
-            text=label,
+        self._projects_with_releases_version = (
+            getattr(self, '_projects_with_releases_version', 0) + 1
         )
+        event = getattr(self, '_projects_with_releases_event', None)
+        if event is not None:
+            event.set()
 
-    async def discover(self) -> Hits:
-        yield self._mark_releases_launcher_hit(self._build_releases_discovery_hit())
+    def _projects_with_releases_load_task(self) -> asyncio.Task[list[JiraProject]]:
+        load_task = getattr(self, '_projects_with_releases_task', None)
+        if load_task is None or load_task.done():
+            self._projects_with_releases_partial = []
+            load_task = asyncio.create_task(self._load_projects_with_releases())
+            self._projects_with_releases_task = load_task
+        return cast(asyncio.Task[list[JiraProject]], load_task)
 
-        if not self._is_releases_palette_active():
-            return
+    async def _iter_projects_with_releases(self) -> AsyncIterator[JiraProject]:
+        event = getattr(self, '_projects_with_releases_event', None)
+        if event is None:
+            event = asyncio.Event()
+            self._projects_with_releases_event = event
+        load_task = self._projects_with_releases_load_task()
+        yielded_keys: set[str] = set()
 
-        for project in await self._get_projects_with_releases():
-            yield self._mark_project_hit(self._build_project_discovery_hit(project))
-
-    async def search(self, query: str) -> Hits:
-        matcher = self.matcher(query)
-        action_score = matcher.match(RELEASES_ACTION_LABEL)
-        if action_score > 0:
-            yield self._mark_releases_launcher_hit(
-                self._build_releases_hit(action_score, matcher.highlight(RELEASES_ACTION_LABEL))
+        while True:
+            version = getattr(self, '_projects_with_releases_version', 0)
+            partial_projects = cast(
+                list[JiraProject],
+                getattr(self, '_projects_with_releases_partial', []),
             )
+            for project in partial_projects:
+                normalized_key = project.key.casefold()
+                if normalized_key in yielded_keys:
+                    continue
+                yielded_keys.add(normalized_key)
+                yield project
 
-        if not self._is_releases_palette_active():
-            return
+            if load_task.done():
+                projects = await asyncio.shield(load_task)
+                for project in projects:
+                    normalized_key = project.key.casefold()
+                    if normalized_key in yielded_keys:
+                        continue
+                    yielded_keys.add(normalized_key)
+                    yield project
+                return
 
-        for project in await self._get_projects_with_releases():
-            label = self._format_label(project)
-            score = matcher.match(label)
-            if score <= 0 and query.strip():
+            event.clear()
+            if getattr(self, '_projects_with_releases_version', 0) != version:
                 continue
-            yield self._mark_project_hit(
-                self._build_project_hit(project, score if score > 0 else 1.0)
-            )
+
+            event_wait = asyncio.create_task(event.wait())
+            try:
+                await asyncio.wait(
+                    (load_task, event_wait),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                if not event_wait.done():
+                    event_wait.cancel()
+                    await asyncio.gather(event_wait, return_exceptions=True)
+
+    def _iter_projects(self) -> AsyncIterator[JiraProject]:
+        return self._iter_projects_with_releases()

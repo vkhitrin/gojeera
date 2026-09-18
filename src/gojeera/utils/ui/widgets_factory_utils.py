@@ -15,7 +15,6 @@ from gojeera.widgets.inputs.date_time_input import DateTimeInput
 from gojeera.widgets.inputs.numeric_input import NumericInput
 from gojeera.widgets.inputs.text_input import TextInput
 from gojeera.widgets.inputs.url import URL
-from gojeera.widgets.markdown.adf_textarea import ADFTextAreaWidget
 from gojeera.widgets.selection.multi_select import MultiSelect, extract_sprint_ids
 from gojeera.widgets.selection.selection import SelectionWidget
 from gojeera.widgets.selection.user_picker import UserPicker
@@ -25,20 +24,24 @@ logger = logging.getLogger('gojeera')
 
 
 def apply_field_control_classes(widget: Widget) -> Widget:
+    missing_classes: list[str] = []
     if not widget.has_class('field_control'):
-        widget.add_class('field_control')
-    if widget.styles.width != '1fr':
+        missing_classes.append('field_control')
+    if str(widget.styles.width) != '1fr':
         widget.styles.width = '1fr'
 
     if isinstance(widget, (TextInput, NumericInput, URL, DateInput, DateTimeInput)):
         if not widget.has_class('field-control-input'):
-            widget.add_class('field-control-input')
+            missing_classes.append('field-control-input')
     elif isinstance(widget, (Select, SelectionWidget, UserPicker)):
         if not widget.has_class('field-control-select'):
-            widget.add_class('field-control-select')
+            missing_classes.append('field-control-select')
     elif isinstance(widget, (MultiSelect, WorkItemLabels)):
         if not widget.has_class('field-control-tags'):
-            widget.add_class('field-control-tags')
+            missing_classes.append('field-control-tags')
+
+    if missing_classes:
+        widget.add_class(*missing_classes)
 
     return widget
 
@@ -722,6 +725,10 @@ class WidgetBuilder:
         metadata: FieldMetadata,
         current_value: dict | str | None = None,
     ) -> Widget:
+        from gojeera.widgets.markdown.adf_textarea import ADFTextAreaWidget
+
+        preconverted_markdown = ADFTextAreaWidget.convert_value_to_markdown(current_value)
+
         def create_widget():
             return ADFTextAreaWidget(
                 mode=mode,
@@ -730,6 +737,7 @@ class WidgetBuilder:
                 required=metadata.required,
                 original_value=current_value,
                 field_supports_update=False,
+                preconverted_markdown=preconverted_markdown,
             )
 
         return WidgetBuilder._wrap_dynamic_field(

@@ -202,9 +202,13 @@ async def test_get_project_space_pull_requests_uses_graphql_v2_project_prs():
         ]
     )
     api = JiraAPI(auth=basic_auth_context(), configuration=api_configuration())
+    published_pages: list[list[dict]] = []
+
+    async def publish_page(page: list[dict]) -> None:
+        published_pages.append(page)
 
     try:
-        pull_requests = await api.get_project_space_pull_requests('ENG')
+        pull_requests = await api.get_project_space_pull_requests('ENG', on_page=publish_page)
     finally:
         await api.client.close_async_client()
         await api.async_http_client.close_async_client()
@@ -216,6 +220,7 @@ async def test_get_project_space_pull_requests_uses_graphql_v2_project_prs():
     expected_pull_request['work_item_key'] = ''
     expected_pull_request['work_item_id'] = ''
     assert pull_requests == [expected_pull_request]
+    assert published_pages == [pull_requests]
 
     request = route.calls[1].request
     assert request.headers['X-Query-Context'] == 'ari:cloud:platform::site/cloud-123'
@@ -293,9 +298,13 @@ async def test_get_repository_pull_requests_filters_graphql_prs_by_repository(mo
         url='https://gitlab.example/platform-api',
     )
 
-    async def get_project_space_pull_requests(project_key):
+    api_calls = 0
+
+    async def get_project_space_pull_requests(project_key, on_page=None):
+        nonlocal api_calls
+        api_calls += 1
         assert project_key == 'ENG'
-        return [
+        pull_requests = [
             _expected_devops_pull_request()
             | {
                 'source_branch': 'feature/ENG-10001-api',
@@ -315,6 +324,9 @@ async def test_get_repository_pull_requests_filters_graphql_prs_by_repository(mo
                 work_item_ari='ari:cloud:jira:cloud-123:issue/10002',
             ),
         ]
+        if on_page is not None:
+            await on_page(pull_requests)
+        return pull_requests
 
     async def get_work_item(work_item_id_or_key, fields=None, properties=None):
         raise AssertionError('repository pull request load should not resolve GraphQL issue ids')
@@ -327,7 +339,15 @@ async def test_get_repository_pull_requests_filters_graphql_prs_by_repository(mo
     monkeypatch.setattr(controller.client, 'get_work_item', get_work_item)
 
     try:
-        response = await controller.get_repository_pull_requests('ENG', repository)
+        published_pages: list[list] = []
+
+        async def publish_page(page):
+            published_pages.append(page)
+
+        response = await controller.get_repository_pull_requests(
+            'ENG', repository, on_page=publish_page
+        )
+        cached_response = await controller.get_repository_pull_requests('ENG', repository)
     finally:
         await controller.close()
 
@@ -339,6 +359,10 @@ async def test_get_repository_pull_requests_filters_graphql_prs_by_repository(mo
     assert pull_requests[0].work_item_key == 'ENG-10001'
     assert pull_requests[0].work_item_id == ''
     assert pull_requests[0].source_branch == 'feature/ENG-10001-api'
+    assert len(published_pages) == 1
+    assert [item.id for item in published_pages[0]] == ['pr-1']
+    assert cached_response.success
+    assert api_calls == 1
 
 
 @pytest.mark.asyncio

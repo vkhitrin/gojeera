@@ -54,15 +54,21 @@ async def test_get_project_repositories_uses_graphql_project_associations(
         auth=basic_auth_context(site='https://plainid.atlassian.net'),
         configuration=api_configuration(site='https://plainid.atlassian.net'),
     )
+    published_pages = []
+
+    def publish_page(repositories_page):
+        published_pages.append(list(repositories_page))
 
     try:
-        repositories = await api.get_project_repositories('ENG')
+        repositories = await api.get_project_repositories('ENG', on_page=publish_page)
     finally:
         await api.client.close_async_client()
         await api.async_http_client.close_async_client()
         await api.graphql_client.close_async_client()
 
     assert repositories == mock_jira_graphql_project_repositories_payload
+    assert published_pages[-1] == repositories
+    assert len(published_pages) == 2
 
     project_request = json.loads(route.calls[0].request.content)
     assert project_request['variables'] == {'cloudId': 'cloud-123', 'projectKey': 'ENG'}

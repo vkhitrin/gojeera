@@ -8,16 +8,19 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.geometry import Offset
+from textual.timer import Timer
 from textual.widgets import Button, Input, SelectionList, Static
 
 from gojeera.internal.models.jira import JiraProjectRelease
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.utils.jira.jql import release_work_items_jql
 from gojeera.utils.ui.focus import focus_first_available
+from gojeera.utils.ui.runtime import DebouncedFilterMixin
 from gojeera.widgets.inputs.extended_input import ExtendedInput
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
 from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.extended_table import ExtendedTable
+from gojeera.widgets.layout.extended_table import ExtendedTable as ReleaseTable
+from gojeera.widgets.layout.modal_components import build_incremental_loading_label
 from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.selection.vim_selection_list import VimSelectionList
@@ -26,13 +29,14 @@ if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class ProjectReleasesScreen(ExtendedModalScreen[None]):
+class ProjectReleasesScreen(DebouncedFilterMixin, ExtendedModalScreen[None]):
     """Modal screen displaying Jira releases for a project."""
 
     BINDINGS = ExtendedModalScreen.BINDINGS + [
         Binding('ctrl+g', 'search_release_work_items', 'Search release work items'),
     ]
     TITLE = 'Project Releases'
+    FILTER_RENDER_DELAY_SECONDS = 0.075
     STATUS_FILTER_OPEN_ARROW = '▲'
     STATUS_FILTER_CLOSED_ARROW = '▼'
     RELEASE_STATUS_FILTER_OPTIONS = (
@@ -47,10 +51,11 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
         self._release_cache: dict[tuple[str, ...], list[JiraProjectRelease]] = {}
         self._loaded_releases: list[JiraProjectRelease] = []
         self._rendered_releases: list[JiraProjectRelease] = []
+        self._filter_render_timer: Timer | None = None
 
     @property
-    def table(self) -> ExtendedTable:
-        return self.query_one('#project-releases-table', ExtendedTable)
+    def table(self) -> ReleaseTable:
+        return self.query_one('#project-releases-table', ReleaseTable)
 
     @property
     def releases_scroll(self) -> VerticalScroll:
@@ -67,6 +72,10 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
     @property
     def status_filter_button(self) -> Button:
         return self.query_one('#project-release-status-filter-button', Button)
+
+    @property
+    def loading_label(self) -> Static:
+        return self.query_one('#project-releases-loading', Static)
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
@@ -89,11 +98,14 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
                 compact=True,
             )
             with VerticalScroll(id='project-releases-scroll'):
-                yield ExtendedTable(
+                yield ReleaseTable(
                     id='project-releases-table',
                     zebra_stripes=True,
                     cursor_type='row',
                 )
+            yield build_incremental_loading_label(
+                'Loading more releases…', 'project-releases-loading'
+            )
 
         yield ExtendedFooter(show_command_palette=False)
 
@@ -141,6 +153,7 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
             self.project_key,
             status=self._status_param(status_key),
             order_by='releaseDate',
+            on_page=lambda releases: self._publish_release_page(status_key, releases),
         )
         self._set_loading(False)
 
@@ -154,7 +167,29 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
 
         releases = self._reorder_releases(cast(list[JiraProjectRelease], response.result or []))
         self._release_cache[status_key] = releases
-        self._set_loaded_releases(releases)
+        if [release.id for release in releases] != [
+            release.id for release in self._loaded_releases
+        ]:
+            self._set_loaded_releases(releases)
+
+    def _publish_release_page(
+        self,
+        status_key: tuple[str, ...],
+        releases: list[JiraProjectRelease],
+    ) -> None:
+        if self._selected_status_key() != status_key:
+            return
+        ordered_releases = self._reorder_releases(releases)
+        self._set_loaded_releases(ordered_releases)
+        self._set_incremental_loading()
+
+    def _set_incremental_loading(self) -> None:
+        self.releases_scroll.loading = False
+        self.text_filter.disabled = False
+        self.status_filter_button.disabled = False
+        self.status_filter.disabled = False
+        self.loading_label.display = True
+        self._sync_status_filter_button_label()
 
     def _set_loading(self, loading: bool) -> None:
         self.releases_scroll.loading = loading
@@ -163,6 +198,7 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
         self.status_filter.disabled = loading
         if loading:
             self.status_filter.display = False
+        self.loading_label.display = False
         self._sync_status_filter_button_label()
 
     def _set_loaded_releases(self, releases: list[JiraProjectRelease]) -> None:
@@ -170,31 +206,48 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
         self._render_releases()
 
     def _render_releases(self) -> None:
+        self._filter_render_timer = None
         table = self.table
-        table.clear()
 
         releases = self._filtered_loaded_releases()
-        self._rendered_releases = releases
-        if not releases:
-            return
-
-        for release in self._rendered_releases:
-            row_key = table.add_row(
-                release.name,
-                release.status,
-                release.start_date or '',
-                release.release_date or '',
-                self._format_count(release.todo_count),
-                self._format_count(release.in_progress_count),
-                self._format_count(release.done_count),
-                self._format_count(release.unmapped_count),
-                (release.description or '').replace('\n', ' '),
-            )
-            if release.status == 'Overdue':
-                table.set_row_style(
-                    row_key,
-                    Style(color=self.app.theme_variables.get('error-lighten-1', 'red')),
+        overdue_style = Style(color=self.app.theme_variables.get('error-lighten-1', 'red'))
+        rendered_ids = [release.id for release in self._rendered_releases]
+        release_ids = [release.id for release in releases]
+        can_append = release_ids[: len(rendered_ids)] == rendered_ids
+        if can_append:
+            new_releases = releases[len(rendered_ids) :]
+            if new_releases:
+                table.append_rows(
+                    (self._row_for_release(release) for release in new_releases),
+                    row_styles=(
+                        overdue_style if release.status == 'Overdue' else None
+                        for release in new_releases
+                    ),
                 )
+        else:
+            table.replace_rows(
+                (self._row_for_release(release) for release in releases),
+                row_styles=(
+                    overdue_style if release.status == 'Overdue' else None for release in releases
+                ),
+            )
+        self._rendered_releases = releases
+
+    def _row_for_release(self, release: JiraProjectRelease) -> tuple[str, ...]:
+        return (
+            release.name,
+            release.status,
+            release.start_date or '',
+            release.release_date or '',
+            self._format_count(release.todo_count),
+            self._format_count(release.in_progress_count),
+            self._format_count(release.done_count),
+            self._format_count(release.unmapped_count),
+            (release.description or '').replace('\n', ' '),
+        )
+
+    def _schedule_filter_render(self) -> None:
+        self._schedule_filter_callback(self._render_releases)
 
     @staticmethod
     def _format_count(value: int | None) -> str:
@@ -252,7 +305,7 @@ class ProjectReleasesScreen(ExtendedModalScreen[None]):
 
     @on(Input.Changed, '#project-release-text-filter')
     def handle_text_filter_changed(self) -> None:
-        self._render_releases()
+        self._schedule_filter_render()
 
     async def action_search_release_work_items(self) -> None:
         release = self._selected_release()

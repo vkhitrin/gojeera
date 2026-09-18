@@ -1,22 +1,35 @@
+import asyncio
 import logging
 
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
+from textual.timer import Timer
 from textual.widgets import Label, TabPane, TextArea
 from textual.widgets._tabbed_content import ContentTab
+from textual.worker import Worker
 
 from gojeera.utils.data.fields import (
     BaseField,
     FieldMode,
 )
 from gojeera.utils.markdown.adf_helpers import render_task_checkboxes, text_to_adf
+from gojeera.utils.ui.delayed_lookup import cancel_delayed_lookup, schedule_delayed_lookup
 from gojeera.widgets.markdown.extended_textarea import ExtendedTextArea
 from gojeera.widgets.markdown.gojeera_markdown import GojeeraMarkdown
 from gojeera.widgets.navigation.extended_jumper import set_jump_mode
 from gojeera.widgets.navigation.extended_tabbed_content import ExtendedTabbedContent
 
 logger = logging.getLogger('gojeera')
+ADF_WARNING_LOOKUP_DELAY_SECONDS = 0.15
+
+
+def _adf_warnings_for_text(text: str) -> list[str]:
+    try:
+        _, warnings = text_to_adf(text, track_warnings=True)
+        return warnings
+    except Exception:
+        return []
 
 
 class ExtendedADFMarkdownTextArea(Vertical, BaseField):
@@ -106,6 +119,8 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         self._initial_wrap_width_hint = initial_wrap_width_hint
         self._suppress_initial_textarea_change = bool(initial_text)
         self._adf_warnings: list[str] = []
+        self._warning_timer: Timer | None = None
+        self._warning_worker: Worker | None = None
 
     def compose(self) -> ComposeResult:
         with ExtendedTabbedContent(id=f'{self.id}-tabs'):
@@ -181,14 +196,7 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
                 return
             self._suppress_initial_textarea_change = False
 
-            if self._text.strip():
-                self._check_adf_warnings(self._text)
-            else:
-                self._adf_warnings = []
-
-            self._update_warning_display()
-
-            self._update_tab_label()
+            self._schedule_adf_warning_check(self._text)
 
     @on(ExtendedTabbedContent.TabActivated)
     def handle_tab_activated(self, event: ExtendedTabbedContent.TabActivated) -> None:
@@ -199,14 +207,10 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
                     preview_text = render_task_checkboxes(current_text)
                     self.markdown_preview.update(preview_text)
 
-                    self._check_adf_warnings(current_text)
+                    self._schedule_adf_warning_check(current_text, delay=0)
                 else:
                     self.markdown_preview.update('_No content to preview_')
-                    self._adf_warnings = []
-
-                self._update_warning_display()
-
-                self._update_tab_label()
+                    self._schedule_adf_warning_check('')
             except Exception:
                 pass
 
@@ -248,12 +252,42 @@ class ExtendedADFMarkdownTextArea(Vertical, BaseField):
         except Exception:
             pass
 
-    def _check_adf_warnings(self, text: str) -> None:
-        try:
-            _, warnings = text_to_adf(text, track_warnings=True)
-            self._adf_warnings = warnings
-        except Exception:
-            self._adf_warnings = []
+    def _schedule_adf_warning_check(
+        self,
+        text: str,
+        *,
+        delay: float = ADF_WARNING_LOOKUP_DELAY_SECONDS,
+    ) -> None:
+        self._warning_timer, self._warning_worker = cancel_delayed_lookup(
+            self._warning_timer,
+            self._warning_worker,
+        )
+        self._adf_warnings = []
+        self._update_warning_display()
+        self._update_tab_label()
+        if not text.strip():
+            return
+
+        self._warning_timer = schedule_delayed_lookup(
+            self,
+            lambda: self._check_adf_warnings_async(text),
+            worker_attr='_warning_worker',
+            delay=delay,
+        )
+
+    async def _check_adf_warnings_async(self, text: str) -> None:
+        warnings = await asyncio.to_thread(_adf_warnings_for_text, text)
+        if text != self._text:
+            return
+        self._adf_warnings = warnings
+        self._update_warning_display()
+        self._update_tab_label()
+
+    def on_unmount(self) -> None:
+        self._warning_timer, self._warning_worker = cancel_delayed_lookup(
+            self._warning_timer,
+            self._warning_worker,
+        )
 
     def _update_warning_display(self) -> None:
         try:

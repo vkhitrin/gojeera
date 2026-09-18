@@ -15,25 +15,43 @@ from gojeera.internal.models.jira import (
     JiraField,
     JiraFilter,
     JiraFilterDict,
+    JiraGlobalSettings,
     JiraProject,
     JiraProjectFeature,
+    JiraServerInfo,
     JiraSprint,
+    JiraTimeTrackingConfiguration,
     JiraUser,
     WorkItemStatus,
     WorkItemType,
 )
 from gojeera.internal.store import migrations
 
-CACHE_TTL_PROJECTS = 3600
-CACHE_TTL_PROJECTS_BY_TYPE = 3600
+CACHE_TTL_PROJECTS = 21600
+CACHE_TTL_PROJECTS_BY_TYPE = 21600
 CACHE_TTL_TYPES = 3600
 CACHE_TTL_STATUSES = 3600
-CACHE_TTL_PROJECT_USERS = 1800
-CACHE_TTL_PROJECT_FEATURES = 86400
+CACHE_TTL_PROJECT_USERS = 900
+CACHE_TTL_PROJECT_FEATURES = 21600
 CACHE_TTL_PROJECT_TYPES = 3600
 CACHE_TTL_PROJECT_STATUSES = 3600
 CACHE_TTL_REMOTE_FILTERS = 3600
-CACHE_TTL_SPRINTS = 3600
+CACHE_TTL_BOARDS = 1800
+CACHE_TTL_SPRINTS = 300
+CACHE_TTL_FIELDS = 86400
+CACHE_TTL_SERVER_INFO = 3600
+CACHE_TTL_GLOBAL_SETTINGS = 300
+CACHE_TTL_PROJECTS_WITH_RELEASES = 300
+CACHE_STALE_PROJECTS = 604800
+CACHE_STALE_PROJECT_USERS = 3600
+CACHE_STALE_PROJECT_FEATURES = 86400
+CACHE_STALE_TYPES = 86400
+CACHE_STALE_STATUSES = 86400
+CACHE_STALE_REMOTE_FILTERS = 86400
+CACHE_STALE_BOARDS = 21600
+CACHE_STALE_SPRINTS = 1800
+CACHE_STALE_FIELDS = 604800
+CACHE_STALE_PROJECTS_WITH_RELEASES = 86400
 MIGRATION_SUFFIX = '.sql'
 SQLITE_BUSY_RETRIES = 3
 SQLITE_BUSY_RETRY_DELAY_SECONDS = 0.05
@@ -52,6 +70,9 @@ CACHE_TYPES = {
     'sprints',
     'boards',
     'fields',
+    'server_info',
+    'global_settings',
+    'projects_with_releases',
     'search_history',
     'recent_searches',
     'recently_viewed_work_items',
@@ -67,6 +88,8 @@ PROFILE_CACHE_TABLES = {
     'sprints',
     'remote_filters',
     'fields',
+    'startup_metadata',
+    'projects_with_releases',
     'search_history',
     'recent_searches',
     'recently_viewed_work_items',
@@ -132,18 +155,39 @@ class ApplicationCache:
             'projects': CACHE_TTL_PROJECTS,
             'projects_by_type': CACHE_TTL_PROJECTS_BY_TYPE,
             'types': CACHE_TTL_TYPES,
+            'work_item_types': CACHE_TTL_TYPES,
             'statuses': CACHE_TTL_STATUSES,
+            'work_item_status': CACHE_TTL_STATUSES,
             'project_users': CACHE_TTL_PROJECT_USERS,
             'project_features': CACHE_TTL_PROJECT_FEATURES,
             'project_types': CACHE_TTL_PROJECT_TYPES,
             'project_statuses': CACHE_TTL_PROJECT_STATUSES,
             'remote_filters': CACHE_TTL_REMOTE_FILTERS,
             'sprints': CACHE_TTL_SPRINTS,
-            'boards': CACHE_TTL_SPRINTS,
-            'fields': None,
+            'boards': CACHE_TTL_BOARDS,
+            'fields': CACHE_TTL_FIELDS,
+            'server_info': CACHE_TTL_SERVER_INFO,
+            'global_settings': CACHE_TTL_GLOBAL_SETTINGS,
+            'projects_with_releases': CACHE_TTL_PROJECTS_WITH_RELEASES,
+        }
+        self._stale_ttls = {
+            'projects': CACHE_STALE_PROJECTS,
+            'projects_by_type': CACHE_STALE_PROJECTS,
+            'project_users': CACHE_STALE_PROJECT_USERS,
+            'project_features': CACHE_STALE_PROJECT_FEATURES,
+            'types': CACHE_STALE_TYPES,
+            'project_types': CACHE_STALE_TYPES,
+            'work_item_types': CACHE_STALE_TYPES,
+            'statuses': CACHE_STALE_STATUSES,
+            'project_statuses': CACHE_STALE_STATUSES,
+            'work_item_status': CACHE_STALE_STATUSES,
+            'remote_filters': CACHE_STALE_REMOTE_FILTERS,
+            'boards': CACHE_STALE_BOARDS,
+            'sprints': CACHE_STALE_SPRINTS,
+            'fields': CACHE_STALE_FIELDS,
+            'projects_with_releases': CACHE_STALE_PROJECTS_WITH_RELEASES,
         }
         self._apply_migrations()
-        self.prune_expired()
 
     def _default_db_path(self) -> Path:
         return Path.home() / '.cache' / 'gojeera' / 'atlassian.db'
@@ -208,7 +252,6 @@ class ApplicationCache:
     def set_profile(self, profile_key: str | None) -> None:
         with self._lock:
             self._profile_key = profile_key or 'default'
-            self.prune_expired()
 
     @property
     def profile_key(self) -> str:
@@ -224,38 +267,50 @@ class ApplicationCache:
         self._validate_cache_type(cache_type)
         with self._lock, self._connection:
             needs_refresh = self._needs_refresh(cache_type, identifier)
-            if not allow_stale and needs_refresh:
+            cache_available = not needs_refresh or (
+                allow_stale and self._within_stale_window(cache_type, identifier)
+            )
+            if not cache_available:
                 return None
             if cache_type == 'projects':
-                return self._get_projects()
+                return self._get_projects(return_empty=True)
             if cache_type == 'projects_by_type':
                 return self._get_projects(
                     project_type_key=identifier,
-                    return_empty=not needs_refresh,
+                    return_empty=True,
                 )
             if cache_type == 'project_users':
-                return self._get_users(identifier)
+                return self._get_users(identifier) or []
             if cache_type == 'project_features':
                 return self._get_project_features(
                     identifier,
-                    return_empty=not needs_refresh,
+                    return_empty=True,
                 )
             if cache_type in {'types', 'project_types'}:
-                return self._get_work_item_types(
+                result = self._get_work_item_types(
                     identifier if cache_type == 'project_types' else None
                 )
+                return result or []
             if cache_type in {'statuses', 'project_statuses'}:
-                return self._get_work_item_statuses(
+                result = self._get_work_item_statuses(
                     identifier if cache_type == 'project_statuses' else None
                 )
+                empty_result: list[Any] | dict[str, Any] = (
+                    {} if cache_type == 'project_statuses' else []
+                )
+                return result or empty_result
             if cache_type == 'sprints':
-                return self._get_sprints(identifier)
+                return self._get_sprints(identifier) or []
             if cache_type == 'boards':
-                return self._get_boards(identifier)
+                return self._get_boards(identifier) or []
             if cache_type == 'remote_filters':
-                return self._get_remote_filters(identifier)
+                return self._get_remote_filters(identifier) or []
             if cache_type == 'fields':
-                return self._get_fields()
+                return self._get_fields() or []
+            if cache_type in {'server_info', 'global_settings'}:
+                return self._get_startup_metadata(cache_type)
+            if cache_type == 'projects_with_releases':
+                return self._get_projects_with_releases()
             return None
 
     def _set(
@@ -300,6 +355,10 @@ class ApplicationCache:
                 self._set_remote_filters(data, identifier, fetched_at, expires_at)
             elif cache_type == 'fields':
                 self._set_fields(data)
+            elif cache_type in {'server_info', 'global_settings'}:
+                self._set_startup_metadata(cache_type, data)
+            elif cache_type == 'projects_with_releases':
+                self._set_projects_with_releases(data)
             self._record_sync(cache_type, identifier, fetched_at, expires_at)
 
     def needs_refresh(self, cache_type: str, identifier: str | None = None) -> bool:
@@ -325,6 +384,20 @@ class ApplicationCache:
         ttl_seconds: int | None = None,
     ) -> None:
         self._set('projects_by_type', projects, project_type_key, ttl_seconds)
+
+    def get_projects_with_releases(
+        self,
+        *,
+        allow_stale: bool = False,
+    ) -> list[JiraProject] | None:
+        return self._get('projects_with_releases', allow_stale=allow_stale)
+
+    def set_projects_with_releases(
+        self,
+        projects: list[JiraProject],
+        ttl_seconds: int | None = None,
+    ) -> None:
+        self._set('projects_with_releases', projects, ttl_seconds=ttl_seconds)
 
     def get_stale_project_by_key(self, project_key: str) -> JiraProject | None:
         with self._lock, self._connection:
@@ -353,6 +426,36 @@ class ApplicationCache:
 
     def set_fields(self, fields: list[JiraField], ttl_seconds: int | None = None) -> None:
         self._set('fields', fields, ttl_seconds=ttl_seconds)
+
+    def get_server_info(self, *, allow_stale: bool = False) -> JiraServerInfo | None:
+        payload = self._get('server_info', allow_stale=allow_stale)
+        return JiraServerInfo(**payload) if payload is not None else None
+
+    def set_server_info(
+        self,
+        server_info: JiraServerInfo,
+        ttl_seconds: int | None = None,
+    ) -> None:
+        self._set('server_info', server_info.as_json(), ttl_seconds=ttl_seconds)
+
+    def get_global_settings(self, *, allow_stale: bool = False) -> JiraGlobalSettings | None:
+        payload = self._get('global_settings', allow_stale=allow_stale)
+        if payload is None:
+            return None
+        time_tracking_payload = payload.get('time_tracking_configuration')
+        payload['time_tracking_configuration'] = (
+            JiraTimeTrackingConfiguration(**time_tracking_payload)
+            if time_tracking_payload is not None
+            else None
+        )
+        return JiraGlobalSettings(**payload)
+
+    def set_global_settings(
+        self,
+        global_settings: JiraGlobalSettings,
+        ttl_seconds: int | None = None,
+    ) -> None:
+        self._set('global_settings', global_settings.as_json(), ttl_seconds=ttl_seconds)
 
     def get_remote_filters(
         self, account_id: str, *, allow_stale: bool = False
@@ -645,9 +748,33 @@ class ApplicationCache:
             raise ValueError(f'Unsupported cache type: {cache_type}')
 
     def _needs_refresh(self, cache_type: str, identifier: str | None = None) -> bool:
+        row = self._get_sync_timestamps(cache_type, identifier)
+        if row is None:
+            return True
+        fetched_at, expires_at = row
+        if expires_at is not None:
+            return time.time() > expires_at
+        default_ttl = self._default_ttls.get(cache_type)
+        return default_ttl is not None and time.time() > fetched_at + default_ttl
+
+    def _within_stale_window(self, cache_type: str, identifier: str | None = None) -> bool:
+        row = self._get_sync_timestamps(cache_type, identifier)
+        if row is None:
+            return False
+        fetched_at, expires_at = row
+        if expires_at is None:
+            fresh_ttl = self._default_ttls.get(cache_type)
+            if fresh_ttl is None:
+                return True
+            expires_at = fetched_at + fresh_ttl
+        return time.time() <= expires_at + self._stale_ttls.get(cache_type, 0)
+
+    def _get_sync_timestamps(
+        self, cache_type: str, identifier: str | None = None
+    ) -> tuple[float, float | None] | None:
         row = self._connection.execute(
             """
-            SELECT expires_at FROM sync_log
+            SELECT fetched_at, expires_at FROM sync_log
             WHERE profile_key = ? AND cache_type = ? AND scope = ?
             """,
             (
@@ -656,27 +783,9 @@ class ApplicationCache:
                 self._sync_scope(cache_type, identifier),
             ),
         ).fetchone()
-        return row is None or (row[0] is not None and time.time() > row[0])
-
-    def record_failure(
-        self,
-        cache_type: str,
-        identifier: str | None = None,
-        error_message: str | None = None,
-        retry_after_seconds: int = 300,
-    ) -> None:
-        self._validate_cache_type(cache_type)
-        fetched_at = time.time()
-        expires_at = fetched_at + retry_after_seconds
-        with self._lock, self._connection:
-            self._upsert_sync_log(
-                cache_type,
-                identifier,
-                fetched_at,
-                expires_at,
-                status='failed',
-                error_message=error_message,
-            )
+        if row is None:
+            return None
+        return float(row[0]), None if row[1] is None else float(row[1])
 
     def _record_sync(
         self,
@@ -771,16 +880,7 @@ class ApplicationCache:
             """,
             (self._profile_key, project_type_key, project_type_key),
         ).fetchall()
-        projects = [
-            JiraProject(
-                id=str(row[0]),
-                key=str(row[1]),
-                name=str(row[2]),
-                project_type_key=row[3],
-                graphql_ari=row[4],
-            )
-            for row in rows
-        ]
+        projects = [self._project_from_row(row) for row in rows]
         if projects:
             return projects
         return [] if return_empty else None
@@ -798,12 +898,46 @@ class ApplicationCache:
         ).fetchone()
         if row is None:
             return None
+        return self._project_from_row(row)
+
+    def _get_projects_with_releases(self) -> list[JiraProject]:
+        rows = self._connection.execute(
+            """
+            SELECT projects.id, projects.key, projects.name,
+                   projects.project_type_key, projects.graphql_ari
+            FROM projects_with_releases
+            INNER JOIN projects
+                ON projects.profile_key = projects_with_releases.profile_key
+                AND projects.key = projects_with_releases.project_key
+            WHERE projects_with_releases.profile_key = ?
+            ORDER BY projects.key COLLATE NOCASE
+            """,
+            (self._profile_key,),
+        ).fetchall()
+        return [self._project_from_row(row) for row in rows]
+
+    @staticmethod
+    def _project_from_row(row: Sequence[Any]) -> JiraProject:
         return JiraProject(
             id=str(row[0]),
             key=str(row[1]),
             name=str(row[2]),
             project_type_key=row[3],
             graphql_ari=row[4],
+        )
+
+    def _set_projects_with_releases(self, projects: list[JiraProject]) -> None:
+        self._upsert_projects(projects)
+        self._connection.execute(
+            'DELETE FROM projects_with_releases WHERE profile_key = ?',
+            (self._profile_key,),
+        )
+        self._connection.executemany(
+            """
+            INSERT INTO projects_with_releases (profile_key, project_key)
+            VALUES (?, ?)
+            """,
+            [(self._profile_key, project.key) for project in projects],
         )
 
     def _set_projects(
@@ -991,15 +1125,15 @@ class ApplicationCache:
     def _set_project_features(
         self,
         features: list[JiraProjectFeature],
-        project_key: str | None,
+        project_identifier: str | None,
         fetched_at: float,
         expires_at: float | None,
     ) -> None:
-        if project_key is None:
+        if project_identifier is None:
             return
         self._connection.execute(
             'DELETE FROM project_features WHERE profile_key = ? AND project_key = ?',
-            (self._profile_key, project_key),
+            (self._profile_key, project_identifier),
         )
         self._connection.executemany(
             """
@@ -1012,7 +1146,7 @@ class ApplicationCache:
             [
                 (
                     self._profile_key,
-                    project_key,
+                    project_identifier,
                     item.feature,
                     item.state,
                     int(item.toggle_locked),
@@ -1402,6 +1536,28 @@ class ApplicationCache:
             ],
         )
 
+    def _get_startup_metadata(self, cache_type: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT payload_json
+            FROM startup_metadata
+            WHERE profile_key = ? AND cache_type = ?
+            """,
+            (self._profile_key, cache_type),
+        ).fetchone()
+        return json.loads(row[0]) if row is not None else None
+
+    def _set_startup_metadata(self, cache_type: str, payload: dict[str, Any]) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO startup_metadata (profile_key, cache_type, payload_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(profile_key, cache_type) DO UPDATE SET
+                payload_json = excluded.payload_json
+            """,
+            (self._profile_key, cache_type, json.dumps(payload, sort_keys=True)),
+        )
+
     def clear(self) -> None:
         with self._lock, self._connection:
             for table_name in PROFILE_CACHE_TABLES:
@@ -1413,13 +1569,26 @@ class ApplicationCache:
     def prune_expired(self) -> None:
         """Remove expired cached data and associated sync metadata for this profile."""
         with self._lock, self._connection:
-            expired_rows = self._connection.execute(
+            cache_rows = self._connection.execute(
                 """
-                SELECT cache_type, scope FROM sync_log
-                WHERE profile_key = ? AND expires_at IS NOT NULL AND expires_at < ?
+                SELECT cache_type, scope, fetched_at, expires_at FROM sync_log
+                WHERE profile_key = ?
                 """,
-                (self._profile_key, time.time()),
+                (self._profile_key,),
             ).fetchall()
+            now = time.time()
+            expired_rows = []
+            for cache_type, scope, fetched_at, expires_at in cache_rows:
+                stale_ttl = self._stale_ttls.get(str(cache_type), 0)
+                if expires_at is not None:
+                    hard_expires_at = float(expires_at) + stale_ttl
+                else:
+                    fresh_ttl = self._default_ttls.get(str(cache_type))
+                    if fresh_ttl is None:
+                        continue
+                    hard_expires_at = float(fetched_at) + fresh_ttl + stale_ttl
+                if hard_expires_at < now:
+                    expired_rows.append((cache_type, scope))
             for cache_type, scope in expired_rows:
                 self._delete_cache_scope(str(cache_type), str(scope))
             self._connection.executemany(
@@ -1474,6 +1643,19 @@ class ApplicationCache:
         elif cache_type == 'fields':
             self._connection.execute(
                 'DELETE FROM fields WHERE profile_key = ?', (self._profile_key,)
+            )
+        elif cache_type in {'server_info', 'global_settings'}:
+            self._connection.execute(
+                """
+                DELETE FROM startup_metadata
+                WHERE profile_key = ? AND cache_type = ?
+                """,
+                (self._profile_key, cache_type),
+            )
+        elif cache_type == 'projects_with_releases':
+            self._connection.execute(
+                'DELETE FROM projects_with_releases WHERE profile_key = ?',
+                (self._profile_key,),
             )
 
     def _delete_orphaned_users(self) -> None:

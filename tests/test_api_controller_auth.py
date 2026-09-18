@@ -96,6 +96,22 @@ def test_api_controller_uses_auth_profile(monkeypatch, auth_context, expected):
         assert getattr(captured['auth'], field_name) == expected_value
 
 
+def test_api_controller_reuses_jira_api_cache(monkeypatch):
+    auth_context = cast(SimpleNamespace, basic_auth_context())
+    shared_cache = object()
+    jira_api = SimpleNamespace(cache=shared_cache)
+
+    monkeypatch.setattr('gojeera.internal.jira.controller.JiraAPI', lambda **kwargs: jira_api)
+    monkeypatch.setattr(
+        'gojeera.internal.jira.controller.get_cache',
+        lambda: pytest.fail('Controller should reuse the Jira API cache'),
+    )
+
+    controller = APIController(configuration=_configuration_for_auth_context(auth_context))
+
+    assert controller.cache is shared_cache
+
+
 def test_api_controller_refreshes_expired_oauth2_token_and_updates_clients(monkeypatch):
     refreshed_tokens: list[str] = []
 
@@ -167,6 +183,7 @@ async def test_api_controller_uses_api_token_fallback_for_project_repositories(m
     )
     fallback_auth = SimpleNamespace(auth_type='basic', profile_name='bot')
     closed = []
+    repository_calls = []
 
     class FakeAsyncClient:
         async def close_async_client(self):
@@ -179,16 +196,23 @@ async def test_api_controller_uses_api_token_fallback_for_project_repositories(m
             self.async_http_client = FakeAsyncClient()
             self.graphql_client = FakeAsyncClient()
 
-        async def get_project_repositories(self, project_key):
+        async def close(self):
+            closed.append('closed')
+
+        async def get_project_repositories(self, project_key, on_page=None):
             assert self.auth is fallback_auth
             assert project_key == 'ENG'
-            return [
+            repository_calls.append(project_key)
+            repositories = [
                 {
                     'id': 'repo-1',
                     'name': 'platform-api',
                     'url': 'https://gitlab.example/platform-api',
                 }
             ]
+            if on_page is not None:
+                await on_page(repositories)
+            return repositories
 
         async def get_project_features(self, project_key):
             assert self.auth is auth_context
@@ -211,13 +235,23 @@ async def test_api_controller_uses_api_token_fallback_for_project_repositories(m
     monkeypatch.setattr('gojeera.internal.jira.controller.JiraAPI', FakeJiraAPI)
 
     controller = APIController(configuration=configuration)
-    response = await controller.get_project_repositories('ENG')
+    published_pages = []
+    response = await controller.get_project_repositories(
+        'ENG',
+        on_page=lambda repositories_page: published_pages.append(repositories_page),
+    )
     repositories = cast(list, response.result)
 
     assert response.success
     assert repositories[0].id == 'repo-1'
     assert repositories[0].name == 'platform-api'
-    assert closed == ['closed', 'closed', 'closed']
+    assert closed == ['closed']
+    assert published_pages == [repositories]
+
+    cached_response = await controller.get_project_repositories('ENG')
+
+    assert cached_response.success
+    assert repository_calls == ['ENG']
 
 
 @pytest.mark.parametrize(

@@ -5,7 +5,7 @@ from textual.widgets import TextArea
 
 from gojeera.components.screens.user_mention_picker_screen import UserMentionPickerScreen
 from gojeera.internal.models.jira import JiraUser
-from gojeera.internal.store.cache import ApplicationCache, get_cache
+from gojeera.internal.store.cache import ApplicationCache, get_cache, run_cache_io
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
@@ -36,7 +36,11 @@ async def insert_user_mention(
         if work_item_key and not project_key:
             project_key = work_item_key.split('-')[0]
 
-        cached_users_data = cache.get_project_users(project_key) if project_key else None
+        cached_users_data = (
+            await run_cache_io(lambda: cache.get_project_users(project_key))
+            if project_key
+            else None
+        )
 
         if cached_users_data:
             users: list[JiraUser] = cached_users_data

@@ -131,9 +131,8 @@ class WorkItemFactory:
 
         watches: dict[str, Any] = fields.get('watches', {}) or {}
 
-        custom_fields_values: dict[str, Any] | None = None
-        if editmeta := data.get('editmeta', {}):
-            custom_fields_values = get_custom_fields_values(fields, editmeta.get('fields', {}))
+        editmeta = data.get('editmeta', {}) or {}
+        custom_fields_values = get_custom_fields_values(fields, editmeta.get('fields', {})) or None
 
         additional_fields: dict[str, Any] = get_additional_fields_values(
             fields,
@@ -141,7 +140,7 @@ class WorkItemFactory:
         )
 
         sprint: JiraSprint | None = None
-        if editmeta := data.get('editmeta', {}):
+        if editmeta:
             edit_fields = editmeta.get('fields', {})
             sprint_field_id = get_sprint_field_id_from_editmeta(edit_fields)
             if sprint_field_id:

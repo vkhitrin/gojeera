@@ -9,6 +9,7 @@ from gojeera.components.tabs.record_list_tab import RecordListTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import JiraRepositoryPullRequest
 from gojeera.internal.models.work_items import JiraWorkItem
+from gojeera.utils.ui.runtime import cancel_worker, worker_is_running
 from gojeera.widgets.layout.record_list import Record, RecordList
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
         work_item = self.work_item
         if work_item is None or self._loaded_work_item_key == work_item.key:
             return
-        if self._loading_worker is not None and not self._loading_worker.is_finished:
+        if worker_is_running(self._loading_worker):
             return
 
         self.show_loading()
@@ -60,8 +61,7 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
         )
 
     def cancel_loading(self) -> None:
-        if self._loading_worker is not None and not self._loading_worker.is_finished:
-            self._loading_worker.cancel()
+        cancel_worker(self._loading_worker)
         self._loading_worker = None
         self.hide_loading()
 
@@ -87,7 +87,9 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
             return
 
         self._loaded_work_item_key = work_item.key
-        self.pull_requests = cast(list[JiraRepositoryPullRequest], response.result or [])
+        pull_requests = cast(list[JiraRepositoryPullRequest], response.result or [])
+        app.mark_detail_tab_count_loaded('tab-development', len(pull_requests))
+        self.pull_requests = pull_requests
         self.hide_loading()
 
     def _selected_pull_request(self) -> JiraRepositoryPullRequest | None:

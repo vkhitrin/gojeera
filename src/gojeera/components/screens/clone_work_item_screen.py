@@ -4,17 +4,10 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Input, Label, Static
 
 from gojeera.utils.ui.focus import focus_first_available
-from gojeera.widgets.inputs.extended_input import ExtendedInput
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
-    build_modal_cancel_button,
-    build_modal_confirm_button,
-)
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
+from gojeera.widgets.layout import modal_components
 
 
-class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
+class CloneWorkItemScreen(modal_components.ExtendedModalScreen[dict | None]):
     """A modal screen to configure the cloned work item's summary."""
 
     def __init__(self, work_item_key: str, original_summary: str):
@@ -34,14 +27,14 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with modal_components.VerticalSuppressClicks(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='clone-work-item-form', classes='modal-form modal-form--tight'):
                 with Vertical(id='summary-field-container', classes='modal-form-section'):
                     summary_label = Label('Summary')
                     summary_label.add_class('field_label')
                     yield summary_label
-                    summary_widget = ExtendedInput(
+                    summary_widget = modal_components.ExtendedInput(
                         id='clone-work-item-summary',
                         placeholder='',
                         value=self.default_summary,
@@ -63,11 +56,13 @@ class CloneWorkItemScreen(ExtendedModalScreen[dict | None]):
                     )
 
             with Horizontal(id='modal_footer', classes='modal-footer-spaced'):
-                yield build_modal_confirm_button(
+                yield modal_components.build_modal_confirm_button(
                     Button, button_id='clone-work-item-button-save', label='Clone'
                 )
-                yield build_modal_cancel_button(Button, button_id='clone-work-item-button-quit')
-        yield ExtendedFooter(show_command_palette=False)
+                yield modal_components.build_modal_cancel_button(
+                    Button, button_id='clone-work-item-button-quit'
+                )
+        yield modal_components.ExtendedFooter(show_command_palette=False)
 
     def on_mount(self) -> None:
         """Configure jumper after mount and set up initial state."""

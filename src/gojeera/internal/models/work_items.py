@@ -71,6 +71,18 @@ class WorkItemComment(BaseModel):
 
 
 @dataclass
+class PaginatedWorkItemComments(BaseModel):
+    comments: list[WorkItemComment]
+    max_results: int
+    start_at: int
+    total: int
+
+    @property
+    def is_last(self) -> bool:
+        return self.start_at + len(self.comments) >= self.total
+
+
+@dataclass
 class WorkItemHistoryChange(BaseModel):
     field: str
     from_value: str | None = None
@@ -350,6 +362,7 @@ class WorkItemSearchResult(BaseModel):
     """Result of a work item search operation."""
 
     total: int = 0
+    total_is_fresh: bool = False
     start: int = 0
     end: int = 0
     response: JiraWorkItemSearchResponse | None = None

@@ -27,22 +27,13 @@ from gojeera.commands.binding_provider import (
     register_binding_in_command_palette,
 )
 from gojeera.components.search.unified_search import UnifiedSearchBar
-from gojeera.components.work_item.work_item_description import (
-    WorkItemInfoContainer,
-    WorkItemSummary,
+from gojeera.components.work_item.work_item_summary import WorkItemSummary
+from gojeera.internal.jira.controller import (
+    INITIAL_WORK_ITEM_FIELDS,
+    APIController,
 )
-from gojeera.components.work_item.work_item_fields import WorkItemFields
-from gojeera.components.work_item.work_item_information import (
-    WORK_ITEM_WORKLOG_BINDINGS,
-    WorkItemBreadcrumb,
-    WorkItemInformation,
-)
-from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
-from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
-from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
-from gojeera.internal.jira.controller import APIController
 from gojeera.internal.models.atlassian import AtlassianContext
-from gojeera.internal.models.work_items import WorkItemSearchResult
+from gojeera.internal.models.work_items import PaginatedWorkItemComments, WorkItemSearchResult
 from gojeera.internal.store.cache import get_cache, run_cache_io
 from gojeera.internal.store.config import CONFIGURATION, ApplicationConfiguration
 from gojeera.internal.store.files import get_log_file, get_themes_directory
@@ -57,8 +48,8 @@ from gojeera.utils.jira.urls import (
     build_external_url_for_work_item,
 )
 from gojeera.utils.system.logging_utils import build_log_extra
+from gojeera.utils.ui.runtime import worker_is_running
 from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.markdown.gojeera_markdown import ExtendedMarkdownParagraph
 from gojeera.widgets.navigation.extended_jumper import ExtendedJumper, set_jump_mode
 from gojeera.widgets.navigation.extended_palette import ExtendedPalette
 from gojeera.widgets.navigation.extended_tabbed_content import ExtendedTabbedContent
@@ -72,9 +63,14 @@ if TYPE_CHECKING:
 
     from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
     from gojeera.components.work_item.work_item_comments import WorkItemCommentsWidget
+    from gojeera.components.work_item.work_item_description import WorkItemInfoContainer
     from gojeera.components.work_item.work_item_development import WorkItemDevelopmentWidget
-    from gojeera.components.work_item.work_item_fields import WorkItemUpdated
+    from gojeera.components.work_item.work_item_fields import WorkItemFields, WorkItemUpdated
     from gojeera.components.work_item.work_item_history import WorkItemHistoryWidget
+    from gojeera.components.work_item.work_item_information import WorkItemInformation
+    from gojeera.components.work_item.work_item_related_work_items import RelatedWorkItemsWidget
+    from gojeera.components.work_item.work_item_subtasks import WorkItemChildWorkItemsWidget
+    from gojeera.components.work_item.work_item_web_links import WorkItemRemoteLinksWidget
     from gojeera.internal.jira.controller import APIControllerResponse
     from gojeera.internal.models.jira import JiraMyselfInfo
     from gojeera.internal.models.work_items import (
@@ -85,6 +81,33 @@ if TYPE_CHECKING:
 CSS_PATH = 'internal/styling/gojeera.tcss'
 TITLE = 'gojeera'
 DEFAULT_THEME = 'textual-dark'
+DEFERRED_COUNT_TAB_IDS = frozenset(
+    {
+        'tab-subtasks',
+        'tab-links',
+        'tab-comments',
+        'tab-development',
+        'tab-history',
+    }
+)
+DEFERRED_COUNT_BADGE = '…'
+COMMENTS_PAGE_SIZE = 50
+WORK_ITEM_WORKLOG_BINDINGS = [
+    Binding(
+        key='ctrl+l',
+        action='view_worklog',
+        description='Worklog',
+        tooltip='View work logs',
+        show=True,
+    ),
+    Binding(
+        key='ctrl+t',
+        action='log_work',
+        description='Log Work',
+        tooltip='Log work time',
+        show=True,
+    ),
+]
 
 
 def get_panel_command_provider() -> type[Provider]:
@@ -278,10 +301,35 @@ class WorkspaceMixin(App):
         self._pending_work_item_navigation_target: WorkItemNavigationTarget | None = None
         self._active_search_data: dict | None = None
         self._active_search_term: str | None = None
+        self._pending_search_count_task: asyncio.Task[APIControllerResponse] | None = None
         self._active_work_item_load_key: str | None = None
         self._comments_loading_worker: Worker | None = None
         self._subtasks_loading_worker: Worker | None = None
+        self._comments_loaded_work_item_key: str | None = None
+        self._comments_next_offset = 0
+        self._loaded_comments = []
+        self._comments_total = 0
+        self._subtasks_loaded_work_item_key: str | None = None
+        self._pending_detail_count_tabs: set[str] = set()
         self._pending_screen_types: set[type[object]] = set()
+        self._information_panel: WorkItemInformation | None = None
+        self._fields_panel: WorkItemFields | None = None
+        self._work_item_details_mounted = False
+        self._work_item_details_mount_lock = asyncio.Lock()
+        self._detail_count_watchers_registered = False
+        self._bindings_refresh_scheduled = False
+
+    def request_bindings_refresh(self) -> None:
+        """Coalesce footer binding recomposition requests into one UI refresh."""
+        if not CONFIGURATION.get().show_footer or self._bindings_refresh_scheduled:
+            return
+        self._bindings_refresh_scheduled = True
+        self.call_after_refresh(self._flush_bindings_refresh)
+
+    def _flush_bindings_refresh(self) -> None:
+        self._bindings_refresh_scheduled = False
+        if CONFIGURATION.get().show_footer:
+            self.refresh_bindings()
 
     def set_focus(
         self,
@@ -318,11 +366,24 @@ class WorkspaceMixin(App):
 
     @property
     def information_panel(self) -> WorkItemInformation:
-        return self.query_one(WorkItemInformation)
+        if self._information_panel is None:
+            from gojeera.components.work_item.work_item_information import (
+                WorkItemInformation,
+            )
+
+            self._information_panel = WorkItemInformation()
+            self._information_panel.can_focus = False
+        return self._information_panel
 
     @property
     def fields_panel(self) -> WorkItemFields:
-        return self.query_one(WorkItemFields)
+        if self._fields_panel is None:
+            from gojeera.components.work_item.work_item_fields import WorkItemFields
+
+            self._fields_panel = WorkItemFields()
+            self._fields_panel.disabled = True
+            self._fields_panel.display = False
+        return self._fields_panel
 
     @property
     def search_results_list(self) -> WorkItemSearchResultsScroll:
@@ -334,7 +395,7 @@ class WorkspaceMixin(App):
 
     @property
     def work_item_fields_widget(self) -> WorkItemFields:
-        return self.query_one(WorkItemFields)
+        return self.fields_panel
 
     @property
     def work_item_comments_widget(self) -> WorkItemCommentsWidget:
@@ -342,19 +403,19 @@ class WorkspaceMixin(App):
 
     @property
     def related_work_items_widget(self) -> RelatedWorkItemsWidget:
-        return self.query_one(RelatedWorkItemsWidget)
+        return cast('RelatedWorkItemsWidget', self.query_one('#related_work_items'))
 
     @property
     def work_item_info_container(self) -> WorkItemInfoContainer:
-        return self.query_one(WorkItemInfoContainer)
+        return cast('WorkItemInfoContainer', self.query_one('#work_item_description_container'))
 
     @property
     def work_item_remote_links_widget(self) -> WorkItemRemoteLinksWidget:
-        return self.query_one(WorkItemRemoteLinksWidget)
+        return cast('WorkItemRemoteLinksWidget', self.query_one('#work_item_remote_links'))
 
     @property
     def work_item_child_work_items_widget(self) -> WorkItemChildWorkItemsWidget:
-        return self.query_one(WorkItemChildWorkItemsWidget)
+        return cast('WorkItemChildWorkItemsWidget', self.query_one('#workitem_subtasks'))
 
     @property
     def work_item_attachments_widget(self) -> WorkItemAttachmentsWidget:
@@ -399,17 +460,20 @@ class WorkspaceMixin(App):
     def details_tabs_row(self) -> Horizontal:
         return self.query_one('#details-tabs-row', Horizontal)
 
+    @property
+    def details_content_row(self) -> Horizontal:
+        return self.query_one('#details-content-row', Horizontal)
+
     def compose(self) -> ComposeResult:
         if CONFIGURATION.get().jumper.enabled:
             yield ExtendedJumper(keys=CONFIGURATION.get().jumper.keys)
         with Vertical(id='main-container'):
             yield UnifiedSearchBar(api=self.api, id='unified-search-bar')
-            with Horizontal(id='three-split-layout'):
+            with Horizontal(id='three-split-layout', classes='-search-inactive'):
                 yield WorkItemsContainer(id='search-results-container')
                 with Vertical(id='details-container'):
                     with Vertical(id='details-breadcrumb-row') as breadcrumb_row:
                         breadcrumb_row.display = False
-                        yield WorkItemBreadcrumb()
                         header_summary = WorkItemSummary(widget_id='details-work-item-summary')
                         header_summary.display = False
                         yield header_summary
@@ -418,6 +482,7 @@ class WorkspaceMixin(App):
                         with ExtendedTabbedContent(
                             id='tabs-information',
                             external_content=True,
+                            disabled=True,
                         ):
                             with TabPane('Description', id='tab-description'):
                                 pass
@@ -436,9 +501,7 @@ class WorkspaceMixin(App):
                             with TabPane('History', id='tab-history'):
                                 pass
 
-                    with Horizontal(id='details-content-row'):
-                        yield WorkItemInformation()
-                        yield WorkItemFields()
+                    yield Horizontal(id='details-content-row')
                     with Horizontal(id='details-footer-row') as footer_row:
                         footer_row.display = False
                         footer_label = Static(
@@ -474,8 +537,10 @@ class WorkspaceMixin(App):
         if action in ('apply_changes', 'discard_changes'):
             return self.is_work_item_ready and self.work_item_fields_widget.has_pending_changes
         if action == 'go_to_parent_work_item':
+            if not self.is_work_item_ready:
+                return False
             work_item = self.information_panel.work_item
-            return bool(self.is_work_item_ready and work_item and work_item.parent_key.strip())
+            return bool(work_item and work_item.parent_key.strip())
         return super().check_action(action, parameters)
 
     async def on_mount(self) -> None:
@@ -494,20 +559,6 @@ class WorkspaceMixin(App):
             tab.can_focus = False
             if CONFIGURATION.get().jumper.enabled:
                 setattr(tab, 'jump_mode', 'click')  # noqa: B010
-
-        work_item_container = self.query_one(
-            '#work-item-fields-container', expect_type=WorkItemFields
-        )
-        work_item_container.can_focus = False
-
-        work_item_middle_container = self.query_one(
-            '#work-item-information-container', expect_type=WorkItemInformation
-        )
-        work_item_middle_container.can_focus = False
-
-        self.tabs.disabled = True
-        self.fields_panel.disabled = True
-        self.fields_panel.display = False
 
         workers: list[Worker] = []
 
@@ -536,6 +587,30 @@ class WorkspaceMixin(App):
                     self._focus_item_after_startup(self.focus_item_on_startup),
                 )
 
+    async def _ensure_work_item_details_mounted(self) -> None:
+        if self._work_item_details_mounted:
+            return
+
+        async with self._work_item_details_mount_lock:
+            if self._work_item_details_mounted:
+                return
+
+            information_panel = self.information_panel
+            fields_panel = self.fields_panel
+            from gojeera.widgets.work_item.work_item_breadcrumb import WorkItemBreadcrumb
+
+            await self.details_breadcrumb_row.mount(
+                WorkItemBreadcrumb(),
+                before='#details-work-item-summary',
+            )
+            await self.details_content_row.mount(information_panel, fields_panel)
+            self._work_item_details_mounted = True
+            self._register_detail_count_watchers()
+
+    def _register_detail_count_watchers(self) -> None:
+        if self._detail_count_watchers_registered:
+            return
+
         self.watch(
             self.work_item_attachments_widget, 'displayed_count', self._update_attachments_tab_title
         )
@@ -559,6 +634,7 @@ class WorkspaceMixin(App):
             self._update_development_tab_title,
         )
         self.watch(self.work_item_history_widget, 'displayed_count', self._update_history_tab_title)
+        self._detail_count_watchers_registered = True
 
     def set_authenticated_user(self, user_info: JiraMyselfInfo) -> None:
         self.atlassian_context.user_info = user_info
@@ -580,7 +656,21 @@ class WorkspaceMixin(App):
         self._update_information_tab_badge('tab-links', count)
 
     def _update_comments_tab_title(self, count: int) -> None:
+        if (
+            self.current_loaded_work_item_key
+            and 'tab-comments' not in self._pending_detail_count_tabs
+        ):
+            count = max(count, self._comments_total)
         self._update_information_tab_badge('tab-comments', count)
+
+    def adjust_loaded_comment_total(self, work_item_key: str, delta: int) -> None:
+        if (
+            self.current_loaded_work_item_key != work_item_key
+            or 'tab-comments' in self._pending_detail_count_tabs
+        ):
+            return
+        self._comments_total = max(0, self._comments_total + delta)
+        self.mark_detail_tab_count_loaded('tab-comments', self._comments_total)
 
     def _update_development_tab_title(self, count: int) -> None:
         self._update_information_tab_badge('tab-development', count)
@@ -589,7 +679,22 @@ class WorkspaceMixin(App):
         self._update_information_tab_badge('tab-history', count)
 
     def _update_information_tab_badge(self, tab_id: str, count: int) -> None:
-        self.tabs.set_tab_badge(tab_id, count)
+        if tab_id in self._pending_detail_count_tabs:
+            badge: int | str = DEFERRED_COUNT_BADGE
+        elif tab_id in DEFERRED_COUNT_TAB_IDS and count == 0:
+            badge = '0'
+        else:
+            badge = count
+        self.tabs.set_tab_badge(tab_id, badge)
+
+    def _mark_detail_tab_count_pending(self) -> None:
+        self._pending_detail_count_tabs = set(DEFERRED_COUNT_TAB_IDS)
+        for tab_id in DEFERRED_COUNT_TAB_IDS:
+            self.tabs.set_tab_badge(tab_id, DEFERRED_COUNT_BADGE)
+
+    def mark_detail_tab_count_loaded(self, tab_id: str, count: int) -> None:
+        self._pending_detail_count_tabs.discard(tab_id)
+        self._update_information_tab_badge(tab_id, count)
 
     def _hide_development_tab(self) -> None:
         self.tabs.hide_tab('tab-development')
@@ -649,7 +754,7 @@ class WorkspaceMixin(App):
             app.open_url(url)
 
     def _get_hovered_attachment_filename(self) -> str | None:
-        for paragraph in self.query(ExtendedMarkdownParagraph):
+        for paragraph in self.query('ExtendedMarkdownParagraph'):
             filename = getattr(paragraph, '_focused_attachment_filename', None)
             if filename:
                 return filename
@@ -768,15 +873,34 @@ class WorkspaceMixin(App):
             'work_item_type': search_field_work_item_type,
             'jql_query': jql_query,
         }
-        response: APIControllerResponse
-        response = await self.api.search_work_items(
+        prepared_search = await self.api.prepare_work_item_search(**search_api_kwargs)
+        if not prepared_search.success or prepared_search.result is None:
+            self.notify(
+                prepared_search.error or 'JQL validation failed',
+                severity='warning',
+            )
+            return WorkItemSearchResult(total=0, start=0, end=0, response=None)
+
+        prepared_search_kwargs = cast(dict[str, Any], prepared_search.result)
+        search_request = self.api.search_work_items(
             **search_api_kwargs,
             search_in_active_sprint=False,
             next_page_token=next_page_token,
             limit=CONFIGURATION.get().search_results_per_page,
+            prepared_search_kwargs=prepared_search_kwargs,
         )
+        self._pending_search_count_task = None
+        if calculate_total:
+            self._pending_search_count_task = asyncio.create_task(
+                self.api.count_work_items(
+                    **search_api_kwargs,
+                    prepared_search_kwargs=prepared_search_kwargs,
+                )
+            )
+        response = await search_request
 
         if not response.success or response.result is None:
+            self._cancel_pending_search_count()
             error_message = (
                 response.error
                 if response.error
@@ -789,14 +913,17 @@ class WorkspaceMixin(App):
             return WorkItemSearchResult(total=0, start=0, end=0, response=None)
 
         if jql_query:
-            self._record_recent_search(jql_query, mode)
+            if calculate_total:
+                self._record_recent_search(jql_query, mode)
 
         result: JiraWorkItemSearchResponse = response.result
         estimated_total_work_items: int = 0
-        if calculate_total:
-            counting: APIControllerResponse = await self.api.count_work_items(**search_api_kwargs)
+        total_is_fresh = False
+        counting = self._completed_pending_search_count()
+        if counting is not None:
             if counting.success and counting.result is not None:
                 estimated_total_work_items = counting.result
+                total_is_fresh = True
             else:
                 estimated_total_work_items = 0
 
@@ -815,9 +942,55 @@ class WorkspaceMixin(App):
         return WorkItemSearchResult(
             response=result,
             total=estimated_total_work_items if estimated_total_work_items else 0,
+            total_is_fresh=total_is_fresh,
             start=1 if work_item_count else 0,
             end=work_item_count,
         )
+
+    def _cancel_pending_search_count(self) -> None:
+        count_task = self._pending_search_count_task
+        self._pending_search_count_task = None
+        if count_task is not None and not count_task.done():
+            count_task.cancel()
+
+    def _completed_pending_search_count(self) -> APIControllerResponse | None:
+        count_task = self._pending_search_count_task
+        if count_task is None or not count_task.done() or count_task.cancelled():
+            return None
+        self._pending_search_count_task = None
+        return count_task.result()
+
+    async def _publish_pending_search_count(
+        self,
+        count_task: asyncio.Task[APIControllerResponse],
+    ) -> None:
+        try:
+            counting = await count_task
+        except asyncio.CancelledError:
+            return
+
+        if self._pending_search_count_task is not count_task:
+            return
+        self._pending_search_count_task = None
+
+        if not counting.success or counting.result is None:
+            self.notify(
+                counting.error or 'Failed to calculate the number of work items',
+                title='Work Items Search',
+                severity='warning',
+            )
+            return
+
+        total = int(counting.result)
+        page_size = CONFIGURATION.get().search_results_per_page
+        self.search_results_list.total_pages = max(1, (total + page_size - 1) // page_size)
+        pagination = self.search_results_container.pagination or {}
+        self.search_results_container.pagination = {
+            'total': total,
+            'current_page_number': pagination.get(
+                'current_page_number', self.search_results_list.page
+            ),
+        }
 
     @staticmethod
     def _build_jql_query(
@@ -870,7 +1043,13 @@ class WorkspaceMixin(App):
             )
             return WorkItemSearchResult(total=0, start=0, end=0, response=None)
         total = len(response.result.work_items or [])
-        return WorkItemSearchResult(response=response.result, total=total, start=total, end=total)
+        return WorkItemSearchResult(
+            response=response.result,
+            total=total,
+            total_is_fresh=True,
+            start=total,
+            end=total,
+        )
 
     async def search_work_items(
         self,
@@ -879,6 +1058,7 @@ class WorkspaceMixin(App):
         page: int | None = None,
         search_data: dict | None = None,
         use_active_search: bool = False,
+        recalculate_total: bool = False,
     ) -> None:
         results: WorkItemSearchResult
         list_view = self.search_results_list
@@ -905,18 +1085,6 @@ class WorkspaceMixin(App):
                     self._restore_active_search_pagination(list_view)
                 return
 
-            if mode == 'jql' and jql is not None:
-                validation_result = await self.api.validate_jql_query(jql)
-                if not validation_result.success:
-                    list_view.work_item_search_results = None
-                    self.notify(
-                        validation_result.error or 'JQL validation failed',
-                        severity='warning',
-                    )
-                    if use_active_search:
-                        self._restore_active_search_pagination(list_view)
-                    return
-
             if work_item_key and self.current_loaded_work_item_key == work_item_key:
                 if self.focused is not list_view and list_view.work_item_search_results is not None:
                     list_view.focus()
@@ -929,6 +1097,7 @@ class WorkspaceMixin(App):
             else:
                 results = await self._search_work_items(
                     next_page_token=next_page_token,
+                    calculate_total=not use_active_search or recalculate_total,
                     search_term=search_term,
                     page=page,
                     search_data=effective_search_data,
@@ -947,25 +1116,45 @@ class WorkspaceMixin(App):
             if not use_active_search and results.response is not None:
                 list_view.clear_loaded_work_item()
 
-            list_view.work_item_search_results = results.response
-            if self.focused is not list_view:
-                list_view.focus()
+            if results.response is not None or not use_active_search:
+                list_view.work_item_search_results = results.response
+            if (
+                not use_active_search
+                and results.response is not None
+                and results.response.work_items
+            ):
+                list_view.request_focus_after_render()
 
             self._active_search_data = effective_search_data
             self._active_search_term = search_term
 
-            total_pages = 1
-            if results.total > 0:
-                total_pages = results.total // CONFIGURATION.get().search_results_per_page
-                if (results.total % CONFIGURATION.get().search_results_per_page) > 0:
-                    total_pages += 1
+            previous_total = (self.search_results_container.pagination or {}).get('total', 0)
+            total_is_fresh = getattr(results, 'total_is_fresh', False)
+            effective_total = (
+                results.total if total_is_fresh else previous_total if use_active_search else 0
+            )
+            total_pages = list_view.total_pages if use_active_search else 1
+            if total_is_fresh and (not use_active_search or recalculate_total):
+                page_size = CONFIGURATION.get().search_results_per_page
+                total_pages = max(1, (effective_total + page_size - 1) // page_size)
 
             list_view.total_pages = total_pages
 
             self.search_results_container.pagination = {
-                'total': results.total,
+                'total': effective_total,
                 'current_page_number': self.search_results_list.page,
             }
+
+            count_task = self._pending_search_count_task
+            if count_task is not None:
+                if count_task.done():
+                    await self._publish_pending_search_count(count_task)
+                else:
+                    self.run_worker(
+                        self._publish_pending_search_count(count_task),
+                        exclusive=True,
+                        group='search_count',
+                    )
         finally:
             self.end_search_request()
 
@@ -980,6 +1169,7 @@ class WorkspaceMixin(App):
         if self.is_search_request_in_progress:
             return
 
+        self._cancel_pending_search_count()
         self._active_search_data = None
         self._active_search_term = None
         self.search_results_container.clear_search()
@@ -1086,6 +1276,7 @@ class WorkspaceMixin(App):
             page_number=requested_page,
             next_page_token=next_page_token,
             use_active_search=True,
+            recalculate_total=True,
         )
 
     async def action_show_overlay(self) -> None:
@@ -1110,6 +1301,7 @@ class WorkspaceMixin(App):
             return
 
         if self._is_same_active_search(search_term):
+            self.search_results_list.request_focus_after_render()
             self._rerun_active_search()
             return
 
@@ -1145,6 +1337,7 @@ class WorkspaceMixin(App):
         search_term: str | None = None,
         use_active_search: bool = False,
         show_pagination: bool = True,
+        recalculate_total: bool = False,
     ) -> Worker:
         self.begin_search_request(
             page_number=page_number,
@@ -1156,6 +1349,7 @@ class WorkspaceMixin(App):
                 search_term=search_term,
                 page=page_number,
                 use_active_search=use_active_search,
+                recalculate_total=recalculate_total,
             ),
             exclusive=True,
             group='search',
@@ -1170,6 +1364,7 @@ class WorkspaceMixin(App):
         page_number: int | None = None,
         show_pagination: bool = True,
     ) -> None:
+        self._cancel_pending_search_count()
         if show_pagination:
             current_search_data = (
                 self._active_search_data or self.unified_search_bar.get_search_data()
@@ -1182,7 +1377,8 @@ class WorkspaceMixin(App):
         )
         if not show_pagination and self.search_results_container.results_loaded:
             self.search_results_container.results_loaded = False
-        self.search_results_list.prepare_for_search()
+        if not show_pagination:
+            self.search_results_list.prepare_for_search()
         self.search_results_container.show_loading()
         if not self.unified_search_bar.search_in_progress:
             self.unified_search_bar.search_in_progress = True
@@ -1211,17 +1407,21 @@ class WorkspaceMixin(App):
         list_view = self.search_results_list
         if list_view.is_pending_initial_render:
             list_view.call_after_refresh(list_view._complete_initial_render)
-            self.set_timer(0.25, self._complete_pending_search_render)
+            self.set_timer(
+                0.25,
+                lambda: self._complete_pending_search_render(list_view),
+            )
             if self.unified_search_bar.search_in_progress:
                 self.unified_search_bar.search_in_progress = False
             return
         self.search_results_container.hide_loading()
         if self.unified_search_bar.search_in_progress:
             self.unified_search_bar.search_in_progress = False
+        list_view.restore_focus_after_request()
 
-    def _complete_pending_search_render(self) -> None:
-        list_view = self.search_results_list
-        if not list_view.is_pending_initial_render:
+    @staticmethod
+    def _complete_pending_search_render(list_view: WorkItemSearchResultsScroll) -> None:
+        if not list_view.is_mounted or not list_view.is_pending_initial_render:
             return
 
         list_view._complete_initial_render()
@@ -1236,12 +1436,18 @@ class WorkspaceMixin(App):
 
         self._active_work_item_load_key = None
         self._cancel_progressive_work_item_detail_loads()
+        self._comments_loaded_work_item_key = None
+        self._comments_next_offset = 0
+        self._loaded_comments = []
+        self._comments_total = 0
+        self._subtasks_loaded_work_item_key = None
+        self._pending_detail_count_tabs.clear()
         self.focused_work_item_link_key = None
 
         if next_loaded_work_item_key is None:
             self.search_results_list.clear_loaded_work_item()
 
-        if not preserve_content:
+        if not preserve_content and self._work_item_details_mounted:
             with self.app.batch_update():
                 self.information_panel.work_item = None
                 self.work_item_info_container.work_item = None
@@ -1273,17 +1479,17 @@ class WorkspaceMixin(App):
 
         if not self.tabs.disabled:
             self.tabs.disabled = True
-        if not self.fields_panel.disabled:
+        if self._work_item_details_mounted and not self.fields_panel.disabled:
             self.fields_panel.disabled = True
         if not preserve_content:
-            if self.fields_panel.display:
+            if self._work_item_details_mounted and self.fields_panel.display:
                 self.fields_panel.display = False
             if self.details_breadcrumb_row.display:
                 self.details_breadcrumb_row.display = False
             if self.details_tabs_row.display:
                 self.details_tabs_row.display = False
 
-        self.call_after_refresh(self.refresh_bindings)
+        self.request_bindings_refresh()
 
     async def action_create_work_item(self) -> None:
         from gojeera.components.screens.create_work_item_screen import AddWorkItemScreen
@@ -1546,6 +1752,56 @@ class WorkspaceMixin(App):
             self._subtasks_loading_worker.cancel()
         self._subtasks_loading_worker = None
 
+    def load_work_item_detail_tab_if_needed(self, tab_id: str) -> None:
+        if not self._work_item_details_mounted:
+            return
+        work_item = self.information_panel.work_item
+        if work_item is None or not self._is_current_loaded_work_item(work_item.key):
+            return
+
+        if tab_id == 'tab-comments':
+            self.work_item_comments_widget.load_permission_if_needed()
+            if self._comments_loaded_work_item_key == work_item.key:
+                self.mark_detail_tab_count_loaded('tab-comments', self._comments_total)
+                return
+            if worker_is_running(self._comments_loading_worker):
+                return
+            if not work_item.comments:
+                self.work_item_comments_widget.show_loading()
+            self._comments_loading_worker = self.run_worker(
+                self._load_work_item_comments(work_item.key),
+                exclusive=False,
+                group='work-item-comments',
+            )
+        elif tab_id == 'tab-subtasks':
+            if self._subtasks_loaded_work_item_key == work_item.key:
+                return
+            if (
+                self._subtasks_loading_worker is not None
+                and not self._subtasks_loading_worker.is_finished
+            ):
+                return
+            if not work_item.subtasks:
+                self.work_item_child_work_items_widget.show_loading()
+            self._subtasks_loading_worker = self.run_worker(
+                self._load_work_item_subtasks(work_item.key),
+                exclusive=False,
+                group='work-item-subtasks',
+            )
+
+    def load_more_work_item_comments(self, work_item_key: str) -> None:
+        if self._comments_loaded_work_item_key == work_item_key:
+            return
+        if not self._is_current_loaded_work_item(work_item_key):
+            return
+        if worker_is_running(self._comments_loading_worker):
+            return
+        self._comments_loading_worker = self.run_worker(
+            self._load_work_item_comments(work_item_key),
+            exclusive=False,
+            group='work-item-comments',
+        )
+
     def _bind_loaded_work_item_details(
         self,
         selected_work_item_key: str,
@@ -1568,6 +1824,10 @@ class WorkspaceMixin(App):
                 work_item.project.is_service_desk if work_item.project else False
             )
             self.work_item_comments_widget.comments = work_item.comments
+            self.work_item_comments_widget.pagination_complete = False
+            self._comments_next_offset = 0
+            self._loaded_comments = []
+            self._comments_total = 0
 
             self.work_item_attachments_widget.work_item_key = work_item.key
             self.work_item_attachments_widget.attachments = work_item.attachments
@@ -1584,8 +1844,11 @@ class WorkspaceMixin(App):
             self.work_item_fields_widget.available_users = self.available_users
             self.work_item_fields_widget.work_item = work_item
 
+        self._mark_detail_tab_count_pending()
         if self.tabs.active == 'tab-history':
             self.work_item_history_widget.load_if_needed()
+        if self.tabs.active == 'tab-links' and CONFIGURATION.get().show_work_item_web_links:
+            self.work_item_remote_links_widget.load_if_needed()
         self.run_worker(
             self._sync_development_tab_for_work_item(work_item),
             exclusive=True,
@@ -1593,44 +1856,32 @@ class WorkspaceMixin(App):
         )
 
         self._apply_pending_work_item_navigation_target()
-        self._start_progressive_work_item_detail_loads(work_item)
-
-    def _start_progressive_work_item_detail_loads(
-        self,
-        work_item: JiraWorkItem,
-    ) -> None:
-        self._cancel_progressive_work_item_detail_loads()
-
-        self.work_item_comments_widget.work_item_key = work_item.key
-        self.work_item_comments_widget.work_item_is_service_desk = (
-            work_item.project.is_service_desk if work_item.project else False
-        )
-        self.work_item_child_work_items_widget.work_item_key = work_item.key
-
-        if not work_item.comments:
-            self.work_item_comments_widget.show_loading()
-        if not work_item.subtasks:
-            self.work_item_child_work_items_widget.show_loading()
-
-        self._comments_loading_worker = self.run_worker(
-            self._load_work_item_comments(work_item.key),
-            exclusive=False,
-            group='work-item-comments',
-        )
-        self._subtasks_loading_worker = self.run_worker(
-            self._load_work_item_subtasks(work_item.key),
-            exclusive=False,
-            group='work-item-subtasks',
-        )
+        self.load_work_item_detail_tab_if_needed(self.tabs.active)
 
     async def _load_work_item_comments(self, work_item_key: str) -> None:
-        response: APIControllerResponse = await self.api.get_comments(work_item_key)
+        response: APIControllerResponse = await self.api.get_comments(
+            work_item_key,
+            offset=self._comments_next_offset,
+            limit=COMMENTS_PAGE_SIZE,
+        )
 
         if not self._is_current_loaded_work_item(work_item_key):
             return
 
-        if response.success and isinstance(response.result, list):
-            self.work_item_comments_widget.comments = response.result
+        if response.success and isinstance(response.result, PaginatedWorkItemComments):
+            page = response.result
+            current_comments = self.work_item_comments_widget.comments or []
+            comments_by_id = {comment.id: comment for comment in current_comments}
+            comments_by_id.update({comment.id: comment for comment in page.comments})
+            self._loaded_comments = list(comments_by_id.values())
+            self._comments_next_offset = page.start_at + len(page.comments)
+            self._comments_total = page.total
+            if self.tabs.active == 'tab-comments':
+                self.mark_detail_tab_count_loaded('tab-comments', page.total)
+            self.work_item_comments_widget.pagination_complete = page.is_last
+            self.work_item_comments_widget.comments = list(self._loaded_comments)
+            if page.is_last:
+                self._comments_loaded_work_item_key = work_item_key
             return
 
         self.logger.error(
@@ -1649,6 +1900,11 @@ class WorkspaceMixin(App):
             return
 
         if response.success and response.result:
+            self._subtasks_loaded_work_item_key = work_item_key
+            self.mark_detail_tab_count_loaded(
+                'tab-subtasks',
+                len(response.result.work_items),
+            )
             self.work_item_child_work_items_widget.work_items = response.result.work_items
             return
 
@@ -1729,8 +1985,12 @@ class WorkspaceMixin(App):
         self.is_loading = True
 
         try:
-            main_response: APIControllerResponse = await self.api.get_work_item(
-                work_item_id_or_key=selected_work_item_key,
+            main_response, _ = await asyncio.gather(
+                self.api.get_work_item(
+                    work_item_id_or_key=selected_work_item_key,
+                    fields=INITIAL_WORK_ITEM_FIELDS,
+                ),
+                self._ensure_work_item_details_mounted(),
             )
 
             if not main_response.success or not main_response.result:
@@ -1765,7 +2025,7 @@ class WorkspaceMixin(App):
 
             self.current_loaded_work_item_key = selected_work_item_key
             self._record_recently_viewed_work_item(work_item)
-            self.call_after_refresh(self.refresh_bindings)
+            self.request_bindings_refresh()
 
             self.call_after_refresh(
                 self._bind_loaded_work_item_details,
@@ -1818,7 +2078,7 @@ class WorkspaceMixin(App):
         if loading:
             self.details_breadcrumb_row.display = False
             self.details_tabs_row.display = False
-        self.call_after_refresh(self.refresh_bindings)
+        self.request_bindings_refresh()
 
     async def clone_work_item(self, work_item_key: str) -> None:
         if not work_item_key:
@@ -1891,7 +2151,7 @@ class WorkspaceMixin(App):
 
             for active_id, next_id in itertools.pairwise(tab_ids):
                 if active_id == current_active:
-                    self.tabs.active = next_id
+                    self._activate_detail_tab_from_keyboard(next_id)
                     break
 
     def action_previous_detail_tab(self) -> None:
@@ -1901,8 +2161,20 @@ class WorkspaceMixin(App):
 
             for prev_id, active_id in itertools.pairwise(tab_ids):
                 if active_id == current_active:
-                    self.tabs.active = prev_id
+                    self._activate_detail_tab_from_keyboard(prev_id)
                     break
+
+    def _activate_detail_tab_from_keyboard(self, tab_id: str) -> None:
+        focused = self.focused
+        active_pane = self.information_panel.get_active_pane()
+        restore_content_focus = focused is not None and (
+            focused is active_pane or focused in active_pane.walk_children()
+        )
+
+        if restore_content_focus:
+            self.tabs.activate_from_content(tab_id)
+        else:
+            self.tabs.active = tab_id
 
     async def _focus_item_after_startup(self, position: int) -> None:
         scroll_view = self.search_results_list
@@ -2020,6 +2292,7 @@ class JiraApp(WorkspaceMixin, App):
 
         self.focus_item_on_startup: int | None = focus_item_on_startup
         self._directory_themes = directory_themes
+        self._directory_themes_registered = False
         self._init_workspace(
             api=self.api,
             project_key=project_key,
@@ -2030,13 +2303,18 @@ class JiraApp(WorkspaceMixin, App):
             user_info=self.atlassian_context.user_info,
         )
         self._setup_logging()
-        self._register_custom_themes()
+        requested_theme = user_theme or CONFIGURATION.get().theme
+        if directory_themes is not None or (
+            requested_theme is not None and self.get_theme(requested_theme) is None
+        ):
+            self._register_custom_themes()
         self._setup_theme(user_theme)
 
     def search_themes(self) -> None:
         """Show the theme picker with the extended command palette."""
         from textual.theme import ThemeProvider
 
+        self._register_custom_themes()
         self._push_screen_exclusive_sync(
             ExtendedPalette(
                 providers=[ThemeProvider],
@@ -2045,6 +2323,9 @@ class JiraApp(WorkspaceMixin, App):
         )
 
     def _register_custom_themes(self) -> None:
+        if self._directory_themes_registered:
+            return
+
         directory_themes = self._directory_themes
         if directory_themes is None:
             themes_dir = get_themes_directory()
@@ -2055,6 +2336,7 @@ class JiraApp(WorkspaceMixin, App):
                 'Registered custom theme from directory',
                 extra=build_log_extra({'theme_name': theme.name}),
             )
+        self._directory_themes_registered = True
 
     def _setup_theme(self, user_theme: str | None = None) -> None:
         if input_theme := (user_theme or CONFIGURATION.get().theme):
@@ -2074,6 +2356,10 @@ class JiraApp(WorkspaceMixin, App):
     async def on_mount(self) -> None:
         await WorkspaceMixin.on_mount(self)
         self.run_worker(self._initialize_startup_context(), name='startup_context')
+        self.run_worker(
+            run_cache_io(lambda: get_cache().prune_expired()),
+            name='cache_prune',
+        )
 
     async def _initialize_startup_context(self) -> None:
         server_info_coroutine = self.api.server_info()
@@ -2270,11 +2556,14 @@ class JiraApp(WorkspaceMixin, App):
         )
 
     def action_show_jql_filters_palette(self) -> None:
-        from gojeera.commands.providers.jql_filters_provider import JQL_FILTERS_PALETTE_ID
+        from gojeera.commands.providers.jql_filters_provider import (
+            JQL_FILTERS_PALETTE_ID,
+            JQL_FILTERS_PALETTE_PLACEHOLDER,
+        )
 
         self._open_sub_command_palette(
             JQL_FILTERS_PALETTE_ID,
-            'Search JQL filters…',
+            JQL_FILTERS_PALETTE_PLACEHOLDER,
         )
 
     def action_show_releases_palette(self) -> None:
@@ -2362,6 +2651,8 @@ class JiraApp(WorkspaceMixin, App):
         for screen in self.screen_stack:
             for footer in screen.query(ExtendedFooter):
                 footer.display = visible
+        if visible:
+            self.request_bindings_refresh()
 
 
 if __name__ == '__main__':

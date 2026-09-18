@@ -15,16 +15,18 @@ from gojeera.utils.ui.focus import focus_first_available
 from gojeera.utils.ui.mention_helpers import insert_user_mention
 from gojeera.utils.ui.textarea_insertion import insert_picker_markup
 from gojeera.widgets.inputs.date_input import DateInput
-from gojeera.widgets.inputs.extended_input import ExtendedInput
-from gojeera.widgets.layout.extended_footer import ExtendedFooter
-from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
-from gojeera.widgets.layout.modal_buttons import (
+from gojeera.widgets.layout.modal_components import (
+    ExtendedADFMarkdownTextArea,
+    ExtendedFooter,
+    ExtendedInput,
+    ExtendedModalScreen,
     build_modal_cancel_button,
     build_modal_confirm_button,
+    set_jump_mode,
 )
-from gojeera.widgets.layout.vertical_suppress_clicks import VerticalSuppressClicks
-from gojeera.widgets.markdown.extended_adf_markdown_textarea import ExtendedADFMarkdownTextArea
-from gojeera.widgets.navigation.extended_jumper import set_jump_mode
+from gojeera.widgets.layout.modal_components import (
+    VerticalSuppressClicks as WorkLogForm,
+)
 
 logger = logging.getLogger('gojeera')
 
@@ -123,7 +125,7 @@ class LogWorkScreen(ExtendedModalScreen[dict]):
 
     def compose(self) -> ComposeResult:
         yield from self.compose_modal_jumper()
-        with VerticalSuppressClicks(id='modal_outer'):
+        with WorkLogForm(id='modal_outer'):
             yield Static(self._modal_title, id='modal_title')
             with VerticalScroll(id='modal-form-scroll'):
                 with ItemGrid(id='time-fields-grid'):

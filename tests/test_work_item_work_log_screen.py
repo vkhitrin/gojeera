@@ -1,9 +1,14 @@
+import asyncio
+from typing import Any, cast
+
 from httpx import Response
 import pytest
 import respx
 
 from gojeera.app import JiraApp
 from gojeera.components.screens.work_item_work_log_screen import WorkItemWorkLogScreen
+from gojeera.internal.jira.controller import APIControllerResponse
+from gojeera.internal.models.work_items import JiraWorklog, PaginatedJiraWorklog
 from gojeera.widgets.layout.record_list import RecordList
 
 from .test_helpers import accept_confirmation, assert_confirmation_screen, wait_until
@@ -68,6 +73,85 @@ async def delete_worklog_and_verify(pilot):
 
 
 class TestWorkItemWorkLogScreen:
+    @pytest.mark.asyncio
+    async def test_worklog_screen_reuses_probe_and_appends_the_next_page(
+        self,
+        search_results_app,
+    ):
+        app = search_results_app
+        release_page = asyncio.Event()
+        requested_pages: list[tuple[int | None, int | None]] = []
+
+        async def get_work_item_worklog(
+            work_item_key: str,
+            offset: int | None = None,
+            limit: int | None = None,
+        ) -> APIControllerResponse:
+            assert work_item_key == 'ENG-3'
+            requested_pages.append((offset, limit))
+            await release_page.wait()
+            return APIControllerResponse(
+                result=PaginatedJiraWorklog(
+                    logs=[
+                        JiraWorklog(id='2', work_item_id='ENG-3'),
+                        JiraWorklog(id='3', work_item_id='ENG-3'),
+                    ],
+                    max_results=100,
+                    start_at=1,
+                    total=3,
+                )
+            )
+
+        cast(Any, app.api).get_work_item_worklog = get_work_item_worklog
+        initial_page = PaginatedJiraWorklog(
+            logs=[JiraWorklog(id='1', work_item_id='ENG-3')],
+            max_results=1,
+            start_at=0,
+            total=3,
+        )
+
+        async with app.run_test() as pilot:
+            screen = WorkItemWorkLogScreen('ENG-3', initial_page=initial_page)
+            await app.push_screen(screen)
+            await wait_until(lambda: requested_pages == [(1, 100)], timeout=3.0)
+
+            assert [record.key for record in screen.worklog_list_view._records] == ['1']
+            assert screen.loading_label.display
+            assert not screen.modal_outer.loading
+
+            release_page.set()
+            await wait_until(
+                lambda: len(screen.worklog_list_view._records) == 3,
+                timeout=3.0,
+            )
+            await pilot.pause()
+
+            assert [record.key for record in screen.worklog_list_view._records] == [
+                '1',
+                '2',
+                '3',
+            ]
+            assert not screen.loading_label.display
+
+            async def get_reloaded_worklogs(
+                work_item_key: str,
+                offset: int | None = None,
+                limit: int | None = None,
+            ) -> APIControllerResponse:
+                assert (work_item_key, offset, limit) == ('ENG-3', 0, 100)
+                return APIControllerResponse(
+                    result=PaginatedJiraWorklog(
+                        logs=[JiraWorklog(id='4', work_item_id='ENG-3')],
+                        max_results=100,
+                        start_at=0,
+                        total=1,
+                    )
+                )
+
+            cast(Any, app.api).get_work_item_worklog = get_reloaded_worklogs
+            await screen.reload_worklogs()
+            assert [record.key for record in screen.worklog_list_view._records] == ['4']
+
     @pytest.mark.asyncio
     async def test_worklog_screen_empty_worklogs(
         self,

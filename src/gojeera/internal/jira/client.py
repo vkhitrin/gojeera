@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 import logging
@@ -73,6 +74,7 @@ class BaseHTTPClient:
         instance_base_url: str | None = None,
         bearer_token: str | None = None,
         token_refresh_callback: Callable[[bool], str | None] | None = None,
+        shared_client: httpx.AsyncClient | httpx.Client | None = None,
     ) -> None:
         self.base_url: str = base_url.rstrip('/')
         self.instance_base_url: str | None = (
@@ -88,16 +90,24 @@ class BaseHTTPClient:
             self.default_headers['Authorization'] = f'Bearer {bearer_token.strip()}'
         self.logger = logging.getLogger('gojeera')
         self.token_refresh_callback = token_refresh_callback
-        self.client = self._create_client(configuration)
+        self._async_token_refresh_task: asyncio.Task[bool] | None = None
+        self._owns_client = shared_client is None
+        self.client = self._create_client(configuration) if shared_client is None else shared_client
 
     @staticmethod
     def _build_client_kwargs(configuration: ApplicationConfiguration) -> dict[str, Any]:
         ssl_certificate_settings: SSLCertificateSettings = _setup_ssl_certificates(configuration)
         timeout = httpx.Timeout(60.0, connect=10.0, read=60.0, write=30.0)
+        limits = httpx.Limits(
+            max_connections=100,
+            max_keepalive_connections=20,
+            keepalive_expiry=30.0,
+        )
         return {
             'verify': ssl_certificate_settings.verify_ssl,
             'cert': ssl_certificate_settings.cert,
             'timeout': timeout,
+            'limits': limits,
         }
 
     def _create_client(
@@ -158,6 +168,38 @@ class BaseHTTPClient:
             and self.token_refresh_callback is not None
         ):
             self._refresh_bearer_token(log_url, force=False)
+
+    async def _refresh_bearer_token_async(
+        self,
+        log_url: str,
+        *,
+        force: bool,
+        stale_authorization: str | None = None,
+    ) -> bool:
+        """Refresh OAuth credentials without blocking the event loop."""
+        if self.token_refresh_callback is None:
+            return False
+
+        current_authorization = self.default_headers.get('Authorization')
+        if (
+            force
+            and stale_authorization is not None
+            and current_authorization != stale_authorization
+        ):
+            return True
+
+        refresh_task = self._async_token_refresh_task
+        if refresh_task is None or refresh_task.done():
+            refresh_task = asyncio.create_task(
+                asyncio.to_thread(self._refresh_bearer_token, log_url, force=force)
+            )
+            self._async_token_refresh_task = refresh_task
+
+        try:
+            return await asyncio.shield(refresh_task)
+        finally:
+            if self._async_token_refresh_task is refresh_task and refresh_task.done():
+                self._async_token_refresh_task = None
 
     def _extract_error_message(
         self, error: httpx.HTTPStatusError, error_details: dict | None
@@ -370,7 +412,7 @@ class BaseHTTPClient:
         log_url = log_url or request_url
         while True:
             if retry_after_refresh:
-                self._refresh_bearer_token_if_needed(log_url)
+                await self._refresh_bearer_token_async(log_url, force=False)
             request_headers = self.set_headers(headers)
 
             try:
@@ -383,6 +425,16 @@ class BaseHTTPClient:
                 )
             except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError) as error:
                 self._handle_transport_exception(error, log_url)
+
+            if self._can_retry_after_refresh(response, retry_after_refresh):
+                refreshed = await self._refresh_bearer_token_async(
+                    log_url,
+                    force=True,
+                    stale_authorization=request_headers.get('Authorization'),
+                )
+                retry_after_refresh = False
+                if refreshed:
+                    continue
 
             retry_after_refresh, should_continue, result = self._handle_request_loop_response(
                 response,
@@ -473,8 +525,9 @@ class AsyncHTTPClient(BaseHTTPClient):
             headers,
         )
 
-    async def close_async_client(self):
-        await self.client.aclose()
+    async def close_async_client(self) -> None:
+        if self._owns_client:
+            await self.client.aclose()
 
     def _async_request_urls(self, url: str) -> AsyncRequestUrls:
         del url
@@ -565,6 +618,10 @@ class JiraClient(JSONResponseMixin, BaseHTTPClient):
 
     def set_headers(self, headers: dict | None = None) -> dict[str, str]:
         return self._merge_headers({'Accept': 'application/json'}, headers)
+
+    def close_client(self) -> None:
+        if self._owns_client:
+            self.client.close()
 
     def make_request(
         self, method: Callable, url: str, headers: dict | None = None, timeout: int = 55, **kwargs

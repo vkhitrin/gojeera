@@ -260,6 +260,7 @@ class JiraFilterDict(TypedDict):
     expression: str
     source: NotRequired[Literal['local', 'remote'] | str]
     starred: NotRequired[bool]
+    id: NotRequired[str]
 
 
 @dataclass
@@ -270,14 +271,18 @@ class JiraFilter(BaseModel):
     expression: str
     source: str = 'local'
     starred: bool = False
+    id: str | None = None
 
     def as_filter_dict(self) -> JiraFilterDict:
-        return {
+        result: JiraFilterDict = {
             'label': self.label,
             'expression': self.expression,
             'source': self.source,
             'starred': self.starred,
         }
+        if self.id is not None:
+            result['id'] = self.id
+        return result
 
 
 @dataclass

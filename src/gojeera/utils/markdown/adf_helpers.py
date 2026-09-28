@@ -454,7 +454,7 @@ def render_task_checkboxes(text: str) -> str:
             in_nested_context = False
         elif not is_already_indented and line.strip() == '':
             pass
-        elif not is_already_indented and line.strip() != '' and not is_unindented_bullet:
+        elif not is_already_indented and line.strip() != '':
             in_nested_context = False
 
         fixed_lines.append(line)

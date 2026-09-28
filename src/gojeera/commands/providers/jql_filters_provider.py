@@ -7,7 +7,7 @@ from rich.text import Text
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
 from gojeera.internal.models.jira import JiraFilterDict
-from gojeera.internal.store.cache import get_cache, run_cache_io
+from gojeera.internal.store.cache import get_cache
 from gojeera.internal.store.config import CONFIGURATION
 from gojeera.widgets.layout.sub_palette import (
     mark_command_palette_notice,
@@ -49,22 +49,15 @@ class JQLFiltersProvider(Provider):
         from gojeera.app import JiraApp
 
         app = cast('JiraApp', self.app)
-        filters = list(CONFIGURATION.get().jql_filters or [])
+        config = CONFIGURATION.get()
+        filters = list(config.jql_filters or [])
         user_info = app.atlassian_context.user_info
-        if user_info is None:
+        if user_info is None or not config.fetch_remote_filters.enabled:
             return filters
 
-        try:
-            cached_filters = await run_cache_io(
-                lambda: get_cache().get_remote_filters(user_info.account_id, allow_stale=True)
-            )
-        except Exception:
-            return filters
-
-        if not cached_filters:
-            return filters
-
-        filters.extend(filter_data.as_filter_dict() for filter_data in cached_filters)
+        filters.extend(
+            await app.unified_search_bar.get_remote_filter_suggestions(user_info.account_id)
+        )
         return filters
 
     @staticmethod
@@ -87,9 +80,25 @@ class JQLFiltersProvider(Provider):
         return getattr(self.app, 'active_sub_command_palette_id', None) == JQL_FILTERS_PALETTE_ID
 
     async def _iter_filters(self) -> list[PreparedJQLFilter]:
+        from gojeera.app import JiraApp
+
+        app = cast('JiraApp', self.app)
+        config = CONFIGURATION.get()
+        user = app.atlassian_context.user_info
+        context = (
+            get_cache().profile_key,
+            user.account_id if user else None,
+            config.fetch_remote_filters.enabled,
+            config.fetch_remote_filters.starred_only,
+            config.fetch_remote_filters.include_shared,
+            repr(config.jql_filters),
+            app.unified_search_bar.remote_filter_revision,
+        )
         cached_filters = getattr(self, '_sorted_jql_filters', None)
-        if cached_filters is not None and monotonic() < getattr(
-            self, '_sorted_jql_filters_expires_at', 0.0
+        if (
+            cached_filters is not None
+            and context == getattr(self, '_sorted_jql_filters_context', None)
+            and monotonic() < getattr(self, '_sorted_jql_filters_expires_at', 0.0)
         ):
             return cast(list[PreparedJQLFilter], cached_filters)
 
@@ -115,6 +124,7 @@ class JQLFiltersProvider(Provider):
             ),
         )
         self._sorted_jql_filters = sorted_filters
+        self._sorted_jql_filters_context = context
         self._sorted_jql_filters_expires_at = monotonic() + PREPARED_FILTERS_TTL_SECONDS
         return sorted_filters
 

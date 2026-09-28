@@ -12,6 +12,19 @@ from gojeera.widgets.selection.dropdown_positioning import constrain_dropdown_of
 HISTORY_PREFIX = '⏱   '
 
 
+class FilterDropdownItem(DropdownItem):
+    """Display a filter label while completing its full, unambiguous JQL."""
+
+    def __init__(self, label: str, expression: str, **kwargs) -> None:
+        self.label = label
+        self._expression = expression.replace('\n', ' ').replace('\t', ' ').strip()
+        super().__init__(**kwargs)
+
+    @property
+    def value(self) -> str:
+        return self._expression
+
+
 class SearchAutoComplete(AutoComplete):
     """Unified autocomplete dropdown for search history and JQL filters."""
 
@@ -68,7 +81,9 @@ class SearchAutoComplete(AutoComplete):
         else:
             prefix_text = prefix_base + '  '
 
-        return DropdownItem(main=main_text, prefix=prefix_text)
+        return FilterDropdownItem(
+            label=label, expression=expression, main=main_text, prefix=prefix_text
+        )
 
     def get_candidates(self, target_state: TargetState) -> list[DropdownItem]:
         del target_state
@@ -87,7 +102,9 @@ class SearchAutoComplete(AutoComplete):
 
         matches = []
         for candidate in candidates:
-            label = candidate.value.split(' (', 1)[0]
+            label = (
+                candidate.label if isinstance(candidate, FilterDropdownItem) else candidate.value
+            )
             if normalized_search in label.lower():
                 matches.append(candidate)
         return matches
@@ -114,20 +131,6 @@ class SearchAutoComplete(AutoComplete):
 
     def apply_completion(self, value: str, state: TargetState) -> None:
         del state
-        if value in self.history_queries:
-            self.target.value = value
-            self.target.cursor_position = len(value)
-            return
-
-        label = value.split(' (', 1)[0] if ' (' in value else value
-        for filter_data in self.jql_filters:
-            if filter_data.get('label') == label:
-                expression = filter_data.get('expression', '')
-                cleaned_expression = expression.replace('\n', ' ').replace('\t', ' ').strip()
-                self.target.value = cleaned_expression
-                self.target.cursor_position = len(cleaned_expression)
-                return
-
         self.target.value = value
         self.target.cursor_position = len(value)
 

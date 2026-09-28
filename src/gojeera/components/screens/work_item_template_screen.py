@@ -277,7 +277,7 @@ class WorkItemTemplatePickerScreen(ExtendedModalScreen[tuple[str, WorkItemTempla
             return
         result = self._on_use_template(selected_template)
         if isawaitable(result):
-            await cast(Awaitable[Any], result)
+            await result
 
     @on(Button.Pressed)
     def handle_button_pressed(self, event: Button.Pressed) -> None:

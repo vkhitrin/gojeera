@@ -1164,73 +1164,49 @@ class JiraAPI:
         Args:
             account_id: User account ID for fetching owned filters.
             starred_only: If True, only return filters that are starred (marked as favorite).
-            max_results: Maximum number of filters to return (default 50).
+            max_results: Maximum number of filters per page (default 50); all pages are fetched.
             include_shared: If True, fetch both personal and shared filters. If False, only personal filters.
 
         Returns:
             A list of dicts with 'label' (filter name), 'expression' (JQL), and 'source' ('remote').
         """
-        filters = []
-        seen_ids = set()
-
+        filter_values: list[dict] = []
         if starred_only:
             self.logger.info('Fetching favourite filters')
-            favourite_filters = await self._fetch_favourite_filters()
-            filters.extend(self._process_filters(favourite_filters, starred_only, seen_ids))
-        elif account_id:
-            self.logger.info(
-                'Fetching personal filters',
-                extra=build_log_extra({'account_id': account_id, 'shared': False}),
-            )
-            personal_params: dict[str, Any] = {
-                'maxResults': max_results,
-                'expand': 'jql,favourite',
-                'accountId': account_id,
-            }
-
-            personal_filters = await self._fetch_paginated_filter_search_results(
-                personal_params,
-                log_label='personal',
-            )
-            filters.extend(self._process_filters(personal_filters, starred_only, seen_ids))
-
-        if include_shared:
-            self.logger.info(
-                'Fetching shared filters',
-                extra=build_log_extra({'shared': True}),
-            )
-            shared_params: dict[str, Any] = {
+            filter_values = await self._fetch_favourite_filters()
+        elif include_shared or account_id:
+            log_label = 'shared' if include_shared else 'personal'
+            params: dict[str, Any] = {
                 'maxResults': max_results,
                 'expand': 'jql,favourite',
             }
-
-            shared_filters = await self._fetch_paginated_filter_search_results(
-                shared_params,
-                log_label='shared',
+            if not include_shared:
+                params['accountId'] = account_id
+            self.logger.info(
+                'Fetching %s filters',
+                log_label,
+                extra=build_log_extra({'account_id': account_id, 'shared': include_shared}),
             )
-            filters.extend(self._process_filters(shared_filters, starred_only, seen_ids))
+            filter_values = await self._fetch_paginated_filter_search_results(
+                params, log_label=log_label
+            )
+
+        filters = self._process_filters(filter_values, starred_only, set())
 
         self.logger.info('Returning filters', extra=build_log_extra({'count': len(filters)}))
         return filters
 
     async def _fetch_favourite_filters(self) -> list[dict]:
-        try:
-            response = await self._client.make_request(
-                method=httpx.AsyncClient.get,
-                url='filter/favourite',
-                params={'expand': 'jql,favourite'},
-            )
-        except Exception:
-            self.logger.warning('Failed to fetch favourite filters', exc_info=True)
-            return []
-
-        if not response:
-            return []
+        response = await self._client.make_request(
+            method=httpx.AsyncClient.get,
+            url='filter/favourite',
+            params={'expand': 'jql,favourite'},
+        )
         if isinstance(response, list):
             return cast(list[dict], response)
-        if isinstance(response, dict):
-            return cast(list[dict], response.get('values', []))
-        return []
+        if isinstance(response, dict) and isinstance(response.get('values'), list):
+            return cast(list[dict], response['values'])
+        raise ValueError('Invalid favourite filters response')
 
     async def _fetch_paginated_filter_search_results(
         self,
@@ -1249,6 +1225,7 @@ class JiraAPI:
             ),
             params=params,
             context_name=f'{log_label} filters',
+            raise_on_error=True,
         )
 
     async def _fetch_paginated_values(
@@ -1261,11 +1238,13 @@ class JiraAPI:
         values_key: str = 'values',
         on_page: Callable[[dict[str, Any], list[dict]], None] | None = None,
         on_error: Callable[[Exception], list[dict] | None] | None = None,
+        raise_on_error: bool = False,
     ) -> list[dict]:
-        """Fetch all Jira pages for endpoints using `startAt` / `maxResults` pagination."""
+        """Fetch all pages, optionally raising instead of returning incomplete results."""
         values: list[dict] = []
         start_at = int(params.get('startAt', 0) or 0)
         effective_max_results = int(params.get('maxResults', max_results) or max_results)
+        previous_page: list[dict] | None = None
 
         while True:
             page_params = dict(params)
@@ -1274,6 +1253,8 @@ class JiraAPI:
             try:
                 response = await request_page(page_params)
             except Exception as error:
+                if raise_on_error:
+                    raise
                 if on_error is not None:
                     handled_values = on_error(error)
                     if handled_values is not None:
@@ -1281,10 +1262,29 @@ class JiraAPI:
                 self.logger.warning('Failed to fetch %s', context_name, exc_info=True)
                 break
 
+            if raise_on_error and (
+                not isinstance(response, dict) or not isinstance(response.get(values_key), list)
+            ):
+                raise ValueError(f'Invalid {context_name} response')
             if not response:
                 break
 
             page_values = cast(list[dict], response.get(values_key, []))
+            if raise_on_error:
+                next_start = self._strict_next_page_start(
+                    response, start_at, effective_max_results, len(page_values)
+                )
+                if page_values and page_values == previous_page:
+                    raise ValueError(f'Repeated {context_name} page')
+                previous_page = page_values
+                values.extend(page_values)
+                if on_page is not None:
+                    on_page(response, page_values)
+                if next_start is None:
+                    break
+                start_at = next_start
+                effective_max_results = response.get('maxResults', effective_max_results)
+                continue
             values.extend(page_values)
 
             if on_page is not None:
@@ -1299,6 +1299,36 @@ class JiraAPI:
                 effective_max_results = response_max_results
 
         return values
+
+    @staticmethod
+    def _strict_next_page_start(
+        response: dict, start_at: int, page_size: int, count: int
+    ) -> int | None:
+        """Reject inconsistent pages rather than treating a partial result as complete."""
+        for key in ('startAt', 'maxResults', 'total'):
+            if key in response and (type(response[key]) is not int or response[key] < 0):
+                raise ValueError(f'Invalid pagination {key}')
+        page_size = response.get('maxResults', page_size)
+        if page_size <= 0 or response.get('startAt', start_at) != start_at:
+            raise ValueError('Non-progressing pagination response')
+        last = response.get('isLast')
+        if 'isLast' in response and type(last) is not bool:
+            raise ValueError('Invalid pagination isLast')
+        total = response.get('total')
+        end = start_at + count
+        if total is not None and (
+            end > total or (last is True and end < total) or (last is False and end >= total)
+        ):
+            raise ValueError('Inconsistent pagination total')
+        if count == 0:
+            if last is False or (total is not None and end < total):
+                raise ValueError('Empty non-final pagination response')
+            return None
+        if last is True or (total is not None and end == total):
+            return None
+        if last is None and total is None and count < page_size:
+            return None
+        return end
 
     def _process_filters(
         self, filter_values: list[dict], starred_only: bool, seen_ids: set[str]
@@ -1316,10 +1346,17 @@ class JiraAPI:
         processed = []
 
         for filter_data in filter_values:
-            filter_id = filter_data.get('id', '')
-            name = filter_data.get('name', '')
-            is_favourite = filter_data.get('favourite', False)
-            jql = filter_data.get('jql', '')
+            if not isinstance(filter_data, dict) or any(
+                not isinstance(filter_data.get(key), str) or not filter_data[key].strip()
+                for key in ('id', 'name', 'jql')
+            ):
+                raise ValueError('Incomplete filter response: expected non-empty id, name and JQL')
+            filter_id = filter_data['id']
+            name = filter_data['name']
+            is_favourite = filter_data.get('favourite', starred_only)
+            if type(is_favourite) is not bool:
+                raise ValueError('Invalid filter favourite status')
+            jql = filter_data['jql']
 
             if filter_id in seen_ids:
                 continue
@@ -1331,15 +1368,9 @@ class JiraAPI:
                 )
                 continue
 
-            if not name or not jql:
-                self.logger.warning(
-                    'Filter missing name or JQL',
-                    extra=build_log_extra({'filter_data': filter_data}),
-                )
-                continue
-
             processed.append(
                 {
+                    'id': filter_id,
                     'label': name,
                     'expression': jql,
                     'source': 'remote',

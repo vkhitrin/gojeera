@@ -457,18 +457,43 @@ class ApplicationCache:
     ) -> None:
         self._set('global_settings', global_settings.as_json(), ttl_seconds=ttl_seconds)
 
+    @staticmethod
+    def _remote_filters_scope(account_id: str, starred_only: bool, include_shared: bool) -> str:
+        # Legacy account-only entries cannot be reused because their fetch options are unknown.
+        return json.dumps([account_id, starred_only, include_shared], separators=(',', ':'))
+
     def get_remote_filters(
-        self, account_id: str, *, allow_stale: bool = False
+        self,
+        account_id: str,
+        *,
+        starred_only: bool = False,
+        include_shared: bool = False,
+        allow_stale: bool = False,
     ) -> list[JiraFilter] | None:
-        return self._get('remote_filters', account_id, allow_stale=allow_stale)
+        scope = self._remote_filters_scope(account_id, starred_only, include_shared)
+        return self._get('remote_filters', scope, allow_stale=allow_stale)
 
     def set_remote_filters(
         self,
         account_id: str,
         filters: Sequence[JiraFilter | JiraFilterDict],
         ttl_seconds: int | None = None,
+        *,
+        starred_only: bool = False,
+        include_shared: bool = False,
+        can_write: Callable[[], bool] | None = None,
     ) -> None:
-        self._set('remote_filters', filters, account_id, ttl_seconds)
+        """Replace filters only if the optional request guard is still valid.
+
+        The guard runs under the cache lock, together with the write and its commit,
+        so an obsolete thread cannot overwrite a newer result after checking it.
+        The guard must be non-blocking and must not perform I/O.
+        """
+        scope = self._remote_filters_scope(account_id, starred_only, include_shared)
+        with self._lock:
+            if can_write is not None and not can_write():
+                return
+            self._set('remote_filters', filters, scope, ttl_seconds)
 
     def get_project_users(
         self, project_key: str, *, allow_stale: bool = False
@@ -1431,7 +1456,7 @@ class ApplicationCache:
             return None
         rows = self._connection.execute(
             """
-            SELECT label, expression, source, starred
+            SELECT label, expression, source, starred, filter_id
             FROM remote_filters
             WHERE profile_key = ? AND account_id = ?
             ORDER BY label
@@ -1439,7 +1464,9 @@ class ApplicationCache:
             (self._profile_key, account_id),
         ).fetchall()
         return [
-            JiraFilter(label=row[0], expression=row[1], source=row[2], starred=bool(row[3]))
+            JiraFilter(
+                label=row[0], expression=row[1], source=row[2], starred=bool(row[3]), id=row[4]
+            )
             for row in rows
         ] or None
 
@@ -1458,40 +1485,27 @@ class ApplicationCache:
         )
         self._connection.executemany(
             """
-            INSERT OR REPLACE INTO remote_filters
-            (profile_key, account_id, label, expression, source, starred)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO remote_filters
+            (profile_key, account_id, entry_key, filter_id, label, expression, source, starred)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     self._profile_key,
                     account_id,
-                    filter_data.label
-                    if isinstance(filter_data, JiraFilter)
-                    else filter_data.get('label', ''),
-                    filter_data.expression
-                    if isinstance(filter_data, JiraFilter)
-                    else filter_data.get('expression', ''),
-                    filter_data.source
-                    if isinstance(filter_data, JiraFilter)
-                    else filter_data.get('source', 'remote'),
-                    int(
-                        filter_data.starred
-                        if isinstance(filter_data, JiraFilter)
-                        else bool(filter_data.get('starred', False))
-                    ),
+                    f'id:{data["id"]}' if data.get('id') else f'position:{index}',
+                    data.get('id'),
+                    data['label'],
+                    data['expression'],
+                    data.get('source', 'remote'),
+                    int(data.get('starred', False)),
                 )
-                for filter_data in filters
-                if (
-                    filter_data.label
+                for index, filter_data in enumerate(filters)
+                for data in [
+                    filter_data.as_filter_dict()
                     if isinstance(filter_data, JiraFilter)
-                    else filter_data.get('label')
-                )
-                and (
-                    filter_data.expression
-                    if isinstance(filter_data, JiraFilter)
-                    else filter_data.get('expression')
-                )
+                    else filter_data
+                ]
             ],
         )
 

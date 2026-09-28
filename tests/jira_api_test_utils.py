@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import logging
 from types import SimpleNamespace
 from typing import cast
@@ -9,7 +10,9 @@ from gojeera.internal.jira.api import JiraAPI
 from gojeera.internal.store.config import ApplicationConfiguration, JiraAuthContext, JiraConfig
 
 
-def build_api_with_mocked_client(responses: list[dict]) -> tuple[JiraAPI, AsyncMock]:
+def build_api_with_mocked_client(
+    responses: Sequence[dict | list[dict] | Exception | None],
+) -> tuple[JiraAPI, AsyncMock]:
     api = JiraAPI.__new__(JiraAPI)
     api.logger = logging.getLogger('gojeera.test')
     api._client = AsyncMock()

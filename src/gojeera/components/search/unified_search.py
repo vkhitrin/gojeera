@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from threading import Event
 from typing import TYPE_CHECKING, Any, cast
 
 from textual import on, work
@@ -9,7 +11,7 @@ from textual.containers import Container
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Button, Input, Select
-from textual.worker import get_current_worker
+from textual.worker import Worker, WorkerCancelled, get_current_worker
 
 from gojeera.internal.models.jira import JiraFilterDict
 from gojeera.internal.store.cache import get_cache, run_cache_io
@@ -70,6 +72,13 @@ class UnifiedSearchBar(Container):
         self._search_history_autocomplete: SearchAutoComplete | None = None
         self._work_item_key: str | None = None
         self._account_id: str | None = None
+        self._remote_filters: list[JiraFilterDict] | None = None
+        self._remote_filters_fetch_requested = False
+        self._remote_filters_generation = 0
+        self._remote_filters_context: tuple[str, str | None, bool, bool, bool] | None = None
+        self._remote_filters_worker: Worker[Any] | None = None
+        self._remote_filters_cache_write_failed = False
+        self.remote_filter_revision = 0
         self._remote_filters_fetched = not CONFIGURATION.get().fetch_remote_filters.enabled
         self._create_work_item_menu: PopupMenu | None = None
         self._last_results_controls_state: tuple[str, bool] | None = None
@@ -373,6 +382,8 @@ class UnifiedSearchBar(Container):
         from gojeera.widgets.search.search_autocomplete import SearchAutoComplete
 
         jql_filters = CONFIGURATION.get().jql_filters or []
+        if self._remote_filters:
+            jql_filters = jql_filters + self._remote_filters
 
         self._jql_autocomplete = SearchAutoComplete(
             target=self.unified_input,
@@ -392,24 +403,82 @@ class UnifiedSearchBar(Container):
     @on(ProfileIsReady)
     def _handle_account_id_ready(self, message: ProfileIsReady) -> None:
         self._account_id = message.account_id
+        self._ensure_remote_filters_loaded()
 
     def _ensure_remote_filters_loaded(self) -> None:
         config = CONFIGURATION.get()
+        context = (
+            self._cache.profile_key,
+            self._account_id,
+            config.fetch_remote_filters.enabled,
+            config.fetch_remote_filters.starred_only,
+            config.fetch_remote_filters.include_shared,
+        )
+        if context != self._remote_filters_context:
+            self._remote_filters_context = context
+            self._remote_filters_generation += 1
+            self._merge_remote_filters([])
+            self._remote_filters = None
+            if self._remote_filters_worker is not None:
+                self._remote_filters_worker.cancel()
+            self._remote_filters_worker = None
+            self._remote_filters_cache_write_failed = False
+            self._remote_filters_fetch_requested = False
+            self._remote_filters_fetched = not config.fetch_remote_filters.enabled
 
-        if config.fetch_remote_filters.enabled and not self._remote_filters_fetched:
+        if config.fetch_remote_filters.enabled and not self._remote_filters_fetch_requested:
             if not self._account_id:
                 return
-            self._fetch_remote_filters(
+            self._remote_filters_generation += 1
+            self._remote_filters_fetch_requested = True
+            self._remote_filters_worker = self._fetch_remote_filters(
                 account_id=self._account_id,
+                generation=self._remote_filters_generation,
                 starred_only=config.fetch_remote_filters.starred_only,
                 cache_ttl=config.fetch_remote_filters.cache_ttl,
                 include_shared=config.fetch_remote_filters.include_shared,
             )
 
-    @work(exclusive=False)
+    async def get_remote_filter_suggestions(self, account_id: str) -> list[JiraFilterDict]:
+        """Share refreshes with the palette, returning loaded/stale filters promptly."""
+        self._account_id = account_id
+        self._ensure_remote_filters_loaded()
+        config = CONFIGURATION.get().fetch_remote_filters
+        if not config.enabled:
+            return []
+        generation = self._remote_filters_generation
+        worker = self._remote_filters_worker
+        if self._remote_filters is None:
+            try:
+                cached = await run_cache_io(
+                    lambda: self._cache.get_remote_filters(
+                        account_id,
+                        starred_only=config.starred_only,
+                        include_shared=config.include_shared,
+                        allow_stale=True,
+                    )
+                )
+                if generation != self._remote_filters_generation:
+                    return []
+                if cached is not None and self._remote_filters is None:
+                    self._merge_remote_filters([item.as_filter_dict() for item in cached])
+            except Exception:
+                logger.debug('Palette cache lookup failed; using shared fetch', exc_info=True)
+        if self._remote_filters is None and worker is not None:
+            try:
+                # Cancelling a palette query must not cancel the shared refresh.
+                await asyncio.shield(worker.wait())
+            except WorkerCancelled:
+                return []
+        if generation != self._remote_filters_generation:
+            return []
+        return list(self._remote_filters or [])
+
+    @work(exclusive=True, group='remote-filters')
     async def _fetch_remote_filters(
         self,
-        account_id: str | None,
+        account_id: str,
+        generation: int,
         starred_only: bool,
         cache_ttl: int,
         include_shared: bool = False,
@@ -418,38 +487,60 @@ class UnifiedSearchBar(Container):
 
         Args:
             account_id: User's Jira account ID
+            generation: Unique generation of this scheduled request
             starred_only: Whether to fetch only starred (favorite) filters
             cache_ttl: Cache TTL in seconds
             include_shared: If True, include shared filters (default: False, personal only)
         """
-        if not account_id:
+        if generation != self._remote_filters_generation:
             return
 
-        cached_filters = await run_cache_io(lambda: self._cache.get_remote_filters(account_id))
+        write_allowed = Event()
+        write_allowed.set()
+        cache_profile = self._cache.profile_key
+        try:
+            cached_filters = None
+            stale_filters = None
+            try:
+                if not self._remote_filters_cache_write_failed:
+                    cached_filters = await run_cache_io(
+                        lambda: self._cache.get_remote_filters(
+                            account_id, starred_only=starred_only, include_shared=include_shared
+                        )
+                    )
+                if (
+                    not self._remote_filters_cache_write_failed
+                    and cached_filters is None
+                    and self._remote_filters is None
+                    and generation == self._remote_filters_generation
+                ):
+                    stale_filters = await run_cache_io(
+                        lambda: self._cache.get_remote_filters(
+                            account_id,
+                            starred_only=starred_only,
+                            include_shared=include_shared,
+                            allow_stale=True,
+                        )
+                    )
+            except Exception:
+                logger.warning(
+                    'Failed to read remote filter cache; fetching from Jira', exc_info=True
+                )
 
-        if cached_filters is not None:
-            if cached_filters:
+            if generation != self._remote_filters_generation:
+                return
+            if cached_filters is not None:
                 self._merge_remote_filters(
                     [filter_data.as_filter_dict() for filter_data in cached_filters]
                 )
-
-            self._remote_filters_fetched = True
-
-            self._update_jql_placeholder()
-            return
-
-        stale_filters = await run_cache_io(
-            lambda: self._cache.get_remote_filters(account_id, allow_stale=True)
-        )
-        if stale_filters is not None:
-            if stale_filters:
+                self._remote_filters_fetched = True
+                return
+            if stale_filters is not None and self._remote_filters is None:
                 self._merge_remote_filters(
                     [filter_data.as_filter_dict() for filter_data in stale_filters]
                 )
-            self._remote_filters_fetched = True
-            self._update_jql_placeholder()
+                self._update_jql_placeholder()
 
-        try:
             remote_filters = cast(
                 'list[JiraFilterDict]',
                 await self.api.client.fetch_user_filters(
@@ -459,28 +550,52 @@ class UnifiedSearchBar(Container):
                     include_shared=include_shared,
                 ),
             )
+            if generation != self._remote_filters_generation:
+                return
 
+            # Successful Jira results remain usable even if persistence is slow or fails.
+            self._merge_remote_filters(remote_filters)
+            self._remote_filters_fetched = True
+            self._update_jql_placeholder()
             result_ttl = (
                 cache_ttl
                 if remote_filters
                 else min(cache_ttl, EMPTY_REMOTE_FILTER_CACHE_TTL_SECONDS)
             )
-            await run_cache_io(
-                lambda: self._cache.set_remote_filters(
-                    account_id, remote_filters, ttl_seconds=result_ttl
+            try:
+                await run_cache_io(
+                    lambda: self._cache.set_remote_filters(
+                        account_id,
+                        remote_filters,
+                        ttl_seconds=result_ttl,
+                        starred_only=starred_only,
+                        include_shared=include_shared,
+                        can_write=lambda: (
+                            write_allowed.is_set()
+                            and generation == self._remote_filters_generation
+                            and cache_profile == self._cache.profile_key
+                        ),
+                    )
                 )
-            )
-
-            if remote_filters:
-                self._merge_remote_filters(remote_filters)
-
-            self._remote_filters_fetched = True
-            self._update_jql_placeholder()
-
+                if generation == self._remote_filters_generation:
+                    self._remote_filters_cache_write_failed = False
+            except Exception:
+                if generation == self._remote_filters_generation:
+                    self._remote_filters_cache_write_failed = True
+                logger.warning(
+                    'Failed to persist remote filters; using fetched results', exc_info=True
+                )
         except Exception:
-            self._remote_filters_fetched = True
-
-            self._update_jql_placeholder()
+            logger.warning(
+                'Failed to load remote filters; retaining existing filters', exc_info=True
+            )
+        finally:
+            # Cancelling the coroutine cannot stop a running cache thread. Revoke its
+            # permission here; the cache checks it atomically before writing.
+            write_allowed.clear()
+            if generation == self._remote_filters_generation:
+                self._remote_filters_fetch_requested = False
+                self._update_jql_placeholder()
 
     def _update_jql_placeholder(self) -> None:
         if self.search_mode == 'jql':
@@ -493,6 +608,10 @@ class UnifiedSearchBar(Container):
 
     def _merge_remote_filters(self, remote_filters: list[JiraFilterDict]) -> None:
         from gojeera.internal.store.config import CONFIGURATION
+
+        if self._remote_filters != remote_filters:
+            self.remote_filter_revision += 1
+        self._remote_filters = remote_filters
 
         if not self._jql_autocomplete:
             return

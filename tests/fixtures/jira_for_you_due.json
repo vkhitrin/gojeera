@@ -1,0 +1,39 @@
+{
+  "issues": [
+    {
+      "id": "101",
+      "key": "ENG-101",
+      "fields": {
+        "summary": "Resolve overdue deployment checks",
+        "status": {"id": "3", "name": "In Progress"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": "2026-06-29",
+        "updated": "2026-07-01T09:00:00.000+0000"
+      }
+    },
+    {
+      "id": "102",
+      "key": "ENG-102",
+      "fields": {
+        "summary": "Review [release] readiness checklist",
+        "status": {"id": "1", "name": "To Do"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": "2026-07-01",
+        "updated": "2026-07-01T08:30:00.000+0000"
+      }
+    },
+    {
+      "id": "103",
+      "key": "SUP-21",
+      "fields": {
+        "summary": "Follow up on customer migration",
+        "status": {"id": "3", "name": "In Progress"},
+        "issuetype": {"id": "10002", "name": "Support"},
+        "duedate": "2026-07-06",
+        "updated": "2026-06-30T14:00:00.000+0000"
+      }
+    }
+  ],
+  "nextPageToken": null,
+  "isLast": true
+}

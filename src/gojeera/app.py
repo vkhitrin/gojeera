@@ -164,6 +164,12 @@ def get_quick_navigation_provider() -> type[Provider]:
     return QuickNavigationProvider
 
 
+def get_for_you_command_provider() -> type[Provider]:
+    from gojeera.commands.providers.for_you_provider import ForYouCommandProvider
+
+    return ForYouCommandProvider
+
+
 def get_recently_viewed_work_items_provider() -> type[Provider]:
     from gojeera.commands.providers.recently_viewed_work_items_provider import (
         RecentlyViewedWorkItemsProvider,
@@ -2232,6 +2238,14 @@ class JiraApp(WorkspaceMixin, App):
                 tooltip='Open help',
             )
         ),
+        Binding(
+            key='f10',
+            action='show_for_you',
+            description='For You',
+            tooltip='Open your personal work feed',
+            priority=True,
+            show=False,
+        ),
         build_toggle_footer_binding(),
         register_binding_in_command_palette(
             Binding(
@@ -2251,6 +2265,7 @@ class JiraApp(WorkspaceMixin, App):
         get_search_command_provider,
         get_jql_filters_provider,
         get_quick_navigation_provider,
+        get_for_you_command_provider,
         get_recently_viewed_work_items_provider,
         get_recent_searches_provider,
         get_release_command_provider,
@@ -2536,6 +2551,40 @@ class JiraApp(WorkspaceMixin, App):
                 placeholder=placeholder,
             )
         )
+
+    async def action_show_for_you(self) -> None:
+        from gojeera.components.screens.for_you_screen import ForYouScreen
+
+        def open_work_item(key: str | None) -> None:
+            if key:
+                self.run_worker(
+                    self._open_for_you_work_item(key), exclusive=True, group='work-item'
+                )
+
+        await self._push_screen_exclusive(ForYouScreen(), open_work_item)
+
+    async def _open_for_you_work_item(self, key: str) -> None:
+        from gojeera.widgets.layout.extended_modal_screen import ExtendedModalScreen
+
+        # Check the entire stack before closing anything: a picker or palette may
+        # be covering an editor with unsaved changes.
+        if any(
+            isinstance(screen, ExtendedModalScreen) and screen.is_dirty()
+            for screen in self.screen_stack[1:]
+        ):
+            self.notify(
+                'Finish or close the editor with unsaved changes before opening a work item.',
+                title='For You',
+                severity='warning',
+            )
+            return
+
+        while len(self.screen_stack) > 1:
+            # Dismiss rather than pop so cancellation callbacks and exclusive
+            # screen guards are released, including push_screen_wait callers.
+            await self.screen.dismiss()
+        self.active_sub_command_palette_id = None
+        await self.load_work_item(key)
 
     def action_show_recently_viewed_work_items_palette(self) -> None:
         from gojeera.commands.providers.recently_viewed_work_items_provider import (

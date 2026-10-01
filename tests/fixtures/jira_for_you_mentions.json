@@ -1,0 +1,39 @@
+{
+  "issues": [
+    {
+      "id": "104",
+      "key": "ENG-104",
+      "fields": {
+        "summary": "Review API rollout plan",
+        "status": {"id": "3", "name": "In Progress"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": null,
+        "updated": "2026-07-01T11:15:00.000+0000"
+      }
+    },
+    {
+      "id": "105",
+      "key": "ENG-105",
+      "fields": {
+        "summary": "Old mention must not appear in the feed",
+        "status": {"id": "1", "name": "To Do"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": null,
+        "updated": "2026-07-01T10:00:00.000+0000"
+      }
+    },
+    {
+      "id": "107",
+      "key": "SUP-22",
+      "fields": {
+        "summary": "Confirm migration support coverage",
+        "status": {"id": "1", "name": "To Do"},
+        "issuetype": {"id": "10002", "name": "Support"},
+        "duedate": null,
+        "updated": "2026-06-30T21:30:00.000+0200"
+      }
+    }
+  ],
+  "nextPageToken": null,
+  "isLast": true
+}

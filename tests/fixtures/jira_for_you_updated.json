@@ -1,0 +1,39 @@
+{
+  "issues": [
+    {
+      "id": "104",
+      "key": "ENG-104",
+      "fields": {
+        "summary": "Review API rollout plan",
+        "status": {"id": "3", "name": "In Progress"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": null,
+        "updated": "2026-07-01T11:15:00.000+0000"
+      }
+    },
+    {
+      "id": "101",
+      "key": "ENG-101",
+      "fields": {
+        "summary": "Resolve overdue deployment checks",
+        "status": {"id": "3", "name": "In Progress"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": "2026-06-29",
+        "updated": "2026-07-01T09:00:00.000+0000"
+      }
+    },
+    {
+      "id": "106",
+      "key": "ENG-106",
+      "fields": {
+        "summary": "Publish incident follow-up",
+        "status": {"id": "5", "name": "Done"},
+        "issuetype": {"id": "10001", "name": "Task"},
+        "duedate": null,
+        "updated": "2026-06-30T16:45:00.000+0000"
+      }
+    }
+  ],
+  "nextPageToken": null,
+  "isLast": true
+}

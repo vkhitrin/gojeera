@@ -120,6 +120,58 @@ search_on_startup: false
   trigger a search when the UI starts (can also be set via CLI argument
   `--search-on-startup`)
 
+### For You
+
+Press **F10** or open **For You** from the command palette to see a personal
+work feed in a modal. Select a row with Enter to open the work item, Ctrl+R
+to refresh, or Escape to close. Selecting an item closes clean overlays and
+returns to the workspace; an editor with unsaved changes blocks navigation
+until you finish or close it. Startup behavior is unchanged.
+
+```yaml
+for_you:
+  due_soon_days: 7
+  recent_days: 7
+  items_per_section: 50
+  mention_scan_items: 50
+  comments_per_item: 100
+```
+
+- **`due_soon_days`** (1–365): Open assignments overdue or due through the end
+  of the day this many days ahead, using Jira's JQL timezone. Done-category
+  items are excluded; overdue items have no lower date bound.
+- **`recent_days`** (1–365): Lookback for assigned/watched updates and comment
+  activity. Updated items can include completed work and your own changes.
+- **`items_per_section`** (1–200): Maximum displayed items per tab. Due items
+  are ordered earliest first; updates and mentions are newest first.
+- **`mention_scan_items`** (1–200): Maximum recently updated accessible items
+  whose comments are scanned for mentions, across all projects, not just
+  assigned/watched items. Only candidates returned by an account-ID comment text
+  search within `recent_days` are scanned; there is no broad recent-update fallback.
+  Increase this setting to scan more candidates, at the cost of additional requests.
+- **`comments_per_item`** (1–500): Maximum newest comments scanned per item,
+  following Jira comment pagination. At most four items are scanned concurrently.
+
+Mentions are **best effort, not notifications**. A result requires an ADF mention
+with your exact account ID in a comment created or edited within `recent_days`.
+An edited old comment may still contain an old mention; the API does not tell us
+when that mention was added. Comment text search is only a candidate-selection
+hint: it may not index mentions on every Jira instance. An empty search makes no
+comment requests; a failed search does not fall back to unrelated recent updates. Search candidates are paginated up to `mention_scan_items` and
+deduplicated. Only those candidates' comments are fetched to verify exact ADF
+account-ID mentions and comment timestamps; text matches alone never count.
+Descriptions are not scanned. Older comments beyond the cap, items beyond the
+scan limit, restricted comments, unindexed mentions, and search-index delays
+can cause missed mentions. Failed queries and unavailable comments produce
+section-specific notifications. Result and scan limits do not trigger warnings;
+successful empty results also remain quiet.
+Tables have no captions or tab tooltips. An item may
+appear in multiple tabs but only once per tab. Nothing is marked read, and there is no background polling or persistent
+feed cache; opening or refreshing the modal fetches fresh data.
+
+Environment overrides use the usual nested syntax, for example
+`GOJEERA_FOR_YOU__RECENT_DAYS=3`.
+
 ### User Management
 
 ```yaml

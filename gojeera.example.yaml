@@ -24,6 +24,14 @@ fetch_remote_filters:
   # Cache remote filters for the mentioned duration in seconds (default: 3600)
   cache_ttl: 3600
 
+# For You - personal work feed
+for_you:
+  due_soon_days: 7
+  recent_days: 7
+  items_per_section: 50
+  mention_scan_items: 50
+  comments_per_item: 100
+
 # Jumper - quick widget navigation overlay (press Ctrl+\ to activate)
 jumper:
   # Enable the jumper overlay for quick navigation (default: true)

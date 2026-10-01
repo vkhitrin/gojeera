@@ -97,6 +97,7 @@ class WorkItemManualUpdateFieldKeys(Enum):
     PARENT = 'parent'
     SUMMARY = 'summary'
     PRIORITY = 'priority'
+    RESOLUTION = 'resolution'
     TIME_TRACKING = 'timetracking'
     COMPONENTS = 'components'
     VERSIONS = 'versions'

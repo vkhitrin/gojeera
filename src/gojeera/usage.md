@@ -15,6 +15,18 @@ The main view is inspired by the Jira Cloud web UI, with a
 search panel on the left, work item details in the middle, and work item fields
 panel on the right.
 
+## For You
+
+![For You — due soon and overdue work items](/tests/__snapshots__/test_for_you_snapshots/TestForYouSnapshots.test_for_you_tab%5Bpopulated-due-textual-dark%5D.svg)
+
+Press **F10** or open **For You** from the command palette to view work items of interest.
+
+The modal contains three tabs:
+
+- **Due Soon & Overdue**: Open work assigned to you that is overdue or nearing its due date
+- **Recently Updated**: Assigned or watched work with recent updates
+- **Mentions**: Work items mentioning you in recently created or edited comments
+
 ## Authenticating With Atlassian Jira
 
 gojeera uses profiles for authentication. Each profile stores Jira connection
@@ -114,21 +126,6 @@ gojeera --work-item-key "PROJ-123"
 gojeera --profile "service_account"
 ```
 
-## Global Keybindings
-
-| Key      | Action           | Description                                          |
-| -------- | ---------------- | ---------------------------------------------------- |
-| `Ctrl+C` | Quit             | Exit the application                                 |
-| `Ctrl+\` | Jump Mode        | Activate jumper overlay for quick navigation         |
-| `Ctrl+P` | Command Palette  | Open command palette                                 |
-| `CTRL+N` | Create Work Item | Create a work item from the main search/results view |
-| `CTRL+R` | Reload           | Reload the active work item                          |
-| `F1`     | Help             | Open help                                            |
-| `F11`    | Toggle Footer    | Show or hide the footer for the current session      |
-| `F12`    | Debug Info       | Show debug information (config, server, user)        |
-| `[`      | Previous Tab     | Navigate to previous tab in work item details        |
-| `]`      | Next Tab         | Navigate to next tab in work item details            |
-
 ## External Editing
 
 When focus is on an editable text widget, press `F2` to open its contents in
@@ -214,22 +211,6 @@ Each work item may contain:
 - Summary
 - Priority, Status, and Assignee.
 
-### Search Result Navigation
-
-Use the results pane to move through matches and load the selected item:
-
-- `j` / `↓` - Move to the next result
-- `k` / `↑` - Move to the previous result
-- `g` - Jump to the first result
-- `G` - Jump to the last result
-- `n` - Load the next page of search results
-- `p` - Load the previous page of search results
-- `Enter` - Load the selected work item
-- `CTRL+O` - Open the selected work item in browser
-- `CTRL+B` - Clone the selected work item
-- `CTRL+Y` - Copy the selected work item key
-- `CTRL+U` - Copy the selected work item URL
-
 ### Search Result Controls
 
 The search results pane combines:
@@ -257,26 +238,11 @@ The information panel contains multiple tabs:
 - Comments
 - History
 
-Several shortcuts are contextual and depend on the active tab:
-
-- `CTRL+D` - delete the selected item in the active context
-- `CTRL+G` - load the selected linked/internal work item
-- `CTRL+O` - open the selected item in the browser
-- `CTRL+E` - edit the current description or selected subtask
-- `CTRL+S` - save fields or download the selected attachment
-
 #### Description Tab
 
 ![Work item summary tab](/static/work_item_description_tab.svg)
 
 Displays work item summary and description with Markdown rendering.
-
-**Keybindings**:
-
-- `CTRL+E` - Edit work item summary and description
-- `CTRL+G` - Load the focused internal Jira link, or the parent work item when no internal link is focused
-- `CTRL+L` - Open worklog
-- `CTRL+T` - Log work
 
 #### Attachments Tab
 
@@ -284,28 +250,11 @@ Displays work item summary and description with Markdown rendering.
 
 Manage files attached to work items.
 
-**Keybindings**:
-
-- `CTRL+N` - Add new attachment when the Attachments tab is active
-- `CTRL+D` - Delete the selected attachment
-- `Enter` - Open attachment in browser
-- `CTRL+S` - Download attachment
-- `CTRL+O` - Open attachment in browser
-
 #### Subtasks Tab
 
 ![Work item subtasks tab](/static/work_item_subtasks_tab.svg)
 
 Manage subtasks for the current work item.
-
-**Keybindings**:
-
-- `CTRL+N` - Create subtask when the Subtasks tab is active
-- `CTRL+B` - Clone selected subtask
-- `CTRL+E` - Edit selected subtask summary
-- `Ctrl+G` - Load selected subtask
-- `Enter` - Load selected subtask
-- `CTRL+O` - Open subtask in browser
 
 #### Web Links Tab
 
@@ -313,25 +262,11 @@ Manage subtasks for the current work item.
 
 Manage remote links associated with work items.
 
-**Keybindings**:
-
-- `CTRL+N` - Add new web link when the Web Links tab is active
-- `CTRL+D` - Delete selected web link
-- `e` - Edit web link
-- `CTRL+O` - Open link in browser
-
 #### Comments Tab
 
 ![Work item comments tab](/static/work_item_comments_tab.svg)
 
 Manage work item comments.
-
-**Keybindings**:
-
-- `CTRL+N` - Add new comment when the Comments tab is active
-- `CTRL+D` - Delete selected comment
-- `CTRL+E` - Edit comment
-- `CTRL+O` - Open comment in browser
 
 **Comment Features**:
 
@@ -356,12 +291,6 @@ gojeera supports Jira's time tracking features:
 - Add work log entries with time spent and comments
 - Update remaining estimate when logging work
 - View and edit existing work log entries
-
-When the worklog list is open:
-
-- `CTRL+D` - Delete the selected worklog
-- `CTRL+E` - Edit the selected worklog
-- `CTRL+O` - Open the selected worklog in browser
 
 ### Fields Panel
 

@@ -360,6 +360,25 @@ def load_fixture(filename: str):
         return json.load(f)
 
 
+@pytest.fixture
+def mock_jira_api_for_you(mock_jira_api_sync, mock_user_info, monkeypatch, request):
+    from .for_you_test_helpers import FOR_YOU_ACCOUNT_ID, install_for_you_fixtures
+
+    del mock_jira_api_sync
+    assert mock_user_info.account_id == FOR_YOU_ACCOUNT_ID
+    return install_for_you_fixtures(monkeypatch, getattr(request, 'param', 'populated'))
+
+
+@pytest.fixture
+def for_you_app(mock_configuration, mock_user_info, mock_jira_api_for_you, request):
+    from .for_you_test_helpers import configure_for_you_test_app
+
+    del mock_jira_api_for_you
+    app = JiraApp(settings=mock_configuration, user_info=mock_user_info)
+    configure_for_you_test_app(app, getattr(request, 'param', 'textual-dark'))
+    return app
+
+
 def load_issue_fixtures(directory: str):
     fixtures_dir = Path(__file__).parent / 'fixtures' / directory
     issues = []

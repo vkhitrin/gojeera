@@ -83,6 +83,16 @@ class RemoteFiltersConfig(StrictConfigModel):
     Default: 3600 seconds (1 hour)."""
 
 
+class ForYouConfig(StrictConfigModel):
+    """Windows and request bounds for the best-effort personal work feed."""
+
+    due_soon_days: int = Field(default=7, ge=1, le=365)
+    recent_days: int = Field(default=7, ge=1, le=365)
+    items_per_section: int = Field(default=50, ge=1, le=200)
+    mention_scan_items: int = Field(default=50, ge=1, le=200)
+    comments_per_item: int = Field(default=100, ge=1, le=500)
+
+
 class JumperConfig(StrictConfigModel):
     """Configuration for the jumper overlay widget."""
 
@@ -506,6 +516,8 @@ class ApplicationConfiguration(BaseSettings):
     to retrieve work items when no criteria and JQL query is provided by the user."""
     fetch_remote_filters: RemoteFiltersConfig = RemoteFiltersConfig()
     """Configuration for fetching remote JQL filters from Jira API."""
+    for_you: ForYouConfig = Field(default_factory=ForYouConfig)
+    """Configuration for the For You modal's time windows and bounded mention scan."""
     jumper: JumperConfig = JumperConfig()
     """Configuration for the jumper overlay widget."""
     search_results_per_page: int = Field(default=20, ge=1, le=200)

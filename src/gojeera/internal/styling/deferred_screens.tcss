@@ -1,3 +1,9 @@
+/* ForYouScreen */
+ForYouScreen LoadingIndicator,
+ForYouScreen LoadingIndicator.-textual-loading-indicator {
+  background: $surface;
+}
+
 /* CommentScreen */
 CommentScreen #modal_outer {
       width: 60%;

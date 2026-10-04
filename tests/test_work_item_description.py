@@ -12,7 +12,6 @@ from gojeera.utils.markdown.adf_helpers import (
     extract_media_attachment_details,
     replace_media_with_text,
 )
-from gojeera.widgets.layout.record_list import RecordList
 from gojeera.widgets.markdown.gojeera_markdown import (
     ATTACHMENT_BROWSER_OPEN_HINT,
     AttachmentTooltipProvider,
@@ -138,8 +137,8 @@ async def click_attachment_link_and_open_attachments_tab(pilot):
     await wait_until(lambda: pilot.app.tabs.active == 'tab-attachments', timeout=3.0)
     await wait_until(
         lambda: (
-            (record_list := pilot.app.screen.query_one(RecordList)).selected_record is not None
-            and record_list.selected_record.title.startswith('image-20260205-112310.png')
+            (attachment := pilot.app.work_item_attachments_widget.selected_attachment) is not None
+            and attachment.filename == 'image-20260205-112310.png'
         ),
         timeout=3.0,
     )

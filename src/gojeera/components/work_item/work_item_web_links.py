@@ -3,20 +3,23 @@ from uuid import uuid4
 
 from textual import on
 from textual.reactive import Reactive, reactive
+from textual.widgets import DataTable
 from textual.worker import Worker
 
-from gojeera.components.tabs.record_list_tab import RecordListTabWidget
+from gojeera.components.tabs.table_tab import TableTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import WorkItemRemoteLink
 from gojeera.utils.ui.runtime import cancel_worker, should_start_keyed_load
-from gojeera.widgets.layout.record_list import Record, RecordList
+from gojeera.widgets.layout.extended_table import TableRecord
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class WorkItemRemoteLinksWidget(RecordListTabWidget):
+class WorkItemRemoteLinksWidget(TableTabWidget):
     """This widget handles adding and updating the list of remote links (aka. web links) associated to a work item."""
+
+    COLUMNS = ('Relationship', 'Title', 'Status', 'URL')
 
     work_item_key: Reactive[str | None] = reactive(None, always_update=True)
     remote_links: Reactive[list[WorkItemRemoteLink] | None] = reactive(None)
@@ -24,7 +27,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
     is_loading: Reactive[bool] = reactive(False, always_update=True)
 
     def __init__(self):
-        super().__init__(widget_id='work_item_remote_links', record_list_id='remote-links-list')
+        super().__init__(widget_id='work_item_remote_links', table_id='remote-links-list')
         self._work_item_key: str | None = None
         self._loaded_work_item_key: str | None = None
         self._loading_worker: Worker | None = None
@@ -78,7 +81,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
 
         for link in self.remote_links or []:
             if link.url == selected_url and link.title == selected_title:
-                self.record_list.focus_record_by_key(link.id)
+                self.table.focus_record_by_key(link.id)
                 return link.id
         return None
 
@@ -289,7 +292,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                 )
 
             with self.app.batch_update():
-                self.record_list.clear_records()
+                self.table.clear_records()
                 self.hide_loading()
             return
 
@@ -306,12 +309,12 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
     def watch_remote_links(self, links: list[WorkItemRemoteLink] | None) -> None:
         with self.app.batch_update():
             if not links:
-                self.record_list.clear_records()
+                self.table.clear_records()
                 self.hide_loading()
                 self.displayed_count = 0
                 return
 
-            records: list[Record] = []
+            records: list[TableRecord] = []
             link_count = 0
             for item in links:
                 if not item.url:
@@ -324,19 +327,21 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
                 else:
                     status = 'Not Resolved'
 
-                footer_parts = [part for part in (status, item.url) if part]
                 records.append(
-                    Record(
+                    TableRecord(
                         key=item.id,
-                        meta=item.relationship or 'Web link',
-                        title=item.title or 'Untitled',
-                        footer=' • '.join(footer_parts),
+                        cells=(
+                            item.relationship or 'Web link',
+                            item.title or 'Untitled',
+                            status,
+                            item.url,
+                        ),
                         payload=item,
                     )
                 )
                 link_count += 1
 
-            self.record_list.set_records(records)
+            self.table.set_records(records)
             self.hide_loading()
             self.displayed_count = link_count
 
@@ -351,7 +356,7 @@ class WorkItemRemoteLinksWidget(RecordListTabWidget):
             self.displayed_count = 0
             return
 
-    @on(RecordList.RowInvoked)
-    def on_row_invoked(self, event: RecordList.RowInvoked) -> None:
-        if event.control is self.record_list:
+    @on(DataTable.RowSelected)
+    def on_row_invoked(self, event: DataTable.RowSelected) -> None:
+        if event.control is self.table:
             self.run_worker(self.action_open_link())

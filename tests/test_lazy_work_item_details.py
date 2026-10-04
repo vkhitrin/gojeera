@@ -2,6 +2,8 @@ from types import MethodType, SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from gojeera.app import DEFERRED_COUNT_BADGE, DEFERRED_COUNT_TAB_IDS, WorkspaceMixin
 from gojeera.components.work_item.work_item_information import WorkItemInformation
 from gojeera.internal.jira.controller import INITIAL_WORK_ITEM_FIELDS, APIControllerResponse
@@ -43,6 +45,26 @@ def test_deferred_tab_counts_show_pending_indicator_until_loaded() -> None:
 
     WorkspaceMixin._update_information_tab_badge(app, 'tab-history', 3)
     set_tab_badge.assert_called_with('tab-history', 3)
+
+
+@pytest.mark.parametrize(
+    'tab_id, update_title',
+    [
+        ('tab-attachments', WorkspaceMixin._update_attachments_tab_title),
+        ('tab-related', WorkspaceMixin._update_related_tab_title),
+    ],
+)
+def test_immediate_tab_counts_include_zero(tab_id, update_title) -> None:
+    app, set_tab_badge = _badge_test_app()
+    WorkspaceMixin._mark_detail_tab_count_pending(app)
+    assert tab_id not in app._pending_detail_count_tabs
+
+    update_title(app, 0)
+    set_tab_badge.assert_called_with(tab_id, '0')
+    update_title(app, 2)
+    set_tab_badge.assert_called_with(tab_id, 2)
+    update_title(app, 0)
+    set_tab_badge.assert_called_with(tab_id, '0')
 
 
 def test_comment_mutation_count_survives_tab_reactivation() -> None:

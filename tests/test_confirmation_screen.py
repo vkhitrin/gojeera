@@ -1,6 +1,6 @@
 import asyncio
 
-from gojeera.widgets.layout.record_list import RecordList
+from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
 
 from .test_helpers import assert_confirmation_screen, assert_snapshot_matches, focus_work_item_tab
 
@@ -8,8 +8,8 @@ from .test_helpers import assert_confirmation_screen, assert_snapshot_matches, f
 async def open_confirmation_screen_via_delete_attachment(pilot):
     await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=1)
 
-    record_list = pilot.app.screen.query_one(RecordList)
-    record_list.focus()
+    attachments_widget = pilot.app.screen.query_one(WorkItemAttachmentsWidget)
+    attachments_widget.table.focus()
     await asyncio.sleep(0.3)
 
     await pilot.press('ctrl+d')

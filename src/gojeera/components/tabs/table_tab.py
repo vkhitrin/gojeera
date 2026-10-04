@@ -4,9 +4,12 @@ from typing import TYPE_CHECKING, TypeVar, cast
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalGroup
+from textual.widgets import DataTable
 
 from gojeera.utils.jira.urls import build_external_url_for_work_item
-from gojeera.widgets.layout.record_list import Record, RecordList, update_record_list_from_items
+from gojeera.widgets.layout.extended_table import ExtendedTable, TableRecord
+
+__all__ = ['WORK_ITEM_NAVIGATION_BINDINGS', 'TableTabWidget']
 
 T = TypeVar('T')
 
@@ -15,46 +18,38 @@ if TYPE_CHECKING:
 
 
 WORK_ITEM_NAVIGATION_BINDINGS = (
-    Binding(
-        key='ctrl+g',
-        action='load_selected_work_item',
-        description='Load Work Item',
-        show=True,
-    ),
-    Binding(
-        key='enter',
-        action='view_selected_work_item',
-        description='View Work Item',
-        show=True,
-    ),
-    Binding(
-        key='ctrl+o',
-        action='open_work_item_browser',
-        description='Open in Browser',
-        show=True,
-    ),
+    Binding('enter', 'view_selected_work_item', 'View Work Item', show=True),
+    Binding('ctrl+o', 'open_work_item_browser', 'Open in Browser', show=True),
 )
 
 
-class RecordListTabWidget(Vertical, can_focus=False):
-    """Shared shell for tab panels backed by a RecordList."""
+class TableTabWidget(Vertical, can_focus=False):
+    """Shared shell for tab panels backed by an ExtendedTable."""
 
     DEFAULT_CSS = """
-    RecordListTabWidget {
+    TableTabWidget {
         width: 100%;
         height: 1fr;
         background: transparent;
     }
 
-    RecordListTabWidget > .tab-content-container {
+    TableTabWidget > .tab-content-container {
         width: 100%;
         height: 1fr;
     }
+
+    TableTabWidget ExtendedTable {
+        width: 100%;
+        height: 1fr;
+        background: transparent;
+    }
     """
 
-    def __init__(self, *, widget_id: str, record_list_id: str) -> None:
+    COLUMNS: tuple[str, ...] = ()
+
+    def __init__(self, *, widget_id: str, table_id: str) -> None:
         super().__init__(id=widget_id)
-        self._record_list_id = record_list_id
+        self._table_id = table_id
         self._work_item_key: str | None = None
 
     @property
@@ -62,8 +57,8 @@ class RecordListTabWidget(Vertical, can_focus=False):
         return self.query_one('.tab-content-container', VerticalGroup)
 
     @property
-    def record_list(self) -> RecordList:
-        return self.query_one(RecordList)
+    def table(self) -> ExtendedTable:
+        return self.query_one(ExtendedTable)
 
     @property
     def has_records(self) -> bool:
@@ -83,8 +78,12 @@ class RecordListTabWidget(Vertical, can_focus=False):
     def compose(self) -> ComposeResult:
         with VerticalGroup(classes='tab-content-container') as content:
             content.display = True
-            yield RecordList(
-                widget_id=self._record_list_id,
+            yield ExtendedTable(
+                id=self._table_id,
+                columns=self.COLUMNS,
+                disable_empty=True,
+                cursor_type='row',
+                zebra_stripes=True,
                 classes='tab-scroll-surface tab-scroll-surface--persistent',
             )
 
@@ -97,14 +96,12 @@ class RecordListTabWidget(Vertical, can_focus=False):
     def update_records_from_items(
         self,
         items: Sequence[T] | None,
-        build_record: Callable[[T], Record],
+        build_record: Callable[[T], TableRecord],
     ) -> int:
         with self.app.batch_update():
-            displayed_count = update_record_list_from_items(
-                items=items,
-                record_list=self.record_list,
-                build_record=build_record,
-            )
+            records = [build_record(item) for item in items or []]
+            self.table.set_records(records)
+            displayed_count = len(records)
             self.is_loading = False
             return displayed_count
 
@@ -112,7 +109,7 @@ class RecordListTabWidget(Vertical, can_focus=False):
         self.content_container.loading = loading and not self.has_records
 
     def selected_payload_as(self, payload_type: type[T]) -> T | None:
-        selected = self.record_list.selected_payload
+        selected = self.table.selected_payload
         return selected if isinstance(selected, payload_type) else None
 
     async def _load_work_item_and_activate_tab(
@@ -155,6 +152,6 @@ class RecordListTabWidget(Vertical, can_focus=False):
 
             webbrowser.open_new_tab(url)
 
-    def handle_row_invoked_load(self, event: RecordList.RowInvoked) -> None:
-        if event.control is self.record_list:
+    def handle_row_invoked_load(self, event: DataTable.RowSelected) -> None:
+        if event.control is self.table:
             self.run_worker(self.action_load_selected_work_item())

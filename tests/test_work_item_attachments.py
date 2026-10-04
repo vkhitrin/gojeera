@@ -4,7 +4,6 @@ import tempfile
 from gojeera.app import JiraApp
 from gojeera.components.screens.new_attachment_screen import AddAttachmentScreen
 from gojeera.components.work_item.work_item_attachments import WorkItemAttachmentsWidget
-from gojeera.widgets.layout.record_list import RecordList
 
 from .test_helpers import (
     accept_confirmation,
@@ -19,8 +18,8 @@ from .test_helpers import (
 async def select_work_item_with_attachments_and_highlight_row(pilot):
     await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=1)
 
-    record_list = pilot.app.screen.query_one(RecordList)
-    record_list.focus()
+    table = pilot.app.screen.query_one(WorkItemAttachmentsWidget).table
+    table.focus()
     await pilot.pause()
 
 
@@ -84,8 +83,7 @@ async def delete_attachment_and_verify(pilot):
     initial_count = attachments_widget.displayed_count
     assert initial_count > 0, 'Should have at least one attachment to delete'
 
-    record_list = attachments_widget.query_one(RecordList)
-    record_list.focus()
+    attachments_widget.table.focus()
     await pilot.pause()
 
     await pilot.press('ctrl+d')

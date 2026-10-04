@@ -12,7 +12,7 @@ from gojeera.commands.providers.jql_filters_provider import (
     JQLFiltersProvider,
 )
 from gojeera.components.work_item.work_item_fields import WorkItemFields
-from gojeera.widgets.layout.record_list import Record
+from gojeera.widgets.layout.extended_table import TableRecord
 from gojeera.widgets.navigation.extended_jumper import ExtendedJumper
 from gojeera.widgets.navigation.extended_palette import ExtendedPalette
 from gojeera.widgets.search.work_item_search_results_scroll import WorkItemSearchResultsScroll
@@ -244,9 +244,9 @@ async def test_detail_tab_keys_move_focus_with_the_active_content(
         app.tabs.disabled = False
 
         description_scroll = app.work_item_info_container.description_container
-        attachments_list = app.work_item_attachments_widget.record_list
+        attachments_list = app.work_item_attachments_widget.table
         attachments_list.set_records(
-            [Record(key='attachment-1', title='Attachment', meta='', footer='')]
+            [TableRecord(key='attachment-1', cells=('Attachment', '', '', '', ''))]
         )
         app.tabs.active = 'tab-description'
         await pilot.pause()
@@ -272,7 +272,7 @@ async def test_detail_tab_keys_move_focus_with_the_active_content(
         )
 
         attachments_list.set_records(
-            [Record(key='attachment-2', title='Attachment', meta='', footer='')]
+            [TableRecord(key='attachment-2', cells=('Attachment', '', '', '', ''))]
         )
         await pilot.pause()
         attachments_list.focus()

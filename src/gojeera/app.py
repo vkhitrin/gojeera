@@ -687,7 +687,7 @@ class WorkspaceMixin(App):
     def _update_information_tab_badge(self, tab_id: str, count: int) -> None:
         if tab_id in self._pending_detail_count_tabs:
             badge: int | str = DEFERRED_COUNT_BADGE
-        elif tab_id in DEFERRED_COUNT_TAB_IDS and count == 0:
+        elif count == 0:
             badge = '0'
         else:
             badge = count

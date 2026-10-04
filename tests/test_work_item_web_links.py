@@ -18,7 +18,7 @@ async def select_work_item_and_highlight_web_link(pilot):
     await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=4)
 
     web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
-    if table := web_links_widget.record_list:
+    if table := web_links_widget.table:
         table.focus()
         await pilot.pause()
 
@@ -82,7 +82,7 @@ async def delete_web_link_and_verify(pilot):
     web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
     initial_count = web_links_widget.displayed_count
 
-    if table := web_links_widget.record_list:
+    if table := web_links_widget.table:
         table.select_index(0, scroll_into_view=True, focus=True)
         await pilot.pause()
 

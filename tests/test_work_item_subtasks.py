@@ -22,7 +22,7 @@ async def open_subtasks_widget(pilot):
 
 async def select_work_item_and_highlight_subtask(pilot):
     subtasks_widget = await open_subtasks_widget(pilot)
-    subtasks_widget.record_list.focus()
+    subtasks_widget.table.focus()
     await pilot.pause()
 
 

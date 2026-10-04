@@ -4,19 +4,22 @@ from typing import TYPE_CHECKING, cast
 from textual import on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
+from textual.widgets import DataTable
 
-from gojeera.components.tabs.record_list_tab import RecordListTabWidget
+from gojeera.components.tabs.table_tab import TableTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import Attachment
 from gojeera.utils.jira.urls import build_external_url_for_attachment
-from gojeera.widgets.layout.record_list import Record, RecordList
+from gojeera.widgets.layout.extended_table import TableRecord
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class WorkItemAttachmentsWidget(RecordListTabWidget):
+class WorkItemAttachmentsWidget(TableTabWidget):
     """A container for displaying the files attached to a work item."""
+
+    COLUMNS = ('Filename', 'Size (KB)', 'Type', 'Created', 'Author')
 
     attachments: Reactive[list[Attachment] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
@@ -53,7 +56,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
     ]
 
     def __init__(self):
-        super().__init__(widget_id='attachments', record_list_id='attachments-list')
+        super().__init__(widget_id='attachments', table_id='attachments-list')
         self._work_item_key: str | None = None
 
     @property
@@ -123,22 +126,26 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
             self.is_loading = False
 
             if not attachments:
-                self.record_list.clear_records()
+                self.table.clear_records()
                 self.displayed_count = 0
                 return
 
             if self.work_item_key:
-                records: list[Record] = []
-                for item in attachments:
-                    title_parts = [part for part in (item.filename, item.created_date) if part]
-                    records.append(
-                        Record(
-                            key=item.id,
-                            title=' • '.join(title_parts),
-                            payload=item,
-                        )
+                records = [
+                    TableRecord(
+                        key=item.id,
+                        cells=(
+                            item.filename,
+                            str(item.get_size()),
+                            item.get_mime_type(),
+                            item.created_date,
+                            item.display_author,
+                        ),
+                        payload=item,
                     )
-                self.record_list.set_records(records)
+                    for item in attachments
+                ]
+                self.table.set_records(records)
                 self.displayed_count = len(attachments)
 
     def focus_attachment_by_filename(self, filename: str) -> bool:
@@ -147,7 +154,10 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
         )
         if attachment is None:
             return False
-        return self.record_list.focus_record_by_key(attachment.id)
+        if not self.table.focus_record_by_key(attachment.id):
+            return False
+        self.table.focus()
+        return True
 
     @property
     def selected_attachment(self) -> Attachment | None:
@@ -251,7 +261,7 @@ class WorkItemAttachmentsWidget(RecordListTabWidget):
                 )
                 self._update_attachments_after_delete()
 
-    @on(RecordList.RowInvoked)
-    def on_row_invoked(self, event: RecordList.RowInvoked) -> None:
-        if event.control is self.record_list:
+    @on(DataTable.RowSelected)
+    def on_row_invoked(self, event: DataTable.RowSelected) -> None:
+        if event.control is self.table:
             self.run_worker(self.action_open_attachment())

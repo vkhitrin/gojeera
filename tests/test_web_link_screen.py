@@ -64,7 +64,7 @@ async def open_edit_web_link_screen(pilot):
     await focus_work_item_tab(pilot, work_item_key='ENG-3', right_presses=4)
 
     web_links_widget = pilot.app.screen.query_one(WorkItemRemoteLinksWidget)
-    if table := web_links_widget.record_list:
+    if table := web_links_widget.table:
         table.select_index(0, scroll_into_view=True, focus=True)
         await asyncio.sleep(0.2)
 

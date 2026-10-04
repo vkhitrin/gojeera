@@ -3,20 +3,19 @@ from typing import TYPE_CHECKING, cast
 from textual import on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
+from textual.widgets import DataTable
 
-from gojeera.components.tabs.record_list_tab import (
-    WORK_ITEM_NAVIGATION_BINDINGS,
-    RecordListTabWidget,
-)
+from gojeera.components.tabs.table_tab import WORK_ITEM_NAVIGATION_BINDINGS, TableTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.work_items import JiraWorkItem
-from gojeera.widgets.layout.record_list import Record, RecordList
+from gojeera.widgets.layout.extended_table import TableRecord
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class WorkItemChildWorkItemsWidget(RecordListTabWidget):
+class WorkItemChildWorkItemsWidget(TableTabWidget):
+    COLUMNS = ('Type', 'Key', 'Summary', 'Status', 'Assignee')
     work_items: Reactive[list[JiraWorkItem] | None] = reactive(None, always_update=True)
     displayed_count: Reactive[int] = reactive(0)
     is_loading: Reactive[bool] = reactive(False, always_update=True)
@@ -38,7 +37,7 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
     ]
 
     def __init__(self):
-        super().__init__(widget_id='workitem_subtasks', record_list_id='subtasks-list')
+        super().__init__(widget_id='workitem_subtasks', table_id='subtasks-list')
 
     @property
     def help_anchor(self) -> str:
@@ -68,8 +67,8 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
 
         self.open_work_item_in_browser(current_work_item.key)
 
-    @on(RecordList.RowInvoked)
-    def selected(self, event: RecordList.RowInvoked) -> None:
+    @on(DataTable.RowSelected)
+    def selected(self, event: DataTable.RowSelected) -> None:
         self.handle_row_invoked_load(event)
 
     def action_clone_selected_work_item(self) -> None:
@@ -129,19 +128,22 @@ class WorkItemChildWorkItemsWidget(RecordListTabWidget):
         )
 
     def watch_work_items(self, items: list[JiraWorkItem] | None) -> None:
-        def build_record(item: JiraWorkItem) -> Record:
+        def build_record(item: JiraWorkItem) -> TableRecord:
             work_item_type_name = item.work_item_type.name if item.work_item_type else 'Unknown'
             assignee_display = ''
             if item.assignee:
                 assignee_display = (
                     item.assignee.display_name or item.assignee.email or item.assignee.account_id
                 )
-            footer_parts = [part for part in (item.status_name, assignee_display) if part]
-            return Record(
+            return TableRecord(
                 key=item.key,
-                meta=f'[{work_item_type_name}] {item.key}',
-                title=item.cleaned_summary(max_length=80),
-                footer=' • '.join(footer_parts),
+                cells=(
+                    work_item_type_name,
+                    item.key,
+                    item.cleaned_summary(),
+                    item.status_name or '',
+                    assignee_display,
+                ),
                 payload=item,
             )
 

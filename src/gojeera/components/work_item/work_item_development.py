@@ -3,21 +3,24 @@ from typing import TYPE_CHECKING, cast
 from textual import on
 from textual.binding import Binding
 from textual.reactive import Reactive, reactive
+from textual.widgets import DataTable
 from textual.worker import Worker
 
-from gojeera.components.tabs.record_list_tab import RecordListTabWidget
+from gojeera.components.tabs.table_tab import TableTabWidget
 from gojeera.internal.jira.controller import APIControllerResponse
 from gojeera.internal.models.jira import JiraRepositoryPullRequest
 from gojeera.internal.models.work_items import JiraWorkItem
 from gojeera.utils.ui.runtime import cancel_worker, worker_is_running
-from gojeera.widgets.layout.record_list import Record, RecordList
+from gojeera.widgets.layout.extended_table import TableRecord
 
 if TYPE_CHECKING:
     from gojeera.app import JiraApp
 
 
-class WorkItemDevelopmentWidget(RecordListTabWidget):
+class WorkItemDevelopmentWidget(TableTabWidget):
     """A container for displaying development details associated with a work item."""
+
+    COLUMNS = ('Title', 'Status', 'Repository', 'Branches', 'Updated', 'Repository URL', 'URL')
 
     work_item: Reactive[JiraWorkItem | None] = reactive(None, always_update=True)
     pull_requests: Reactive[list[JiraRepositoryPullRequest] | None] = reactive(
@@ -33,7 +36,7 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
     def __init__(self):
         super().__init__(
             widget_id='work-item-development',
-            record_list_id='work-item-development-list',
+            table_id='work-item-development-list',
         )
         self._loaded_work_item_key: str | None = None
         self._loading_worker: Worker | None = None
@@ -107,13 +110,13 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
 
         self.app.open_url(pull_request.url)
 
-    @on(RecordList.RowInvoked)
-    def selected(self, event: RecordList.RowInvoked) -> None:
-        if event.control is self.record_list:
+    @on(DataTable.RowSelected)
+    def selected(self, event: DataTable.RowSelected) -> None:
+        if event.control is self.table:
             self.action_open_remote_link()
 
     def watch_pull_requests(self, pull_requests: list[JiraRepositoryPullRequest] | None) -> None:
-        def build_record(pull_request: JiraRepositoryPullRequest) -> Record:
+        def build_record(pull_request: JiraRepositoryPullRequest) -> TableRecord:
             repository = (
                 pull_request.repository_name
                 or pull_request.repository_id
@@ -126,30 +129,17 @@ class WorkItemDevelopmentWidget(RecordListTabWidget):
                 for part in (pull_request.source_branch, pull_request.destination_branch)
                 if part
             )
-            footer = ' | '.join(
-                part
-                for part in (
-                    repository,
-                    pull_request.repository_url or None,
-                    branches,
-                    pull_request.url or '',
-                )
-                if part
-            )
-            meta = ' | '.join(
-                part
-                for part in (
-                    'Pull Request',
-                    pull_request.status or None,
-                    pull_request.last_updated or None,
-                )
-                if part
-            )
-            return Record(
+            return TableRecord(
                 key=pull_request.id,
-                meta=meta,
-                title=pull_request.title,
-                footer=footer,
+                cells=(
+                    pull_request.title,
+                    pull_request.status or '',
+                    repository,
+                    branches,
+                    pull_request.last_updated or '',
+                    pull_request.repository_url or '',
+                    pull_request.url or '',
+                ),
                 payload=pull_request,
             )
 

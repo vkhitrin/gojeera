@@ -31,7 +31,7 @@ async def test_history_fetches_one_page_at_a_time(monkeypatch) -> None:
             self.append_records = Mock()
 
         @property
-        def record_list(self):
+        def table(self):
             return SimpleNamespace(append_records=self.append_records)
 
         def watch_history(self, history: list[WorkItemHistoryEntry] | None) -> None:
@@ -170,7 +170,7 @@ async def open_work_item_history_initial_state(pilot):
 async def select_work_item_and_highlight_history(pilot):
     history_widget = await open_work_item_history(pilot)
 
-    history_widget.record_list.focus()
+    history_widget.table.focus()
     await pilot.pause()
 
 

@@ -46,7 +46,7 @@ async def delete_issue_link_and_verify(pilot):
         f'Expected related work items, got {related_widget.displayed_count}'
     )
 
-    table = related_widget.record_list
+    table = related_widget.table
     table.select_index(0, scroll_into_view=True, focus=True)
     await asyncio.sleep(0.2)
 

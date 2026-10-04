@@ -29,7 +29,7 @@ class RepositoryPullRequestsScreen(DebouncedFilterMixin, ExtendedModalScreen[Non
     """Modal screen displaying pull requests associated with a repository."""
 
     BINDINGS = ExtendedModalScreen.BINDINGS + [
-        Binding('ctrl+g', 'go_to_work_item', 'Go to work item'),
+        Binding('enter', 'go_to_work_item', 'Go to work item'),
         Binding('ctrl+o', 'open_pull_request_in_browser', 'Open in browser'),
     ]
     TITLE = 'Repository Pull Requests'
@@ -258,6 +258,11 @@ class RepositoryPullRequestsScreen(DebouncedFilterMixin, ExtendedModalScreen[Non
         app = cast('JiraApp', self.app)
         while len(app.screen_stack) > 1 and isinstance(app.screen, ExtendedModalScreen):
             app.pop_screen()
+
+    @textual_on(PullRequestTable.RowSelected, '#repository-pull-requests-table')
+    async def on_pull_request_selected(self, event: PullRequestTable.RowSelected) -> None:
+        event.stop()
+        await self.action_go_to_work_item()
 
     async def action_go_to_work_item(self) -> None:
         pull_request = self._selected_pull_request()

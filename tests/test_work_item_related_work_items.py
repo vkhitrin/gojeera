@@ -80,7 +80,7 @@ async def prepare_related_widget(pilot):
 
 async def select_work_item_and_highlight_related_work_item(pilot):
     related_widget = await open_related_widget(pilot)
-    related_widget.record_list.focus()
+    related_widget.table.focus()
     await asyncio.sleep(0.3)
 
 
@@ -89,7 +89,7 @@ async def delete_issue_link_and_verify(pilot):
     initial_count = related_widget.displayed_count
     assert initial_count > 0, f'Expected related work items, got {initial_count}'
 
-    table = related_widget.record_list
+    table = related_widget.table
     table.select_index(0, scroll_into_view=True, focus=True)
     await asyncio.sleep(0.2)
 
